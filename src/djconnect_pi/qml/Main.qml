@@ -3489,7 +3489,7 @@ BrandWindow {
                 RefreshIconButton {
                     objectName: "trackInsightRefresh"
                     text: root.tr("refresh_track_insight")
-                    loading: djconnect.askDjBusy
+                    loading: djconnect.trackInsightLoading
                     enabled: trackInsightPanel.canRequestAnalysis
                     onClicked: djconnect.refreshTrackInsight()
                 }
@@ -3555,7 +3555,7 @@ BrandWindow {
                         message: root.tr("track_insight_empty")
                         visible: djconnect.trackInsightError.length === 0 && djconnect.trackInsightText.length === 0
                                  && djconnect.trackInsightItems.length === 0 && djconnect.trackInsightSections.length === 0
-                                 && !trackInsightSubject.visible && !trackInsightVisualizer.visible && !djconnect.askDjBusy
+                                 && !trackInsightSubject.visible && !trackInsightVisualizer.visible && !djconnect.trackInsightLoading
                     }
 
                     GlassCard {

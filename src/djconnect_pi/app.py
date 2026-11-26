@@ -340,6 +340,7 @@ class DJConnectBackend(QObject):
         self._music_discovery_consent_rejected = False
         self._music_discovery_consent_epoch = 0
         self._track_insight_title = ""
+        self._track_insight_loading = False
         self._track_insight_audio_notice = False
         self._track_insight_verified_credit: dict[str, str] = {}
         self._track_insight_artist = ""
@@ -683,6 +684,10 @@ class DJConnectBackend(QObject):
     @Property(bool, notify=askDjChanged)
     def askDjBusy(self) -> bool:
         return self._ask_dj_busy
+
+    @Property(bool, notify=askDjChanged)
+    def trackInsightLoading(self) -> bool:
+        return self._track_insight_loading
 
     @Property("QVariantList", notify=askDjHelpChanged)
     def askDjHelpSections(self) -> list:
@@ -1909,9 +1914,14 @@ class DJConnectBackend(QObject):
         playback = deepcopy(self.playback)
         if manual:
             self.showToastForContext(self.tr_key("refreshing"), "trackinsight")
+        self._track_insight_loading = True
         self._set_ask_dj_busy(True)
         self._run(self.tr_key("track_insight"), lambda: self._track_insight_worker(playback, scope, force_refresh=manual),
-                  done=lambda: self._set_ask_dj_busy(False))
+                  done=self._finish_track_insight_request)
+
+    def _finish_track_insight_request(self) -> None:
+        self._track_insight_loading = False
+        self._set_ask_dj_busy(False)
 
     def _playback_seek_context(self, playback: Playback) -> tuple | None:
         if (not self.paired or not session_profile_id(self.cfg) or not self.musicBackendAvailable

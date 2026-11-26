@@ -3290,6 +3290,7 @@ def test_backend_track_insight_refresh_requests_fresh_analysis_and_shows_toast(t
 
     backend.refreshTrackInsight()
 
+    assert backend.trackInsightLoading and backend.askDjBusy
     assert backend.toastText == backend.t("refreshing")
     assert backend.toastIcon == "trackInsight"
     assert calls
@@ -3297,6 +3298,11 @@ def test_backend_track_insight_refresh_requests_fresh_analysis_and_shows_toast(t
     worker = calls[0][1]
     worker()
     backend.client.track_insight.assert_called_once_with(backend.playback, force_refresh=True)
+    calls[0][2]()
+    assert not backend.trackInsightLoading and not backend.askDjBusy
+
+    backend._set_ask_dj_busy(True)
+    assert backend.askDjBusy and not backend.trackInsightLoading
 
 
 def test_backend_track_insight_auto_open_requires_playing_track(tmp_path: Path) -> None:
