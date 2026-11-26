@@ -147,6 +147,7 @@ class SessionController(QObject):
         self._saved_summary_binding = None
         self._timeline_trail = []
         self._error = ""
+        self._connection_offline = False
         self._saved_open_retry = None
         self._serial = 0
         self._running = 0
@@ -336,6 +337,7 @@ class SessionController(QObject):
             "moments": [] if revoked else deepcopy(self._moments),
             "saved_summary": [] if revoked else self._saved_summary(),
             "timeline": {} if revoked else deepcopy(self._timeline), "search": {} if revoked else deepcopy(self._search), "error": self._error,
+            "connection_offline": not revoked and self._connection_offline,
             "saved_open_retry": not revoked and bool(self._saved_open_target()),
             "history_available": self._history_supported(), "search_available": self._search_supported(),
             "loaded": self._loaded and not revoked, "history_loaded": self._history_loaded and not revoked,
@@ -716,6 +718,7 @@ class SessionController(QObject):
 
     def invalidate(self):
         self._last_runtime_read = None
+        self._connection_offline = False
         had_scope = self._bootstrap_binding is not None
         self._contribution_wake_scope = None
         self._owner_epoch += 1
@@ -1990,6 +1993,12 @@ class SessionController(QObject):
                     self.questionConfirmed.emit(confirmed)
                 return
         history_action = result["action"] in {"history", "history_more", "history_refresh", "timeline", "timeline_refresh", "timeline_page", "timeline_previous", "timeline_extend", "search", "search_more", "search_refresh", "open_entry"}
+        if ((history_action or result["action"] in {"refresh", "archive_search"})
+                and result.get("view_epoch") == self._view_epoch):
+            if result.get("error") == "offline":
+                self._connection_offline = True
+            elif "error" not in result:
+                self._connection_offline = False
         if result["action"] == "archive_search":
             if result.get("view_epoch") != self._view_epoch:
                 self.changed.emit()

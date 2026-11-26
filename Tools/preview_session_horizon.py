@@ -467,7 +467,11 @@ def main():
                     expected_offline = TRANSLATIONS[language]["session_connection_offline"]
                     assert connection_accessible.text(QAccessible.Text.Description) == expected_offline
                     assert connection_type.property("text") == expected_offline
+                    owner._connection_offline = True
                     owner._error = "unavailable"
+                    owner.changed.emit()
+                    assert connection.property("iconName") == "info" and connection_type.property("text") == expected_offline
+                    owner._connection_offline = False
                     owner.changed.emit()
                     assert connection.property("iconName") == "globe" and connection_type.property("text") == expected_connection
                     owner._error = ""

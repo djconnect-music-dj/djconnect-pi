@@ -42,7 +42,7 @@ Item {
     readonly property bool sessionControlsVisible: !historical && state.session_id.length > 0 && !state.owner_read_only
     property var owner: backend.djSession
     property var state: owner.screenState
-    readonly property bool connectionOffline: state.error === "offline"
+    readonly property bool connectionOffline: state.connection_offline || state.error === "offline"
     readonly property string connectionStatusText: connectionOffline ? tr("session_connection_offline") : backend.connectionType
     readonly property var archiveSessions: visible && historical && !currentHistory && !state.timeline.session
         ? owner.archiveRows : []

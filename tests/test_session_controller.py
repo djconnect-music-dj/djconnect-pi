@@ -267,11 +267,16 @@ def test_temporary_poll_failure_keeps_confirmed_session_until_recovery(controlle
         {"success": True, "session": session}, failed_read,
         {"success": True, "session": session}, {"success": True, "session": None},
     ]
-    for expected_session in ("s1", "s1", "s1", ""):
+    failed_offline = isinstance(failed_read, SessionError) and failed_read.category == "offline"
+    for expected_session, was_offline, remains_offline in (
+        ("s1", False, False), ("s1", False, failed_offline), ("s1", failed_offline, False), ("", False, False),
+    ):
         owner.poll()
+        assert owner.state["connection_offline"] == was_offline
         backend.jobs.pop()()
         assert owner.state["session_id"] == expected_session
         assert owner.state["error"] == ""
+        assert owner.state["connection_offline"] == remains_offline
     assert owner.state["loaded"]
 
 
