@@ -763,6 +763,15 @@ def main():
                 owner.searchUpdated.emit()
                 QTest.qWait(65)
                 assert panel.property("selectedMatchId") == "fixture-search-match-2"
+                owner._search["_pages"] = 2
+                owner.changed.emit()
+                assert search_submit.property("iconName") == "refresh"
+                assert search_accessible.text(QAccessible.Text.Name) == TRANSLATIONS[language]["session_archive_refresh_search"]
+                with patch.object(owner, "_launch") as verify:
+                    click(window, search_submit)
+                    verify.assert_called_once_with("search_refresh", {"session_id": saved["session_id"], "query": "fixture", "pages": 2})
+                    assert panel.property("selectedMatchId") == "fixture-search-match-2"
+                owner._search["_pages"] = 1
                 owner._search["matches"] = [
                     {"session_id": saved["session_id"], "entry_id": f"fixture-search-match-{index}", "summary": "Fixture match"}
                     for index in range(1, 29)

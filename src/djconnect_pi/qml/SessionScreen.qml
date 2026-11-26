@@ -783,7 +783,7 @@ Item {
         }
     }
     function refreshSearchResults() {
-        if (!searchPanel.opened || !state.search.query || searchRefreshPending) return
+        if (!searchPanel.opened || archiveSearchAvailable || !searchPanel.hasSearchResults || searchRefreshPending) return
         rememberSearch()
         searchRefreshIntent = {session: state.search.session_id, query: state.search.query, profile: scopeProfileId}
         searchRead.restart()
@@ -797,7 +797,9 @@ Item {
         onTriggered: {
             var intent = screen.searchRefreshIntent
             if (!intent || screen.owner.busy) return
-            if (searchPanel.opened && intent.profile === screen.scopeProfileId && intent.session === screen.state.search.session_id && intent.query === screen.state.search.query) screen.owner.refreshSearch()
+            if (searchPanel.opened && !screen.archiveSearchAvailable && searchPanel.hasSearchResults
+                    && intent.profile === screen.scopeProfileId && intent.session === screen.state.search.session_id
+                    && intent.query === screen.state.search.query) screen.owner.refreshSearch()
             screen.searchRefreshIntent = null
         }
     }
@@ -2994,8 +2996,8 @@ Item {
         readonly property string searchError: result.error || screen.state.error
         readonly property bool matchingQuery: !!result.query && result.query === searchInput.text.trim()
             && (screen.archiveSearchAvailable || result.session_id === screen.searchTarget)
-        readonly property bool hasArchiveResults: screen.archiveSearchAvailable && matchingQuery
-            && "sessions" in result && !searchError
+        readonly property bool hasSearchResults: matchingQuery && !searchError
+            && (screen.archiveSearchAvailable ? "sessions" in result : "matches" in result)
         readonly property int selectedMatchIndex: matches.findIndex(function(row) { return matchId(row) === selectedMatchId })
         readonly property bool noMatches: matchingQuery && result.complete === true
             && matches.length === 0 && !searchInProgress && !screen.owner.busy && !searchError
@@ -3014,7 +3016,7 @@ Item {
                 selectedMatchId = matchId(matches[0])
         }
         onResultChanged: if (pendingArchiveMatch) Qt.callLater(restoreArchiveMatch)
-        onHasArchiveResultsChanged: if (pendingArchiveMatch && hasArchiveResults) Qt.callLater(restoreArchiveMatch)
+        onHasSearchResultsChanged: if (pendingArchiveMatch && hasSearchResults) Qt.callLater(restoreArchiveMatch)
         function resetSearch() {
             cancelTypedSearch()
             selectedMatchId = ""
@@ -3066,7 +3068,7 @@ Item {
         readonly property bool canLoadMoreMatches: !screen.archiveSearchAvailable && matchingQuery
             && !!result.next_cursor && !screen.state.search_limit_reached && !searchInProgress && !screen.owner.busy && !searchError
         function restoreArchiveMatch() {
-            if (!pendingArchiveMatch || !opened || !hasArchiveResults) return
+            if (!pendingArchiveMatch || !opened || !screen.archiveSearchAvailable || !hasSearchResults) return
             const index = findMatchIndex(pendingArchiveMatch.sessionId, pendingArchiveMatch.index)
             if (index < 0 || revealMatch(index)) pendingArchiveMatch = null
         }
@@ -3087,6 +3089,12 @@ Item {
             if (screen.owner.busy || !searchInput.text.trim().length) return
             keyboardVisible = false
             screen.searchNow()
+        }
+        function activateSearchButton() {
+            if (!screen.archiveSearchAvailable && hasSearchResults) {
+                keyboardVisible = false
+                screen.refreshSearchResults()
+            } else submitSearch()
         }
         function acceptSearchInput() {
             if (moveMatch(1) || noMatches) {
@@ -3145,11 +3153,11 @@ Item {
                 }
                 GlassButton {
                     objectName: "sessionSearchSubmit"
-                    iconName: searchPanel.searchInProgress ? "" : searchPanel.hasArchiveResults ? "refresh" : "search"
-                    Accessible.name: searchPanel.hasArchiveResults ? screen.tr("session_archive_refresh_search") : screen.searchLabel
+                    iconName: searchPanel.searchInProgress ? "" : searchPanel.hasSearchResults ? "refresh" : "search"
+                    Accessible.name: searchPanel.hasSearchResults ? screen.tr("session_archive_refresh_search") : screen.searchLabel
                     implicitWidth: 56
-                    enabled: !screen.owner.busy && searchInput.text.trim().length > 0
-                    onClicked: searchPanel.submitSearch()
+                    enabled: !screen.owner.busy && !screen.searchRefreshPending && searchInput.text.trim().length > 0
+                    onClicked: searchPanel.activateSearchButton()
                     BusyIndicator {
                         objectName: "sessionSearchProgress"
                         anchors.centerIn: parent
