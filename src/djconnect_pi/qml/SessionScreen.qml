@@ -42,8 +42,9 @@ Item {
     readonly property bool sessionControlsVisible: !historical && state.session_id.length > 0 && !state.owner_read_only
     property var owner: backend.djSession
     property var state: owner.screenState
-    readonly property bool connectionOffline: state.connection_offline || state.error === "offline"
-    readonly property string connectionStatusText: connectionOffline ? tr("session_connection_offline") : backend.connectionType
+    readonly property bool connectionOffline: !backend.demoMode && (state.connection_offline || state.error === "offline")
+    readonly property string connectionStatusText: backend.demoMode ? tr("demo_mode")
+        : connectionOffline ? tr("session_connection_offline") : backend.connectionType
     readonly property var archiveSessions: visible && historical && !currentHistory && !state.timeline.session
         ? owner.archiveRows : []
     readonly property bool archiveEmpty: historical && !currentHistory && !owner.busy && !state.error
@@ -3414,7 +3415,7 @@ Item {
                 }
             }
             GlassButton {
-                visible: screen.idleWelcome && !screen.compact
+                visible: screen.idleWelcome && !screen.compact && screen.backend.paired && !screen.backend.demoMode
                 enabled: !screen.owner.busy
                 iconName: "refresh"
                 text: screen.tr("refresh")
@@ -3423,6 +3424,18 @@ Item {
                     connectionInfo.close()
                     screen.owner.refresh()
                     screen.backend.pollSharedSettings()
+                }
+            }
+            GlassButton {
+                objectName: "sessionConnectionStopDemo"
+                visible: screen.backend.demoMode
+                text: screen.tr("exit_demo")
+                tint: BrandTheme.colors.danger
+                Layout.fillWidth: true
+                onClicked: {
+                    connectionInfo.close()
+                    screen.backend.exitDemoMode()
+                    screen.navigate("now")
                 }
             }
         }

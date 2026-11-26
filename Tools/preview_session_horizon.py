@@ -922,6 +922,22 @@ def main():
                 owner._error = "unavailable"
                 owner.changed.emit()
                 assert not search_empty.property("visible")
+                QQmlExpression(engine.rootContext(), panel, "close()").evaluate()
+                with patch.object(backend, "_sync_config_from_disk"):
+                    backend.cfg.paired = False
+                    backend.pairedChanged.emit()
+                    backend.enterDemoMode()
+                    window.setProperty("activeScreen", "session")
+                    QTest.qWait(300)
+                    assert backend.demoMode
+                    click(window, connection)
+                    assert connection_info.property("opened")
+                    assert connection_type.property("text") == TRANSLATIONS[language]["demo_mode"]
+                    stop_demo = one(connection_info.property("contentItem"), "sessionConnectionStopDemo")
+                    assert stop_demo.property("visible") and stop_demo.property("text") == TRANSLATIONS[language]["exit_demo"]
+                    click(window, stop_demo)
+                    assert not backend.demoMode and window.findChild(QObject, "pairingPanel").property("visible")
+                    assert not connection_info.property("visible")
                 backend.shutdown()
                 delete(window)
                 delete(engine)
