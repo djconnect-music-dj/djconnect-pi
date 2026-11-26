@@ -1667,6 +1667,10 @@ _SESSION_COMPOSER_TRANSLATIONS = {
         "Impossible de charger les recommandations.",
         "No se pudieron cargar las recomendaciones.",
     ),
+    "music_discovery_updated": (
+        "Recommendations updated", "Aanbevelingen vernieuwd", "Empfehlungen aktualisiert",
+        "Recommandations actualisées", "Recomendaciones actualizadas",
+    ),
     "music_discovery_play_failed": (
         "Could not play this recommendation.",
         "Deze aanbeveling kon niet worden afgespeeld.",

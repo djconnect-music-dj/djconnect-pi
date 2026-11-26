@@ -921,11 +921,21 @@ def main():
         assert detail_error.property("text") == backend.t("music_discovery_feedback_failed")
         backend.musicDiscoveryPlayed.emit("fixture-shelf", "fixture-track")
         assert not detail.property("opened")
-        backend._apply_music_discovery_data({"success": False, "error": "music_discovery_unavailable"})
-        assert empty_feed.property("visible") and empty_feed.property("text") == backend.t("music_discovery_load_failed")
-        assert backend.musicDiscoveryItems[0]["title"] == refreshed_title
-        backend._apply_music_discovery_data({"success": True, "sections": []})
-        assert empty_feed.property("text") == backend.t("music_discovery_empty")
+        with (patch.object(backend, "_sync_config_from_disk"), patch.object(backend, "_run") as refresh_request,
+              patch.object(backend.client, "music_discovery_refresh", side_effect=[
+                  requests.ReadTimeout, {"success": True, "sections": []},
+              ]), patch.object(backend, "_persist_backend_summary")):
+            for key in ("music_discovery_load_failed", "music_discovery_updated"):
+                QMetaObject.invokeMethod(discovery_refresh, "clicked")
+                assert discovery_refresh.property("loading")
+                refresh_request.call_args.args[1]()
+                refresh_request.call_args.kwargs["done"]()
+                assert backend.toastText == backend.t(key) and backend.toastIcon == "discover"
+                if key == "music_discovery_load_failed":
+                    assert empty_feed.property("visible") and empty_feed.property("text") == backend.t(key)
+                    assert backend.musicDiscoveryItems[0]["title"] == refreshed_title
+            assert refresh_request.call_count == 2
+            assert empty_feed.property("text") == backend.t("music_discovery_empty")
         with patch.object(backend, "_sync_config_from_disk"), patch.object(backend, "_run") as request:
             QTest.qWait(65)
             request.assert_called_once()

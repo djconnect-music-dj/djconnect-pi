@@ -134,6 +134,10 @@ class _MusicDnaProfileResult(_ProfileReadResult):
         self.retryable = retryable
 
 
+class _DiscoveryRefreshResult(_ProfileReadResult):
+    """An explicit Discover refresh that needs a completion notice."""
+
+
 class _TrackInsightResult(dict):
     """Track Insight delivery scope captured before dispatch, outside the wire payload."""
 
@@ -2130,10 +2134,11 @@ class DJConnectBackend(QObject):
             def worker() -> None:
                 self._music_discovery_accept_worker(ticket=ticket)
         else:
-            read = self.client.music_discovery_refresh if action == "refresh" else self.client.music_discovery_feed
+            manual = action == "refresh"
+            read = self.client.music_discovery_refresh if manual else self.client.music_discovery_feed
 
             def worker() -> None:
-                self._music_discovery_feed_worker(read=read, ticket=ticket)
+                self._music_discovery_feed_worker(read=read, ticket=ticket, manual=manual)
         _LOGGER.info("User requested Music Discovery %s", action)
         self._run(self.tr_key("music_discovery"), worker, done=lambda: self._set_music_discovery_busy(False))
 
@@ -2819,7 +2824,7 @@ class DJConnectBackend(QObject):
             return
         self._musicDnaReady.emit(self._profile_read_result(data, ticket))
 
-    def _music_discovery_feed_worker(self, *, read=None, ticket=None) -> None:
+    def _music_discovery_feed_worker(self, *, read=None, ticket=None, manual: bool = False) -> None:
         current = self._private_read_context()
         if ticket is not None and ticket != current:
             return
@@ -2842,7 +2847,8 @@ class DJConnectBackend(QObject):
             data = {"success": False, "error": exc.code}
         except (DJConnectError, requests.RequestException):
             data = {"success": False, "error": "music_discovery_unavailable"}
-        self._musicDiscoveryReady.emit(self._profile_read_result(data, ticket))
+        result = _DiscoveryRefreshResult(data, ticket) if manual else self._profile_read_result(data, ticket)
+        self._musicDiscoveryReady.emit(result)
 
     def _music_discovery_accept_worker(self, *, ticket=None) -> None:
         current = self._private_read_context()
@@ -3538,6 +3544,7 @@ class DJConnectBackend(QObject):
             return
         if not isinstance(data, dict):
             return
+        manual = isinstance(data, _DiscoveryRefreshResult)
         error = str(data.get("error") or "")
         if data.get("success") is False and error in {"music_discovery_play_failed", "music_discovery_feedback_failed"}:
             self._music_discovery_error = self.tr_key(error)
@@ -3547,6 +3554,8 @@ class DJConnectBackend(QObject):
             self._music_discovery_error = self.tr_key("music_discovery_load_failed")
             self._set_backend_available(False)
             self.musicDiscoveryChanged.emit()
+            if manual:
+                self._show_toast(self._music_discovery_error, 2200, "discover")
             return
         if data.get("success") is False and error != "music_dna_disabled":
             # Rejected feeds are not content or Profile authority. Never render
@@ -3559,6 +3568,8 @@ class DJConnectBackend(QObject):
             key = "session_profile_missing" if error in PROFILE_ERROR_CODES | {"music_dna_context_changed"} else "backend_unavailable"
             self._music_discovery_error = self.tr_key(key)
             self.musicDiscoveryChanged.emit()
+            if manual:
+                self._show_toast(self._music_discovery_error, 2200, "discover")
             return
         self._apply_profile_context(data)
         self._music_discovery_consent_rejected = False
@@ -3570,6 +3581,8 @@ class DJConnectBackend(QObject):
             self._music_discovery_error = ""
             self._music_discovery_empty_text = str(data.get("reason") or data.get("empty_text") or data.get("message") or self.tr_key("music_discovery_requires_music_dna"))
             self.musicDiscoveryChanged.emit()
+            if manual:
+                self._show_toast(self.tr_key("music_discovery_requires_music_dna"), 2200, "discover")
             return
         parsed = parse_music_discovery_feed(data, ha_url=self.cfg.ha_url)
         self._set_music_discovery_items(parsed["items"])
@@ -3578,6 +3591,8 @@ class DJConnectBackend(QObject):
         self._music_discovery_error = ""
         self._set_backend_available(True)
         self.musicDiscoveryChanged.emit()
+        if manual:
+            self._show_toast(self.tr_key("music_discovery_updated"), 2200, "discover")
 
     @Slot(object)
     def _apply_track_insight_data(self, data: object) -> None:
