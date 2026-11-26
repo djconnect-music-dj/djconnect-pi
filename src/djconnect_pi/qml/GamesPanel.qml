@@ -8,8 +8,10 @@ Rectangle {
     id: root
     objectName: "gamesPanel"
     readonly property bool compact: width < 900
+    property bool routeOpen: false
     property bool foreground: false
-    readonly property bool gameplayActive: visible && foreground
+    readonly property bool gameplayActive: routeOpen && visible && foreground
+    visible: routeOpen
     color: BrandTheme.colors.background
     SessionMoodCanvas { anchors.fill: parent; mood: root.gameMood; activeSession: true }
 
@@ -56,13 +58,21 @@ Rectangle {
     onVisibleChanged: {
         if (visible) forceActiveFocus()
     }
+    onRouteOpenChanged: {
+        if (routeOpen || !gameCanvas) return
+        pauseRound()
+        resetGame()
+    }
     onGameplayActiveChanged: {
         if (gameplayActive || !playing) return
+        pauseRound()
+        gameCanvas.requestPaint()
+    }
+    function pauseRound() {
         playing = false
         flashTimer.stop()
         flash = false
         djconnect.stopGameSounds()
-        gameCanvas.requestPaint()
     }
     Keys.onUpPressed: root.useDirection("up")
     Keys.onDownPressed: root.useDirection("down")
