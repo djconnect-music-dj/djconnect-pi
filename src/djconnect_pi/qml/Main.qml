@@ -1517,6 +1517,7 @@ BrandWindow {
         id: nowPanel
         objectName: "nowPanel"
         readonly property alias artworkTint: nowArtworkPalette.tint
+        readonly property bool playbackActionsAvailable: djconnect.demoMode || (djconnect.paired && djconnect.backendAvailable)
 
         AppBackground {}
 
@@ -1668,6 +1669,44 @@ BrandWindow {
                             return
                         }
                         root.activeScreen = "control"
+                    }
+                }
+            }
+
+            GlassSurface {
+                objectName: "nowPlaybackControls"
+                Layout.alignment: Qt.AlignHCenter
+                Layout.preferredWidth: Math.min(parent.width, 416)
+                Layout.preferredHeight: 76
+                radius: height / 2
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.margins: 10
+                    spacing: 10
+                    GlassButton {
+                        objectName: "nowPreviousTrack"
+                        Layout.fillWidth: true
+                        iconName: "previous"
+                        Accessible.name: root.tr("session_playback_previous_track")
+                        enabled: nowPanel.playbackActionsAvailable
+                        onClicked: djconnect.previous()
+                    }
+                    GlassButton {
+                        objectName: "nowTogglePlayback"
+                        Layout.fillWidth: true
+                        iconName: djconnect.playing ? "pause" : "play"
+                        Accessible.name: root.tr(djconnect.playing ? "pause" : "play")
+                        primary: true
+                        enabled: nowPanel.playbackActionsAvailable
+                        onClicked: djconnect.togglePlay()
+                    }
+                    GlassButton {
+                        objectName: "nowNextTrack"
+                        Layout.fillWidth: true
+                        iconName: "next"
+                        Accessible.name: root.tr("session_playback_next_track")
+                        enabled: nowPanel.playbackActionsAvailable
+                        onClicked: djconnect.next()
                     }
                 }
             }

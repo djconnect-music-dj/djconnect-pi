@@ -90,6 +90,35 @@ def main():
         for screen in ["session", "history", "now", "control", "queue", "playlists", "askdj", "trackinsight", "discover", "musicdna", "more", "settings", "games", "legal", "privacy", "feedback"]:
             window.setProperty("activeScreen", screen)
             capture(screen)
+        window.setProperty("activeScreen", "now")
+        if profile == "pi5-arm64":
+            assert window.property("activeScreen") == "session"
+        else:
+            capture("now-direct-playback")
+            controls = visual_item(window.contentItem(), "nowPlaybackControls")
+            artwork = visual_item(window.contentItem(), "nowTrackArtwork")
+            assert artwork.mapToScene(QPointF(0, artwork.height())).y() <= controls.mapToScene(QPointF()).y()
+            assert controls.mapToScene(QPointF(controls.width(), controls.height())).y() <= height
+
+            def tap_now_control(name):
+                button = visual_item(controls, name)
+                assert button.property("enabled")
+                center = button.mapToScene(QPointF(button.width() / 2, button.height() / 2))
+                QTest.mouseClick(window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, center.toPoint())
+
+            title_before = backend.title
+            tap_now_control("nowNextTrack")
+            assert backend.title != title_before and window.property("activeScreen") == "now", (
+                title_before, backend.title, window.property("activeScreen"), backend.demoMode, len(backend._queue_items),
+            )
+            tap_now_control("nowPreviousTrack")
+            assert backend.title == title_before
+            playing_before = backend.playing
+            tap_now_control("nowTogglePlayback")
+            assert backend.playing != playing_before
+            tap_now_control("nowTogglePlayback")
+            assert backend.playing == playing_before
+            backend.hideToast()
         track = {"title": "Repeated track title with more detail " * 12, "uri": "spotify:track:fixture-a", "index": 4}
         backend._queue_items = parse_queue_items({"queue": [
             track, track, {"title": "Other track", "uri": "spotify:track:fixture-b", "index": 5},
