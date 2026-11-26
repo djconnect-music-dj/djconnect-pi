@@ -436,9 +436,13 @@ def main():
                 with patch.object(owner, "_launch") as verify:
                     pull_down(window, search_scroll, touch, 230)
                     verify.assert_called_once_with("archive_search", "fixture")
+                owner.changed.emit()
+                QTest.qWait(65)
+                assert archive_panel.property("matches").toVariant() == []
                 owner._archive_search = cached_results
                 owner.changed.emit()
                 QTest.qWait(300)
+                assert archive_panel.property("selectedMatchId") == "hidden-on-current-page"
                 search_result = one(archive_panel.property("contentItem"), "sessionArchiveSearchRow")
                 with patch.object(owner, "_launch") as verify:
                     click(window, search_result)

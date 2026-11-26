@@ -753,12 +753,14 @@ Item {
     function cancelSearchRead() { searchRead.stop(); searchPosition.stop(); searchRefreshIntent = null; searchReturn = null }
     function rememberSearch() {
         searchReturn = null
-        for (var i = 0; i < searchRows.count; i++) {
-            var card = searchRows.itemAt(i)
+        const rows = archiveSearchAvailable ? archiveSearchRows : searchRows
+        for (var i = 0; i < rows.count; i++) {
+            var card = rows.itemAt(i)
             if (!card) continue
             var y = card.mapToItem(searchScroll.contentItem, 0, 0).y
             if (y + card.height > 0 && y < searchScroll.contentItem.height && isFinite(y) && Math.abs(y) <= 1000000) {
-                searchReturn = {id: card.modelData.entry_id, offset: y}
+                searchReturn = {id: searchPanel.matchId(card.modelData), offset: y,
+                    selectedId: searchPanel.selectedMatchId}
                 return
             }
         }
@@ -768,6 +770,10 @@ Item {
         rememberSearch()
         searchRefreshIntent = {session: state.search.session_id, query: state.search.query, profile: scopeProfileId}
         searchRead.restart()
+    }
+    function scheduleArchiveSearchPosition() {
+        if (archiveSearchAvailable && searchReturn && searchPanel.matchingQuery
+                && "sessions" in searchPanel.result) searchPosition.restart()
     }
     Timer {
         id: searchRead; interval: 0
@@ -786,9 +792,12 @@ Item {
             screen.searchReturn = null
             var flick = searchScroll.contentItem
             if (!searchPanel.opened || flick.dragging) return
-            for (var i = 0; saved && i < searchRows.count; i++) {
-                var card = searchRows.itemAt(i)
-                if (card && card.modelData.entry_id === saved.id) {
+            const rows = screen.archiveSearchAvailable ? archiveSearchRows : searchRows
+            if (saved && saved.selectedId && searchPanel.matches.some(row => searchPanel.matchId(row) === saved.selectedId))
+                searchPanel.selectedMatchId = saved.selectedId
+            for (var i = 0; saved && i < rows.count; i++) {
+                var card = rows.itemAt(i)
+                if (card && searchPanel.matchId(card.modelData) === saved.id) {
                     flick.contentY = Math.max(0, Math.min(flick.contentY + card.mapToItem(flick, 0, 0).y - saved.offset, Math.max(0, flick.contentHeight - flick.height)))
                     return
                 }
@@ -808,8 +817,10 @@ Item {
     }
     function searchNow() {
         cancelSearchRead()
-        if (archiveSearchAvailable) owner.searchArchive(searchInput.text)
-        else owner.search(searchTarget, searchInput.text)
+        if (archiveSearchAvailable) {
+            if (searchPanel.matchingQuery) rememberSearch()
+            owner.searchArchive(searchInput.text)
+        } else owner.search(searchTarget, searchInput.text)
     }
     function showSearch() {
         searchPanel.openTouchKeyboard = true
@@ -1072,7 +1083,7 @@ Item {
             if (!screen.owner.busy) screen.archiveReadActive = false
             if (!screen.historical || screen.currentHistory || screen.state.timeline.session) screen.cancelArchiveRead()
             if (screen.archiveIntent && !screen.owner.busy) archiveRead.restart()
-            if (!screen.state.search.query) screen.cancelSearchRead()
+            if (!searchPanel.result.query) screen.cancelSearchRead()
             if (screen.historyReadPending && !screen.owner.busy) historyRead.restart()
             if (screen.searchRefreshPending && !screen.owner.busy) searchRead.restart()
             if (screen.pendingArchiveSearchReturn && !screen.owner.busy) Qt.callLater(screen.restoreArchiveSearch)
@@ -2892,6 +2903,8 @@ Item {
             if (selectedMatchId && selectedMatchIndex < 0)
                 selectedMatchId = ""
             if (pendingArchiveMatchId) Qt.callLater(restoreArchiveMatch)
+            if (screen.searchReturn && screen.archiveSearchAvailable)
+                Qt.callLater(screen.scheduleArchiveSearchPosition)
         }
         onMatchingQueryChanged: if (pendingArchiveMatchId) Qt.callLater(restoreArchiveMatch)
         function resetSearch() {
@@ -3101,7 +3114,7 @@ Item {
                         && !screen.backend.demoMode && searchPanel.matchingQuery && !screen.owner.busy
                         && !screen.searchRefreshPending && (screen.liveViewOpen || screen.historyViewOpen)
                     onRefreshRequested: {
-                        if (screen.archiveSearchAvailable) screen.owner.searchArchive(searchPanel.result.query)
+                        if (screen.archiveSearchAvailable) screen.searchNow()
                         else screen.refreshSearchResults()
                     }
                 }
