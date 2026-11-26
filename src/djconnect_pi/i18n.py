@@ -1861,6 +1861,8 @@ _PLAYBACK_CONTROL_TRANSLATIONS = {
     "session_refresh_seconds": ("%1 s", "%1 s", "%1 s", "%1 s", "%1 s"),
     "track_artwork": ("Track artwork", "Trackhoes", "Titelcover", "Pochette du titre", "Portada de la pista"),
     "session_playback_controls": ("Playback controls", "Afspeelbediening", "Wiedergabesteuerung", "Commandes de lecture", "Controles de reproducción"),
+    "session_playback_previous_track": ("Previous track", "Vorig nummer", "Vorheriger Titel", "Titre précédent", "Pista anterior"),
+    "session_playback_next_track": ("Next track", "Volgend nummer", "Nächster Titel", "Titre suivant", "Pista siguiente"),
     "session_playback_command_sending": (
         "Sending playback command…", "Afspeelopdracht wordt verstuurd…", "Wiedergabebefehl wird gesendet…",
         "Envoi de la commande de lecture…", "Enviando la orden de reproducción…",

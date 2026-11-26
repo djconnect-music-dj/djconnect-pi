@@ -2653,6 +2653,7 @@ Item {
                 KeyNavigation.tab: transportControls.overArtwork ? null : toggleTransport
                 KeyNavigation.backtab: transportControls.overArtwork ? null : seekForwardTransport
                 commandName: "previous"
+                accessibleLabelKey: "session_playback_previous_track"
                 buttonSize: transportControls.buttonSize
             }
             SessionTransportButton {
@@ -2672,6 +2673,7 @@ Item {
                 KeyNavigation.tab: transportControls.overArtwork ? null : repeatTransport
                 KeyNavigation.backtab: transportControls.overArtwork ? null : toggleTransport
                 commandName: "next"
+                accessibleLabelKey: "session_playback_next_track"
                 buttonSize: transportControls.buttonSize
             }
             SessionTransportButton {
@@ -2774,10 +2776,11 @@ Item {
         id: transportButton
         required property string commandName
         required property real buttonSize
+        property string accessibleLabelKey: commandName
         property int pressedEpoch: 0
         readonly property bool basicTransport: ["previous", "play", "pause", "next"].includes(commandName)
         iconName: commandName
-        Accessible.name: screen.tr(commandName)
+        Accessible.name: screen.tr(accessibleLabelKey)
         implicitWidth: buttonSize
         implicitHeight: buttonSize
         padding: 0

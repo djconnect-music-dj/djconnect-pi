@@ -290,6 +290,10 @@ def main():
                 previous = visual(window.contentItem(), 'sessionPlaybackPrevious')
                 toggle = visual(window.contentItem(), 'sessionPlaybackToggle')
                 controls = visual(overlay, 'trackArtworkTransportControls')
+                for name, key in (('sessionPlaybackPrevious', 'session_playback_previous_track'),
+                                  ('sessionPlaybackNext', 'session_playback_next_track')):
+                    label_accessible = QAccessible.queryAccessibleInterface(visual(controls, name))
+                    assert label_accessible.text(QAccessible.Text.Name) == backend.t(key)
                 focus_order = [close_artwork, artwork_controls]
                 for name in ('sessionPlaybackRepeat', 'sessionPlaybackShuffle', 'sessionArtworkFavorite',
                              'sessionPlaybackPrevious', 'sessionPlaybackToggle', 'sessionPlaybackNext',
