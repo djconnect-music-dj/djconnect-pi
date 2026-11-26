@@ -485,7 +485,6 @@ BrandWindow {
         ToolTip.visible: hovered
         ToolTip.text: text
         Accessible.name: text
-        Accessible.description: text
         Layout.preferredWidth: 48
         Layout.preferredHeight: 48
         background: GlassSurface { tertiary: true; interactive: true; pressed: refreshControl.down; focused: refreshControl.activeFocus }
@@ -954,6 +953,7 @@ BrandWindow {
         property string heading: ""
         property string emptyText: ""
         property string searchLabel: ""
+        property string refreshLabel: root.tr("refresh")
         property string iconName: "queue"
         property string playCommand: "play_context_at"
         property bool loading: false
@@ -1090,6 +1090,7 @@ BrandWindow {
                 }
                 RefreshIconButton {
                     objectName: "mediaRefresh"
+                    text: panel.refreshLabel
                     loading: panel.loading
                     enabled: panel.refreshAvailable
                     onClicked: if (panel.refreshAvailable) panel.refreshRequested()
@@ -2477,6 +2478,7 @@ BrandWindow {
             heading: root.tr("queue")
             emptyText: root.tr("empty_queue")
             searchLabel: root.tr("media_search_queue")
+            refreshLabel: root.tr("refresh_queue")
             playCommand: "play_context_at"
             items: djconnect.queueItems
             loading: djconnect.queueLoading
@@ -2494,6 +2496,7 @@ BrandWindow {
             heading: root.tr("playlists")
             emptyText: root.tr("empty_playlists")
             searchLabel: root.tr("media_search_playlists")
+            refreshLabel: root.tr("refresh_playlists")
             iconName: "playlists"
             playCommand: "start_playlist"
             items: djconnect.playlistItems
@@ -2697,6 +2700,7 @@ BrandWindow {
 
                 RefreshIconButton {
                     objectName: "trackInsightRefresh"
+                    text: root.tr("refresh_track_insight")
                     loading: djconnect.askDjBusy
                     enabled: trackInsightPanel.canRequestAnalysis
                     onClicked: djconnect.refreshTrackInsight()
@@ -3452,6 +3456,8 @@ BrandWindow {
 
                 RefreshIconButton {
                     id: discoveryRefreshButton
+                    objectName: "discoveryRefreshButton"
+                    text: root.tr("refresh_discovery")
                     loading: djconnect.musicDiscoveryBusy
                     enabled: !loading
                     onClicked: djconnect.refreshMusicDiscovery()
@@ -4022,6 +4028,7 @@ BrandWindow {
                 RefreshIconButton {
                     id: musicDnaRefreshButton
                     objectName: "musicDnaRefreshButton"
+                    text: root.tr("refresh_music_dna")
                     loading: djconnect.musicDnaBusy
                     enabled: !loading && djconnect.paired && !djconnect.demoMode && !djconnect.versionMismatchVisible
                     onClicked: djconnect.refreshMusicDna()
@@ -4483,6 +4490,7 @@ BrandWindow {
                 RefreshIconButton {
                     id: askDjRefreshButton
                     objectName: "askDjRefreshButton"
+                    text: root.tr("refresh_ask_dj")
                     loading: djconnect.askDjBusy
                     enabled: !loading
                     onClicked: djconnect.refreshAskDjHistory()

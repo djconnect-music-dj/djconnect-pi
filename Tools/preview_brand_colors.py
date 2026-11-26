@@ -10,7 +10,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from PySide6.QtCore import Q_ARG, Q_RETURN_ARG, QMetaObject, QObject, QPointF, QTimer, qInstallMessageHandler
-from PySide6.QtGui import QGuiApplication
+from PySide6.QtGui import QAccessible, QGuiApplication
 from PySide6.QtQml import QQmlApplicationEngine, QQmlExpression
 from PySide6.QtQuickControls2 import QQuickStyle
 from PySide6.QtTest import QTest
@@ -113,6 +113,9 @@ def main():
         assert not long_title.property("scrolling") and long_title.property("shift") == 0
         assert label.property("lineCount") > 1 and not label.property("truncated")
         queue_panel = visual_item(window.contentItem(), "queuePanel")
+        queue_refresh = visual_item(queue_panel, "mediaRefresh")
+        queue_accessible = QAccessible.queryAccessibleInterface(queue_refresh)
+        assert queue_accessible.text(QAccessible.Text.Name) == backend.t("refresh_queue")
         with patch.object(backend, "_run"):
             backend._demo_mode = False
             QMetaObject.invokeMethod(repeated_row, "clicked")
@@ -189,6 +192,8 @@ def main():
         QTest.qWait(65)
         assert not visual_item(playlist_panel, "mediaItemRow-0").property("enabled")
         media_refresh = visual_item(playlist_panel, "mediaRefresh")
+        playlist_accessible = QAccessible.queryAccessibleInterface(media_refresh)
+        assert playlist_accessible.text(QAccessible.Text.Name) == backend.t("refresh_playlists")
         media_pull_refresh = playlist_panel.findChild(QObject, "mediaPullToRefresh")
         playlist_panel.setProperty("searching", False)
         assert not media_refresh.property("enabled") and not media_pull_refresh.property("canRefresh")
@@ -515,6 +520,9 @@ def main():
         window.setProperty("activeScreen", "discover")
         QTest.qWait(65)
         gate = visual_item(window.contentItem(), "discoveryMusicDnaGate")
+        discovery_refresh = visual_item(window.contentItem(), "discoveryRefreshButton")
+        discovery_accessible = QAccessible.queryAccessibleInterface(discovery_refresh)
+        assert discovery_accessible.text(QAccessible.Text.Name) == backend.t("refresh_discovery")
         empty_feed = visual_item(window.contentItem(), "discoveryEmptyFeedText")
         backend.cfg.paired, backend.cfg.device_token = True, "synthetic-not-a-credential"
         backend.pairedChanged.emit()
