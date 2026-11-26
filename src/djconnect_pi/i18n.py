@@ -1874,6 +1874,27 @@ _SESSION_FORECAST_TRANSLATIONS = {
     "session_forecast_refresh": (
         "Refresh Horizon", "Horizon vernieuwen", "Horizon aktualisieren", "Actualiser Horizon", "Actualizar Horizon",
     ),
+    "demo_horizon_notice": (
+        "Demo · Sample Horizon", "Demo · Voorbeeld van Horizon", "Demo · Horizon-Beispiel",
+        "Démo · Exemple Horizon", "Demo · Ejemplo de Horizon",
+    ),
+    "demo_horizon_guidance_title": (
+        "The next few minutes", "De komende minuten", "Die nächsten Minuten",
+        "Les prochaines minutes", "Los próximos minutos",
+    ),
+    "demo_horizon_aim_title": (
+        "What I’m aiming for", "Waar ik op mik", "Mein Ziel", "Mon objectif", "Mi objetivo",
+    ),
+    "demo_horizon_guidance": (
+        "A gentle transition leaves room for the next track.", "Een rustige overgang maakt ruimte voor de volgende track.",
+        "Ein sanfter Übergang lässt Raum für den nächsten Titel.", "Une transition douce laisse place au morceau suivant.",
+        "Una transición suave deja espacio para la siguiente pista.",
+    ),
+    "demo_horizon_aim": (
+        "The next track could bring a warmer sound.", "De volgende track kan wat warmer klinken.",
+        "Der nächste Titel könnte etwas wärmer klingen.", "Le prochain morceau pourrait avoir un son plus chaleureux.",
+        "La siguiente pista podría tener un sonido más cálido.",
+    ),
     "session_attribution_source": ("Source", "Bron", "Quelle", "Source", "Fuente"),
 }
 for _key, _values in _SESSION_FORECAST_TRANSLATIONS.items():

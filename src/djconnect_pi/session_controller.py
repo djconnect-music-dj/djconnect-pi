@@ -250,7 +250,8 @@ class SessionController(QObject):
             "owner_epoch": self._owner_epoch if bootstrap else 0,
             "owner_profile_id": self._bootstrap_owner if bootstrap else session_profile_id(self.backend.cfg),
             "runtime_state": session.get("runtime_state", ""),
-            "forecast_supported": not revoked and forecast_supported(session, self._caps),
+            "forecast_supported": (session.get("session_id") == "demo-session" and session.get("runtime_state") == "active")
+                if self.backend.demoMode else not revoked and forecast_supported(session, self._caps),
             "mood": session.get("selected_mood", ""),
             "profile_confirmation_required": not (bool(session_profile_id(self.backend.cfg)) or bootstrap),
         }, session, revoked
@@ -333,7 +334,7 @@ class SessionController(QObject):
             "archive_delete": self._archive_delete.snapshot(),
             "content_delete": self._content_delete.snapshot(),
             "vibecast": self._vibecast.snapshot(),
-            "forecast": {"state": "empty", "sections": []} if revoked else self._forecast.snapshot(),
+            "forecast": self._forecast_view(header, revoked),
             "presence": session.get("selected_presence", ""),
             "persona": session.get("dj_persona", ""),
             "composer_available": self._composer_supported(), "pending_question": {} if revoked else deepcopy(self._pending_question), "current_reply": {} if revoked else deepcopy(self._current_reply), "retained_flow": [] if revoked else deepcopy(flow),
@@ -937,6 +938,29 @@ class SessionController(QObject):
                 "state": "playing" if playback.is_playing else "paused",
                 "progress": position / duration if duration else 0,
                 "time_label": f"{position // 60}:{position % 60:02d} / {duration // 60}:{duration % 60:02d}"}
+
+    def _forecast_view(self, header, revoked):
+        empty = {"state": "empty", "sections": []}
+        if revoked:
+            return empty
+        if not self.backend.demoMode:
+            return self._forecast.snapshot()
+        if not header["forecast_supported"]:
+            return empty
+        playback = self._demo_playback()
+        current = " · ".join(value for value in (playback.get("title"), playback.get("artist")) if value)
+        sections = []
+        if current:
+            sections.append({"id": "current", "claim_type": "current",
+                             "title_key": "session_forecast_current", "text": current})
+        sections.extend(
+            {"id": section_id, "claim_type": claim, "title_key": title, "text_key": body}
+            for section_id, claim, title, body in (
+                ("guidance", "intention", "demo_horizon_guidance_title", "demo_horizon_guidance"),
+                ("aim", "conditional_target", "demo_horizon_aim_title", "demo_horizon_aim"),
+            )
+        )
+        return {"state": "ready", "sections": sections, "demo": True}
 
     def _expire_history_headers(self, now):
         expired = {row["session_id"] for row in self._sessions

@@ -1442,12 +1442,27 @@ Item {
                 color: BrandTheme.colors.muted; font.pixelSize: 19
                 wrapMode: Text.WordWrap; Layout.fillWidth: true
             }
+            Text {
+                objectName: "sessionForecastDemoNotice"
+                visible: !!screen.state.forecast.demo
+                text: screen.tr("demo_horizon_notice")
+                textFormat: Text.PlainText
+                color: BrandTheme.colors.muted
+                font.pixelSize: 17
+                font.bold: true
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+            }
             Repeater {
                 objectName: "sessionForecastRows"
                 model: screen.state.forecast.sections
                 GlassCard {
                     required property var modelData
                     objectName: "sessionForecastSection-" + modelData.id
+                    readonly property string sectionTitle: screen.state.forecast.demo && modelData.title_key
+                        ? screen.tr(modelData.title_key) : modelData.title || ""
+                    readonly property string sectionBody: screen.state.forecast.demo && modelData.text_key
+                        ? screen.tr(modelData.text_key) : modelData.text || ""
                     visible: forecastSource.ready
                     Layout.fillWidth: true
                     RowLayout {
@@ -1459,16 +1474,16 @@ Item {
                             Accessible.ignored: true
                         }
                         Text {
-                            text: modelData.title; textFormat: Text.PlainText; color: BrandTheme.colors.text
+                            text: sectionTitle; textFormat: Text.PlainText; color: BrandTheme.colors.text
                             font.pixelSize: 25; font.bold: true; wrapMode: Text.Wrap; Layout.fillWidth: true
                             Accessible.role: Accessible.Heading
                         }
                     }
-                    Text { text: screen.tr("session_forecast_" + modelData.claim_type); textFormat: Text.PlainText; color: BrandTheme.colors.muted; font.pixelSize: 18; wrapMode: Text.WordWrap; Layout.fillWidth: true }
-                    readonly property var guidance: ForecastGuidance.split(modelData.id, modelData.text)
+                    Text { text: screen.tr("session_forecast_" + modelData.claim_type); visible: text !== sectionTitle; textFormat: Text.PlainText; color: BrandTheme.colors.muted; font.pixelSize: 18; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+                    readonly property var guidance: ForecastGuidance.split(modelData.id, sectionBody)
                     Text {
                         objectName: "sessionForecastSectionBody"
-                        text: guidance ? guidance.intro : modelData.text
+                        text: guidance ? guidance.intro : sectionBody
                         textFormat: Text.PlainText; color: BrandTheme.colors.text; font.pixelSize: 23
                         wrapMode: Text.Wrap; Layout.fillWidth: true
                     }
