@@ -1501,6 +1501,7 @@ _KEYBOARD_TRANSLATIONS = {
     "media_search_queue": ("Search queue", "Zoek in wachtrij", "Warteschlange durchsuchen", "Rechercher dans la file", "Buscar en la cola"),
     "media_search_playlists": ("Search playlists", "Zoek in afspeellijsten", "Playlists durchsuchen", "Rechercher dans les playlists", "Buscar en las listas"),
     "media_no_matches": ("No search results", "Geen zoekresultaten", "Keine Suchergebnisse", "Aucun résultat", "Sin resultados"),
+    "close_search": ("Close search", "Zoeken sluiten", "Suche schließen", "Fermer la recherche", "Cerrar búsqueda"),
     "refresh_queue": ("Refresh queue", "Wachtrij vernieuwen", "Warteschlange aktualisieren", "Actualiser la file d’attente", "Actualizar cola"),
     "refresh_playlists": ("Refresh playlists", "Playlists vernieuwen", "Playlists aktualisieren", "Actualiser les playlists", "Actualizar listas"),
     "refresh_discovery": ("Refresh Discover", "Ontdekken vernieuwen", "Entdecken aktualisieren", "Actualiser Découvrir", "Actualizar Descubrir"),

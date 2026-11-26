@@ -992,10 +992,12 @@ BrandWindow {
             mediaRows.positionViewAtIndex(selectedMatchIndex, ListView.Center)
         }
         function closeSearch(resetPending) {
+            const restoreFocus = !resetPending && searching && visible
             if (resetPending) pendingMediaItem = null
             keyboardOpen = false
             searching = false
             searchInput.clear()
+            if (restoreFocus && searchToggle.enabled) searchToggle.forceActiveFocus()
         }
 
         function isPendingMediaItem(item) {
@@ -1072,12 +1074,16 @@ BrandWindow {
                 connectionText: djconnect.connectionType
 
                 GlassButton {
+                    id: searchToggle
                     objectName: "mediaSearchOpen"
+                    readonly property string actionLabel: panel.searching ? root.tr("close_search") : panel.searchLabel
                     iconName: "search"
                     tertiary: true
                     implicitWidth: 52
                     foregroundColor: panel.searching ? BrandTheme.colors.actionAccent : BrandTheme.colors.text
-                    Accessible.name: panel.searchLabel
+                    Accessible.name: actionLabel
+                    ToolTip.visible: hovered
+                    ToolTip.text: actionLabel
                     enabled: panel.searching || panel.items.length > 0
                     onClicked: {
                         if (panel.searching) panel.closeSearch()
@@ -1144,7 +1150,8 @@ BrandWindow {
                         onClicked: panel.moveMatch(1)
                     }
                     GlassButton {
-                        iconName: "end"; tertiary: true; Accessible.name: root.tr("close")
+                        objectName: "mediaSearchClose"
+                        iconName: "end"; tertiary: true; Accessible.name: root.tr("close_search")
                         onClicked: panel.closeSearch()
                     }
                 }

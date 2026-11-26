@@ -116,6 +116,15 @@ def main():
         queue_refresh = visual_item(queue_panel, "mediaRefresh")
         queue_accessible = QAccessible.queryAccessibleInterface(queue_refresh)
         assert queue_accessible.text(QAccessible.Text.Name) == backend.t("refresh_queue")
+        search_toggle = visual_item(queue_panel, "mediaSearchOpen")
+        search_accessible = QAccessible.queryAccessibleInterface(search_toggle)
+        assert search_accessible.text(QAccessible.Text.Name) == backend.t("media_search_queue")
+        QMetaObject.invokeMethod(search_toggle, "clicked")
+        assert search_accessible.text(QAccessible.Text.Name) == backend.t("close_search")
+        assert visual_item(queue_panel, "mediaSearchInput").property("activeFocus")
+        QMetaObject.invokeMethod(visual_item(queue_panel, "mediaSearchClose"), "clicked")
+        assert search_accessible.text(QAccessible.Text.Name) == backend.t("media_search_queue")
+        assert search_toggle.property("activeFocus") and not queue_panel.property("searching")
         with patch.object(backend, "_run"):
             backend._demo_mode = False
             QMetaObject.invokeMethod(repeated_row, "clicked")
