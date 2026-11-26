@@ -38,7 +38,7 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 "djconnect_pi.qml" = ["*.qml", "*.js", "*.png", "*.qsb", "*.frag", "qmldir"]
-"djconnect_pi" = ["fonts/*.ttf", "fonts/LICENSE.txt"]
+"djconnect_pi" = ["fonts/*.ttf", "fonts/LICENSE.txt", "ask_dj_examples_v1.json"]
 
 [tool.coverage.run]
 branch = true

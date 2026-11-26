@@ -16,6 +16,7 @@ from uuid import UUID
 
 import requests
 
+from .ask_dj_help import HELP_RESPONSE_BYTES, HELP_ROUTE, HelpObservation, HelpRequest
 from .config import CLIENT_TYPE, PROTOCOL_VERSION
 from .i18n import locale_for_language
 
@@ -29,6 +30,8 @@ JSON_CHUNK_BYTES = 16 * 1024
 
 
 def response_budget(route: str) -> int:
+    if route == HELP_ROUTE:
+        return HELP_RESPONSE_BYTES
     if route in {"session/history", "ask_dj/history"} or (route.startswith("session/history/") and route != "session/history/open"):
         return JSON_HISTORY_BYTES
     if route in {"session/active", "session/broadcast/snapshot", "session/start", "ask_dj/message"}:
@@ -175,7 +178,7 @@ class SessionTransport:
                                   profile_type="", privacy_mode="", private_authorized=private, owner_epoch=epoch)
         return binding
 
-    def _request(self, binding: SessionBinding, method: str, route: str, payload=None, *, timeout=None, isolated=False, archive_delete=False, content_delete=False, private_probe=False, display_owner=False, optional_capabilities=False) -> dict:
+    def _request(self, binding: SessionBinding, method: str, route: str, payload=None, *, timeout=None, isolated=False, archive_delete=False, content_delete=False, private_probe=False, display_owner=False, optional_capabilities=False, help_request=None) -> dict | HelpObservation:
         if binding != self.binding():
             raise SessionError("context_changed")
         if private_probe:
@@ -239,11 +242,13 @@ class SessionTransport:
             "Accept": "application/json", "Cache-Control": "no-store",
             "Accept-Language": locale_for_language(binding.language),
         }
-        if binding.profile_id and not display_owner:
+        if binding.profile_id and not display_owner and help_request is None:
             headers["X-DJConnect-Profile-ID"] = binding.profile_id
         identity = ({"device_id": binding.device_id, "client_type": CLIENT_TYPE}
                     if archive_delete or content_delete else binding.identity())
         body = {**identity, **(payload or {})}
+        if help_request is not None:
+            body = help_request.query()
         if display_owner:
             body = {"contract_version": 1, "identity": {"device_id": binding.device_id,
                     "client_type": CLIENT_TYPE}, **payload}
@@ -272,6 +277,8 @@ class SessionTransport:
                     if private_probe and response.status_code == 403:
                         raise SessionError("private_scope_denied")
                     raise SessionError("denied")
+                if help_request is not None and response.status_code != 200:
+                    raise SessionError("unavailable")
                 if optional_capabilities and method == "GET" and route == "capabilities" and response.status_code == 404:
                     return {}
                 if 300 <= response.status_code < 400 or (response.status_code >= 500 and not archive_delete):
@@ -298,11 +305,14 @@ class SessionTransport:
                 if binding != self.binding():
                     raise SessionError("context_changed")
                 try:
-                    data = json.loads(raw)
-                except (ValueError, TypeError, RecursionError):
+                    data = (HelpObservation.decode(raw, help_request) if help_request is not None
+                            else json.loads(raw))
+                except (ValueError, TypeError, RecursionError, OSError):
                     raise SessionError(category) from None
                 if binding != self.binding():
                     raise SessionError("context_changed")
+                if help_request is not None:
+                    return data
                 if not isinstance(data, dict):
                     raise SessionError(category)
                 code = data.get("error") if isinstance(data.get("error"), str) else ""
@@ -384,6 +394,13 @@ class SessionTransport:
 
     def track_insight_capabilities(self, binding):
         return self._request(binding, "GET", "capabilities", isolated=True, optional_capabilities=True)
+
+    def ask_dj_help(self, binding, surface, session_id=None) -> HelpObservation:
+        try:
+            request = HelpRequest(surface, binding.language, session_id)
+        except (ValueError, TypeError):
+            raise SessionError("invalid") from None
+        return self._request(binding, "GET", HELP_ROUTE, isolated=True, help_request=request)
 
     def active(self, binding, *, isolated=False):
         return self._request(binding, "GET", "session/active", isolated=isolated)

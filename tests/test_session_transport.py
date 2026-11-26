@@ -58,6 +58,83 @@ def test_track_insight_capability_probe_distinguishes_missing_route_from_failure
             client.track_insight_capabilities(binding)
 
 
+def test_ask_dj_help_uses_closed_paired_get_without_profile_or_identity_query(transport):
+    client, cfg, request, response = transport
+    def wire(method, url, **options):
+        assert method == "GET" and url.endswith("/ask_dj/help-context")
+        assert options["allow_redirects"] is False and "json" not in options
+        headers = options["headers"]
+        assert headers["Cache-Control"] == "no-store" and headers["X-DJConnect-Device-ID"] == cfg.device_id
+        assert "X-DJConnect-Profile-ID" not in headers
+        query = options["params"]
+        assert set(query) == {"schema_version", "request_id", "surface", "language", "catalogue_id",
+                              "catalogue_revision", "catalogue_sha256", "session_id"}
+        assert query["session_id"] == "existing+session" and query["language"] == "nl"
+        receipt = {
+            "schema_version": 1, "request_id": query["request_id"], "surface": query["surface"],
+            "session_id": query["session_id"], "language": query["language"], "available": True,
+            "observation_id": "8d137231-cbb1-4e66-9d96-4936666e14c0", "track_id": "media+id",
+            "eligible_entry_ids": ["discover.recent", "listen.current"],
+            "catalogue": {"schema_version": 1, "catalogue_id": query["catalogue_id"],
+                          "revision": query["catalogue_revision"], "sha256": query["catalogue_sha256"],
+                          "qualified": True},
+        }
+        response.json.return_value = receipt
+        return response
+
+    request.side_effect = wire
+    result = client.ask_dj_help(client.binding(), "active_session", "existing+session")
+    assert result.available and result.track_id == "media+id"
+    assert result.eligible_ids == ("discover.recent", "listen.current")
+    response.close.assert_called_once()
+
+
+@pytest.mark.parametrize("update", [
+    {"schema_version": True}, {"schema_version": 1.0}, {"language": "en"},
+    {"session_id": "another-session"}, {"eligible_entry_ids": ["unknown"]},
+    {"eligible_entry_ids": ["discover.recent", "discover.recent"]},
+    {"eligible_entry_ids": ["listen.outputs", "discover.recent"]},
+    {"eligible_entry_ids": ["listen.current"]}, {"track_id": "foreign-track"},
+    {"observation_id": None}, {"extra": None}, {"available": False},
+])
+def test_ask_dj_help_rejects_unbound_or_malformed_observations(transport, update):
+    client, _, request, response = transport
+    def wire(*args, **options):
+        query = options["params"]
+        assert "session_id" not in query
+        response.json.return_value = {
+            "schema_version": 1, "request_id": query["request_id"], "surface": "ask_dj",
+            "session_id": None, "language": "nl", "available": True, "track_id": None,
+            "observation_id": "8d137231-cbb1-4e66-9d96-4936666e14c0",
+            "eligible_entry_ids": ["discover.recent"],
+            "catalogue": {"schema_version": 1, "catalogue_id": query["catalogue_id"],
+                          "revision": query["catalogue_revision"], "sha256": query["catalogue_sha256"],
+                          "qualified": True},
+            **update,
+        }
+        return response
+
+    request.side_effect = wire
+    with pytest.raises(SessionError, match="^invalid$"):
+        client.ask_dj_help(client.binding(), "ask_dj")
+
+
+def test_ask_dj_help_rejects_duplicate_keys_or_oversized_response(transport):
+    client, _, request, response = transport
+    response.iter_content.side_effect = lambda **_: iter([b'{"schema_version":1,"schema_version":1}'])
+    with pytest.raises(SessionError, match="^invalid$"):
+        client.ask_dj_help(client.binding(), "ask_dj")
+    response.iter_content.reset_mock()
+    response.headers["Content-Length"] = "16385"
+    with pytest.raises(SessionError, match="^invalid$"):
+        client.ask_dj_help(client.binding(), "ask_dj")
+    response.iter_content.assert_not_called()
+    request.reset_mock()
+    with pytest.raises(SessionError, match="^invalid$"):
+        client.ask_dj_help(client.binding(), "active_session")
+    request.assert_not_called()
+
+
 def test_successor_profile_discards_delayed_response(transport):
     client, cfg, request, response = transport
     def delayed(*args, **kwargs):
