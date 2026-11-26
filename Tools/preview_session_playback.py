@@ -262,6 +262,18 @@ def main():
                 capture('fullscreen-track-art')
                 shade = visual(window.contentItem(), 'trackArtworkControlsShade')
                 assert shade.property('visible')
+                close_artwork = visual(overlay, 'closeTrackArtwork')
+                artwork_controls = visual(overlay, 'trackArtworkControlsToggle')
+                assert close_artwork.property('activeFocus')
+                QTest.keyClick(window, Qt.Key.Key_Tab)
+                assert artwork_controls.property('activeFocus')
+                accessible_toggle = QAccessible.queryAccessibleInterface(artwork_controls)
+                assert accessible_toggle.text(QAccessible.Text.Name) == backend.t('session_playback_controls')
+                assert accessible_toggle.state().checkable and accessible_toggle.state().checked
+                QTest.keyClick(window, Qt.Key.Key_Space)
+                assert not shade.property('visible') and not accessible_toggle.state().checked
+                QTest.keyClick(window, Qt.Key.Key_Space)
+                assert shade.property('visible') and accessible_toggle.state().checked and not intents
                 previous = visual(window.contentItem(), 'sessionPlaybackPrevious')
                 toggle = visual(window.contentItem(), 'sessionPlaybackToggle')
                 controls = visual(overlay, 'trackArtworkTransportControls')

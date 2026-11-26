@@ -6939,9 +6939,13 @@ BrandWindow {
         z: 198
         active: root.trackArtworkOpen && root.trackArtworkViewOpen
         focus: active
-        onLoaded: item.forceActiveFocus()
+        onLoaded: item.focusOverlay()
         sourceComponent: FocusScope {
             objectName: "trackArtworkOverlay"
+            function focusOverlay() {
+                if (root.trackArtworkOpeningControl) closeArtworkButton.forceActiveFocus(Qt.PopupFocusReason)
+                else forceActiveFocus()
+            }
             Keys.onEscapePressed: {
                 if (root.trackArtworkControlsOpen) root.trackArtworkControlsOpen = false
                 else root.trackArtworkOpen = false
@@ -6967,6 +6971,7 @@ BrandWindow {
                     Layout.fillWidth: true
                     Item { Layout.fillWidth: true }
                     GlassButton {
+                        id: closeArtworkButton
                         objectName: "closeTrackArtwork"
                         iconName: "close"
                         Accessible.name: root.tr("close")
@@ -7058,9 +7063,21 @@ BrandWindow {
                                 visible: root.trackArtworkCanControl && root.trackArtworkControlsOpen
                                 color: "#80000000"
                             }
-                            MouseArea {
+                            Button {
+                                id: artworkControlsToggle
+                                objectName: "trackArtworkControlsToggle"
                                 anchors.fill: parent
                                 enabled: root.trackArtworkCanControl
+                                Accessible.name: root.tr("session_playback_controls")
+                                Accessible.checkable: true
+                                Accessible.checked: root.trackArtworkControlsOpen
+                                contentItem: Item {}
+                                background: Rectangle {
+                                    color: "transparent"
+                                    radius: expandedArtworkCard.radius
+                                    border.width: artworkControlsToggle.visualFocus ? 2 : 0
+                                    border.color: BrandTheme.colors.focus
+                                }
                                 onClicked: root.toggleTrackArtworkControls()
                             }
                             Loader {
