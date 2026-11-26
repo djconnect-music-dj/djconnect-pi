@@ -2923,7 +2923,7 @@ Item {
         property bool restoreControlFocus: false
         property string selectedMatchId: ""
         property string pendingArchiveMatchId: ""
-        property bool typedArchiveSearchPending: false
+        property string typedArchiveQuery: ""
         readonly property var result: screen.archiveSearchAvailable ? screen.owner.archiveSearchState : screen.state.search
         readonly property var matches: screen.archiveSearchAvailable ? (result.sessions || []) : (result.matches || [])
         readonly property string searchError: result.error || screen.state.error
@@ -2953,23 +2953,28 @@ Item {
             screen.owner.clearArchiveSearch()
         }
         function cancelTypedArchiveSearch() {
-            typedArchiveSearchPending = false
+            typedArchiveQuery = ""
             typedArchiveSearch.stop()
         }
         function editSearch() {
+            const query = searchInput.text.trim()
+            if (screen.archiveSearchAvailable && query && (query === typedArchiveQuery || query === result.query)) return
             resetSearch()
-            typedArchiveSearchPending = screen.archiveSearchAvailable && !!searchInput.text.trim()
-            scheduleTypedArchiveSearch()
+            if (screen.archiveSearchAvailable && query) {
+                typedArchiveQuery = query
+                scheduleTypedArchiveSearch()
+            }
         }
         function scheduleTypedArchiveSearch() {
-            if (typedArchiveSearchPending && !typedArchiveSearch.running)
+            if (typedArchiveQuery && !typedArchiveSearch.running)
                 typedArchiveSearch.start()
         }
         Timer {
             id: typedArchiveSearch
             interval: 350
             onTriggered: {
-                if (!searchPanel.opened || !screen.archiveSearchAvailable) searchPanel.cancelTypedArchiveSearch()
+                if (!searchPanel.opened || !screen.archiveSearchAvailable
+                        || searchPanel.typedArchiveQuery !== searchInput.text.trim()) searchPanel.cancelTypedArchiveSearch()
                 else if (!screen.owner.busy) screen.searchNow()
             }
         }

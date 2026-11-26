@@ -445,6 +445,15 @@ def main():
                 assert archive_count.property("text") == "1 / 2"
                 QTest.keyClick(window, Qt.Key.Key_Up)
                 assert archive_panel.property("selectedMatchId") == "second-archive-match"
+                with patch.object(owner, "_launch") as verify:
+                    QTest.keyClick(window, Qt.Key.Key_End)
+                    QTest.keyClick(window, Qt.Key.Key_Space)
+                    QTest.qWait(425)
+                    verify.assert_not_called()
+                    assert archive_field.property("text") == "fixture "
+                    assert archive_panel.property("selectedMatchId") == "second-archive-match"
+                    QTest.keyClick(window, Qt.Key.Key_Backspace)
+                    assert archive_field.property("text") == "fixture"
                 QTest.keyClick(window, Qt.Key.Key_Down)
                 assert archive_panel.property("selectedMatchId") == "hidden-on-current-page"
                 with patch.object(owner, "_launch") as verify:
