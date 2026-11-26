@@ -1617,6 +1617,10 @@ Item {
                 readonly property bool playbackPaused: !screen.state.error && playbackSources.ready
                     && screen.state.playback.state === "paused"
                 readonly property bool emptyFlow: screen.state.moments.length === 0 && screen.state.retained_flow.length === 0
+                readonly property bool showStartHint: emptyFlow && screen.state.runtime_state === "active"
+                    && screen.state.loaded && !screen.state.error && !screen.state.playback.item_id
+                    && !screen.state.profile_confirmation_required && !screen.backend.demoMode
+                    && !screen.state.pending_question.text && !screen.state.current_reply.text
                 visible: !screen.historical && screen.state.session_id.length > 0
                     && (emptyFlow || compactIdle || (confirmedIdle && playbackPaused))
                 Layout.fillWidth: !compactIdle
@@ -1638,12 +1642,22 @@ Item {
                         Layout.fillWidth: true
                         Text {
                             objectName: "sessionWaitingTitle"
-                            text: screen.tr(waitingCard.playbackPaused ? "session_playback_paused"
+                            text: screen.tr(waitingCard.showStartHint ? "session_start_here"
+                                : waitingCard.playbackPaused ? "session_playback_paused"
                                 : screen.state.runtime_state === "opening" ? "session_starting"
                                 : screen.state.runtime_state === "ending" ? "session_ending" : "session_listening")
                             textFormat: Text.PlainText
                             color: BrandTheme.colors.text; font.pixelSize: screen.compact ? 24 : 30
                             font.bold: true; wrapMode: Text.WordWrap; Layout.fillWidth: true
+                        }
+                        Text {
+                            objectName: "sessionWaitingStartHint"
+                            visible: waitingCard.showStartHint
+                            text: visible ? screen.tr(screen.state.composer_available
+                                ? "session_start_here_ask" : "session_start_here_music") : ""
+                            textFormat: Text.PlainText
+                            color: BrandTheme.colors.muted; font.pixelSize: 22
+                            wrapMode: Text.WordWrap; Layout.fillWidth: true
                         }
                         Text {
                             objectName: "sessionWaitingPausedDetail"

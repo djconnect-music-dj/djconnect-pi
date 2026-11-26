@@ -1457,6 +1457,21 @@ _SESSION_LIFECYCLE_TRANSLATIONS = {
         "Votre musique est en pause. Votre session DJ reste active.",
         "Tu música está en pausa. Tu sesión de DJ sigue activa.",
     ),
+    "session_start_here": (
+        "Your session starts here", "Je sessie begint hier", "Deine Session beginnt hier",
+        "Votre session commence ici", "Tu sesión empieza aquí",
+    ),
+    "session_start_here_music": (
+        "Play some music.", "Zet muziek aan.", "Mach Musik an.",
+        "Lancez de la musique.", "Pon música.",
+    ),
+    "session_start_here_ask": (
+        "Play some music or ask your DJ a question.",
+        "Zet muziek aan of stel je DJ een vraag.",
+        "Mach Musik an oder stelle deinem DJ eine Frage.",
+        "Lancez de la musique ou posez une question à votre DJ.",
+        "Pon música o hazle una pregunta a tu DJ.",
+    ),
     "session_starting": ("Your session is starting…", "Je sessie wordt gestart…", "Deine Session wird gestartet…", "Votre session démarre…", "Tu sesión se está iniciando…"),
     "session_ending": ("Your session is ending…", "Je sessie wordt beëindigd…", "Deine Session wird beendet…", "Votre session se termine…", "Tu sesión se está finalizando…"),
 }

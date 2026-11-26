@@ -347,12 +347,23 @@ def main():
                 assert paused_detail.property('text') == TRANSLATIONS[language]['session_playback_paused_detail']
                 assert window.findChild(QObject, 'sessionExpandedEnd').property('enabled')
                 assert metadata.property('visible')
+                start_hint = window.findChild(QObject, 'sessionWaitingStartHint')
+                assert not start_hint.property('visible')
                 capture('waiting-paused')
                 owner._session['broadcast']['playback'] = {}
                 owner.changed.emit()
                 QTest.qWait(80)
                 assert waiting_vinyl.property('visible') and not metadata.property('visible')
                 assert not paused_detail.property('visible')
+                assert waiting_title.property('text') == TRANSLATIONS[language]['session_start_here']
+                hint_key = 'session_start_here_ask' if owner.state['composer_available'] else 'session_start_here_music'
+                assert start_hint.property('visible') and start_hint.property('text') == TRANSLATIONS[language][hint_key]
+                assert start_hint.property('contentWidth') <= start_hint.width() + 1
+                with patch.object(owner, '_composer_supported', return_value=True):
+                    owner.changed.emit()
+                    QTest.qWait(80)
+                    assert start_hint.property('text') == TRANSLATIONS[language]['session_start_here_ask']
+                    assert start_hint.property('contentWidth') <= start_hint.width() + 1
                 capture('waiting-vinyl-no-current-item')
                 owner._session = {}
                 owner.changed.emit()
