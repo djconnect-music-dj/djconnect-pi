@@ -400,9 +400,19 @@ def main():
                 assert refresh_accessible.text(QAccessible.Text.Name) == refresh_label
                 controls = visual(overlay, 'trackArtworkTransportControls')
                 assert refresh_status.mapToItem(controls, refresh_status.width(), 0).x() <= controls.width() + 1
-                owner._playback_control.blocked = False
-                owner._playback_control.status = ''
-                owner.changed.emit()
+                previous_active_result = owner.transport.active.return_value
+                owner.transport.active.return_value = {'success': True, 'session': deepcopy(owner._session)}
+                click('trackArtworkPlaybackRefresh')
+                assert owner.refreshing and len(reads) == 1 and not intents
+                spinner = visual(overlay, 'trackArtworkPlaybackRefreshSpinner')
+                capture('fullscreen-track-art-refreshing-playback-status')
+                assert refresh_status.property('visible') and not refresh_status.property('enabled')
+                assert spinner.property('visible') and spinner.property('running')
+                assert refresh_accessible.text(QAccessible.Text.Name) == backend.t('session_refreshing_playback_status')
+                drain()
+                assert not refresh_status.property('visible') and not spinner.property('running') and not intents
+                owner.transport.active.return_value = previous_active_result
+                current_playback = owner._session['broadcast']['playback']
                 focused_transport = visual(overlay, 'sessionPlaybackPrevious')
                 focused_transport.forceActiveFocus()
                 assert focused_transport.property('activeFocus')

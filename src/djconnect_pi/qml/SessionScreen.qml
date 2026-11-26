@@ -2714,13 +2714,37 @@ Item {
         GlassButton {
             id: refreshTransport
             objectName: "trackArtworkPlaybackRefresh"
-            visible: screen.state.playback_control.status === "uncertain"
+            property bool refreshingStatus: false
+            visible: refreshingStatus || screen.state.playback_control.status === "uncertain"
             Layout.alignment: Qt.AlignHCenter
             Layout.maximumWidth: transportControls.width
-            iconName: "refresh"
-            text: screen.tr("session_refresh_playback_status")
-            enabled: !screen.owner.busy
-            onClicked: screen.owner.refreshPlayback()
+            iconName: refreshingStatus ? "" : "refresh"
+            text: screen.tr(refreshingStatus ? "session_refreshing_playback_status" : "session_refresh_playback_status")
+            enabled: !refreshingStatus && !screen.owner.busy && !screen.owner.refreshing
+            opacity: enabled || refreshingStatus ? 1 : 0.4
+            leftPadding: refreshingStatus ? 50 : padding
+            implicitWidth: contentItem.implicitWidth + (refreshingStatus ? 72 : 36)
+            onClicked: {
+                refreshingStatus = true
+                screen.owner.refreshPlayback()
+                if (!screen.owner.refreshing) refreshingStatus = false
+            }
+            onVisibleChanged: if (!visible) refreshingStatus = false
+            BusyIndicator {
+                objectName: "trackArtworkPlaybackRefreshSpinner"
+                anchors.left: parent.left
+                anchors.leftMargin: 14
+                anchors.verticalCenter: parent.verticalCenter
+                width: 26; height: 26
+                visible: refreshTransport.refreshingStatus
+                running: visible
+            }
+            Connections {
+                target: screen.owner
+                function onRefreshingChanged() {
+                    if (!screen.owner.refreshing) refreshTransport.refreshingStatus = false
+                }
+            }
         }
         Item { visible: transportControls.overArtwork; Layout.fillHeight: true }
     }
