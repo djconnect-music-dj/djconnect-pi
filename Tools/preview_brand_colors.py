@@ -696,9 +696,10 @@ def main():
             backend._set_music_discovery_busy(False)
             QTest.qWait(1150)
             assert request.call_count == 3
-        backend._apply_music_discovery_data({"success": True, "sections": [
+        backend._apply_music_discovery_data({"success": True, "feedback_supported": True, "sections": [
             {"id": "fixture-shelf", "title": "Recommendations", "items": [
-                {"id": "fixture-track", "kind": "track", "title": "Closeable recommendation"},
+                {"id": "fixture-track", "kind": "track", "title": "Closeable recommendation",
+                 "uri": "spotify:track:fixture", "reason": "A long recommendation explanation with listening context. " * 110},
             ]},
         ]})
         QTest.qWait(65)
@@ -719,6 +720,19 @@ def main():
             assert recommendation.property("activeFocus")
             QTest.keyClick(window, Qt.Key.Key_Space)
             assert detail.property("opened")
+            scroller = visual_item(window.contentItem(), "discoveryDetailScroll").property("contentItem")
+            play = visual_item(window.contentItem(), "discoveryDetailPlay")
+            feedback = visual_item(window.contentItem(), "discoveryDetailFeedback")
+            assert play.mapToItem(scroller, QPointF()).y() > scroller.height()
+            for action in (play, feedback):
+                QTest.keyClick(window, Qt.Key.Key_Tab)
+                top = action.mapToItem(scroller, QPointF()).y()
+                assert action.property("activeFocus") and top >= -1 and top + action.height() <= scroller.height() + 1
+            capture("discovery-detail-keyboard-actions-" + locale)
+            for action in (play, close_detail):
+                QTest.keyClick(window, Qt.Key.Key_Backtab, Qt.KeyboardModifier.ShiftModifier)
+                top = action.mapToItem(scroller, QPointF()).y()
+                assert action.property("activeFocus") and top >= -1 and top + action.height() <= scroller.height() + 1
             QTest.keyClick(window, Qt.Key.Key_Escape)
             assert not detail.property("opened") and recommendation.property("activeFocus")
         backend.setLanguage("nl")

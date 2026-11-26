@@ -3786,6 +3786,18 @@ BrandWindow {
                 if (item) open()
             }
 
+            function revealFocusedControl(control) {
+                if (!control.activeFocus) return
+                const flick = detailScroll.contentItem
+                const top = control.mapToItem(flick.contentItem, 0, 0).y
+                const bottom = top + control.height
+                if (top < flick.contentY)
+                    flick.contentY = Math.max(flick.originY, top)
+                else if (bottom > flick.contentY + flick.height)
+                    flick.contentY = Math.min(bottom - flick.height,
+                                              flick.originY + Math.max(0, flick.contentHeight - flick.height))
+            }
+
             Connections {
                 target: djconnect
                 function onDemoModeChanged() { discoveryDetail.close() }
@@ -3798,6 +3810,7 @@ BrandWindow {
 
             contentItem: ScrollView {
                 id: detailScroll
+                objectName: "discoveryDetailScroll"
                 clip: true
                 contentWidth: availableWidth
                 ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
@@ -3851,6 +3864,7 @@ BrandWindow {
                             iconName: "close"
                             Accessible.name: root.tr("close")
                             Layout.alignment: Qt.AlignTop
+                            onActiveFocusChanged: discoveryDetail.revealFocusedControl(closeRecommendationButton)
                             onClicked: discoveryDetail.close()
                         }
                     }
@@ -3878,6 +3892,7 @@ BrandWindow {
                     }
 
                     GlassButton {
+                        id: playRecommendationButton
                         objectName: "discoveryDetailPlay"
                         text: root.tr("play_now")
                         iconName: "play"
@@ -3887,6 +3902,7 @@ BrandWindow {
                         font.pixelSize: 18
                         Layout.fillWidth: true
                         Layout.preferredHeight: 52
+                        onActiveFocusChanged: discoveryDetail.revealFocusedControl(playRecommendationButton)
                         onClicked: if (discoveryDetail.item) djconnect.playMusicDiscoveryItem(discoveryDetail.item.payload)
                     }
 
@@ -3902,6 +3918,7 @@ BrandWindow {
                     }
 
                     PurpleButton {
+                        id: feedbackRecommendationButton
                         objectName: "discoveryDetailFeedback"
                         text: root.tr("feedback")
                         visible: djconnect.musicDiscoveryFeedbackSupported
@@ -3909,6 +3926,7 @@ BrandWindow {
                         font.pixelSize: 18
                         Layout.fillWidth: true
                         Layout.preferredHeight: 48
+                        onActiveFocusChanged: discoveryDetail.revealFocusedControl(feedbackRecommendationButton)
                         onClicked: discoveryFeedbackMenu.open()
 
                         Menu {
