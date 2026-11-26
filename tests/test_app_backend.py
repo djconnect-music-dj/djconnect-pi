@@ -411,6 +411,21 @@ def test_discovery_feedback_removes_only_acknowledged_recommendation(tmp_path, s
         backend.client.music_discovery_feed.assert_not_called()
 
 
+@pytest.mark.parametrize("version_mismatch", [False, True])
+def test_ask_dj_send_is_not_queued_offline_or_with_an_incompatible_backend(tmp_path, version_mismatch):
+    ensure_app()
+    config_path = tmp_path / "config.json"
+    save_config(config_path, Config(paired=True, device_token="fixture", ha_url="http://fixture.invalid"))
+    backend = DJConnectBackend(config_path)
+    backend._question_executor.submit = Mock()
+    backend._set_backend_available(version_mismatch)
+    backend._version_mismatch_visible = version_mismatch
+
+    assert backend.sendAskDjQuestion("Keep this draft") is False
+    backend._question_executor.submit.assert_not_called()
+    assert not backend.askDjBusy and backend.askDjMessages == []
+
+
 def test_log_display_uses_compact_touch_prefix() -> None:
     text = _format_logs_for_display(
         "2026-06-13 17:53:49,528 INFO djconnect_pi.app: Started\n"

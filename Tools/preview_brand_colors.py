@@ -60,7 +60,7 @@ def main():
         window.setProperty("splashVisible", False)
         # Keep fixture reads explicit; wall-clock polling would race language/scope probes.
         for obj in window.findChildren(QObject):
-            if 'Timer' in obj.metaObject().className() and obj.property('interval') in (3000,15000):
+            if 'Timer' in obj.metaObject().className() and obj.property('interval') in (3000, 7000, 15000):
                 pause = QQmlExpression(engine.rootContext(), obj, 'running = false')
                 pause.evaluate()
                 assert not pause.hasError(), pause.error().toString()
@@ -747,12 +747,24 @@ def main():
         backend.pairedChanged.emit()
         backend._demo_mode = False
         backend.demoModeChanged.emit()
+        draft.setProperty("text", "Keep this offline draft")
+        send_question = visual_item(ask_dj, "askDjSend")
+        assert send_question.property("enabled")
         backend._set_backend_available(False)
         offline_history = visual_item(ask_dj, "askDjOfflineHistory")
         assert offline_notice.property("visible") and offline_history.property("visible")
         assert offline_history.property("text") == backend.t("ask_dj_offline_history")
         assert visual_item(ask_dj, "askDjMessagesView").property("count") == 4
-        backend._set_backend_available(True)
+        assert draft.property("enabled") and not send_question.property("enabled")
+        draft.forceActiveFocus()
+        with patch.object(backend._question_executor, "submit") as dispatch:
+            QTest.keyClick(window, Qt.Key.Key_Return)
+            dispatch.assert_not_called()
+            backend._set_backend_available(True)
+            dispatch.assert_not_called()
+        assert send_question.property("enabled") and draft.property("text") == "Keep this offline draft", (
+            send_question.property("enabled"), draft.property("text"), backend.paired, backend.backendAvailable,
+        )
         assert not offline_notice.property("visible")
         backend._demo_mode = True
         backend.demoModeChanged.emit()

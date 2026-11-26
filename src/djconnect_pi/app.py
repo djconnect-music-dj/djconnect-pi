@@ -1628,7 +1628,7 @@ class DJConnectBackend(QObject):
             ]}))
             return True
         self._sync_config_from_disk()
-        if not self.paired or self.cfg.private_session:
+        if not self.paired or self.cfg.private_session or not self._backend_available or self._version_mismatch_visible:
             return False
         transport = self._session_controller.transport
         try:

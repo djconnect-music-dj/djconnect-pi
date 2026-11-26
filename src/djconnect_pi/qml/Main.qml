@@ -5424,7 +5424,7 @@ BrandWindow {
                         iconName: "send"; Accessible.name: root.tr("session_send")
                         primary: true
                         Layout.preferredWidth: 52; Layout.fillHeight: true
-                        enabled: askDjChatInput.enabled && askDjChatInput.text.trim().length > 0
+                        enabled: !askDjPanel.historyOffline && askDjChatInput.enabled && askDjChatInput.text.trim().length > 0
                         onClicked: askDjPanel.sendQuestion()
                     }
                 }
