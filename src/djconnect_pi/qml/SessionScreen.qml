@@ -717,6 +717,12 @@ Item {
         archiveIntent = {profile: scopeProfileId, manual: !!manual}
         archiveRead.restart()
     }
+    function loadMoreArchive() {
+        if (!historyViewOpen || !archiveMore.visible || !archiveMore.enabled || searchPanel.visible) return
+        rememberArchive()
+        archiveReadActive = true
+        owner.moreHistory()
+    }
     Timer {
         id: archiveRead; interval: 0
         onTriggered: {
@@ -1033,12 +1039,15 @@ Item {
         target: historyScroll.contentItem
         property string flowDragContext: ""
         property string automaticLoadContext: ""
-        property real flowDragStart: 0
+        property string archiveDragScope: ""
+        property real dragStart: 0
         function onDraggingChanged() {
             var flick = historyScroll.contentItem
             if (!flick.dragging) return
             flowDragContext = flowLoadOlder.visible && screen.visible ? screen.composerContext : ""
-            flowDragStart = flick.contentY
+            archiveDragScope = archiveMore.visible && archiveMore.enabled && screen.backend.paired
+                && !screen.backend.demoMode && !searchPanel.visible ? screen.historyPullScope : ""
+            dragStart = flick.contentY
             archivePosition.stop()
             screen.archiveReturn = null
             screen.followQuestionReply = false
@@ -1048,10 +1057,17 @@ Item {
         function onMovementEnded() {
             var dragContext = flowDragContext
             flowDragContext = ""
+            const archiveScope = archiveDragScope
+            archiveDragScope = ""
             var flick = historyScroll.contentItem
+            if (flick.contentY <= dragStart) return
+            if (archiveScope && archiveScope === screen.historyPullScope
+                    && flick.contentY + flick.height >= flick.originY + flick.contentHeight - 24) {
+                screen.loadMoreArchive()
+                return
+            }
             if (!dragContext || dragContext !== screen.composerContext || dragContext === automaticLoadContext
-                    || !screen.visible || !flowLoadOlder.visible || !flowLoadOlder.enabled
-                    || !flick.atYEnd || flick.contentY <= flowDragStart) return
+                    || !screen.visible || !flowLoadOlder.visible || !flowLoadOlder.enabled || !flick.atYEnd) return
             automaticLoadContext = dragContext
             screen.owner.expandFlow(screen.state.session_id)
         }
@@ -2256,7 +2272,14 @@ Item {
                 GlassButton { objectName: "sessionHistoryPrevious"; text: screen.tr("session_history_previous"); visible: screen.state.has_previous_entries; enabled: !screen.owner.busy; onClicked: screen.owner.previousEntries(screen.readingAnchor()) }
                 GlassButton { objectName: "sessionHistoryNext"; text: screen.tr("session_history_next"); visible: !!screen.state.timeline.next_cursor; enabled: !screen.owner.busy; onClicked: screen.owner.nextEntries(screen.readingAnchor(), screen.readingOffset) }
             }
-            GlassButton { visible: screen.historical && !screen.state.timeline.session && screen.state.has_more_sessions; objectName: "sessionArchiveMore"; text: screen.tr("session_more"); enabled: !screen.owner.busy && !screen.archiveIntent; onClicked: { if (screen.visible && screen.historical && !screen.currentHistory && !screen.state.timeline.session && screen.state.has_more_sessions && !screen.owner.busy && !screen.archiveIntent) { screen.rememberArchive(); screen.archiveReadActive = true; screen.owner.moreHistory() } } }
+            GlassButton {
+                id: archiveMore
+                objectName: "sessionArchiveMore"
+                visible: screen.historical && !screen.currentHistory && !screen.state.timeline.session && screen.state.has_more_sessions
+                enabled: !screen.historyReadOutstanding && !screen.archiveReadActive
+                text: screen.tr("session_more")
+                onClicked: screen.loadMoreArchive()
+            }
             Text { objectName: "sessionArchiveLimit"; visible: screen.historical && !screen.state.timeline.session && screen.state.history_limit_reached; text: screen.tr("session_archive_limit"); textFormat: Text.PlainText; color: BrandTheme.colors.muted; font.pixelSize: 18; wrapMode: Text.WordWrap; Layout.fillWidth: true }
 
             Flow {

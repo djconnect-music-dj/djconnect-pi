@@ -66,8 +66,9 @@ def click(window, button):
     QTest.qWait(65)
 
 
-def pull_down(window, scroll, touch, distance, *, retract=False):
-    start = scroll.mapToScene(QPointF(scroll.width() / 2, 100)).toPoint()
+def drag_scroll(window, scroll, touch, distance, *, retract=False):
+    start_y = 100 if distance > 0 else scroll.height() - 100
+    start = scroll.mapToScene(QPointF(scroll.width() / 2, start_y)).toPoint()
     QTest.touchEvent(window, touch).press(0, start, window).commit()
     offsets = [round(step * distance / 5) for step in range(1, 6)]
     if retract:
@@ -271,10 +272,10 @@ def main():
                                         view_flickable = view.property("contentItem")
                                         view_flickable.setProperty("contentY", view_flickable.property("originY"))
                                         QTest.qWait(65)
-                                        pull_down(window, view, touch, 24)
+                                        drag_scroll(window, view, touch, 24)
                                         refresh.assert_not_called()
                                         assert not spinner.property("visible")
-                                        pull_down(window, view, touch, 230)
+                                        drag_scroll(window, view, touch, 230)
                                         refresh.assert_called_once_with("refresh", background=True)
                                         assert spinner.property("visible") and spinner.property("running")
                                         assert spinner.y() == view.y() + 8
@@ -304,9 +305,9 @@ def main():
                         forecast_flick.setProperty("contentY", forecast_flick.property("originY"))
                         QTest.qWait(65)
                         with QSignalBlocker(poll_timer), patch.object(owner, "_launch") as refresh:
-                            pull_down(window, forecast_view, touch, 230, retract=True)
+                            drag_scroll(window, forecast_view, touch, 230, retract=True)
                             refresh.assert_not_called()
-                            pull_down(window, forecast_view, touch, 230)
+                            drag_scroll(window, forecast_view, touch, 230)
                             refresh.assert_called_once_with("refresh", background=True)
                     click(window, flow)
                     sid = session["session_id"]
@@ -466,11 +467,11 @@ def main():
                 archive_panel.setProperty("keyboardVisible", True)
                 QTest.qWait(65)
                 with patch.object(owner, "_launch") as verify:
-                    pull_down(window, search_scroll, touch, 230)
+                    drag_scroll(window, search_scroll, touch, 230)
                     verify.assert_not_called()
                 assert not archive_panel.property("keyboardVisible") and archive_field.property("text") == "fixture"
                 with patch.object(owner, "_launch") as verify:
-                    pull_down(window, search_scroll, touch, 230)
+                    drag_scroll(window, search_scroll, touch, 230)
                     verify.assert_called_once_with("archive_search", "fixture")
                 owner.changed.emit()
                 QTest.qWait(65)
@@ -543,10 +544,10 @@ def main():
                     owner._set_running(1, action)
                     owner.changed.emit()
                 with patch.object(owner, "_launch", side_effect=start_history_read) as archive_read:
-                    pull_down(window, archive_scroll, touch, 24)
+                    drag_scroll(window, archive_scroll, touch, 24)
                     archive_read.assert_not_called()
                     assert not pull_spinner.property("visible")
-                    pull_down(window, archive_scroll, touch, 230)
+                    drag_scroll(window, archive_scroll, touch, 230)
                     archive_read.assert_called_once_with("history_refresh", expected_manual_refresh)
                     assert pull_spinner.property("visible")
                     assert pull_spinner.y() == archive_scroll.y() + 8
@@ -571,6 +572,25 @@ def main():
                 owner.archiveRefreshFinished.emit(False)
                 assert backend.toastText == TRANSLATIONS[language]["session_archive_refresh_failed"]
                 backend.hideToast()
+                owner._history_cursor = "fixture-next-archive-page"
+                owner._sessions = [
+                    {"session_id": f"fixture-page-session-{index}", "lifecycle_status": "ENDED",
+                     "created_at": "2026-11-25T10:00:00Z"} for index in range(30)
+                ]
+                owner.changed.emit()
+                QTest.qWait(65)
+                with patch.object(owner, "_launch", side_effect=start_history_read) as archive_read:
+                    drag_scroll(window, archive_scroll, touch, -65)
+                    archive_read.assert_not_called()
+                    remaining = archive_flick.property("contentHeight") - archive_flick.height()
+                    archive_flick.setProperty("contentY", archive_flick.property("originY") + remaining - 110)
+                    QTest.qWait(65)
+                    drag_scroll(window, archive_scroll, touch, -230)
+                    QTest.qWait(350)
+                    archive_read.assert_called_once_with("history_more", owner._archive_request(2))
+                owner._set_running()
+                owner._history_cursor = ""
+                owner._sessions = []
                 owner._error = "unavailable"
                 owner.changed.emit()
                 assert not archive_empty.property("visible") and not archive_window_empty.property("visible")
@@ -632,7 +652,7 @@ def main():
                 archive_flick.setProperty("contentY", archive_flick.property("originY"))
                 QTest.qWait(65)
                 with patch.object(owner, "_launch", side_effect=start_history_read) as saved_read:
-                    pull_down(window, archive_scroll, touch, 230)
+                    drag_scroll(window, archive_scroll, touch, 230)
                     saved_read.assert_called_once_with("timeline_refresh", {
                         "session_id": saved["session_id"], "entry_id": entry["entry_id"],
                         "page_cursor": "fixture-detail-page",
@@ -670,7 +690,7 @@ def main():
                 assert not search_empty.property("visible")
                 search_field.setProperty("text", "fixture")
                 with patch.object(owner, "_launch") as verify:
-                    pull_down(window, search_scroll, touch, 230)
+                    drag_scroll(window, search_scroll, touch, 230)
                     verify.assert_called_once_with("search_refresh", {
                         "session_id": saved["session_id"], "query": "fixture", "pages": 1,
                     })
