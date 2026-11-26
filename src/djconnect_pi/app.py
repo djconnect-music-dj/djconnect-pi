@@ -202,6 +202,7 @@ class DJConnectBackend(QObject):
     _backendAvailableReady = Signal(bool)
     _toastReady = Signal(str, int, str)
     _askDjReady = Signal(object)
+    _askDjClearReady = Signal(object)
     _musicDnaReady = Signal(object)
     _musicDiscoveryReady = Signal(object)
     _musicDiscoveryPlayConfirmed = Signal(object, str, str, object)
@@ -332,6 +333,7 @@ class DJConnectBackend(QObject):
         self._backendAvailableReady.connect(self._set_backend_available)
         self._toastReady.connect(self._show_toast)
         self._askDjReady.connect(self._apply_ask_dj_data)
+        self._askDjClearReady.connect(self._apply_ask_dj_clear_result)
         self._musicDnaReady.connect(self._apply_music_dna_data)
         self._musicDiscoveryReady.connect(self._apply_music_discovery_data)
         self._musicDiscoveryPlayConfirmed.connect(self._apply_music_discovery_play)
@@ -2393,8 +2395,24 @@ class DJConnectBackend(QObject):
         if ticket != self._private_read_context():
             return
         self._persist_backend_summary()
-        self._askDjReady.emit(self._profile_read_result(data, ticket))
-        self._toastReady.emit(self.tr_key("ask_dj_cleared"), 2500, "askdj")
+        self._askDjClearReady.emit(self._profile_read_result(data, ticket))
+
+    @Slot(object)
+    def _apply_ask_dj_clear_result(self, data: object) -> None:
+        if self._demo_mode or not isinstance(data, dict) or not self._profile_result_current(data):
+            return
+        cleared = data.get("cleared")
+        revision = data.get("clear_revision")
+        legacy_receipt = (
+            cleared is None and type(revision) is int and revision > self._ask_dj_clear_revision
+            and data.get("messages") == []
+        )
+        if data.get("success") is not True or not (cleared is True or legacy_receipt):
+            self._show_toast(self.tr_key("ask_dj_clear_unconfirmed"), 5000, "askdj")
+            return
+        self._apply_ask_dj_data(data)
+        if self._profile_result_current(data):
+            self._show_toast(self.tr_key("ask_dj_cleared"), 2500, "askdj")
 
     def _track_insight_worker(self, playback: Playback, scope: tuple) -> None:
         if not self._application_foreground or scope != self._track_insight_scope():

@@ -1506,6 +1506,13 @@ _KEYBOARD_TRANSLATIONS = {
         "Les messages affichés peuvent ne plus être à jour.",
         "Los mensajes mostrados pueden estar desactualizados.",
     ),
+    "ask_dj_clear_unconfirmed": (
+        "Chat history deletion is unconfirmed. Refresh before retrying.",
+        "Wissen van de chatgeschiedenis is niet bevestigd. Vernieuw voordat je het opnieuw probeert.",
+        "Das Löschen des Chatverlaufs ist nicht bestätigt. Vor einem weiteren Versuch bitte aktualisieren.",
+        "La suppression de l’historique n’est pas confirmée. Actualisez avant de réessayer.",
+        "No se ha confirmado el borrado del historial. Actualiza antes de volver a intentarlo.",
+    ),
     "media_search_queue": ("Search queue", "Zoek in wachtrij", "Warteschlange durchsuchen", "Rechercher dans la file", "Buscar en la cola"),
     "media_search_playlists": ("Search playlists", "Zoek in afspeellijsten", "Playlists durchsuchen", "Rechercher dans les playlists", "Buscar en las listas"),
     "media_no_matches": ("No search results", "Geen zoekresultaten", "Keine Suchergebnisse", "Aucun résultat", "Sin resultados"),

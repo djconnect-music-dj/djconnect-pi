@@ -1491,6 +1491,26 @@ def test_ask_dj_clear_does_not_cross_conversation_scope(tmp_path, transition):
     backend.client.ask_dj_history_clear.assert_not_called()
 
 
+@pytest.mark.parametrize("response,confirmed", [
+    ({"success": True, "cleared": True}, True),
+    ({"success": True, "clear_revision": 2, "messages": []}, True),
+    ({"success": True, "clear_revision": 1, "messages": []}, False),
+    ({"success": True}, False),
+    ({"success": False, "cleared": True}, False),
+])
+def test_ask_dj_clear_requires_an_authoritative_receipt(tmp_path, response, confirmed):
+    ensure_app()
+    backend = DJConnectBackend(tmp_path / "config.json")
+    backend._ask_dj_messages = [{"id": "saved", "text": "Saved answer"}]
+    backend._ask_dj_clear_revision = 1
+    backend.client.ask_dj_history_clear = Mock(return_value=response)
+
+    backend._clear_ask_dj_history_worker()
+
+    assert bool(backend.askDjMessages) is not confirmed
+    assert backend.toastText == backend.t("ask_dj_cleared" if confirmed else "ask_dj_clear_unconfirmed")
+
+
 def test_ask_dj_clear_history_success_clears_local_messages_and_revisions(tmp_path: Path) -> None:
     ensure_app()
     backend = DJConnectBackend(tmp_path / "config.json")

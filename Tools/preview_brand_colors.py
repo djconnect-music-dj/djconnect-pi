@@ -790,6 +790,13 @@ def main():
         assert window.property("askDjClearConfirmOpen")
         confirm_clear = window.findChild(QObject, "askDjClearConfirmButton")
         assert confirm_clear.property("enabled")
+        with (patch.object(backend, "_sync_config_from_disk"),
+              patch.object(backend.client, "ask_dj_history_clear", return_value={"success": True}),
+              patch.object(backend._executor, "submit") as dispatch):
+            QMetaObject.invokeMethod(confirm_clear, "clicked")
+            dispatch.call_args.args[0]()
+        assert backend.toastText == backend.t("ask_dj_clear_unconfirmed")
+        assert window.property("askDjClearConfirmOpen")
         backend._set_backend_available(False)
         assert not confirm_clear.property("enabled")
         backend._set_backend_available(True)
