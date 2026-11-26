@@ -481,6 +481,21 @@ def main():
                     click(window, connection_about)
                     assert window.property("aboutOpen") and window.property("activeScreen") == "history"
                     assert not connection_info.property("visible")
+                    backend_status = window.findChild(QObject, "aboutMusicBackendStatus")
+                    original_backend = (backend.cfg.music_backend, backend.cfg.music_backend_available, backend.backendAvailable)
+                    for identifier, provider_ready, connection_ready in (
+                        ("", True, True), ("spotify_direct", False, True), ("spotify_direct", True, False),
+                        ("spotify_direct", True, True),
+                    ):
+                        backend.cfg.music_backend = identifier
+                        backend.cfg.music_backend_available = provider_ready
+                        backend._set_backend_available(connection_ready)
+                        backend.settingsChanged.emit()
+                        status_key = "music_backend_available_state" if identifier and provider_ready and connection_ready else "music_backend_unavailable_state"
+                        assert backend_status.property("text") == TRANSLATIONS[language][status_key]
+                    backend.cfg.music_backend, backend.cfg.music_backend_available, was_available = original_backend
+                    backend._set_backend_available(was_available)
+                    backend.settingsChanged.emit()
                     QQmlExpression(engine.rootContext(), window, 'navigateEdgeBack("about")').evaluate()
                     assert not window.property("aboutOpen") and window.property("activeScreen") == "history"
                 backend.settingsChanged.emit()

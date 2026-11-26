@@ -6798,7 +6798,14 @@ BrandWindow {
                     Text { text: root.tr("connection_type"); color: BrandTheme.colors.muted; font.pixelSize: 20; font.bold: true; horizontalAlignment: Text.AlignRight; Layout.preferredWidth: 190 }
                     Text { text: djconnect.connectionType; color: BrandTheme.colors.text; font.pixelSize: 20; Layout.fillWidth: true; elide: Text.ElideRight }
                     Text { text: root.tr("music_backend"); color: BrandTheme.colors.muted; font.pixelSize: 20; font.bold: true; horizontalAlignment: Text.AlignRight; Layout.preferredWidth: 190 }
-                    Text { text: djconnect.paired ? root.tr("connected_value") : root.tr("not_connected_value"); color: djconnect.paired ? BrandTheme.colors.success : BrandTheme.colors.danger; font.pixelSize: 20; font.bold: true; Layout.fillWidth: true }
+                    Text {
+                        objectName: "aboutMusicBackendStatus"
+                        readonly property bool available: djconnect.paired && djconnect.backendAvailable
+                            && djconnect.musicBackendId.length > 0 && djconnect.musicBackendAvailable
+                        text: root.tr(available ? "music_backend_available_state" : "music_backend_unavailable_state")
+                        color: available ? BrandTheme.colors.success : BrandTheme.colors.danger
+                        font.pixelSize: 20; font.bold: true; Layout.fillWidth: true
+                    }
                     Text { text: root.tr("backend_name"); color: BrandTheme.colors.muted; font.pixelSize: 20; font.bold: true; horizontalAlignment: Text.AlignRight; Layout.preferredWidth: 190 }
                     Text { text: djconnect.musicBackendName.length ? djconnect.musicBackendName : "-"; color: BrandTheme.colors.text; font.pixelSize: 18; Layout.fillWidth: true; elide: Text.ElideMiddle }
                     Text { text: root.tr("backend_error"); color: BrandTheme.colors.muted; font.pixelSize: 20; font.bold: true; horizontalAlignment: Text.AlignRight; Layout.preferredWidth: 190; visible: djconnect.musicBackendError.length > 0 }
