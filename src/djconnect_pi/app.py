@@ -184,6 +184,7 @@ class DJConnectBackend(QObject):
     playbackModePendingChanged = Signal()
     outputDeviceChanged = Signal()
     progressChanged = Signal()
+    playbackSeekCancelled = Signal()
     pairedChanged = Signal()
     busyChanged = Signal()
     settingsChanged = Signal()
@@ -407,6 +408,8 @@ class DJConnectBackend(QObject):
         for signal in (self.outputDeviceChanged, self.profileChanged, self.pairedChanged,
                        self.demoModeChanged, self.settingsChanged):
             signal.connect(self._invalidate_playback_mode)
+            signal.connect(self._invalidate_playback_seek)
+        self.playbackTrackChanged.connect(self._invalidate_playback_seek)
         self._statusReady.connect(self._set_status_text)
         self._pairingReady.connect(self._apply_pairing)
         self._busyReady.connect(self._set_busy)
@@ -1648,12 +1651,20 @@ class DJConnectBackend(QObject):
 
     @Slot()
     def cancelPlaybackSeek(self) -> None:
+        had_gesture = self._playback_seek_gesture is not None
         self._playback_seek_epoch += 1
         self._playback_seek_gesture = None
+        if had_gesture:
+            self.playbackSeekCancelled.emit()
+
+    @Slot()
+    def _invalidate_playback_seek(self) -> None:
+        if self._playback_seek_gesture and self._playback_seek_gesture[1] != self._seek_gesture_context():
+            self.cancelPlaybackSeek()
 
     def _seek_gesture_context(self):
         if self._demo_mode:
-            return ("demo", self.playback.uri) if self.playback.duration_seconds > 0 else None
+            return ("demo", self.playback.uri, self.playback.output_device) if self.playback.duration_seconds > 0 else None
         return self._playback_seek_context(self.playback)
 
     @Slot(result=int)
@@ -1951,6 +1962,7 @@ class DJConnectBackend(QObject):
         value = value.strip()
         if not value:
             self.playback.output_device = ""
+            self.cancelPlaybackSeek()
             self.outputDeviceChanged.emit()
             _LOGGER.info("User cleared output device selection from touch UI")
             self.showToastForContext(self.tr_key("none"), "playback")
@@ -2055,6 +2067,7 @@ class DJConnectBackend(QObject):
         self._pending_output_device = value
         self._pending_output_until = time.monotonic() + 20
         self.cancelControlVolume()
+        self.cancelPlaybackSeek()
         self.outputDeviceChanged.emit()
         _LOGGER.info("User selected output device: %s", value)
         self.showToastForContext(value, "playback")

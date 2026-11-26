@@ -1726,6 +1726,7 @@ BrandWindow {
                     stepSize: 1
                     enabled: nowPanel.seekActionsAvailable && (djconnect.demoMode || djconnect.musicBackendSupportsSeek)
                     Accessible.name: root.tr("session_playback_position")
+                    onEnabledChanged: if (!enabled && seekPointer && seekPointer.lease) djconnect.cancelPlaybackSeek()
                     onMoved: if (!seekPointer.pressed) {
                         const lease = djconnect.beginPlaybackSeek()
                         if (lease) djconnect.commitPlaybackSeek(lease, Math.round(value))
@@ -1760,6 +1761,10 @@ BrandWindow {
                         anchors.fill: parent
                         property int lease: 0
                         property int draft: 0
+                        Connections {
+                            target: djconnect
+                            function onPlaybackSeekCancelled() { seekPointer.lease = 0 }
+                        }
                         function targetAt(x) {
                             const inset = nowPositionSlider.leftPadding + nowPositionSlider.handle.width / 2
                             const travel = Math.max(1, nowPositionSlider.availableWidth - nowPositionSlider.handle.width)
