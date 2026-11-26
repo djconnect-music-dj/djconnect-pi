@@ -526,6 +526,18 @@ def main():
                 owner.changed.emit()
                 assert not pull_spinner.property("visible")
                 assert owner._history_start == expected_window["start"]
+                toolbar_refresh = one(screen, "sessionRefresh")
+                toolbar_spinner = one(toolbar_refresh, "sessionRefreshSpinner")
+                assert not toolbar_spinner.property("visible")
+                with patch.object(owner, "_launch", side_effect=start_history_read) as archive_read:
+                    QTest.qWait(300)
+                    click(window, toolbar_refresh)
+                    archive_read.assert_called_once_with("history_refresh", expected_window)
+                    assert toolbar_spinner.property("visible") and not toolbar_refresh.property("enabled")
+                    assert not pull_spinner.property("visible")
+                owner._set_running()
+                owner.changed.emit()
+                assert not toolbar_spinner.property("visible") and toolbar_refresh.property("enabled")
                 owner._error = "unavailable"
                 owner.changed.emit()
                 assert not archive_empty.property("visible") and not archive_window_empty.property("visible")

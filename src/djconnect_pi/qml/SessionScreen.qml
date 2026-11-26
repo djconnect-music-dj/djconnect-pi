@@ -337,13 +337,18 @@ Item {
     readonly property bool showForecast: !historical && state.forecast_supported && forecastMode
     property Item pullRefreshView: null
     property bool historyPullRefreshing: false
+    property bool historyToolbarRefreshing: false
     readonly property bool historyReadOutstanding: !!archiveIntent || historyReadPending || owner.busy
     readonly property string historyPullScope: JSON.stringify([
         scopeProfileId, currentHistory, (state.timeline.session || {}).session_id || ""
     ])
-    onHistoryReadOutstandingChanged: if (!historyReadOutstanding) historyPullRefreshing = false
-    onHistoryPullScopeChanged: historyPullRefreshing = false
-    onHistoryViewOpenChanged: if (!historyViewOpen) historyPullRefreshing = false
+    function clearHistoryRefreshIndicators() {
+        historyPullRefreshing = false
+        historyToolbarRefreshing = false
+    }
+    onHistoryReadOutstandingChanged: if (!historyReadOutstanding) clearHistoryRefreshIndicators()
+    onHistoryPullScopeChanged: clearHistoryRefreshIndicators()
+    onHistoryViewOpenChanged: if (!historyViewOpen) clearHistoryRefreshIndicators()
     function refreshFromPull(view) {
         owner.refresh()
         if (owner.refreshing) pullRefreshView = view
@@ -1231,14 +1236,21 @@ Item {
                     onClicked: connectionInfo.open()
                 }
                 GlassButton {
+                    id: toolbarRefresh
                     objectName: "sessionRefresh"
-                    iconName: screen.owner.refreshing ? "" : "refresh"
+                    readonly property bool refreshing: screen.historical ? screen.historyToolbarRefreshing : screen.owner.refreshing
+                    iconName: refreshing ? "" : "refresh"
                     Accessible.name: screen.tr("refresh")
                     implicitWidth: 52; background: Item {}
-                    enabled: !screen.owner.busy || screen.owner.refreshing
+                    enabled: screen.historical ? screen.backend.paired && !screen.backend.demoMode
+                        && !screen.historyReadOutstanding && !screen.archiveReadActive
+                        : !screen.owner.busy || screen.owner.refreshing
                     onClicked: {
-                        if (screen.owner.refreshing) return
-                        if (screen.historical) screen.refreshHistory(); else screen.owner.refresh()
+                        if (refreshing) return
+                        if (screen.historical) {
+                            screen.refreshHistory()
+                            screen.historyToolbarRefreshing = screen.historyReadOutstanding
+                        } else screen.owner.refresh()
                         screen.backend.pollSharedSettings()
                     }
                     BusyIndicator {
@@ -1246,8 +1258,9 @@ Item {
                         anchors.centerIn: parent
                         width: 28
                         height: width
-                        visible: screen.owner.refreshing
+                        visible: toolbarRefresh.refreshing
                         running: visible
+                        Accessible.name: screen.tr("loading")
                     }
                 }
             }
