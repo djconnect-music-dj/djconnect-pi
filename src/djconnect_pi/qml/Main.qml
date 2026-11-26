@@ -6386,6 +6386,7 @@ BrandWindow {
             currentHistory: root.activeScreen === "session-history"
             onExpandTrackArtwork: function(source) { root.openTrackArtwork(source) }
             onOpenVibeScape: function(pickerTop) { root.openVibeScape(pickerTop) }
+            onPairingRecoveryRequested: root.resetPairingConfirmOpen = true
             onNavigate: function(destination) {
                 if (destination === "about") root.aboutOpen = true
                 else root.activeScreen = destination
@@ -7315,6 +7316,7 @@ BrandWindow {
 
     GlassSheet {
         id: resetPairingConfirmPanel
+        objectName: "resetPairingConfirmPanel"
         visible: root.resetPairingConfirmOpen
         z: 84
 
@@ -7353,6 +7355,7 @@ BrandWindow {
                 }
 
                 DangerButton {
+                    objectName: "resetPairingConfirmAction"
                     text: root.tr("reset_pairing")
                     Layout.fillWidth: true
                     Layout.preferredHeight: 56
@@ -7364,6 +7367,7 @@ BrandWindow {
                 }
 
                 PurpleButton {
+                    objectName: "resetPairingCancel"
                     text: root.tr("cancel")
                     font.pixelSize: 24
                     Layout.fillWidth: true

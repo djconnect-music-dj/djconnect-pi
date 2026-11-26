@@ -47,9 +47,11 @@ Item {
     property var state: owner.screenState
     readonly property bool connectionOffline: !backend.demoMode && (state.connection_offline || state.error === "offline")
     readonly property bool connectionRetrying: connectionOffline && owner.connectionReadInFlight
+    readonly property bool pairingRecoveryNeeded: !backend.demoMode && backend.paired && !backend.haUrl.trim().length
     readonly property bool connectionMusicUnavailable: !backend.demoMode && !connectionOffline && backend.paired
         && backend.backendAvailable && backend.musicBackendId.length > 0 && !backend.musicBackendAvailable
     readonly property string connectionStatusText: backend.demoMode ? tr("demo_mode")
+        : pairingRecoveryNeeded ? tr("session_connection_address_missing")
         : connectionRetrying ? tr("session_connection_retrying") : connectionOffline ? tr("session_connection_offline")
         : connectionMusicUnavailable ? tr("backend_unavailable") : backend.connectionType
     readonly property var archiveSessions: visible && historical && !currentHistory && !state.timeline.session
@@ -985,6 +987,7 @@ Item {
     }
     signal openVibeScape(real pickerTop)
     signal navigate(string destination)
+    signal pairingRecoveryRequested()
     function tr(key) { backend.translationVersion; return backend.t(key) }
     function displayDate(value) { backend.translationVersion; return owner.formatTimestamp(value || "") }
     function savedDurationSuffix(header) {
@@ -1316,9 +1319,9 @@ Item {
                 GlassButton {
                     objectName: "sessionToolbarConnection"
                     iconName: screen.connectionRetrying ? "refresh"
-                        : screen.connectionOffline || screen.connectionMusicUnavailable ? "info" : "globe"
+                        : screen.connectionOffline || screen.connectionMusicUnavailable || screen.pairingRecoveryNeeded ? "info" : "globe"
                     foregroundColor: screen.connectionRetrying ? BrandTheme.colors.cyan : screen.connectionOffline ? BrandTheme.colors.danger
-                        : screen.connectionMusicUnavailable ? BrandTheme.colors.warning
+                        : screen.connectionMusicUnavailable || screen.pairingRecoveryNeeded ? BrandTheme.colors.warning
                         : screen.idleWelcome ? BrandTheme.colors.cyan : BrandTheme.colors.text
                     Accessible.name: screen.tr("connection_type")
                     Accessible.description: screen.connectionStatusText
@@ -3800,6 +3803,12 @@ Item {
     GlassPopup {
         id: connectionInfo
         objectName: "sessionConnectionInfo"
+        property bool recoveryRequested: false
+        onClosed: {
+            const recover = recoveryRequested
+            recoveryRequested = false
+            if (recover && screen.visible && screen.pairingRecoveryNeeded) screen.pairingRecoveryRequested()
+        }
         x: screen.width - width - 20; y: toolbar.y + toolbar.height + 8
         width: Math.min(screen.width - 40, 420); padding: 22
         modal: true; dim: false
@@ -3810,7 +3819,8 @@ Item {
                 objectName: "sessionConnectionType"
                 text: screen.connectionStatusText; textFormat: Text.PlainText
                 font.pixelSize: 22
-                color: screen.connectionRetrying ? BrandTheme.colors.cyan : screen.connectionOffline ? BrandTheme.colors.danger
+                color: screen.pairingRecoveryNeeded ? BrandTheme.colors.warning
+                    : screen.connectionRetrying ? BrandTheme.colors.cyan : screen.connectionOffline ? BrandTheme.colors.danger
                     : screen.connectionMusicUnavailable ? BrandTheme.colors.warning : BrandTheme.colors.muted
                 wrapMode: Text.WordWrap; Layout.fillWidth: true
             }
@@ -3839,7 +3849,19 @@ Item {
                 }
             }
             GlassButton {
+                objectName: "sessionConnectionPairAgain"
+                visible: screen.pairingRecoveryNeeded
+                iconName: "globe"
+                text: screen.tr("reset_pairing")
+                Layout.fillWidth: true
+                onClicked: {
+                    connectionInfo.recoveryRequested = true
+                    connectionInfo.close()
+                }
+            }
+            GlassButton {
                 visible: screen.idleWelcome && !screen.compact && screen.backend.paired && !screen.backend.demoMode
+                    && !screen.pairingRecoveryNeeded
                 enabled: !screen.owner.busy
                 iconName: "refresh"
                 text: screen.tr("refresh")
