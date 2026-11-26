@@ -3037,14 +3037,14 @@ Item {
                     for (let index = 0; index < count; index++) {
                         const row = itemAtIndex(index)
                         if (row && row.y + row.height > contentY && row.y < contentY + height)
-                            return {id: outputsPanel.choices[index].id, offset: row.y - contentY}
+                            return {id: outputsPanel.choices[index].id, index: index, offset: row.y - contentY}
                     }
                     return null
                 }
                 function restorePosition(anchor) {
-                    if (!anchor || moving) return
-                    const index = outputsPanel.choices.findIndex(row => row.id === anchor.id)
-                    if (index < 0) return
+                    if (!anchor || moving || !count) return
+                    const matchingIndex = outputsPanel.choices.findIndex(row => row.id === anchor.id)
+                    const index = matchingIndex >= 0 ? matchingIndex : Math.min(anchor.index, count - 1)
                     forceLayout()
                     positionViewAtIndex(index, ListView.Beginning)
                     const row = itemAtIndex(index)

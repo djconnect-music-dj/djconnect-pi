@@ -675,6 +675,16 @@ def main():
                 restored_anchor = output_anchor.evaluate()[0].toVariant()
                 assert restored_anchor['id'] == old_anchor['id'] and abs(restored_anchor['offset'] - old_anchor['offset']) <= 1
                 assert backend.toastText == TRANSLATIONS[language]['session_output_updated']
+                devices = owner.transport.playback_outputs.return_value['devices']
+                devices[:] = [device for device in devices if device['id'] != restored_anchor['id']]
+                choices = owner.state['playback_control']['outputs']['choices']
+                expected_anchor = choices[restored_anchor['index'] + 1]['id']
+                click('sessionOutputRead')
+                assert len(intents) == 1
+                intents.pop()()
+                QTest.qWait(80)
+                replacement_anchor = output_anchor.evaluate()[0].toVariant()
+                assert replacement_anchor['id'] == expected_anchor
                 owner.transport.playback_outputs.side_effect = SessionError('unavailable')
                 click('sessionOutputRead')
                 assert len(intents) == 1
