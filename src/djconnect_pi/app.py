@@ -137,6 +137,10 @@ class _MusicDnaProfileResult(_ProfileReadResult):
 class _DiscoveryRefreshResult(_ProfileReadResult):
     """An explicit Discover refresh that needs a completion notice."""
 
+    def __init__(self, data, context, *, used_existing_feed: bool):
+        super().__init__(data, context)
+        self.used_existing_feed = used_existing_feed
+
 
 class _TrackInsightResult(dict):
     """Track Insight delivery scope captured before dispatch, outside the wire payload."""
@@ -2135,10 +2139,9 @@ class DJConnectBackend(QObject):
                 self._music_discovery_accept_worker(ticket=ticket)
         else:
             manual = action == "refresh"
-            read = self.client.music_discovery_refresh if manual else self.client.music_discovery_feed
 
             def worker() -> None:
-                self._music_discovery_feed_worker(read=read, ticket=ticket, manual=manual)
+                self._music_discovery_feed_worker(ticket=ticket, manual=manual)
         _LOGGER.info("User requested Music Discovery %s", action)
         self._run(self.tr_key("music_discovery"), worker, done=lambda: self._set_music_discovery_busy(False))
 
@@ -2824,15 +2827,25 @@ class DJConnectBackend(QObject):
             return
         self._musicDnaReady.emit(self._profile_read_result(data, ticket))
 
-    def _music_discovery_feed_worker(self, *, read=None, ticket=None, manual: bool = False) -> None:
+    def _music_discovery_feed_worker(self, *, ticket=None, manual: bool = False) -> None:
         current = self._private_read_context()
         if ticket is not None and ticket != current:
             return
         ticket = current
-        if read is None:
-            read = self.client.music_discovery_feed
+        used_existing_feed = False
         try:
-            data = read()
+            if manual:
+                try:
+                    data = self.client.music_discovery_refresh()
+                except BackendUnavailable:
+                    data = {"success": False, "error": "music_discovery_unavailable"}
+                if data.get("success") is False and data.get("error") in ("rate_limited", "music_discovery_unavailable"):
+                    if ticket != self._private_read_context():
+                        return
+                    data = self.client.music_discovery_feed()
+                    used_existing_feed = True
+            else:
+                data = self.client.music_discovery_feed()
             if ticket != self._private_read_context():
                 return
             self._apply_profile_context(data)
@@ -2847,7 +2860,8 @@ class DJConnectBackend(QObject):
             data = {"success": False, "error": exc.code}
         except (DJConnectError, requests.RequestException):
             data = {"success": False, "error": "music_discovery_unavailable"}
-        result = _DiscoveryRefreshResult(data, ticket) if manual else self._profile_read_result(data, ticket)
+        result = (_DiscoveryRefreshResult(data, ticket, used_existing_feed=used_existing_feed) if manual
+                  else self._profile_read_result(data, ticket))
         self._musicDiscoveryReady.emit(result)
 
     def _music_discovery_accept_worker(self, *, ticket=None) -> None:
@@ -3592,7 +3606,10 @@ class DJConnectBackend(QObject):
         self._set_backend_available(True)
         self.musicDiscoveryChanged.emit()
         if manual:
-            notice_key = "music_discovery_rate_limited" if data.get("rate_limited") is True else "music_discovery_updated"
+            if data.used_existing_feed:
+                notice_key = "music_discovery_existing_feed"
+            else:
+                notice_key = "music_discovery_rate_limited" if data.get("rate_limited") is True else "music_discovery_updated"
             self._show_toast(self.tr_key(notice_key), 2200, "discover")
 
     @Slot(object)

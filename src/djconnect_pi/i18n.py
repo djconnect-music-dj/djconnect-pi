@@ -1678,6 +1678,12 @@ _SESSION_COMPOSER_TRANSLATIONS = {
         "Patientez avant d’actualiser à nouveau. Les dernières recommandations disponibles sont affichées.",
         "Espera antes de actualizar de nuevo. Se muestran las últimas recomendaciones disponibles.",
     ),
+    "music_discovery_existing_feed": (
+        "Showing the latest available recommendations.", "Je ziet de laatst beschikbare aanbevelingen.",
+        "Die letzten verfügbaren Empfehlungen werden angezeigt.",
+        "Les dernières recommandations disponibles sont affichées.",
+        "Se muestran las últimas recomendaciones disponibles.",
+    ),
     "music_discovery_play_failed": (
         "Could not play this recommendation.",
         "Deze aanbeveling kon niet worden afgespeeld.",

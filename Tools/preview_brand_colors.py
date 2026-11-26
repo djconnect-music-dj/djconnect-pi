@@ -21,7 +21,7 @@ from djconnect_pi.app import DJConnectBackend, parse_ask_dj_messages, parse_play
 from djconnect_pi.brand_theme import apply_palette
 from djconnect_pi.config import Config, save_config
 from djconnect_pi.expiry_clock import ExpiryClock
-from djconnect_pi.ha import Playback
+from djconnect_pi.ha import BackendUnavailable, Playback
 from djconnect_pi.session_history_view import presented_history, search_page
 from djconnect_pi.session_projection import history_page, timestamp
 from djconnect_pi.session_transport import SessionError
@@ -921,17 +921,19 @@ def main():
         assert detail_error.property("text") == backend.t("music_discovery_feedback_failed")
         backend.musicDiscoveryPlayed.emit("fixture-shelf", "fixture-track")
         assert not detail.property("opened")
+        existing_feed = {"success": True, "sections": [
+            {"id": "fixture-shelf", "title": "Recommendations", "items": [{"id": "fixture-track", "title": refreshed_title}]},
+        ]}
         with (patch.object(backend, "_sync_config_from_disk"), patch.object(backend, "_run") as refresh_request,
               patch.object(backend.client, "music_discovery_refresh", side_effect=[
                   requests.ReadTimeout,
-                  {"success": True, "rate_limited": True, "sections": [
-                      {"id": "fixture-shelf", "title": "Recommendations", "items": [
-                          {"id": "fixture-track", "title": refreshed_title},
-                      ]},
-                  ]},
+                  {**existing_feed, "rate_limited": True},
+                  BackendUnavailable("Fixture unavailable"),
                   {"success": True, "sections": []},
-              ]), patch.object(backend, "_persist_backend_summary")):
-            for key in ("music_discovery_load_failed", "music_discovery_rate_limited", "music_discovery_updated"):
+              ]), patch.object(backend.client, "music_discovery_feed", return_value=existing_feed) as feed_read,
+              patch.object(backend, "_persist_backend_summary")):
+            for key in ("music_discovery_load_failed", "music_discovery_rate_limited", "music_discovery_existing_feed",
+                        "music_discovery_updated"):
                 QMetaObject.invokeMethod(discovery_refresh, "clicked")
                 assert discovery_refresh.property("loading")
                 refresh_request.call_args.args[1]()
@@ -940,9 +942,10 @@ def main():
                 if key == "music_discovery_load_failed":
                     assert empty_feed.property("visible") and empty_feed.property("text") == backend.t(key)
                     assert backend.musicDiscoveryItems[0]["title"] == refreshed_title
-                if key == "music_discovery_rate_limited":
+                if key in ("music_discovery_rate_limited", "music_discovery_existing_feed"):
                     assert not empty_feed.property("visible") and backend.musicDiscoveryItems[0]["title"] == refreshed_title
-            assert refresh_request.call_count == 3
+            assert refresh_request.call_count == 4
+            feed_read.assert_called_once()
             assert empty_feed.property("text") == backend.t("music_discovery_empty")
         with patch.object(backend, "_sync_config_from_disk"), patch.object(backend, "_run") as request:
             QTest.qWait(65)
