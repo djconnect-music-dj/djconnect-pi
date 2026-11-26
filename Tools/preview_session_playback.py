@@ -664,10 +664,23 @@ def main():
                     transfer.assert_not_called()
                     assert not output_panel.property('pendingOutputName')
                 observed['playback']['volume_percent'] = 0
+                owner.transport.playback_status.side_effect = SessionError('unavailable')
                 click('sessionCurrentVolume')
                 assert len(intents) == 1
                 volume_icon = window.findChild(QObject, 'sessionVolumeObservedIcon')
+                volume_read = window.findChild(QObject, 'sessionVolumeRead')
+                volume_read_spinner = window.findChild(QObject, 'sessionVolumeReadSpinner')
+                assert volume_read_spinner.property('running') and not volume_read.property('enabled')
+                volume_read_size = volume_read.size()
                 assert not volume_icon.property('visible')
+                intents.pop()()
+                QTest.qWait(80)
+                assert window.findChild(QObject, 'sessionVolumeObserved').property('text') == TRANSLATIONS[language]['session_volume_unavailable']
+                assert volume_read.size() == volume_read_size and volume_read.property('enabled')
+                assert volume_read.property('text') == TRANSLATIONS[language]['session_volume_read']
+                owner.transport.playback_status.side_effect = None
+                click('sessionVolumeRead')
+                assert len(intents) == 1 and volume_read_spinner.property('running')
                 intents.pop()()
                 QTest.qWait(80)
                 volume_shortcut = window.findChild(QObject, 'sessionCurrentVolume')

@@ -2855,20 +2855,33 @@ Item {
                     onClicked: screen.owner.setPlaybackVolume(screen.state.session_id, screen.state.playback.item_id, screen.state.playback_control.volume.lease, 60)
                 }
                 GlassButton {
+                    id: volumeRead
                     objectName: "sessionVolumeRead"
-                    visible: !parent.known && !screen.state.playback_control.reading_volume
-                    text: screen.tr("refresh"); Layout.fillWidth: true
-                    enabled: !screen.owner.busy && !screen.state.playback_control.running
+                    readonly property bool reading: !!screen.state.playback_control.reading_volume
+                    visible: !volumeControls.known
+                    text: reading ? "" : screen.tr("session_volume_read")
+                    Accessible.name: screen.tr(reading ? "loading" : "session_volume_read")
+                    Layout.fillWidth: true
+                    enabled: !reading && !screen.owner.busy && !screen.state.playback_control.running
+                    opacity: enabled || reading ? 1 : 0.4
                     onClicked: {
                         if (screen.state.playback_control.status === "uncertain") screen.owner.refreshPlayback()
                         else screen.owner.readPlaybackVolume(screen.state.session_id, screen.state.playback.item_id)
+                    }
+                    BusyIndicator {
+                        objectName: "sessionVolumeReadSpinner"
+                        anchors.centerIn: parent
+                        width: 28; height: width
+                        visible: volumeRead.reading
+                        running: visible
+                        Accessible.ignored: true
                     }
                 }
             }
             Text {
                 readonly property var control: screen.state.playback_control
                 visible: text.length > 0
-                text: control.reading_volume ? screen.tr("loading")
+                text: control.reading_volume ? ""
                     : control.status === "sending" ? screen.tr("session_question_sending")
                     : control.status === "accepted" ? screen.tr("session_playback_sent")
                     : control.status === "uncertain" ? screen.tr("session_uncertain") : ""
