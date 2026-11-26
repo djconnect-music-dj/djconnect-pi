@@ -2565,9 +2565,11 @@ Item {
             Layout.fillWidth: true
         }
         Text {
-            objectName: "sessionTransportTrackArtist"
+            objectName: "sessionTransportTrackSubtitle"
+            readonly property string artist: (screen.state.playback.artist || "").trim()
             visible: !transportControls.overArtwork && playbackSources.ready && text.length > 0
-            text: screen.state.playback.artist || ""; textFormat: Text.PlainText
+            text: artist || (screen.state.playback.target_name || "").trim(); textFormat: Text.PlainText
+            Accessible.name: artist ? text : screen.tr("output_device") + ": " + text
             color: BrandTheme.colors.muted; font.pixelSize: 18
             wrapMode: Text.Wrap; maximumLineCount: 2; elide: Text.ElideRight
             Layout.fillWidth: true

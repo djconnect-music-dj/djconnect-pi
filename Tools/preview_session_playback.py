@@ -448,10 +448,20 @@ def main():
                 assert_popup_anchor(progress, transport_panel)
                 assert progress.height() >= 44
                 transport_title = visual(transport_panel.property('contentItem'), 'sessionTransportTrackTitle')
-                transport_artist = visual(transport_panel.property('contentItem'), 'sessionTransportTrackArtist')
+                transport_subtitle = visual(transport_panel.property('contentItem'), 'sessionTransportTrackSubtitle')
                 assert transport_title.property('visible') and transport_title.property('text') == owner.state['playback']['title']
-                assert transport_artist.property('visible') and transport_artist.property('text') == owner.state['playback']['artist']
-                assert transport_artist.y() >= transport_title.y() + transport_title.height()
+                assert transport_subtitle.property('visible') and transport_subtitle.property('text') == owner.state['playback']['artist']
+                assert transport_subtitle.y() >= transport_title.y() + transport_title.height()
+                displayed_playback = owner._session['broadcast']['playback']
+                artist = displayed_playback['artist']
+                displayed_playback['artist'] = ' '
+                owner.changed.emit()
+                target = owner.state['playback']['target_name']
+                assert target and transport_subtitle.property('text') == target
+                subtitle_accessible = QAccessible.queryAccessibleInterface(transport_subtitle)
+                assert subtitle_accessible.text(QAccessible.Text.Name) == f'{TRANSLATIONS[language]["output_device"]}: {target}'
+                displayed_playback['artist'] = artist
+                owner.changed.emit()
                 transport_position = visual(transport_panel.property('contentItem'), 'sessionTransportPosition')
                 transport_progress = visual(transport_panel.property('contentItem'), 'sessionTransportProgress')
                 assert transport_position.property('visible') and transport_position.property('text') == owner.state['playback']['time_label']
