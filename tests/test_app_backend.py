@@ -3945,7 +3945,8 @@ def test_queued_discovery_consent_does_not_enable_music_dna_in_another_profile(t
 
 
 @pytest.mark.parametrize("reported_device", ["speaker-a", "speaker-b"])
-def test_now_playing_seek_requires_the_same_observed_output(tmp_path: Path, reported_device: str) -> None:
+@pytest.mark.parametrize("mode", ["relative", "position"])
+def test_now_playing_seek_requires_the_same_observed_output(tmp_path: Path, reported_device: str, mode: str) -> None:
     ensure_app()
     backend = DJConnectBackend(tmp_path / "config.json")
     backend.cfg.paired = True
@@ -3965,17 +3966,26 @@ def test_now_playing_seek_requires_the_same_observed_output(tmp_path: Path, repo
         "backend_available": True, "music_backend_available": True,
         "music_backend_capabilities": {"supports_seek": True},
         "playback": {"uri": "fixture:track", "has_playback": True,
+                     "progress_ms": 18125, "duration_ms": 240000,
                      "device": {"id": reported_device, "active": True, "is_restricted": False}},
     })
     transport.playback_adjustment = Mock()
-    backend.seekPlayback(15000)
+    transport.playback_seek_offset = Mock()
+    if mode == "position":
+        backend.commitPlaybackSeek(backend.beginPlaybackSeek(), 40)
+    else:
+        backend.seekPlayback(15000)
     backend._run.assert_called_once()
     backend._run.call_args.args[1]()
     if reported_device == "speaker-a":
-        transport.playback_adjustment.assert_called_once_with(transport.binding(), "seek_relative", 15000)
+        if mode == "position":
+            transport.playback_seek_offset.assert_called_once_with(transport.binding(), 21875)
+        else:
+            transport.playback_adjustment.assert_called_once_with(transport.binding(), "seek_relative", 15000)
         backend._refresh_worker.assert_called_once()
     else:
         transport.playback_adjustment.assert_not_called()
+        transport.playback_seek_offset.assert_not_called()
         backend._refresh_worker.assert_not_called()
 
 

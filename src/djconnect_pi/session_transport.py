@@ -417,6 +417,13 @@ class SessionTransport:
             "command": command, "value": value,
             "request_source": "device_command", "app_version": PROTOCOL_VERSION}, isolated=True)
 
+    def playback_seek_offset(self, binding, milliseconds: int):
+        if type(milliseconds) is not int or milliseconds == 0:
+            raise SessionError("invalid")
+        return self._request(binding, "POST", "command", {
+            "command": "seek_relative", "value": milliseconds,
+            "request_source": "device_command", "app_version": PROTOCOL_VERSION}, isolated=True)
+
     def playback_volume(self, binding, value: int, backend: str):
         if (type(value) is not int or not 0 <= value <= 60
                 or not isinstance(backend, str) or backend not in {"spotify_direct", "music_assistant"}):

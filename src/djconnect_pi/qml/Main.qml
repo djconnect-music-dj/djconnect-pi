@@ -1682,25 +1682,77 @@ BrandWindow {
                 Layout.alignment: Qt.AlignHCenter
                 Layout.preferredWidth: Math.min(parent.width, 416)
                 spacing: 10
-                ProgressBar {
+                Slider {
+                    id: nowPositionSlider
                     objectName: "nowPlaybackProgress"
                     Layout.fillWidth: true
-                    value: djconnect.trackProgress
-                    Accessible.ignored: true
-                    background: Rectangle { implicitHeight: 6; radius: 3; color: BrandTheme.colors.text; opacity: 0.18 }
-                    contentItem: Item {
-                        implicitHeight: 6
+                    Layout.preferredHeight: 44
+                    from: 0
+                    to: djconnect.durationSeconds
+                    stepSize: 1
+                    enabled: nowPanel.seekActionsAvailable && (djconnect.demoMode || djconnect.musicBackendSupportsSeek)
+                    Accessible.name: root.tr("session_playback_position")
+                    onMoved: if (!seekPointer.pressed) {
+                        const lease = djconnect.beginPlaybackSeek()
+                        if (lease) djconnect.commitPlaybackSeek(lease, Math.round(value))
+                    }
+                    Binding {
+                        target: nowPositionSlider; property: "value"
+                        value: seekPointer.lease > 0 ? seekPointer.draft : djconnect.positionSeconds
+                        restoreMode: Binding.RestoreNone
+                    }
+                    background: Rectangle {
+                        x: nowPositionSlider.leftPadding
+                        y: (nowPositionSlider.height - height) / 2
+                        width: nowPositionSlider.availableWidth
+                        height: 6; radius: 3
+                        color: BrandTheme.alpha(BrandTheme.colors.text, "30")
                         Rectangle {
-                            width: parent.width * djconnect.trackProgress
+                            width: parent.width * nowPositionSlider.visualPosition
                             height: parent.height
                             radius: 3
                             color: BrandTheme.colors.text
                         }
                     }
+                    handle: Rectangle {
+                        width: 16; height: 16; radius: 8
+                        visible: nowPositionSlider.enabled
+                        x: nowPositionSlider.leftPadding + nowPositionSlider.visualPosition * (nowPositionSlider.availableWidth - width)
+                        y: (nowPositionSlider.height - height) / 2
+                        color: BrandTheme.colors.text
+                    }
+                    MouseArea {
+                        id: seekPointer
+                        anchors.fill: parent
+                        property int lease: 0
+                        property int draft: 0
+                        function targetAt(x) {
+                            const inset = nowPositionSlider.leftPadding + nowPositionSlider.handle.width / 2
+                            const travel = Math.max(1, nowPositionSlider.availableWidth - nowPositionSlider.handle.width)
+                            return Math.round(nowPositionSlider.valueAt(Math.max(0, Math.min(1, (x - inset) / travel))))
+                        }
+                        onPressed: function(mouse) {
+                            lease = djconnect.beginPlaybackSeek()
+                            draft = targetAt(mouse.x)
+                        }
+                        onPositionChanged: function(mouse) { if (lease) draft = targetAt(mouse.x) }
+                        onReleased: function(mouse) {
+                            const ticket = lease
+                            lease = 0
+                            if (ticket) djconnect.commitPlaybackSeek(ticket, targetAt(mouse.x))
+                        }
+                        onCanceled: {
+                            if (lease) djconnect.cancelPlaybackSeek()
+                            lease = 0
+                        }
+                    }
                 }
                 Text {
                     objectName: "nowPlaybackTime"
-                    text: djconnect.progressLabel.replace("/", " / ")
+                    text: seekPointer.lease > 0
+                        ? Math.floor(seekPointer.draft / 60) + ":" + ("0" + seekPointer.draft % 60).slice(-2)
+                            + " / " + djconnect.progressLabel.split("/")[1]
+                        : djconnect.progressLabel.replace("/", " / ")
                     color: BrandTheme.colors.muted
                     font.pixelSize: 18
                 }

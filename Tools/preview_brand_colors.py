@@ -124,7 +124,7 @@ def main():
             backend.playback.duration_seconds = 240
             backend.playback.position_seconds = 75
             backend.progressChanged.emit()
-            assert position.property("visible") and progress.property("value") == 0.3125
+            assert position.property("visible") and progress.property("value") == 75
             assert time_label.property("text") == "1:15 / 4:00"
             assert position.mapToScene(QPointF(0, position.height())).y() <= controls.mapToScene(QPointF()).y()
             capture("now-playback-position")
@@ -132,6 +132,13 @@ def main():
             assert backend.positionSeconds == 60
             tap_now_control("nowSeekForward")
             assert backend.positionSeconds == 75
+            start = progress.mapToScene(QPointF(progress.width() * 0.3, progress.height() / 2)).toPoint()
+            end = progress.mapToScene(QPointF(progress.width() * 0.6, progress.height() / 2)).toPoint()
+            QTest.mousePress(window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, start)
+            QTest.mouseMove(window, end)
+            assert backend.positionSeconds == 75 and time_label.property("text") != "1:15 / 4:00"
+            QTest.mouseRelease(window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, end)
+            assert 135 <= backend.positionSeconds <= 155
             backend.playback.duration_seconds = 0
             backend.progressChanged.emit()
             assert not position.property("visible") and controls.property("visible")

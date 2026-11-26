@@ -310,6 +310,7 @@ class DJConnectBackend(QObject):
         self._session_controller.ownerScopeChanged.connect(self._session_owner_changed)
         self._control_volume_serial = 0
         self._playback_seek_epoch = 0
+        self._playback_seek_gesture = None
         self._control_volume_intent = None
         self._control_volume_pending = False
         self._controlVolumeFinished.connect(self._finish_control_volume)
@@ -1398,14 +1399,40 @@ class DJConnectBackend(QObject):
     @Slot()
     def cancelPlaybackSeek(self) -> None:
         self._playback_seek_epoch += 1
+        self._playback_seek_gesture = None
+
+    def _seek_gesture_context(self):
+        if self._demo_mode:
+            return ("demo", self.playback.uri) if self.playback.duration_seconds > 0 else None
+        return self._playback_seek_context(self.playback)
+
+    @Slot(result=int)
+    def beginPlaybackSeek(self) -> int:
+        context = self._seek_gesture_context()
+        if self.busy or not self._session_controller._foreground or context is None:
+            return 0
+        self.cancelPlaybackSeek()
+        self._playback_seek_gesture = (self._playback_seek_epoch, context)
+        return self._playback_seek_epoch
+
+    @Slot(int, int)
+    def commitPlaybackSeek(self, lease: int, target_seconds: int) -> None:
+        if not lease or self._playback_seek_gesture != (lease, self._seek_gesture_context()):
+            return
+        self.cancelPlaybackSeek()
+        self._seek_playback(target_seconds=target_seconds)
 
     @Slot(int)
     def seekPlayback(self, offset_ms: int) -> None:
-        if offset_ms not in (-15000, 15000) or self.playback.duration_seconds <= 0:
+        if offset_ms in (-15000, 15000):
+            self._seek_playback(offset_ms=offset_ms)
+
+    def _seek_playback(self, *, offset_ms: int = 0, target_seconds: int | None = None) -> None:
+        if self.playback.duration_seconds <= 0:
             return
         if self._demo_mode:
-            self.playback.position_seconds = max(0, min(self.playback.duration_seconds - 1,
-                                                       self.playback.position_seconds + offset_ms // 1000))
+            position = self.playback.position_seconds + offset_ms // 1000 if target_seconds is None else target_seconds
+            self.playback.position_seconds = max(0, min(self.playback.duration_seconds - 1, position))
             self.progressChanged.emit()
             self.djSession.demo_playback_changed()
             return
@@ -1441,13 +1468,24 @@ class DJConnectBackend(QObject):
                         or not isinstance(device, dict) or device.get("active") is not True
                         or device.get("is_restricted") is not False or device.get("id") != output):
                     return
-                transport.playback_adjustment(binding, "seek_relative", offset_ms)
+                if target_seconds is None:
+                    transport.playback_adjustment(binding, "seek_relative", offset_ms)
+                else:
+                    progress = observed.get("progress_ms")
+                    duration = observed.get("duration_ms")
+                    if type(progress) is not int or type(duration) is not int or not 0 <= progress <= duration or duration <= 0:
+                        return
+                    delta = max(0, min(duration, target_seconds * 1000)) - progress
+                    if abs(delta) < 500:
+                        return
+                    transport.playback_seek_offset(binding, delta)
             except SessionError:
                 return
             if current():
                 self._refresh_worker()
 
-        self._run(self.tr_key("seek_back_15" if offset_ms < 0 else "seek_forward_15"), worker)
+        label = "session_playback_position" if target_seconds is not None else "seek_back_15" if offset_ms < 0 else "seek_forward_15"
+        self._run(self.tr_key(label), worker)
 
     def _control_volume_context(self, playback: Playback) -> tuple | None:
         if self._demo_mode:
