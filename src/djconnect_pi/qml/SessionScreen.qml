@@ -2893,8 +2893,10 @@ Item {
                     readonly property bool reading: !!screen.state.playback_control.reading_outputs
                     iconName: reading ? "" : "refresh"
                     implicitWidth: implicitHeight
-                    Accessible.name: screen.tr("refresh")
-                    enabled: !screen.owner.busy && !!screen.state.playback_control.available && !!screen.state.playback_control.outputs_supported
+                    Accessible.name: screen.tr("session_output_refresh")
+                    enabled: !reading && !screen.owner.busy && !!screen.state.playback_control.available
+                        && !!screen.state.playback_control.outputs_supported
+                    opacity: enabled || reading ? 1 : 0.4
                     onClicked: {
                         if (screen.state.playback_control.status === "uncertain") screen.owner.refreshPlayback()
                         else screen.owner.readPlaybackOutputs(screen.state.session_id, screen.state.playback.item_id)
@@ -2906,6 +2908,7 @@ Item {
                         height: width
                         visible: outputRefresh.reading
                         running: visible
+                        Accessible.name: screen.tr("loading")
                     }
                 }
             }

@@ -579,9 +579,14 @@ def main():
                 output_refresh = window.findChild(QObject, 'sessionOutputRead')
                 output_spinner = window.findChild(QObject, 'sessionOutputReadSpinner')
                 assert output_spinner.property('visible') and not output_refresh.property('enabled')
+                assert output_refresh.property('opacity') == 1
+                refresh_accessible = QAccessible.queryAccessibleInterface(output_refresh)
+                assert refresh_accessible.text(QAccessible.Text.Name) == TRANSLATIONS[language]['session_output_refresh']
+                refresh_size = output_refresh.size()
                 intents.pop()()
                 QTest.qWait(80)
                 assert output_refresh.property('iconName') == 'refresh' and not output_spinner.property('visible')
+                assert output_refresh.size() == refresh_size and output_refresh.property('enabled')
                 output_choices = window.findChild(QObject, 'sessionOutputChoices')
                 assert output_refresh.mapToScene(QPointF(0, output_refresh.height())).y() <= output_choices.mapToScene(QPointF()).y()
                 output_shortcut = window.findChild(QObject, 'sessionCurrentOutput')

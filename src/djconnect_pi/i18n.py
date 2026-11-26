@@ -1833,6 +1833,7 @@ for _key, _values in _ARTWORK_PREPARE_TRANSLATIONS.items():
 _PLAYBACK_CONTROL_TRANSLATIONS = {
     "session_output_title": ("Playback output", "Afspeeluitvoer", "Wiedergabeausgabe", "Sortie de lecture", "Salida de reproducción"),
     "session_output_choose": ("Choose output device", "Uitvoerapparaat kiezen", "Ausgabegerät auswählen", "Choisir la sortie audio", "Elegir dispositivo de salida"),
+    "session_output_refresh": ("Refresh output devices", "Uitvoerapparaten verversen", "Ausgabegeräte aktualisieren", "Actualiser les sorties audio", "Actualizar los dispositivos de salida"),
     "session_output_current": ("Current", "Huidig", "Aktuell", "Actuelle", "Actual"),
     "session_output_unavailable": ("Available outputs could not be confirmed.", "De beschikbare uitvoer kon niet worden bevestigd.", "Verfügbare Ausgaben konnten nicht bestätigt werden.", "Les sorties disponibles n’ont pas pu être confirmées.", "No se pudieron confirmar las salidas disponibles."),
     "session_output_empty": ("No other outputs are available.", "Er zijn geen andere uitvoerapparaten beschikbaar.", "Keine weiteren Ausgaben verfügbar.", "Aucune autre sortie disponible.", "No hay otras salidas disponibles."),
