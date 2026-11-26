@@ -1478,6 +1478,7 @@ _LOG_SEARCH_TRANSLATIONS = {
     "copy_logs": ("Copy logs", "Logs kopiëren", "Protokolle kopieren", "Copier les journaux", "Copiar registros"),
     "logs_copied": ("Logs copied", "Logs gekopieerd", "Protokolle kopiert", "Journaux copiés", "Registros copiados"),
     "logs_cleared": ("Logs cleared", "Logs gewist", "Protokolle gelöscht", "Journaux effacés", "Registros borrados"),
+    "logs_clear_failed": ("Could not clear logs", "Logregels konden niet worden gewist", "Protokolle konnten nicht gelöscht werden", "Impossible d’effacer les journaux", "No se pudieron borrar los registros"),
     "logs_search": ("Search logs", "Zoek in logs", "Protokolle durchsuchen", "Rechercher dans les journaux", "Buscar en registros"),
     "logs_previous_match": ("Previous match", "Vorig resultaat", "Vorheriger Treffer", "Résultat précédent", "Coincidencia anterior"),
     "logs_next_match": ("Next match", "Volgend resultaat", "Nächster Treffer", "Résultat suivant", "Coincidencia siguiente"),

@@ -6043,6 +6043,7 @@ BrandWindow {
 
     Rectangle {
         id: toast
+        objectName: "appToast"
         anchors.top: parent.top
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.topMargin: 32
@@ -6053,7 +6054,7 @@ BrandWindow {
         border.width: 2
         opacity: djconnect.toastVisible ? 1 : 0
         visible: opacity > 0
-        z: 70
+        z: djconnect.logsVisible && djconnect.toastIcon === "logs" ? logsPanel.z + 1 : 70
         y: djconnect.toastVisible ? 0 : -16
         scale: djconnect.toastVisible ? 1 : 0.94
         transformOrigin: Item.Top
@@ -6181,6 +6182,7 @@ BrandWindow {
     }
 
     Rectangle {
+        id: logsPanel
         anchors.fill: parent
         color: BrandTheme.colors.background
         visible: djconnect.logsVisible

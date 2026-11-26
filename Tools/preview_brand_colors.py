@@ -1174,9 +1174,22 @@ def main():
             assert search_toggle.property("activeFocus")
             QTest.keyClick(window, log_find.key(), log_find.keyboardModifiers())
             search_input.setProperty("text", "sample")
-            QMetaObject.invokeMethod(visual_item(logs, "logsClear"), "clicked")
+            logs_clear = visual_item(logs, "logsClear")
+            original_contents = log_path.read_text(encoding="utf-8")
+            original_entries = backend.logsText
+            QMetaObject.invokeMethod(logs_clear, "clicked")
+            confirm_clear = visual_item(window.contentItem(), "confirmClearLogs")
+            with patch.object(Path, "write_text", side_effect=PermissionError("fixture denied")):
+                QMetaObject.invokeMethod(confirm_clear, "clicked")
+            assert backend.logsText == original_entries and log_path.read_text(encoding="utf-8") == original_contents
+            assert search_input.property("text") == "sample" and search_count.property("text") == "1/3"
+            toast = visual_item(window.contentItem(), "appToast")
+            assert toast.z() > logs.parentItem().z() and backend.toastText == backend.t("logs_clear_failed")
+            capture("logs-clear-error-" + locale)
+            assert toast.property("visible")
+            QMetaObject.invokeMethod(logs_clear, "clicked")
             assert window.property("clearLogsConfirmOpen") and log_path.stat().st_size > 0
-            QMetaObject.invokeMethod(visual_item(window.contentItem(), "confirmClearLogs"), "clicked")
+            QMetaObject.invokeMethod(confirm_clear, "clicked")
             assert not window.property("clearLogsConfirmOpen") and log_path.stat().st_size == 0
             assert backend.toastVisible and backend.toastText == backend.t("logs_cleared")
             empty_logs = visual_item(logs, "logsEmptyMessage")

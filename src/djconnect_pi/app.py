@@ -2049,7 +2049,8 @@ class DJConnectBackend(QObject):
             self._logs_read_error = ""
             self.showToastForContext(self.tr_key("logs_cleared"), "diagnostics")
         except Exception as exc:  # noqa: BLE001 - log clearing must report all local filesystem failures to the UI
-            self._logs_text = self.tr_key("logs_failed", error=exc)
+            _LOGGER.warning("Could not clear the local log file: %s", exc)
+            self.showToastForContext(self.tr_key("logs_clear_failed"), "diagnostics")
         self.logsChanged.emit()
 
     @Slot()
