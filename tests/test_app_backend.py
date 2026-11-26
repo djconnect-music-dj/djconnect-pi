@@ -7,7 +7,7 @@ import sys
 import time
 from pathlib import Path
 from types import ModuleType
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 
 import pytest
 import requests
@@ -4208,19 +4208,36 @@ def test_media_play_during_unrelated_busy_state_dispatches_once(tmp_path: Path) 
 def test_backend_shuffle_and_repeat_dispatch_commands(tmp_path: Path) -> None:
     ensure_app()
     backend = DJConnectBackend(tmp_path / "config.json")
-    calls: list[tuple[str, dict[str, object]]] = []
-    backend.command = lambda command, **payload: calls.append((command, payload))  # type: ignore[method-assign]
+    backend.cfg.paired = True
+    backend.cfg.device_token = "fixture-token"
+    backend._run = lambda label, worker: worker()
+    backend.client.command = Mock(side_effect=[
+        {"success": False, "playback": {"shuffle": True, "title": "Rejected snapshot"}},
+        {"success": True, "playback": {"shuffle": True}},
+        {"success": True},
+        {"success": True, "playback": {"repeat_state": "context"}},
+        {"success": True, "repeat": "track"},
+    ])
+    original_title = backend.title
 
     backend.toggleShuffle()
+    assert backend.shuffle is False
+    assert backend.title == original_title
+    assert backend.toastText == backend.tr_key("command_failed")
+    backend.toggleShuffle()
+    assert backend.shuffle is True
     backend.cycleRepeat()
+    assert backend.repeat == "context"
     backend.cycleRepeat()
     backend.setPlaybackRepeatMode("unknown")
     assert backend.repeat == "track"
 
-    assert calls == [
-        ("set_shuffle", {"value": True}),
-        ("set_repeat", {"value": "context"}),
-        ("set_repeat", {"value": "track"}),
+    assert backend.client.command.call_args_list == [
+        call("set_shuffle", value=True),
+        call("set_shuffle", value=True),
+        call("set_repeat", value="context"),
+        call("status"),
+        call("set_repeat", value="track"),
     ]
 
 

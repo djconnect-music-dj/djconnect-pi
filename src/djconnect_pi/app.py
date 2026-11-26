@@ -225,6 +225,7 @@ class DJConnectBackend(QObject):
     debugScreenRequested = Signal(str)
 
     _playbackReady = Signal(object)
+    _playbackModeReady = Signal(object, str, object)
     _statusReady = Signal(str)
     _pairingReady = Signal(bool, str)
     _busyReady = Signal(bool)
@@ -385,6 +386,7 @@ class DJConnectBackend(QObject):
         self._event_timer.timeout.connect(self._poll_local_events)
         self._event_timer.start()
         self._playbackReady.connect(self._apply_playback)
+        self._playbackModeReady.connect(self._apply_playback_mode)
         self._statusReady.connect(self._set_status_text)
         self._pairingReady.connect(self._apply_pairing)
         self._busyReady.connect(self._set_busy)
@@ -1788,13 +1790,7 @@ class DJConnectBackend(QObject):
 
     @Slot()
     def toggleShuffle(self) -> None:
-        self.playback.shuffle = not self.playback.shuffle
-        self.shuffleChanged.emit()
-        _LOGGER.info("User toggled shuffle to %s", self.playback.shuffle)
-        self.showToastForContext(self.tr_key("shuffle"), "playback")
-        if self._demo_mode:
-            return
-        self.command("set_shuffle", value=self.playback.shuffle)
+        self._request_playback_mode("shuffle", not self.playback.shuffle)
 
     @Slot()
     def cycleRepeat(self) -> None:
@@ -1805,13 +1801,60 @@ class DJConnectBackend(QObject):
     def setPlaybackRepeatMode(self, value: str) -> None:
         if value not in {"off", "track", "context"}:
             return
-        self.playback.repeat = value
-        self.repeatChanged.emit()
-        _LOGGER.info("User changed repeat mode to %s", value)
-        self.showToastForContext(self.tr_key("repeat"), "playback")
+        self._request_playback_mode("repeat", value)
+
+    def _playback_mode_context(self) -> tuple:
+        return (self._private_read_context(), self.cfg.music_backend, self.cfg.music_backend_revision,
+                self.cfg.music_target_player.get("id", ""), self.playback.output_device_id,
+                self.playback.output_device, self._demo_mode)
+
+    def _request_playback_mode(self, mode: str, value: bool | str) -> None:
+        context = self._playback_mode_context()
         if self._demo_mode:
+            self._apply_playback_mode(context, mode, value)
             return
-        self.command("set_repeat", value=value)
+        if self.busy or not self.paired:
+            return
+        self._run(self.tr_key(mode), lambda: self._playback_mode_worker(context, mode, value))
+
+    def _playback_mode_worker(self, context: tuple, mode: str, value: bool | str) -> None:
+        if self._demo_mode or context != self._playback_mode_context():
+            return
+        data = self.client.command(f"set_{mode}", value=value)
+        self._persist_backend_summary()
+        if context != self._playback_mode_context():
+            return
+        if data.get("success") is False or data.get("backend_available") is False:
+            self._playbackModeReady.emit(context, mode, None)
+            return
+        if not self._playback_mode_matches(data, mode, value):
+            data = self.client.command("status")
+            self._persist_backend_summary()
+        if (data.get("success") is not False and data.get("backend_available") is not False
+                and self._playback_mode_matches(data, mode, value)):
+            self._playbackModeReady.emit(context, mode, value)
+
+    @staticmethod
+    def _playback_mode_matches(data: dict, mode: str, value: bool | str) -> bool:
+        playback = data.get("playback")
+        snapshot = playback if isinstance(playback, dict) else data
+        observed = snapshot.get("repeat_state", snapshot.get(mode)) if mode == "repeat" else snapshot.get(mode)
+        return type(observed) is type(value) and observed == value
+
+    @Slot(object, str, object)
+    def _apply_playback_mode(self, context: tuple, mode: str, value: bool | str | None) -> None:
+        if self._shutting_down or context != self._playback_mode_context():
+            return
+        if value is None:
+            self.showToastForContext(self.tr_key("command_failed"), "connectivity")
+            return
+        if mode == "shuffle" and isinstance(value, bool):
+            self.playback.shuffle = value
+            self.shuffleChanged.emit()
+        elif mode == "repeat" and isinstance(value, str):
+            self.playback.repeat = value
+            self.repeatChanged.emit()
+        self.showToastForContext(self.tr_key(mode), "playback")
 
     @Slot(str)
     def setOutputDevice(self, value: str) -> None:
