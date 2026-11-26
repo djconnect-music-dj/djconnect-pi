@@ -1614,8 +1614,7 @@ Item {
                 }
                 GlassButton {
                     objectName: "sessionArchiveRetry"
-                    visible: screen.historical && !screen.currentHistory && !screen.state.timeline.session
-                        && screen.state.history_available
+                    visible: screen.historyViewOpen && (screen.state.history_available || screen.currentHistory)
                         && ["offline", "unavailable", "conflict"].indexOf(screen.state.error) >= 0
                     enabled: !screen.owner.busy && !screen.historyReadPending
                         && !screen.archiveReadActive && !screen.archiveIntent
