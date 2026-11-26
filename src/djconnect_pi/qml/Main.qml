@@ -928,6 +928,7 @@ BrandWindow {
         property var items: []
         property bool searching: false
         property bool keyboardOpen: false
+        property int pendingMediaIndex: -1
         readonly property bool compact: width < 900
         readonly property var matches: filterItems(items, searchInput.text)
         signal refreshRequested()
@@ -950,6 +951,7 @@ BrandWindow {
             mediaRows.positionViewAtIndex(mediaRows.currentIndex, ListView.Contain)
         }
         function closeSearch() {
+            pendingMediaIndex = -1
             keyboardOpen = false
             searching = false
             searchInput.clear()
@@ -979,6 +981,7 @@ BrandWindow {
             else closeSearch()
         }
         onMatchesChanged: {
+            pendingMediaIndex = -1
             mediaRows.currentIndex = 0
             mediaRows.positionViewAtBeginning()
         }
@@ -986,6 +989,9 @@ BrandWindow {
             target: djconnect
             function onProfileChanged() { panel.closeSearch() }
             function onPairedChanged() { panel.closeSearch() }
+            function onMediaActivityChanged() {
+                if (!djconnect.mediaPlaybackBusy) panel.pendingMediaIndex = -1
+            }
         }
         Connections {
             target: root
@@ -1107,6 +1113,7 @@ BrandWindow {
                         required property var modelData
                         required property int index
                         objectName: "mediaItemRow-" + index
+                        readonly property bool starting: djconnect.mediaPlaybackBusy && panel.pendingMediaIndex === index
                         width: mediaRows.width
                         implicitHeight: Math.max(panel.compact ? 86 : 100, contentItem.implicitHeight + 2 * verticalPadding)
                         topPadding: panel.compact ? 9 : 13
@@ -1115,9 +1122,14 @@ BrandWindow {
                         rightPadding: leftPadding
                         text: modelData.title || ""
                         Accessible.name: text
+                        Accessible.description: starting ? root.tr("loading") : ""
                         enabled: !!modelData.uri && !panel.loading && !djconnect.mediaPlaybackBusy
-                        opacity: enabled ? 1 : 0.58
-                        onClicked: djconnect.playMediaItem(panel.playCommand, panel.itemPayload(modelData))
+                        opacity: enabled || starting ? 1 : 0.58
+                        onClicked: {
+                            panel.pendingMediaIndex = index
+                            djconnect.playMediaItem(panel.playCommand, panel.itemPayload(modelData))
+                            if (!djconnect.mediaPlaybackBusy) panel.pendingMediaIndex = -1
+                        }
                         background: GlassSurface {
                             introduction: true
                             radius: panel.compact ? 24 : 34
@@ -1187,13 +1199,23 @@ BrandWindow {
                                     Layout.fillWidth: true
                                 }
                             }
-                            FeatureIcon {
-                                objectName: "mediaPlayIndicator"
-                                visible: mediaRow.enabled
-                                iconName: "play"
+                            Item {
+                                visible: !!mediaRow.modelData.uri
                                 Layout.preferredWidth: panel.compact ? 28 : 34
                                 Layout.preferredHeight: Layout.preferredWidth
                                 Accessible.ignored: true
+                                FeatureIcon {
+                                    objectName: "mediaPlayIndicator"
+                                    anchors.fill: parent
+                                    visible: mediaRow.enabled
+                                    iconName: "play"
+                                }
+                                BusyIndicator {
+                                    objectName: "mediaPlaySpinner"
+                                    anchors.fill: parent
+                                    visible: mediaRow.starting
+                                    running: visible
+                                }
                             }
                         }
                     }
