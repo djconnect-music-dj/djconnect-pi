@@ -285,7 +285,11 @@ Item {
         syncSessionVisibility()
         syncMediaVisibility()
     }
-    onShowForecastChanged: { if (showForecast) closePlaybackPanels(); syncMediaVisibility() }
+    onShowForecastChanged: {
+        if (showForecast) closePlaybackPanels()
+        else if (forecastScroll && forecastScroll.contentItem) forecastScroll.contentItem.cancelFlick()
+        syncMediaVisibility()
+    }
     onStateChanged: {
         if (contentDeletePanel && contentDeletePanel.opened && state.content_delete
                 && (!state.content_delete.status
@@ -298,7 +302,18 @@ Item {
         if (volumePanel && (!control.available || !control.volume_supported)) volumePanel.close()
         if (outputsPanel && (!control.available || !control.outputs_supported)) outputsPanel.close()
     }
-    onComposerContextChanged: { clearFlowReturn(); forecastMode = false; closeTransient(); if (historyReadPending && historyReadKind === "current") { historyRead.stop(); historyReadPending = false; navigate("session") } }
+    onComposerContextChanged: {
+        clearFlowReturn()
+        if (forecastScroll && forecastScroll.contentItem)
+            forecastScroll.contentItem.contentY = forecastScroll.contentItem.originY
+        forecastMode = false
+        closeTransient()
+        if (historyReadPending && historyReadKind === "current") {
+            historyRead.stop()
+            historyReadPending = false
+            navigate("session")
+        }
+    }
     function clearComposer() { followQuestionReply = false; pendingReplyId = ""; draft = ""; if (composeInput) composeInput.clear(); if (composerPanel) composerPanel.close(); if (owner) owner.clearSelection() }
     function submitQuestion() {
         // A local demo answer can arrive before sendQuestion returns.

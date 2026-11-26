@@ -216,6 +216,17 @@ def main():
                         click(window, flow)
                         assert not screen.property("showForecast") and flow.property("checked")
                         assert window.property("trackArtworkViewOpen") and banner.property("source").isEmpty()
+                        if mood == "party":
+                            show(owner, session, caps, stamp, guidance, ("Fixture forecast paragraph.\n" * 70).strip(),
+                                 mood, window, screen, horizon, flow)
+                            max_offset = max(0, scroll.property("contentHeight") - scroll.height())
+                            offset = min(120, max_offset)
+                            assert offset > 0
+                            scroll.setProperty("contentY", scroll.property("originY") + offset)
+                            click(window, flow)
+                            click(window, horizon)
+                            assert abs(scroll.property("contentY") - scroll.property("originY") - offset) <= 1
+                            click(window, flow)
 
                     # Ordinary prose and a malformed six-track lookalike stay verbatim.
                     for fallback in (prose, f"{intro} {', '.join([track_names[0]] * 6)}. {note}"):
@@ -232,6 +243,7 @@ def main():
                     assert one(empty, "sessionForecastEmptyIcon").property("iconName") == "forecast_horizon"
                     assert one(empty, "sessionForecastEmptyMessage").property("text") == TRANSLATIONS[language]["session_forecast_empty"]
                     click(window, flow)
+                    forecast_flick = window.findChild(QObject, "sessionForecastScroll").property("contentItem")
                     sid = session["session_id"]
                     row = {
                         "entry_id": "fixture-withdrawn", "session_id": sid, "order": 1,
@@ -257,6 +269,10 @@ def main():
                     scroll.setProperty("contentY", scroll.property("contentY") + card.mapToItem(scroll, 0, 0).y())
                     QTest.qWait(60)
                     capture(window, output, captures, f"withdrawn-{language}")
+                    forecast_flick.setProperty("contentY", forecast_flick.property("originY") + 85)
+                    owner.invalidate()
+                    QTest.qWait(65)
+                    assert abs(forecast_flick.property("contentY") - forecast_flick.property("originY")) <= 1
                 backend.shutdown()
                 delete(window)
                 delete(engine)
