@@ -1701,6 +1701,13 @@ _SESSION_COMPOSER_TRANSLATIONS = {
         "Music DNA est facultatif. Vous pouvez effacer séparément Music DNA et votre historique Ask DJ dans Home Assistant.",
         "Music DNA es opcional. Puedes borrar Music DNA y tu historial de Ask DJ por separado en Home Assistant.",
     ),
+    "privacy_diagnostics_body": (
+        "You choose whether to share app diagnostics with support or in a GitHub issue.",
+        "Je kiest zelf of je appdiagnostiek deelt met support of in een GitHub-issue.",
+        "Du entscheidest, ob du App-Diagnosedaten mit dem Support oder in einem GitHub-Issue teilst.",
+        "Vous choisissez de partager ou non les diagnostics de l’application avec l’assistance ou dans un ticket GitHub.",
+        "Tú decides si compartes los diagnósticos de la aplicación con el equipo de soporte o en una incidencia de GitHub.",
+    ),
     "privacy_open_failed": ("Could not open the privacy statement.", "De privacyverklaring kon niet worden geopend.", "Die Datenschutzerklärung konnte nicht geöffnet werden.", "Impossible d’ouvrir la déclaration de confidentialité.", "No se pudo abrir la declaración de privacidad."),
     "session_connection_offline": ("DJ Session is offline", "DJ-sessie is offline", "DJ-Session ist offline", "Session DJ hors ligne", "Sesión DJ sin conexión"),
     "session_connection_retrying": ("Reconnecting to the DJ Session", "Opnieuw verbinden met de DJ-sessie", "Verbindung zur DJ-Session wird wiederhergestellt", "Reconnexion à la session DJ", "Reconectando con la sesión DJ"),
