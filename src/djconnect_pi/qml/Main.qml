@@ -3889,7 +3889,7 @@ BrandWindow {
             && !djconnect.versionMismatchVisible && !djconnect.musicDiscoveryBusy
             && !requiresMusicDna
         property real renewedArtworkThrough: 0
-        readonly property var visibleRecommendations: djconnect.musicDiscoveryItems.filter(function(item) {
+        readonly property var visibleRecommendations: requiresMusicDna ? [] : djconnect.musicDiscoveryItems.filter(function(item) {
             return item.sectionId && item.sectionTitle && item.discoveryItemId && item.title
         })
         readonly property real nextArtworkExpiry: {
@@ -3928,7 +3928,7 @@ BrandWindow {
         }
 
         ProfileReadOnOpen {
-            surfaceVisible: musicDiscoveryPanel.visible
+            surfaceVisible: musicDiscoveryPanel.visible && !(djconnect.musicDnaLoaded && !djconnect.musicDnaEnabled)
             busy: djconnect.musicDiscoveryBusy
             loaded: djconnect.musicDiscoveryLoaded
             onRequested: djconnect.loadMusicDiscovery()
@@ -3980,7 +3980,7 @@ BrandWindow {
                     id: discoveryRefreshButton
                     objectName: "discoveryRefreshButton"
                     text: root.tr("refresh_discovery")
-                    loading: djconnect.musicDiscoveryBusy
+                    loading: djconnect.musicDiscoveryBusy || (musicDiscoveryPanel.requiresMusicDna && djconnect.musicDnaBusy)
                     enabled: !loading
                     onClicked: djconnect.refreshMusicDiscovery()
                 }
@@ -4027,8 +4027,7 @@ BrandWindow {
                         GlassSurface {
                             objectName: "discoveryMusicDnaGate"
                             hero: true
-                            visible: musicDiscoveryPanel.showEmptyFeed && musicDiscoveryPanel.requiresMusicDna
-                                && djconnect.musicDiscoveryError.length === 0
+                            visible: musicDiscoveryPanel.requiresMusicDna && djconnect.musicDiscoveryError.length === 0
                             Layout.fillWidth: true
                             Layout.preferredHeight: discoveryMusicDnaDisabledColumn.implicitHeight + 28
                             radius: root.standardButtonRadius
@@ -4252,13 +4251,17 @@ BrandWindow {
             padding: 16
             closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
             background: GlassSurface { popover: true; elevated: true }
-            onItemChanged: if (!item) close()
+            onItemChanged: if (!item) Qt.callLater(closeUnavailableRecommendation)
             onOpened: {
                 recommendationQualityStrip.resetLabelScroll()
                 recommendationSourceStrip.resetLabelScroll()
                 closeRecommendationButton.forceActiveFocus(Qt.PopupFocusReason)
             }
             onClosed: selected = null
+
+            function closeUnavailableRecommendation() {
+                if (!item) close()
+            }
 
             function showRecommendation(recommendation) {
                 selected = {sectionId: recommendation.sectionId, discoveryItemId: recommendation.discoveryItemId}

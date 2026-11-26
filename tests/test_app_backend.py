@@ -18,6 +18,7 @@ from djconnect_pi import __version__
 from djconnect_pi.app import (
     DJConnectBackend,
     SaveCurrentTrackError,
+    _DiscoveryReadResult,
     _ask_dj_actions,
     _ask_dj_display_time,
     _current_track_insight_proof,
@@ -200,6 +201,42 @@ def test_music_discovery_disabled_backend_reason_shows_empty_state(tmp_path: Pat
     backend._clear_profile_scoped_caches(preserve_session=True)
     assert not backend.musicDiscoveryDnaDisabled
     assert not backend.musicDiscoveryLoaded
+
+
+def test_discover_withdraws_cached_and_queued_recommendations_on_confirmed_music_dna_opt_out(tmp_path):
+    ensure_app()
+    config_path = tmp_path / "config.json"
+    save_config(config_path, Config(paired=True, device_token="fixture", ha_url="http://fixture.invalid"))
+    backend = DJConnectBackend(config_path)
+    backend._apply_music_dna_data({"success": True, "enabled": True, "profile": {}})
+    feed = {"success": True, "enabled": True, "feedback_supported": True, "sections": [
+        {"id": "shelf", "title": "Shelf", "items": [
+            {"id": "track", "kind": "track", "title": "Old recommendation", "uri": "spotify:track:old"},
+        ]},
+    ]}
+    backend._apply_music_discovery_data(feed)
+    assert backend.musicDiscoveryItems and backend.musicDiscoveryFeedbackSupported
+    stale = _DiscoveryReadResult(feed, backend._private_read_context(), backend._music_discovery_consent_epoch)
+    payload = backend.musicDiscoveryItems[0]["payload"]
+    with patch.object(backend, "_run") as task, patch.object(backend.client, "music_discovery_play") as play:
+        backend.playMusicDiscoveryItem(payload)
+        task.assert_called_once()
+        backend._apply_music_dna_data({"success": True, "enabled": False, "profile": {}})
+        assert not backend.musicDiscoveryItems and not backend.musicDiscoveryFeedbackSupported
+        backend.sendMusicDiscoveryFeedback(payload, "hide_artist")
+        task.assert_called_once()
+        with patch.object(backend, "loadMusicDna") as read_consent:
+            backend.refreshMusicDiscovery()
+            read_consent.assert_called_once()
+        task.assert_called_once()
+        backend._apply_music_dna_data({"success": True, "enabled": True, "profile": {}})
+        task.call_args.args[1]()
+        task.call_args.kwargs["done"]()
+        play.assert_not_called()
+    backend._apply_music_discovery_data(stale)
+    assert backend.musicDiscoveryItems == []
+    backend._apply_music_discovery_data(feed)
+    assert backend.musicDiscoveryItems
 
 
 @pytest.mark.parametrize("action,method", [
