@@ -5098,6 +5098,16 @@ BrandWindow {
             Qt.callLater(centerSelectedMatch)
         }
 
+        readonly property bool canRefreshHistory: djconnect.paired && !djconnect.demoMode
+            && !djconnect.versionMismatchVisible && !djconnect.askDjBusy
+
+        function refreshHistory() {
+            if (!canRefreshHistory) return
+            chatKeyboardOpen = false
+            if (searchKeyboardOpen) dismissSearchKeyboard()
+            djconnect.refreshAskDjHistory()
+        }
+
         function moveMatch(offset) {
             if (!matches.length)
                 return false
@@ -5141,8 +5151,8 @@ BrandWindow {
                     objectName: "askDjRefreshButton"
                     text: root.tr("refresh_ask_dj")
                     loading: djconnect.askDjBusy
-                    enabled: !loading
-                    onClicked: djconnect.refreshAskDjHistory()
+                    enabled: askDjPanel.canRefreshHistory
+                    onClicked: askDjPanel.refreshHistory()
                 }
 
                 leading: [
@@ -5271,9 +5281,9 @@ BrandWindow {
                         objectName: "askDjPullToRefresh"
                         flickable: askDjMessagesView
                         canRefresh: askDjPanel.visible && root.active && !root.screenBlanked
-                            && djconnect.paired && !djconnect.demoMode && !djconnect.askDjBusy
+                            && askDjPanel.canRefreshHistory
                             && djconnect.askDjMessages.length > 0 && !askDjPanel.searchOpen && !askDjPanel.chatKeyboardOpen
-                        onRefreshRequested: djconnect.refreshAskDjHistory()
+                        onRefreshRequested: askDjPanel.refreshHistory()
                     }
 
                     header: ColumnLayout {
