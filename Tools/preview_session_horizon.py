@@ -381,6 +381,15 @@ def main():
                 owner._history_start = "fixture-older-window"
                 owner.changed.emit()
                 assert not archive_empty.property("visible") and archive_window_empty.property("visible")
+                archive_flick = archive_scroll.property("contentItem")
+                archive_flick.setProperty("contentY", archive_flick.property("originY"))
+                expected_window = owner._archive_request()
+                with patch.object(owner, "_launch") as archive_read:
+                    pull_down(window, archive_scroll, touch, 24)
+                    archive_read.assert_not_called()
+                    pull_down(window, archive_scroll, touch, 230)
+                    archive_read.assert_called_once_with("history_refresh", expected_window)
+                assert owner._history_start == expected_window["start"]
                 owner._error = "unavailable"
                 owner.changed.emit()
                 assert not archive_empty.property("visible") and not archive_window_empty.property("visible")
