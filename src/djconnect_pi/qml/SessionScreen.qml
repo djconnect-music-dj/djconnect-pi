@@ -259,9 +259,11 @@ Item {
     readonly property string playbackMenuScope: JSON.stringify([
         state.playback.item_id || "", state.playback.source_url || "", state.playback.target_name || ""
     ])
-    onPlaybackMenuScopeChanged: {
-        if (volumePanel && volumePanel.visible) volumePanel.close()
-        if (outputsPanel && outputsPanel.visible) outputsPanel.close()
+    onPlaybackMenuScopeChanged: closePlaybackPanels()
+    function closePlaybackPanels() {
+        if (transportPanel) transportPanel.close()
+        if (volumePanel) volumePanel.close()
+        if (outputsPanel) outputsPanel.close()
     }
     property bool forecastMode: false
     readonly property bool showForecast: !historical && state.forecast_supported && forecastMode
@@ -281,7 +283,7 @@ Item {
         syncSessionVisibility()
         syncMediaVisibility()
     }
-    onShowForecastChanged: { if (showForecast) { outputsPanel.close(); volumePanel.close() } syncMediaVisibility() }
+    onShowForecastChanged: { if (showForecast) closePlaybackPanels(); syncMediaVisibility() }
     onStateChanged: {
         if (contentDeletePanel && contentDeletePanel.opened && state.content_delete
                 && (!state.content_delete.status
@@ -689,8 +691,7 @@ Item {
         archiveDetailReturn = null
         cancelSearchRead()
         clearComposer()
-        if (outputsPanel) outputsPanel.close()
-        if (volumePanel) volumePanel.close()
+        closePlaybackPanels()
         if (searchPanel) searchPanel.close()
         if (searchInput) searchInput.clear()
         if (choices) choices.close()
@@ -703,7 +704,7 @@ Item {
         if (owner) owner.clearSearch()
     }
     onVisibleChanged: { syncMediaVisibility(); if (!visible) { cancelArchiveRead(); if (owner) owner.clearArchive(); clearFlowReturn(); historyRead.stop(); historyReadProfile = ""; historyReadSession = ""; historyReadPending = false; readingRestore.stop(); pendingReadingAnchor = ""; closeTransient() } }
-    onHistoricalChanged: { if (historical) { outputsPanel.close(); volumePanel.close() } syncMediaVisibility(); if (!historical) { archiveDetailReturn = null; cancelArchiveRead(); if (owner) owner.clearArchive() } readingRestore.stop(); pendingReadingAnchor = ""; readingOffset = 0; if (!historical && flowReturn) { historyScroll.contentItem.cancelFlick(); flowReturnRestore.restart() } }
+    onHistoricalChanged: { if (historical) closePlaybackPanels(); syncMediaVisibility(); if (!historical) { archiveDetailReturn = null; cancelArchiveRead(); if (owner) owner.clearArchive() } readingRestore.stop(); pendingReadingAnchor = ""; readingOffset = 0; if (!historical && flowReturn) { historyScroll.contentItem.cancelFlick(); flowReturnRestore.restart() } }
     onSearchTargetChanged: { if (searchPanel) searchPanel.close(); if (searchInput) searchInput.clear(); if (owner) owner.clearSearch() }
     signal openVibeScape(real pickerTop)
     signal navigate(string destination)
@@ -1329,58 +1330,78 @@ Item {
                             }
                         }
                     }
-                    RowLayout {
+                    SessionPlaybackShortcut {
+                        id: progressButton
                         objectName: "sessionPlaybackProgress"
                         visible: playbackSources.ready && screen.state.playback.time_label !== undefined
                         Layout.row: 1
                         Layout.column: screen.compact ? 0 : 1
                         Layout.columnSpan: screen.compact ? 2 : 1
                         Layout.fillWidth: true
-                        Row {
-                            id: playbackMeter
-                            objectName: "sessionPlaybackMeter"
-                            readonly property bool playing: screen.state.playback.state === "playing"
-                            readonly property bool animating: visible && playing && GlassStyle.motionEnabled
-                                && screen.backend.releaseProfile !== "pi-zero-2w-arm64"
-                                && Qt.application.state === Qt.ApplicationActive
-                            property real phase: 0
-                            spacing: 2
-                            Layout.preferredWidth: 18
-                            Layout.preferredHeight: 20
-                            Accessible.ignored: true
-                            Timer {
-                                interval: 80
-                                repeat: true
-                                running: playbackMeter.animating
-                                onTriggered: playbackMeter.phase = (playbackMeter.phase + 0.32) % (2 * Math.PI)
-                            }
-                            Repeater {
-                                model: [0.85, 0.35, 0.62, 0.25]
-                                Rectangle {
-                                    required property int index
-                                    required property real modelData
-                                    readonly property real level: playbackMeter.animating
-                                        ? 0.18 + 0.82 * (0.5 + 0.5 * Math.sin(playbackMeter.phase + index * 1.7))
-                                        : playbackMeter.playing ? modelData : 0.16
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    width: 3
-                                    height: Math.max(3, playbackMeter.height * level)
-                                    radius: 1
-                                    color: BrandTheme.colors.text
+                        enabled: !!screen.state.playback_control.available
+                        opacity: 1
+                        padding: 0
+                        implicitHeight: 44
+                        Accessible.name: screen.tr("session_playback_controls")
+                        Accessible.description: screen.state.playback.time_label || ""
+                        background: Rectangle {
+                            radius: 8
+                            color: progressButton.down ? BrandTheme.colors.surfaceRaised : "transparent"
+                            border.color: progressButton.activeFocus ? BrandTheme.colors.actionAccent : "transparent"
+                        }
+                        onVisibleChanged: if (!visible && transportPanel) transportPanel.close()
+                        onEnabledChanged: if (!enabled && transportPanel) transportPanel.close()
+                        onCurrentTrackClicked: {
+                            transportPanel.captureSource(progressButton)
+                            transportPanel.open()
+                        }
+                        contentItem: RowLayout {
+                            Row {
+                                id: playbackMeter
+                                objectName: "sessionPlaybackMeter"
+                                readonly property bool playing: screen.state.playback.state === "playing"
+                                readonly property bool animating: visible && playing && GlassStyle.motionEnabled
+                                    && screen.backend.releaseProfile !== "pi-zero-2w-arm64"
+                                    && Qt.application.state === Qt.ApplicationActive
+                                property real phase: 0
+                                spacing: 2
+                                Layout.preferredWidth: 18
+                                Layout.preferredHeight: 20
+                                Accessible.ignored: true
+                                Timer {
+                                    interval: 80
+                                    repeat: true
+                                    running: playbackMeter.animating
+                                    onTriggered: playbackMeter.phase = (playbackMeter.phase + 0.32) % (2 * Math.PI)
+                                }
+                                Repeater {
+                                    model: [0.85, 0.35, 0.62, 0.25]
+                                    Rectangle {
+                                        required property int index
+                                        required property real modelData
+                                        readonly property real level: playbackMeter.animating
+                                            ? 0.18 + 0.82 * (0.5 + 0.5 * Math.sin(playbackMeter.phase + index * 1.7))
+                                            : playbackMeter.playing ? modelData : 0.16
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        width: 3
+                                        height: Math.max(3, playbackMeter.height * level)
+                                        radius: 1
+                                        color: BrandTheme.colors.text
+                                    }
                                 }
                             }
-                        }
-                        ProgressBar {
-                            id: playbackProgress
-                            value: screen.state.playback.progress || 0; Layout.fillWidth: true
-                            Accessible.name: screen.tr("now_playing")
-                            background: Rectangle { implicitHeight: 6; radius: 3; color: BrandTheme.colors.text; opacity: 0.18 }
-                            contentItem: Item {
-                                implicitHeight: 6
-                                Rectangle { width: playbackProgress.visualPosition * parent.width; height: parent.height; radius: 3; color: BrandTheme.colors.text }
+                            ProgressBar {
+                                id: playbackProgress
+                                value: screen.state.playback.progress || 0; Layout.fillWidth: true
+                                Accessible.name: screen.tr("now_playing")
+                                background: Rectangle { implicitHeight: 6; radius: 3; color: BrandTheme.colors.text; opacity: 0.18 }
+                                contentItem: Item {
+                                    implicitHeight: 6
+                                    Rectangle { width: playbackProgress.visualPosition * parent.width; height: parent.height; radius: 3; color: BrandTheme.colors.text }
+                                }
                             }
+                            Text { text: screen.state.playback.time_label || ""; textFormat: Text.PlainText; font.pixelSize: screen.compact ? 16 : 18; color: BrandTheme.colors.muted }
                         }
-                        Text { text: screen.state.playback.time_label || ""; textFormat: Text.PlainText; font.pixelSize: screen.compact ? 16 : 18; color: BrandTheme.colors.muted }
                     }
                     RowLayout {
                         visible: playbackSources.ready && (!!screen.state.playback.target_name || volumeShortcut.visible)
@@ -1968,84 +1989,89 @@ Item {
         }
     }
     readonly property Component artworkTransportControls: Component {
-        ColumnLayout {
-            id: artworkControls
+        SessionTransportControls {
             objectName: "trackArtworkTransportControls"
-            readonly property real buttonSize: Math.max(0, Math.min(156 * screen.ipadScale,
+            overArtwork: true
+            buttonSize: Math.max(0, Math.min(156 * screen.ipadScale,
                 (width - 24) / 3, (height - 88) / 3))
-            spacing: 8
-            Item { Layout.fillHeight: true }
-            GridLayout {
-                Layout.alignment: Qt.AlignHCenter
-                columns: 3
-                rowSpacing: 8
-                columnSpacing: 12
-                SessionTransportButton {
-                    objectName: "sessionPlaybackRepeat"
-                    commandName: "repeat"
-                    buttonSize: artworkControls.buttonSize
-                }
-                SessionTransportButton {
-                    objectName: "sessionPlaybackShuffle"
-                    commandName: "shuffle"
-                    buttonSize: artworkControls.buttonSize
-                }
-                SessionTransportButton {
-                    objectName: "sessionArtworkFavorite"
-                    commandName: "toggle_favorite"
-                    iconName: "heart"
-                    buttonSize: artworkControls.buttonSize
-                }
-                SessionTransportButton {
-                    objectName: "sessionPlaybackPrevious"
-                    commandName: "previous"
-                    buttonSize: artworkControls.buttonSize
-                }
-                SessionTransportButton {
-                    objectName: "sessionPlaybackToggle"
-                    commandName: screen.state.playback.state === "playing" ? "pause" : "play"
-                    buttonSize: artworkControls.buttonSize
-                    checked: true
-                }
-                SessionTransportButton {
-                    objectName: "sessionPlaybackNext"
-                    commandName: "next"
-                    buttonSize: artworkControls.buttonSize
-                }
-                SessionTransportButton {
-                    objectName: "sessionPlaybackSeekBack"
-                    commandName: "seek_back_15"
-                    buttonSize: artworkControls.buttonSize
-                }
-                Item {}
-                SessionTransportButton {
-                    objectName: "sessionPlaybackSeekForward"
-                    commandName: "seek_forward_15"
-                    buttonSize: artworkControls.buttonSize
-                }
-            }
-            Text {
-                readonly property string status: screen.state.playback_control.status || ""
-                visible: status.length > 0
-                Layout.fillWidth: true
-                text: screen.tr(status === "sending" ? "session_question_sending"
-                    : status === "accepted" ? "session_playback_sent" : "session_uncertain")
-                textFormat: Text.PlainText
-                color: BrandTheme.colors.text
-                font.pixelSize: 18
-                horizontalAlignment: Text.AlignHCenter
-                wrapMode: Text.WordWrap
-            }
-            GlassButton {
-                objectName: "trackArtworkPlaybackRefresh"
-                visible: screen.state.playback_control.status === "uncertain"
-                Layout.alignment: Qt.AlignHCenter
-                text: screen.tr("refresh")
-                enabled: !screen.owner.busy
-                onClicked: screen.owner.refreshPlayback()
-            }
-            Item { Layout.fillHeight: true }
         }
+    }
+    component SessionTransportControls: ColumnLayout {
+        id: transportControls
+        required property real buttonSize
+        property bool overArtwork: false
+        spacing: 8
+        Item { visible: transportControls.overArtwork; Layout.fillHeight: true }
+        GridLayout {
+            Layout.alignment: Qt.AlignHCenter
+            columns: 3
+            rowSpacing: 8
+            columnSpacing: 12
+            SessionTransportButton {
+                objectName: "sessionPlaybackRepeat"
+                commandName: "repeat"
+                buttonSize: transportControls.buttonSize
+            }
+            SessionTransportButton {
+                objectName: "sessionPlaybackShuffle"
+                commandName: "shuffle"
+                buttonSize: transportControls.buttonSize
+            }
+            SessionTransportButton {
+                objectName: "sessionArtworkFavorite"
+                commandName: "toggle_favorite"
+                iconName: "heart"
+                buttonSize: transportControls.buttonSize
+            }
+            SessionTransportButton {
+                objectName: "sessionPlaybackPrevious"
+                commandName: "previous"
+                buttonSize: transportControls.buttonSize
+            }
+            SessionTransportButton {
+                objectName: "sessionPlaybackToggle"
+                commandName: screen.state.playback.state === "playing" ? "pause" : "play"
+                buttonSize: transportControls.buttonSize
+                checked: true
+            }
+            SessionTransportButton {
+                objectName: "sessionPlaybackNext"
+                commandName: "next"
+                buttonSize: transportControls.buttonSize
+            }
+            SessionTransportButton {
+                objectName: "sessionPlaybackSeekBack"
+                commandName: "seek_back_15"
+                buttonSize: transportControls.buttonSize
+            }
+            Item {}
+            SessionTransportButton {
+                objectName: "sessionPlaybackSeekForward"
+                commandName: "seek_forward_15"
+                buttonSize: transportControls.buttonSize
+            }
+        }
+        Text {
+            readonly property string status: screen.state.playback_control.status || ""
+            visible: status.length > 0
+            Layout.fillWidth: true
+            text: screen.tr(status === "sending" ? "session_question_sending"
+                : status === "accepted" ? "session_playback_sent" : "session_uncertain")
+            textFormat: Text.PlainText
+            color: BrandTheme.colors.text
+            font.pixelSize: 18
+            horizontalAlignment: Text.AlignHCenter
+            wrapMode: Text.WordWrap
+        }
+        GlassButton {
+            objectName: "trackArtworkPlaybackRefresh"
+            visible: screen.state.playback_control.status === "uncertain"
+            Layout.alignment: Qt.AlignHCenter
+            text: screen.tr("refresh")
+            enabled: !screen.owner.busy
+            onClicked: screen.owner.refreshPlayback()
+        }
+        Item { visible: transportControls.overArtwork; Layout.fillHeight: true }
     }
     component SessionTransportButton: GlassButton {
         id: transportButton
@@ -2101,9 +2127,25 @@ Item {
             if (above >= edgeMargin) return above
             return Math.max(edgeMargin, lastTop)
         }
+        property int compactWidth: 520
         property int wideWidth: 380
-        width: Math.min(screen.width - 32, screen.compact ? 520 : Math.round(wideWidth * screen.ipadScale))
+        width: Math.min(screen.width - 32, screen.compact ? compactWidth : Math.round(wideWidth * screen.ipadScale))
         padding: 20; modal: true; dim: false
+    }
+    AnchoredPlaybackPopup {
+        id: transportPanel
+        objectName: "sessionTransportPanel"
+        compactWidth: 320
+        wideWidth: 320
+        focus: true
+        onAboutToHide: if (screen.owner) screen.owner.cancelPlaybackIntent()
+        background: GlassSurface { elevated: true; popover: !screen.compact }
+        contentItem: Loader {
+            active: transportPanel.visible
+            sourceComponent: SessionTransportControls {
+                buttonSize: Math.min(screen.compact ? 64 : 72, (transportPanel.availableWidth - 24) / 3)
+            }
+        }
     }
     AnchoredPlaybackPopup {
         id: volumePanel

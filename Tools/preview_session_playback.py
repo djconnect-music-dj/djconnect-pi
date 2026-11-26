@@ -345,7 +345,6 @@ def main():
                 owner._moments, owner._retained_flow = moments, retained
                 owner.changed.emit()
                 QTest.qWait(80)
-                modifiers = Qt.KeyboardModifier.NoModifier
                 paused = deepcopy(session)
                 paused['broadcast']['playback']['state'] = 'paused'
                 owner.transport.active.return_value = {'success': True, 'session': paused}
@@ -373,11 +372,6 @@ def main():
                     assert progress_origin.y() < artwork_button.mapToItem(metadata, 0, artwork_button.height()).y()
                 capture('progress-layout')
                 output_panel = window.findChild(QObject, 'sessionOutputPanel')
-                point = progress.mapToScene(QPointF(progress.width()/2, progress.height()/2))
-                QTest.mouseClick(window, Qt.MouseButton.LeftButton, modifiers, QPoint(round(point.x()), round(point.y())))
-                QTest.qWait(60)
-                assert not popup.property('opened') and not output_panel.property('opened') and not intents
-
                 def assert_popup_anchor(trigger, panel):
                     top = trigger.mapToItem(screen, 0, 0)
                     bottom = trigger.mapToItem(screen, trigger.width(), trigger.height())
@@ -390,6 +384,40 @@ def main():
                     assert 15 <= y and y + popup_height <= height - 15
                     if bottom.y() + 8 + popup_height <= height - 16:
                         assert abs(y - (bottom.y() + 8)) < 2
+
+                transport_panel = window.findChild(QObject, 'sessionTransportPanel')
+                click('sessionPlaybackProgress')
+                assert transport_panel.property('opened') and not window.property('trackArtworkOpen')
+                assert not popup.property('opened') and not output_panel.property('opened') and not intents
+                assert_popup_anchor(progress, transport_panel)
+                assert progress.height() >= 44
+                capture('direct-playback-controls')
+
+                original_session = owner._session
+                owner._session = deepcopy(original_session)
+                current_playback = owner._session['broadcast']['playback']
+                panel_position = (transport_panel.property('x'), transport_panel.property('y'))
+                current_playback['position_ms'] += 750
+                owner.changed.emit()
+                QTest.qWait(60)
+                assert transport_panel.property('opened') and not intents
+                assert (transport_panel.property('x'), transport_panel.property('y')) == panel_position
+                click('sessionPlaybackPrevious')
+                assert len(intents) == 1
+                intents.pop()()
+                owner.transport.playback_command.assert_called_once()
+                assert owner.transport.playback_command.call_args.args[1] == 'previous'
+                owner.transport.playback_command.reset_mock()
+                drain()
+                assert transport_panel.property('opened')
+
+                owner._session = deepcopy(original_session)
+                owner._session['broadcast']['playback']['item_id'] = 'synthetic-new-track'
+                owner.changed.emit()
+                assert not transport_panel.property('opened') and not intents
+                owner._session = original_session
+                owner.changed.emit()
+                QTest.qWait(120)
 
                 initial_caps = backend.cfg.music_backend_capabilities
                 backend.cfg.music_backend_capabilities = {
