@@ -2877,6 +2877,7 @@ Item {
         readonly property var observation: screen.state.playback_control.outputs || ({})
         readonly property var choices: observation.choices || []
         property bool manualRefreshPending: false
+        property string pendingOutputName: ""
         function openForCurrentItem(source) {
             captureSource(source)
             if (screen.owner.readPlaybackOutputs(screen.state.session_id, screen.state.playback.item_id)) open()
@@ -2890,14 +2891,20 @@ Item {
             else if (control.outputs_status === "unavailable")
                 screen.backend.showToastForContext(screen.tr("session_output_unavailable"), "refresh")
         }
+        function chooseOutput(id, name) {
+            if (screen.owner.setPlaybackOutput(screen.state.session_id, screen.state.playback.item_id, observation.lease, id))
+                pendingOutputName = name
+        }
         Connections {
             target: screen.owner
             function onChanged() {
                 if (outputsPanel.manualRefreshPending) Qt.callLater(outputsPanel.finishManualRefresh)
+                if (!screen.state.playback_control.running) outputsPanel.pendingOutputName = ""
             }
         }
         onAboutToHide: {
             manualRefreshPending = false
+            pendingOutputName = ""
             if (screen.owner) screen.owner.cancelPlaybackIntent()
         }
         background: GlassSurface { elevated: true; popover: !screen.compact }
@@ -2989,7 +2996,7 @@ Item {
                             Accessible.ignored: true
                         }
                     }
-                    onClicked: screen.owner.setPlaybackOutput(screen.state.session_id, screen.state.playback.item_id, outputsPanel.observation.lease, modelData.id)
+                    onClicked: outputsPanel.chooseOutput(modelData.id, modelData.name)
                 }
             }
             Text {
@@ -2998,6 +3005,8 @@ Item {
                 color: BrandTheme.colors.muted; font.pixelSize: 18
                 visible: text.length > 0
                 text: screen.state.playback_control.reading_outputs ? screen.tr("loading")
+                    : screen.state.playback_control.status === "sending" && outputsPanel.pendingOutputName
+                        ? screen.tr("session_output_switching").replace("%1", () => outputsPanel.pendingOutputName)
                     : screen.state.playback_control.status === "sending" ? screen.tr("session_question_sending")
                     : screen.state.playback_control.status === "uncertain" ? screen.tr("session_uncertain")
                     : screen.state.playback_control.outputs_status === "unavailable" ? screen.tr("session_output_unavailable")

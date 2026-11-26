@@ -646,6 +646,23 @@ def main():
                 intents.pop()()
                 QTest.qWait(120)
                 assert not backend.toastVisible
+                click('sessionCurrentOutput')
+                intents.pop()()
+                QTest.qWait(80)
+                with patch.object(owner.transport, 'playback_output') as transfer:
+                    alternative = visual(window.contentItem(), 'sessionOutputChoice-synthetic-alternative')
+                    assert alternative is not None and alternative.property('enabled')
+                    point = alternative.mapToScene(QPointF(alternative.width() / 2, alternative.height() / 2)).toPoint()
+                    QTest.mouseClick(window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, point)
+                    QTest.qWait(65)
+                    assert len(intents) == 1
+                    output_status = window.findChild(QObject, 'sessionOutputStatus')
+                    assert output_status.property('text') == TRANSLATIONS[language]['session_output_switching'].replace('%1', 'Speaker 2')
+                    click('sessionOutputClose')
+                    intents.pop()()
+                    QTest.qWait(80)
+                    transfer.assert_not_called()
+                    assert not output_panel.property('pendingOutputName')
                 observed['playback']['volume_percent'] = 0
                 click('sessionCurrentVolume')
                 assert len(intents) == 1
