@@ -472,6 +472,39 @@ def main():
                 assert not pull_spinner.property("visible")
                 owner._set_running()
                 owner.changed.emit()
+                owner._timeline = {"session": saved, "revision": "fixture-saved", "entries": []}
+                owner.changed.emit()
+                show_search = QQmlExpression(engine.rootContext(), screen, "showSearch()")
+                show_search.evaluate()
+                assert not show_search.hasError()
+                QTest.qWait(65)
+                panel = window.findChild(QObject, "sessionSearchPanel")
+                panel.setProperty("keyboardVisible", False)
+                search_field = window.findChild(QObject, "sessionSearchInput")
+                search_field.setProperty("text", "fixture")
+                search_empty = window.findChild(QObject, "sessionSearchEmpty")
+                search_message = window.findChild(QObject, "sessionSearchEmptyMessage")
+                owner._search = {"session_id": saved["session_id"], "query": "fixture", "complete": False, "matches": []}
+                owner.changed.emit()
+                assert not search_empty.property("visible")
+                owner._search["complete"] = True
+                owner.changed.emit()
+                for language in LANGUAGES:
+                    backend.setLanguage(language)
+                    QTest.qWait(65)
+                    assert search_empty.property("visible")
+                    assert search_message.property("text") == TRANSLATIONS[language]["session_search_empty"]
+                    assert search_message.property("contentWidth") <= search_message.width() + 1
+                search_field.setProperty("text", "different query")
+                assert not search_empty.property("visible")
+                search_field.setProperty("text", "fixture")
+                owner._set_running(1, "search_refresh")
+                owner.changed.emit()
+                assert not search_empty.property("visible")
+                owner._set_running()
+                owner._error = "unavailable"
+                owner.changed.emit()
+                assert not search_empty.property("visible")
                 backend.shutdown()
                 delete(window)
                 delete(engine)

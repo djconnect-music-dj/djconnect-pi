@@ -2771,6 +2771,10 @@ Item {
         property string selectedMatchId: ""
         readonly property var matches: screen.state.search.matches || []
         readonly property int selectedMatchIndex: matches.findIndex(function(row) { return row.entry_id === selectedMatchId })
+        readonly property bool noMatches: !!screen.state.search.query
+            && screen.state.search.query === searchInput.text.trim()
+            && screen.state.search.session_id === screen.searchTarget && screen.state.search.complete
+            && matches.length === 0 && !screen.owner.busy && !screen.state.error
         onMatchesChanged: {
             if (selectedMatchId && !matches.some(function(row) { return row.entry_id === selectedMatchId }))
                 selectedMatchId = ""
@@ -2864,19 +2868,45 @@ Item {
             }
             Text {
                 Layout.leftMargin: searchPanel.bodyMargin; Layout.rightMargin: searchPanel.bodyMargin
-                visible: !!screen.state.search.query
+                visible: !!screen.state.search.query && !searchPanel.noMatches && !screen.owner.busy && !screen.state.error
                 text: screen.tr(screen.state.search_limit_reached ? "session_search_limit" : screen.state.search.complete ? "session_search_complete" : "session_search_partial")
                 color: BrandTheme.colors.muted; font.pixelSize: 18
                 wrapMode: Text.WordWrap; Layout.fillWidth: true
             }
-            Text {
+            Item {
+                objectName: "sessionSearchEmpty"
                 Layout.leftMargin: searchPanel.bodyMargin; Layout.rightMargin: searchPanel.bodyMargin
-                visible: !!screen.state.search.query && (screen.state.search.matches || []).length === 0 && screen.state.search.complete
-                text: screen.tr("session_search_empty"); color: BrandTheme.colors.muted; font.pixelSize: 20
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                visible: searchPanel.noMatches
+                ColumnLayout {
+                    anchors.centerIn: parent
+                    width: parent.width
+                    spacing: 12
+                    FeatureIcon {
+                        iconName: "search"
+                        iconColor: BrandTheme.colors.muted
+                        Accessible.ignored: true
+                        Layout.alignment: Qt.AlignHCenter
+                        Layout.preferredWidth: screen.compact ? 40 : 54
+                        Layout.preferredHeight: Layout.preferredWidth
+                    }
+                    Text {
+                        objectName: "sessionSearchEmptyMessage"
+                        text: screen.tr("session_search_empty")
+                        textFormat: Text.PlainText
+                        horizontalAlignment: Text.AlignHCenter
+                        color: BrandTheme.colors.muted
+                        font.pixelSize: 20
+                        wrapMode: Text.WordWrap
+                        Layout.fillWidth: true
+                    }
+                }
             }
             ScrollView {
                 id: searchScroll
                 objectName: "sessionSearchScroll"
+                visible: !searchPanel.noMatches
                 Layout.fillWidth: true; Layout.fillHeight: true; Layout.minimumHeight: 0
                 Layout.leftMargin: searchPanel.bodyMargin; Layout.rightMargin: searchPanel.bodyMargin
                 contentWidth: availableWidth; clip: true
