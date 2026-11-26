@@ -3190,9 +3190,13 @@ BrandWindow {
             modal: true
             padding: 20
             property bool storyCard: true
+            property bool animatedPreview: false
             property bool renderingCard: false
             property int exportGeneration: 0
-            onAboutToShow: storyCard = true
+            onAboutToShow: {
+                storyCard = true
+                animatedPreview = false
+            }
             onClosed: {
                 exportGeneration += 1
                 renderingCard = false
@@ -3255,6 +3259,14 @@ BrandWindow {
                         Layout.fillWidth: true; Layout.preferredWidth: 1
                         onClicked: insightSharePopup.storyCard = false
                     }
+                    GlassButton {
+                        objectName: "trackInsightShareAnimate"
+                        text: root.tr("track_insight_share_animate")
+                        checked: insightSharePopup.animatedPreview
+                        enabled: !GlassStyle.reduceMotion
+                        Layout.fillWidth: true; Layout.preferredWidth: 1
+                        onClicked: insightSharePopup.animatedPreview = !insightSharePopup.animatedPreview
+                    }
                 }
                 ScrollView {
                     id: insightShareScroll
@@ -3270,6 +3282,9 @@ BrandWindow {
                             objectName: "trackInsightShareCard"
                             visible: trackInsightPanel.canShareInsight
                             story: insightSharePopup.storyCard
+                            animate: visible && insightSharePopup.animatedPreview && insightSharePopup.opened
+                                && root.active && GlassStyle.awake && !GlassStyle.reduceMotion
+                                && !insightSharePopup.renderingCard && !insightSaveDialog.visible
                             Layout.alignment: Qt.AlignHCenter
                             Layout.preferredWidth: Math.min(insightShareContent.width, story ? 190 : 280)
                             Layout.preferredHeight: Layout.preferredWidth * (story ? 16 / 9 : 1)

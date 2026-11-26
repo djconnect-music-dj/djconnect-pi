@@ -11,6 +11,8 @@ Rectangle {
     required property string artworkUrl
     required property string badge
     required property string creditLabel
+    property bool animate: false
+    property real motionPhase: 0
     readonly property real contentPadding: width * 0.07
     radius: width * 0.06
     clip: true
@@ -18,6 +20,32 @@ Rectangle {
         GradientStop { position: 0; color: BrandTheme.colors.backgroundStart }
         GradientStop { position: 0.5; color: BrandTheme.colors.backgroundMid }
         GradientStop { position: 1; color: BrandTheme.colors.opaqueGlass }
+    }
+
+    NumberAnimation {
+        target: card
+        property: "motionPhase"
+        from: 0; to: 1; duration: 6000
+        loops: Animation.Infinite
+        running: card.animate
+    }
+    onAnimateChanged: if (!animate) motionPhase = 0
+
+    Rectangle {
+        width: card.width * 1.2
+        height: width
+        radius: width / 2
+        x: card.width * (-0.55 + 0.22 * Math.sin(card.motionPhase * 2 * Math.PI))
+        y: card.height * (-0.25 + 0.16 * Math.cos(card.motionPhase * 2 * Math.PI))
+        color: BrandTheme.alpha(BrandTheme.colors.actionBlue, "12")
+    }
+    Rectangle {
+        width: card.width * 1.2
+        height: width
+        radius: width / 2
+        x: card.width * (0.36 + 0.18 * Math.cos(card.motionPhase * 2 * Math.PI))
+        y: card.height * (0.50 + 0.16 * Math.sin(card.motionPhase * 2 * Math.PI))
+        color: BrandTheme.alpha(BrandTheme.colors.actionPurple, "12")
     }
 
     ColumnLayout {

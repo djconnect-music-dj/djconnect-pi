@@ -1716,6 +1716,7 @@ _SESSION_COMPOSER_TRANSLATIONS = {
     "track_insight_share": ("Share Track Insight", "Track Insight delen", "Track Insight teilen", "Partager Track Insight", "Compartir Track Insight"),
     "track_insight_share_story": ("Story", "Story", "Story", "Story", "Historia"),
     "track_insight_share_square": ("Square", "Vierkant", "Quadrat", "Carré", "Cuadrado"),
+    "track_insight_share_animate": ("Animate preview", "Bewegend voorbeeld", "Vorschau animieren", "Animer l’aperçu", "Animar la vista previa"),
     "track_insight_save_card": ("Save card as PNG", "Kaart bewaren als PNG", "Karte als PNG speichern", "Enregistrer la carte en PNG", "Guardar tarjeta como PNG"),
     "track_insight_png_files": ("PNG images", "PNG-afbeeldingen", "PNG-Bilder", "Images PNG", "Imágenes PNG"),
     "track_insight_card_saved": ("Card saved", "Kaart opgeslagen", "Karte gespeichert", "Carte enregistrée", "Tarjeta guardada"),
