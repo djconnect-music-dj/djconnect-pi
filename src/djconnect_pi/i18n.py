@@ -1279,6 +1279,17 @@ _MUSIC_DNA_CARD_TRANSLATIONS = {
         "Music DNA wird aus Home Assistant geladen…", "Chargement de Music DNA depuis Home Assistant…",
         "Cargando Music DNA desde Home Assistant…",
     ),
+    "music_dna_profile_unavailable": (
+        "Music DNA could not be loaded from Home Assistant.",
+        "Music DNA kon niet worden opgehaald uit Home Assistant.",
+        "Music DNA konnte nicht aus Home Assistant geladen werden.",
+        "Impossible de charger Music DNA depuis Home Assistant.",
+        "No se pudo cargar Music DNA desde Home Assistant.",
+    ),
+    "music_dna_reload_profile": (
+        "Reload Music DNA", "Music DNA opnieuw laden", "Music DNA erneut laden",
+        "Recharger Music DNA", "Volver a cargar Music DNA",
+    ),
     "music_dna_no_profile_yet": (
         "No Music DNA profile yet", "Nog geen Music DNA-profiel", "Noch kein Music-DNA-Profil",
         "Pas encore de profil Music DNA", "Aún no hay un perfil de Music DNA",

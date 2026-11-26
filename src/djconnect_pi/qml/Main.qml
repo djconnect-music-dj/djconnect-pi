@@ -3850,28 +3850,37 @@ BrandWindow {
                     id: musicDnaRefreshButton
                     objectName: "musicDnaRefreshButton"
                     loading: djconnect.musicDnaBusy
-                    enabled: !loading
+                    enabled: !loading && djconnect.paired && !djconnect.demoMode && !djconnect.versionMismatchVisible
                     onClicked: djconnect.refreshMusicDna()
                 }
             }
 
             GlassCard {
                 objectName: "musicDnaErrorCard"
-                visible: djconnect.musicDnaError.length > 0
+                visible: !djconnect.musicDnaBusy && (djconnect.musicDnaError.length > 0 || !djconnect.musicDnaLoaded)
                 Layout.fillWidth: true
                 Text {
-                    text: djconnect.musicDnaError
+                    objectName: "musicDnaUnavailableText"
+                    text: djconnect.musicDnaError || root.tr("music_dna_profile_unavailable")
                     textFormat: Text.PlainText
                     color: BrandTheme.colors.text
                     font.pixelSize: 22
                     wrapMode: Text.WordWrap
                     Layout.fillWidth: true
                 }
+                GlassButton {
+                    objectName: "musicDnaReloadProfile"
+                    text: root.tr("music_dna_reload_profile")
+                    iconName: "refresh"
+                    enabled: musicDnaRefreshButton.enabled
+                    Layout.alignment: Qt.AlignLeft
+                    onClicked: djconnect.refreshMusicDna()
+                }
             }
 
             GlassCard {
                 objectName: "musicDnaLoadingCard"
-                visible: !djconnect.musicDnaLoaded && djconnect.musicDnaBusy && djconnect.musicDnaError.length === 0
+                visible: !djconnect.musicDnaLoaded && djconnect.musicDnaBusy
                 Layout.fillWidth: true
                 RowLayout {
                     Layout.fillWidth: true

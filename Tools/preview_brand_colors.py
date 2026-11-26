@@ -342,6 +342,21 @@ def main():
         opt_in = visual_item(window.contentItem(), "musicDnaOptInHero")
         assert loading.property("visible") and not opt_in.property("visible")
         assert visual_item(loading, "musicDnaLoadingText").property("text") == backend.t("music_dna_loading_profile")
+        backend._apply_music_dna_data({"success": True})
+        backend._set_music_dna_busy(False)
+        unavailable = visual_item(window.contentItem(), "musicDnaErrorCard")
+        assert unavailable.property("visible") and not opt_in.property("visible")
+        assert visual_item(unavailable, "musicDnaUnavailableText").property("text") == backend.t("music_dna_profile_unavailable")
+        backend.cfg.paired, backend.cfg.device_token = True, "synthetic-not-a-credential"
+        backend.pairedChanged.emit()
+        reload_button = visual_item(unavailable, "musicDnaReloadProfile")
+        assert reload_button.property("enabled")
+        with patch.object(backend, "_sync_config_from_disk"), patch.object(backend, "_run") as request:
+            QMetaObject.invokeMethod(reload_button, "clicked")
+            request.assert_called_once()
+            assert loading.property("visible") and not reload_button.property("enabled")
+        backend.cfg.paired, backend.cfg.device_token = False, ""
+        backend.pairedChanged.emit()
         backend._apply_music_dna_data({"success": True, "enabled": False, "profile": {}})
         backend._set_music_dna_busy(False)
         assert not loading.property("visible") and opt_in.property("visible")
