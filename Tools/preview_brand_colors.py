@@ -742,6 +742,23 @@ def main():
                 top = action.mapToItem(scroller, QPointF()).y()
                 assert action.property("activeFocus") and top >= -1 and top + action.height() <= scroller.height() + 1
             capture("discovery-detail-keyboard-actions-" + locale)
+            feedback_menu = window.findChild(QObject, "discoveryFeedbackMenu")
+            with patch.object(backend, "_run") as request:
+                QTest.keyClick(window, Qt.Key.Key_Space)
+                QTest.qWait(180)
+                assert feedback_menu.property("opened") and feedback_menu.property("currentIndex") == 0
+                QTest.keyClick(window, Qt.Key.Key_Down)
+                assert feedback_menu.property("currentIndex") == 1
+                QTest.keyClick(window, Qt.Key.Key_Escape)
+                QTest.qWait(180)
+                assert not feedback_menu.property("opened") and detail.property("opened") and feedback.property("activeFocus")
+                QTest.keyClick(window, Qt.Key.Key_Space)
+                capture("discovery-feedback-menu-" + locale)
+                assert feedback_menu.property("opened") and feedback_menu.property("currentIndex") == 0
+                QTest.keyClick(window, Qt.Key.Key_Escape)
+                QTest.qWait(180)
+                assert not feedback_menu.property("opened") and detail.property("opened") and feedback.property("activeFocus")
+                request.assert_not_called()
             for action in (play, *reversed(strips), close_detail):
                 QTest.keyClick(window, Qt.Key.Key_Backtab, Qt.KeyboardModifier.ShiftModifier)
                 top = action.mapToItem(scroller, QPointF()).y()

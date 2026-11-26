@@ -3961,7 +3961,9 @@ BrandWindow {
 
                         Menu {
                             id: discoveryFeedbackMenu
+                            objectName: "discoveryFeedbackMenu"
                             y: parent.height
+                            onOpened: currentIndex = 0
                             MenuItem {
                                 text: root.tr("music_discovery_not_for_me")
                                 onTriggered: discoveryDetail.sendFeedback("not_for_me")
