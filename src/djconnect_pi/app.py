@@ -6560,7 +6560,19 @@ def _music_dna_cards(profile: dict[str, object], ha_url: str) -> list[dict[str, 
         card("energy", "mood_energy", metric=percent, entries=energy_rows,
              count=sample_count if type(sample_count) is int and sample_count >= 0 else None)
     rhythm = block("listening_rhythm")
-    card("rhythm", "history", entries=percentages(rhythm.get("dayparts"), "daypart", dayparts),
+    top_daypart = bounded_text(rhythm.get("top_daypart"), 64).strip()
+    top_weekday = bounded_text(rhythm.get("top_weekday"), 64).strip()
+    rhythm_entries = percentages(rhythm.get("dayparts"), "daypart", dayparts)
+    if top_daypart or top_weekday:
+        title, title_labels = (top_daypart, dayparts) if top_daypart else (top_weekday, weekdays)
+        value_key = title_labels.get(title.casefold(), "")
+        rhythm_entries.insert(0, {
+            "title": "" if value_key else title,
+            "valueKey": value_key,
+            "subtitle": top_weekday if top_daypart else "",
+            "subtitleKey": weekdays.get(top_weekday.casefold(), "") if top_daypart else "",
+        })
+    card("rhythm", "history", entries=rhythm_entries,
          groups=grouped("weekdays", percentages(rhythm.get("weekdays"), "weekday", weekdays)))
     mix = block("mood_mix")
     average = mix.get("average")

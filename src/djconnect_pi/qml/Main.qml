@@ -4961,7 +4961,8 @@ BrandWindow {
             }
             Text {
                 visible: text.length > 0
-                text: dnaRow.entry.labelKey ? dnaRow.entry.title || dnaRow.value : dnaRow.entry.subtitle || ""
+                text: dnaRow.entry.subtitleKey ? root.tr(dnaRow.entry.subtitleKey)
+                    : dnaRow.entry.labelKey ? dnaRow.entry.title || dnaRow.value : dnaRow.entry.subtitle || ""
                 textFormat: Text.PlainText
                 color: BrandTheme.colors.muted; font.pixelSize: 15
                 Layout.fillWidth: true; wrapMode: Text.Wrap

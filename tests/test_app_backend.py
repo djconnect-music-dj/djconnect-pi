@@ -652,7 +652,8 @@ def test_music_dna_parser_renders_optional_blocks_and_hides_empty_cards() -> Non
                 "favorite_genres": ["house", "indie"],
                 "recent_favorite_tracks": [{"title": "Strobe", "artist": "deadmau5"}],
                 "playtime": {"total_seconds": 3661, "formatted_total": "1h 1m", "top_artists": [{"name": "Robyn"}], "top_albums": ["Body Talk"]},
-                "listening_rhythm": {"sample_count": 3, "dayparts": [{"daypart": "avond", "percent": 100}]},
+                "listening_rhythm": {"sample_count": 3, "top_daypart": " Avond ", "top_weekday": "vrijdag",
+                                     "dayparts": [{"daypart": "avond", "percent": 100}]},
                 "mood_mix": {"sample_count": 4, "average": 45, "zones": [{"zone": "groove", "percent": 25}]},
                 "repeat_magnets": {"eligible": True, "items": [{"title": "Ever Again"}]},
                 "explicit_positives": {"eligible": True, "items": ["Saved favorites"]},
@@ -673,7 +674,10 @@ def test_music_dna_parser_renders_optional_blocks_and_hides_empty_cards() -> Non
         "positives", "anchors", "top_tracks", "top_artists", "feedback", "rhythm", "mood_mix",
     }
     assert cards["playtime"]["value"] == "1h 1m"
-    assert cards["rhythm"]["rows"][0]["labelKey"] == "music_dna_card_evening"
+    headline, meter = cards["rhythm"]["rows"]
+    assert headline["valueKey"] == "music_dna_card_evening"
+    assert headline["subtitleKey"] == "music_dna_card_friday"
+    assert meter["labelKey"] == "music_dna_card_evening"
     assert cards["mood_mix"]["rows"][0]["percent"] == 25
     assert cards["top_tracks"]["groups"][0]["key"] == "music_dna_card_short_term"
     assert cards["top_tracks"]["groups"][0]["rows"][0]["subtitle"] == "B"
