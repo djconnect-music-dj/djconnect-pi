@@ -2049,6 +2049,16 @@ Item {
                 visible: !screen.historical && screen.backend.demoMode && !!screen.state.playback.item_id
                 Layout.alignment: Qt.AlignHCenter
                 GlassButton {
+                    objectName: "sessionDemoFavorite"
+                    iconName: screen.backend.currentTrackFavorite ? "heart_filled" : "heart"
+                    Accessible.name: screen.tr(screen.backend.currentTrackFavorite ? "session_favorite_remove" : "session_favorite_add")
+                    enabled: screen.backend.favoriteAvailable
+                    onClicked: {
+                        if (screen.backend.currentTrackFavorite) screen.backend.removeCurrentTrackFavorite()
+                        else screen.backend.saveCurrentTrack()
+                    }
+                }
+                GlassButton {
                     iconName: "previous"; Accessible.name: screen.tr("previous")
                     onClicked: screen.backend.previous()
                 }

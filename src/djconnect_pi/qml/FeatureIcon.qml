@@ -333,7 +333,7 @@ Canvas {
                 ctx.quadraticCurveTo(px(12), py(29), px(16), py(26))
                 ctx.lineTo(px(23), py(17))
                 ctx.stroke()
-            } else if (iconName === "heart") {
+            } else if (iconName === "heart" || iconName === "heart_filled") {
                 ctx.beginPath()
                 ctx.moveTo(px(16), py(25))
                 ctx.bezierCurveTo(px(7), py(19), px(5), py(13), px(8.5), py(9.5))
@@ -341,7 +341,8 @@ Canvas {
                 ctx.bezierCurveTo(px(17), py(8.5), px(20.5), py(6.5), px(23.5), py(9.5))
                 ctx.bezierCurveTo(px(27), py(13), px(25), py(19), px(16), py(25))
                 ctx.closePath()
-                ctx.stroke()
+                if (iconName === "heart_filled") ctx.fill()
+                else ctx.stroke()
             } else if (iconName === "mood") {
                 circle(16, 16, 10, false)
                 circle(12, 13, 1.4, true)

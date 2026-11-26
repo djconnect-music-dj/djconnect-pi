@@ -300,6 +300,7 @@ class DJConnectBackend(QObject):
         self._logs_read_error = ""
         self._logs_visible = False
         self._demo_mode = False
+        self._demo_favorite_uris: set[str] = set()
         self._demo_progress = QTimer(self)
         self._demo_progress.setInterval(1000)
         self._demo_progress.timeout.connect(self._tick_demo_playback)
@@ -941,12 +942,14 @@ class DJConnectBackend(QObject):
 
     @Property(bool, notify=favoriteChanged)
     def favoriteAvailable(self) -> bool:
+        if self._demo_mode:
+            return self.playback.uri.startswith("demo:track:")
         capabilities = self.cfg.music_backend_capabilities or {}
         return bool(self.paired and capabilities.get("supports_favorites") and self.playback.uri)
 
     @Property(bool, notify=favoriteChanged)
     def favoriteRemovalAvailable(self) -> bool:
-        return self.favoriteAvailable and self.cfg.music_backend == "spotify_direct"
+        return self.favoriteAvailable and (self._demo_mode or self.cfg.music_backend == "spotify_direct")
 
     @Property(bool, notify=favoriteBusyChanged)
     def favoriteBusy(self) -> bool:
@@ -1754,6 +1757,9 @@ class DJConnectBackend(QObject):
 
     @Slot()
     def saveCurrentTrack(self) -> None:
+        if self._demo_mode:
+            self._set_demo_favorite(True)
+            return
         self._sync_config_from_disk()
         if self._demo_mode or not self.favoriteAvailable or self._favorite_busy:
             return
@@ -1769,6 +1775,9 @@ class DJConnectBackend(QObject):
 
     @Slot()
     def removeCurrentTrackFavorite(self) -> None:
+        if self._demo_mode:
+            self._set_demo_favorite(False)
+            return
         self._sync_config_from_disk()
         context = self._favorite_removal_context()
         if context is None or not self.playback.is_favorite or self._favorite_busy:
@@ -2328,6 +2337,7 @@ class DJConnectBackend(QObject):
         if not self._demo_mode:
             return
         self._demo_mode = False
+        self._demo_favorite_uris.clear()
         self._demo_progress.stop()
         self._clear_profile_scoped_caches(preserve_session=True)
         self._queue_items = []
@@ -2335,6 +2345,7 @@ class DJConnectBackend(QObject):
         self.demoModeChanged.emit()
         self.mediaListsChanged.emit()
         self.playback = Playback()
+        self.favoriteChanged.emit()
         self.titleChanged.emit()
         self.artistChanged.emit()
         self.albumChanged.emit()
@@ -4046,6 +4057,7 @@ class DJConnectBackend(QObject):
         self.playback.artist = str(track["subtitle"])
         self.playback.album = str(track.get("album") or "")
         self.playback.uri = str(track["uri"])
+        self.playback.is_favorite = self.playback.uri in self._demo_favorite_uris
         self.playback.position_seconds = 0
         self.playback.duration_seconds = int(track["duration"])
         self.playback.image_url = ""
@@ -4062,8 +4074,20 @@ class DJConnectBackend(QObject):
         track_changed = previous_uri != self.playback.uri
         self.djSession.demo_playback_changed(track_changed=track_changed)
         if track_changed:
+            self.favoriteChanged.emit()
             self.trackInsightPlaybackItemChanged.emit()
             self.playbackTrackChanged.emit()
+
+    def _set_demo_favorite(self, liked: bool) -> None:
+        if not self.favoriteAvailable or liked == self.playback.is_favorite:
+            return
+        if liked:
+            self._demo_favorite_uris.add(self.playback.uri)
+        else:
+            self._demo_favorite_uris.discard(self.playback.uri)
+        self.playback.is_favorite = liked
+        self.favoriteChanged.emit()
+        self.showToastForContext(self.tr_key("favorite_saved" if liked else "favorite_removed"), "playback")
 
     def _show_demo_track_insight(self) -> None:
         track = next((item for item in demo_queue_items() if item["uri"] == self.playback.uri), None)

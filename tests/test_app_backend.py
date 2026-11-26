@@ -2573,6 +2573,28 @@ def test_backend_wake_display_resets_x11_dpms(tmp_path: Path, monkeypatch) -> No
     ]
 
 
+def test_demo_favorites_follow_the_track_and_never_call_home_assistant(tmp_path: Path, monkeypatch) -> None:
+    ensure_app()
+    backend = DJConnectBackend(tmp_path / "config.json")
+    command = Mock()
+    monkeypatch.setattr(backend.client, "command", command)
+    backend.enterDemoMode()
+    backend.saveCurrentTrack()
+    assert backend.favoriteAvailable and backend.currentTrackFavorite
+    backend.next()
+    assert not backend.currentTrackFavorite
+    backend.previous()
+    assert backend.currentTrackFavorite
+    backend.removeCurrentTrackFavorite()
+    assert not backend.currentTrackFavorite
+    backend.saveCurrentTrack()
+    backend.exitDemoMode()
+    backend.enterDemoMode()
+    assert not backend.currentTrackFavorite
+    command.assert_not_called()
+    backend.shutdown()
+
+
 def test_backend_favorite_state_requires_capability_and_track_uri(tmp_path: Path) -> None:
     ensure_app()
     backend = DJConnectBackend(tmp_path / "config.json")
