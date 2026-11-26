@@ -827,6 +827,7 @@ Item {
         function onDragEnded() { Qt.callLater(searchPanel.finishKeyboardDismissalDrag) }
     }
     function searchNow() {
+        searchPanel.cancelTypedArchiveSearch()
         cancelSearchRead()
         if (archiveSearchAvailable) {
             if (searchPanel.matchingQuery) rememberSearch()
@@ -1098,6 +1099,7 @@ Item {
             if (screen.historyReadPending && !screen.owner.busy) historyRead.restart()
             if (screen.searchRefreshPending && !screen.owner.busy) searchRead.restart()
             if (screen.pendingArchiveSearchReturn && !screen.owner.busy) Qt.callLater(screen.restoreArchiveSearch)
+            if (!screen.owner.busy) searchPanel.scheduleTypedArchiveSearch()
         }
         function onSearchUpdated() { searchPosition.restart() }
         function onContextCleared() { screen.cancelArchiveRead(); screen.clearFlowReturn(); historyRead.stop(); screen.historyReadProfile = ""; screen.historyReadSession = ""; readingRestore.stop(); screen.pendingReadingAnchor = ""; screen.readingOffset = 0; screen.closeTransient(); if (screen.historical) screen.navigate(screen.currentHistory ? "session" : "more"); screen.historyReadPending = false }
@@ -2901,6 +2903,7 @@ Item {
         property bool restoreControlFocus: false
         property string selectedMatchId: ""
         property string pendingArchiveMatchId: ""
+        property bool typedArchiveSearchPending: false
         readonly property var result: screen.archiveSearchAvailable ? screen.owner.archiveSearchState : screen.state.search
         readonly property var matches: screen.archiveSearchAvailable ? (result.sessions || []) : (result.matches || [])
         readonly property string searchError: result.error || screen.state.error
@@ -2919,11 +2922,33 @@ Item {
         }
         onMatchingQueryChanged: if (pendingArchiveMatchId) Qt.callLater(restoreArchiveMatch)
         function resetSearch() {
+            cancelTypedArchiveSearch()
             selectedMatchId = ""
             pendingArchiveMatchId = ""
             screen.archiveSearchHandoff = null
             screen.owner.clearSearch()
             screen.owner.clearArchiveSearch()
+        }
+        function cancelTypedArchiveSearch() {
+            typedArchiveSearchPending = false
+            typedArchiveSearch.stop()
+        }
+        function editSearch() {
+            resetSearch()
+            typedArchiveSearchPending = screen.archiveSearchAvailable && !!searchInput.text.trim()
+            scheduleTypedArchiveSearch()
+        }
+        function scheduleTypedArchiveSearch() {
+            if (typedArchiveSearchPending && !typedArchiveSearch.running)
+                typedArchiveSearch.start()
+        }
+        Timer {
+            id: typedArchiveSearch
+            interval: 350
+            onTriggered: {
+                if (!searchPanel.opened || !screen.archiveSearchAvailable) searchPanel.cancelTypedArchiveSearch()
+                else if (!screen.owner.busy) screen.searchNow()
+            }
         }
         function moveMatch(delta) {
             const count = matches.length
@@ -3003,7 +3028,7 @@ Item {
                     background: GlassSurface { radius: 20; interactive: true; focused: searchInput.activeFocus }
                     Accessible.name: screen.searchLabel
                     selectByMouse: true
-                    onTextEdited: searchPanel.resetSearch()
+                    onTextEdited: searchPanel.editSearch()
                     TapHandler { onTapped: searchPanel.keyboardVisible = true }
                     onAccepted: searchPanel.acceptSearchInput()
                     Keys.onUpPressed: function(event) { event.accepted = searchPanel.moveMatch(-1) }
@@ -3178,7 +3203,7 @@ Item {
                 visible: searchPanel.keyboardVisible
                 Layout.fillWidth: true
                 target: searchInput; backend: screen.backend
-                onEdited: searchPanel.resetSearch()
+                onEdited: searchPanel.editSearch()
                 onSubmitted: searchPanel.acceptSearchInput()
                 onDismissed: searchPanel.keyboardVisible = false
             }

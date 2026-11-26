@@ -396,9 +396,19 @@ def main():
                 QTest.keyClick(window, find.key(), find.keyboardModifiers())
                 QTest.qWait(65)
                 assert archive_field.property("placeholderText") == TRANSLATIONS[language]["session_archive_search"]
-                archive_field.setProperty("text", "fixture")
                 with patch.object(owner, "_launch") as verify:
+                    QTest.keyClick(window, Qt.Key.Key_F)
+                    QTest.qWait(180)
+                    QTest.keyClick(window, Qt.Key.Key_I)
+                    QTest.qWait(220)
+                    verify.assert_not_called()
+                    QTest.qWait(170)
+                    verify.assert_called_once_with("archive_search", "fi")
+                    verify.reset_mock()
+                    QTest.keyClick(window, Qt.Key.Key_X)
+                    archive_field.setProperty("text", "fixture")
                     QTest.keyClick(window, Qt.Key.Key_Return)
+                    QTest.qWait(400)
                     verify.assert_called_once_with("archive_search", "fixture")
                 owner._archive_search = {"query": "fixture", "error": "unavailable", "sessions": []}
                 owner.changed.emit()
