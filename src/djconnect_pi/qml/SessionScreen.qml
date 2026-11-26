@@ -2834,9 +2834,20 @@ Item {
                     onAccepted: searchPanel.submitSearch()
                 }
                 GlassButton {
-                    iconName: "search"; Accessible.name: screen.tr("session_search")
+                    iconName: screen.owner.searchBusy ? "" : "search"
+                    Accessible.name: screen.tr("session_search")
+                    implicitWidth: 56
                     enabled: !screen.owner.busy && searchInput.text.trim().length > 0
                     onClicked: searchPanel.submitSearch()
+                    BusyIndicator {
+                        objectName: "sessionSearchProgress"
+                        anchors.centerIn: parent
+                        width: 28
+                        height: width
+                        visible: screen.owner.searchBusy
+                        running: visible
+                        Accessible.name: screen.tr("loading")
+                    }
                 }
                 Text {
                     objectName: "sessionSearchMatchCount"
@@ -2938,7 +2949,11 @@ Item {
                         text: screen.tr("session_more"); enabled: !screen.owner.busy
                         onClicked: { screen.rememberSearch(); screen.owner.moreSearch() }
                     }
-                    BusyIndicator { visible: screen.owner.busy; running: visible; Layout.alignment: Qt.AlignHCenter }
+                    BusyIndicator {
+                        visible: screen.owner.busy && !screen.owner.searchBusy
+                        running: visible
+                        Layout.alignment: Qt.AlignHCenter
+                    }
                 }
             }
             SearchKeyboardDock {

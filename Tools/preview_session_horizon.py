@@ -500,7 +500,12 @@ def main():
                 search_field.setProperty("text", "fixture")
                 owner._set_running(1, "search_refresh")
                 owner.changed.emit()
+                search_progress = window.findChild(QObject, "sessionSearchProgress")
+                assert search_progress.property("visible") and search_progress.property("running")
                 assert not search_empty.property("visible")
+                owner._set_running(1, "timeline_refresh")
+                owner.changed.emit()
+                assert not search_progress.property("visible")
                 owner._set_running()
                 owner._error = "unavailable"
                 owner.changed.emit()

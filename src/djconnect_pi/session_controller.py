@@ -655,6 +655,10 @@ class SessionController(QObject):
     def refreshing(self):
         return bool(self._running and self._running_action == "refresh")
 
+    @Property(bool, notify=changed)
+    def searchBusy(self):
+        return bool(self._running and self._running_action in {"search", "search_more", "search_refresh"})
+
     def _set_running(self, serial=0, action="", *, background=False):
         was_refreshing = self.refreshing
         self._running = serial
