@@ -2902,6 +2902,13 @@ Item {
             keyboardVisible = false
             screen.searchNow()
         }
+        function acceptSearchInput() {
+            if (moveMatch(1) || noMatches) {
+                keyboardVisible = false
+                return
+            }
+            submitSearch()
+        }
         onOpened: keyboardVisible = openTouchKeyboard && !searchInput.text.length
         onClosed: {
             keyboardVisible = false
@@ -2934,7 +2941,7 @@ Item {
                     selectByMouse: true
                     onTextEdited: searchPanel.resetSearch()
                     TapHandler { onTapped: searchPanel.keyboardVisible = true }
-                    onAccepted: searchPanel.submitSearch()
+                    onAccepted: searchPanel.acceptSearchInput()
                     Keys.onUpPressed: function(event) { event.accepted = searchPanel.moveMatch(-1) }
                     Keys.onDownPressed: function(event) { event.accepted = searchPanel.moveMatch(1) }
                 }
@@ -3091,7 +3098,7 @@ Item {
                 Layout.fillWidth: true
                 target: searchInput; backend: screen.backend
                 onEdited: searchPanel.resetSearch()
-                onSubmitted: searchPanel.submitSearch()
+                onSubmitted: searchPanel.acceptSearchInput()
                 onDismissed: searchPanel.keyboardVisible = false
             }
         }

@@ -392,10 +392,8 @@ def main():
                 assert not archive_panel.property("keyboardVisible")
                 assert archive_field.property("placeholderText") == TRANSLATIONS[language]["session_archive_search"]
                 archive_field.setProperty("text", "fixture")
-                submit = QQmlExpression(engine.rootContext(), archive_panel, "submitSearch()")
                 with patch.object(owner, "_launch") as verify:
-                    submit.evaluate()
-                    assert not submit.hasError()
+                    QTest.keyClick(window, Qt.Key.Key_Return)
                     verify.assert_called_once_with("archive_search", "fixture")
                 owner._archive_search = {"query": "fixture", "complete": True, "sessions": [
                     {"session_id": "hidden-on-current-page", "lifecycle_status": "ENDED",
@@ -409,6 +407,11 @@ def main():
                 assert archive_panel.property("selectedMatchId") == "second-archive-match"
                 QTest.keyClick(window, Qt.Key.Key_Down)
                 assert archive_panel.property("selectedMatchId") == "hidden-on-current-page"
+                with patch.object(owner, "_launch") as verify:
+                    QTest.keyClick(window, Qt.Key.Key_Return)
+                    verify.assert_not_called()
+                assert archive_panel.property("selectedMatchId") == "second-archive-match"
+                QTest.keyClick(window, Qt.Key.Key_Down)
                 search_scroll = window.findChild(QObject, "sessionSearchScroll")
                 cached_results = owner.archiveSearchState
                 with patch.object(owner, "_launch") as verify:
