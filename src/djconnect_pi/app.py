@@ -300,6 +300,7 @@ class DJConnectBackend(QObject):
         self._pending_output_choice = None
         self._unconfirmed_output_choice = ""
         self._control_outputs_request = None
+        self._control_outputs_status = ""
         self._last_display_wake_at = 0.0
         self._game_sound_objects: list[tuple[object, QBuffer]] = []
         self._status_text = self.tr_key("paired" if self.cfg.paired else "not_paired")
@@ -731,6 +732,10 @@ class DJConnectBackend(QObject):
     @Property(bool, notify=outputDeviceChanged)
     def controlOutputsRefreshing(self) -> bool:
         return self._control_outputs_request is not None
+
+    @Property(str, notify=outputDeviceChanged)
+    def controlOutputsStatus(self) -> str:
+        return self._control_outputs_status
 
     @Property("QVariantList", notify=outputDeviceChanged)
     def outputDevices(self) -> list[str]:
@@ -1692,6 +1697,7 @@ class DJConnectBackend(QObject):
             return
         self._control_outputs_request = None
         if context == self._private_read_context():
+            self._control_outputs_status = "ready" if observed is not None else "unavailable"
             if observed is not None:
                 self.playback.output_devices = observed.output_devices
                 self.playback.output_device_details = observed.output_device_details
@@ -3372,10 +3378,12 @@ class DJConnectBackend(QObject):
     def _clear_profile_scoped_caches(self, *, preserve_session=False) -> None:
         if not preserve_session and hasattr(self, "_session_controller"):
             self._session_controller.invalidate()
-        if self._pending_output_choice or self._unconfirmed_output_choice or self._control_outputs_request is not None:
+        if (self._pending_output_choice or self._unconfirmed_output_choice
+                or self._control_outputs_request is not None or self._control_outputs_status):
             self._pending_output_choice = None
             self._unconfirmed_output_choice = ""
             self._control_outputs_request = None
+            self._control_outputs_status = ""
             self.controlVolumeChanged.emit()
             self.outputDeviceChanged.emit()
         self._shared_settings_epoch += 1

@@ -2814,6 +2814,7 @@ def test_compact_output_refresh_updates_inventory_without_changing_playback(tmp_
     backend.client.command.assert_called_once_with("devices")
     backend._run.call_args.kwargs["done"]()
     assert not backend.controlOutputsRefreshing and backend.outputDeviceId == "active"
+    assert backend.controlOutputsStatus == ("unavailable" if outcome == "failed" else "ready")
     assert backend.outputDevice == "Active speaker"
     assert backend.outputDevices == {"success": ["New"], "empty": [], "failed": ["Old"]}[outcome]
 

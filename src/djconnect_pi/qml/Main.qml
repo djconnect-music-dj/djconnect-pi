@@ -2156,7 +2156,7 @@ BrandWindow {
                     textRole: "name"
                     displayText: displayName(currentIndex)
                     enabled: djconnect.pendingOutputChoiceName.length === 0 && !djconnect.controlOutputsRefreshing
-                    visible: count > 1 || djconnect.outputDevice.length === 0
+                    visible: djconnect.outputDeviceChoices.length > 0
                     currentIndex: selectedIndex()
                     font.pixelSize: 26
                     delegate: ItemDelegate {
@@ -2173,10 +2173,16 @@ BrandWindow {
                 }
 
                 Text {
-                    text: root.tr("output_device")
-                    visible: controlOutputDeviceCombo.count <= 1 && djconnect.outputDevice.length > 0
+                    objectName: "controlOutputInventoryState"
+                    text: djconnect.controlOutputsRefreshing ? root.tr("loading")
+                        : djconnect.controlOutputsStatus === "unavailable" ? root.tr("session_output_unavailable")
+                        : djconnect.controlOutputsStatus === "ready" ? root.tr(djconnect.outputDevice.length > 0
+                            ? "session_output_empty" : "playback_outputs_none_found")
+                        : djconnect.outputDevice || root.tr("output_device")
+                    visible: !controlOutputDeviceCombo.visible
                     color: BrandTheme.colors.muted
                     font.pixelSize: 24
+                    wrapMode: Text.Wrap
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignVCenter
                     Layout.fillWidth: true

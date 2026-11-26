@@ -194,14 +194,29 @@ def main():
             backend._demo_mode = False
             backend.cfg.paired, backend.cfg.device_token = True, "synthetic-not-a-credential"
             backend._set_backend_available(True)
+            previous_outputs = backend.playback.output_devices
+            backend.playback.output_devices = ()
             with patch.object(backend, "_run") as inventory:
                 window.setProperty("activeScreen", "control")
                 QTest.qWait(80)
                 assert backend.controlOutputsRefreshing
+                inventory_status = visual_item(window.contentItem(), "controlOutputInventoryState")
+                assert inventory_status.property("visible") and inventory_status.property("text") == backend.t("loading")
                 backend.outputDeviceChanged.emit()
                 inventory.assert_called_once()
                 inventory.call_args.kwargs["done"]()
                 assert not backend.controlOutputsRefreshing and not backend.toastVisible
+                assert inventory_status.property("text") == backend.t("session_output_unavailable")
+                with patch.object(backend.client, "command", return_value={"success": True, "devices": []}):
+                    backend.refreshControlOutputs()
+                    inventory.call_args.args[1]()
+                    inventory.call_args.kwargs["done"]()
+                assert inventory_status.property("text") == backend.t("playback_outputs_none_found")
+                capture("control-outputs-empty")
+            backend.playback.output_devices = previous_outputs
+            backend._control_outputs_status = ""
+            backend.outputDeviceChanged.emit()
+            backend.hideToast()
             backend._demo_mode = True
             backend.cfg.paired, backend.cfg.device_token = False, ""
         track = {"title": "Repeated track title with more detail " * 12, "uri": "spotify:track:fixture-a", "index": 4}
