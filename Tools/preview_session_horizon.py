@@ -160,6 +160,9 @@ def main():
                 assert not splash.property("visible"), f"Startup overlay still intercepts input at {width}x{height}"
                 assert one(window.contentItem(), "navIcon-session").property("iconColor").name() == "#ffffff"
                 screen = window.findChild(QObject, "djSessionScreen")
+                poll_timer = screen.findChild(QObject, "sessionRuntimePollTimer")
+                assert poll_timer is not None
+                poll_timer.blockSignals(True)  # The fixture completes only explicitly driven reads.
                 mode_strip = one(screen, "sessionModeStrip")
                 horizon = one(screen, "sessionForecastMode")
                 flow = one(screen, "sessionFlowMode")
@@ -257,15 +260,13 @@ def main():
                             click(window, flow)
                             if language == "nl":
                                 forecast_scroll = window.findChild(QObject, "sessionForecastScroll")
-                                poll_timer = screen.findChild(QObject, "sessionRuntimePollTimer")
-                                assert poll_timer is not None
                                 flow_view = window.findChild(QObject, "sessionHistoryScroll")
                                 spinner = one(screen, "sessionPullRefreshSpinner")
                                 live_refresh = one(screen, "sessionRefresh")
                                 live_spinner = one(live_refresh, "sessionRefreshSpinner")
                                 refresh_size = live_refresh.size()
                                 with QSignalBlocker(poll_timer), patch.object(owner, "_launch", side_effect=(
-                                    lambda action, *, background=False, manual_refresh=False: owner._set_running(1, action, background=background)
+                                    lambda action, *, background=False, **_: owner._set_running(1, action, background=background)
                                 )) as refresh:
                                     assert live_refresh.property("enabled")
                                     owner.poll()
@@ -273,7 +274,8 @@ def main():
                                     assert not live_refresh.property("enabled") and live_spinner.property("running")
                                     assert live_refresh.property("opacity") == 1 and live_refresh.size() == refresh_size
                                     click(window, live_refresh)
-                                    refresh.assert_called_once_with("refresh", background=True)
+                                    refresh.assert_called_once_with("refresh", background=True, manual_refresh=False,
+                                                                   playback_confirmation=False)
                                     owner._set_running()
                                     assert live_refresh.property("enabled") and not live_spinner.property("visible")
                                     refresh.reset_mock()
@@ -285,7 +287,8 @@ def main():
                                         refresh.assert_not_called()
                                         assert not spinner.property("visible")
                                         drag_scroll(window, view, touch, 230)
-                                        refresh.assert_called_once_with("refresh", background=True, manual_refresh=True)
+                                        refresh.assert_called_once_with("refresh", background=True, manual_refresh=True,
+                                                                       playback_confirmation=False)
                                         assert spinner.property("visible") and spinner.property("running")
                                         assert spinner.y() == view.y() + 8
                                         click(window, switch)
@@ -305,6 +308,7 @@ def main():
                         assert one(section, "sessionForecastSectionBody").property("text") == fallback
                         assert not one(section, "sessionForecastQueueNote").property("visible")
                     owner._forecast.expire(stamp + 121)
+                    owner._set_running()
                     owner.changed.emit()
                     QTest.qWait(65)
                     assert not list(visual_items(screen, "sessionForecastQueueTrack"))
@@ -322,7 +326,8 @@ def main():
                             drag_scroll(window, forecast_view, touch, 230, retract=True)
                             refresh.assert_not_called()
                             drag_scroll(window, forecast_view, touch, 230)
-                            refresh.assert_called_once_with("refresh", background=True, manual_refresh=True)
+                            refresh.assert_called_once_with("refresh", background=True, manual_refresh=True,
+                                                           playback_confirmation=False)
                     click(window, flow)
                     sid = session["session_id"]
                     if language == "nl":

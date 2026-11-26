@@ -739,7 +739,7 @@ def main():
                 assert insight.property('enabled') and insight.width() >= 44
                 click('sessionPlaybackInsight')
                 assert window.property('activeScreen') == 'trackinsight'
-                backend._request_track_insight.assert_called_once_with(show_toast=False)
+                backend._request_track_insight.assert_called_once_with(manual=False)
                 assert not transport_panel.property('opened') and not intents
                 window.setProperty('activeScreen', 'session')
                 backend.playback = original_playback

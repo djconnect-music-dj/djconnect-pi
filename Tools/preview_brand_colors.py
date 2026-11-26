@@ -98,6 +98,7 @@ def main():
 
         capture("pairing")
         backend.enterDemoMode()
+        backend._demo_progress.stop()
         backend._toast_visible = False
         backend.toastChanged.emit()
         for screen in ["session", "history", "now", "control", "queue", "playlists", "askdj", "trackinsight", "discover", "musicdna", "more", "settings", "games", "legal", "privacy", "feedback"]:
@@ -162,7 +163,7 @@ def main():
             assert backend.playing == playing_before
             backend.hideToast()
             output = visual_item(window.contentItem(), "nowPlaybackOutput")
-            assert output.property("visible") and output.property("text") == backend.t("output_device")
+            assert output.property("visible") and output.property("text") == backend.t("session_output_choose")
             backend.playback.output_device = "Fixture output"
             backend.outputDeviceChanged.emit()
             assert output.property("text") == "Fixture output"
