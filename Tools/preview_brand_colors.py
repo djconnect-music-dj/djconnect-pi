@@ -1425,7 +1425,9 @@ def main():
                         assert parsed.netloc=='github.com' and parsed.path=='/djconnect-music-dj/djconnect-pi/issues/new'
                         assert parse_qs(parsed.query)=={'title':[backend.t('feedback_issue_title')],'body':[backend.t('feedback_issue_template')]}
                         assert not window.findChild(QObject,'feedbackOpenError').property('visible')
+                        assert window.property('activeScreen') == 'more'
                     capture('feedback-open-draft-only-'+language)
+                    QMetaObject.invokeMethod(window.findChild(QObject,button_name),'clicked')
                     with patch('djconnect_pi.app.QDesktopServices.openUrl', return_value=False) as browser:
                         QMetaObject.invokeMethod(window.findChild(QObject,'feedbackOpenIssue'),'clicked')
                         assert window.findChild(QObject,'feedbackOpenError').property('visible')

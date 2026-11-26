@@ -399,6 +399,16 @@ Canvas {
                 line(16, 7, 16, 25)
                 line(12, 7, 20, 7)
                 line(12, 25, 20, 25)
+            } else if (iconName === "external_link") {
+                ctx.beginPath()
+                ctx.moveTo(px(15), py(8))
+                ctx.lineTo(px(7), py(8))
+                ctx.lineTo(px(7), py(25))
+                ctx.lineTo(px(24), py(25))
+                ctx.lineTo(px(24), py(17))
+                ctx.stroke()
+                line(15, 17, 26, 6)
+                line(18, 6, 26, 6); line(26, 6, 26, 14)
             } else if (iconName === "share") {
                 ctx.beginPath()
                 ctx.moveTo(px(11), py(13)); ctx.lineTo(px(7), py(13)); ctx.lineTo(px(7), py(27))

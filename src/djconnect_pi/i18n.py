@@ -1934,6 +1934,7 @@ _FEEDBACK_TRANSLATIONS = {
         'Ouvrir un signalement GitHub',
         'Abrir un informe en GitHub',
     ),
+    'feedback_not_now': ('Not Now', 'Niet nu', 'Nicht jetzt', 'Pas maintenant', 'Ahora no'),
     'feedback_unavailable': (
         'GitHub could not be opened. Try again when a browser is available.',
         'GitHub kon niet worden geopend. Probeer het opnieuw wanneer een browser beschikbaar is.',

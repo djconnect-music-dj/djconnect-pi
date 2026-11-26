@@ -34,8 +34,25 @@ Item {
                     Layout.fillWidth: true
                     Text { text: page.tr("feedback_share"); textFormat: Text.PlainText; color: BrandTheme.colors.text; font.pixelSize: 20; font.weight: Font.DemiBold; wrapMode: Text.WordWrap; Layout.fillWidth: true }
                     Text { text: page.tr("feedback_help"); textFormat: Text.PlainText; color: BrandTheme.colors.text; font.pixelSize: 22; wrapMode: Text.WordWrap; Layout.fillWidth: true }
-                    GlassButton { objectName: "feedbackOpenIssue"; primary: true; text: page.tr("feedback_open"); iconName: "chat"; Layout.fillWidth: true; onClicked: page.feedbackOpenFailed = !page.backend.openFeedbackIssue() }
+                    GlassButton {
+                        objectName: "feedbackOpenIssue"
+                        primary: true
+                        text: page.tr("feedback_open")
+                        iconName: "external_link"
+                        Layout.fillWidth: true
+                        onClicked: {
+                            page.feedbackOpenFailed = !page.backend.openFeedbackIssue()
+                            if (!page.feedbackOpenFailed) page.back()
+                        }
+                    }
                     Text { objectName: "feedbackOpenError"; visible: page.feedbackOpenFailed; text: page.tr("feedback_unavailable"); textFormat: Text.PlainText; color: BrandTheme.colors.muted; font.pixelSize: 22; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+                    GlassButton {
+                        objectName: "feedbackNotNow"
+                        tertiary: true
+                        text: page.tr("feedback_not_now")
+                        Layout.fillWidth: true
+                        onClicked: page.back()
+                    }
                 }
                 GlassCard {
                     visible: page.privacy && !page.feedback
