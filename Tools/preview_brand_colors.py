@@ -231,11 +231,13 @@ def main():
         assert not visual_item(unsourced, "trackInsightSectionSource").property("visible")
         plain = QQmlExpression(engine.rootContext(), label, "textFormat === 0")
         assert plain.evaluate()[0] and not plain.hasError()
+        analysis_heading = visual_item(window.contentItem(), "trackInsightAnalysisHeading")
         notice = visual_item(window.contentItem(), "trackInsightUnmeasuredNotice")
         for language in ("en", "nl", "de", "fr", "es"):
             backend.setLanguage(language)
             QTest.qWait(35)
             assert notice.property("visible") and notice.property("text") == backend.t("track_insight_unmeasured_audio")
+            assert analysis_heading.property("text") == backend.t("track_insight_analysis_heading")
         backend._track_insight_audio_notice = False
         backend._track_insight_verified_credit = {
             "context": "Fixture verified credit", "provider": "Fixture catalogue",
@@ -248,6 +250,13 @@ def main():
         assert visual_item(credit_card, "trackInsightVerifiedContext").property("text") == "Fixture verified credit"
         link = visual_item(credit_card, "sessionAttributionSourceLink")
         assert link.property("targetUrl") == "https://example.test/fixture-credit"
+        for language in ("en", "nl", "de", "fr", "es"):
+            backend.setLanguage(language)
+            QTest.qWait(35)
+            assert analysis_heading.property("text") == backend.t("track_insight_interpretation")
+        backend._track_insight_text = "Fixture verified credit"
+        backend.trackInsightChanged.emit()
+        assert credit_card.property("visible") and not analysis_heading.property("visible")
         assert not notice.property("visible")
         backend.setLanguage("nl")
         window.setProperty("activeScreen", "session")

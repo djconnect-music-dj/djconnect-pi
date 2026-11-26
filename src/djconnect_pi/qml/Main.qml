@@ -2931,7 +2931,9 @@ BrandWindow {
                         }
                     }
                     GlassCard {
+                        id: trackAnalysisCard
                         objectName: "trackInsightAnalysisCard"
+                        readonly property bool accompaniesCredit: !!verifiedCreditsCard.credit.context
                         visible: djconnect.trackInsightText.length > 0
                             && djconnect.trackInsightText !== djconnect.trackInsightVerifiedCredit.context
                         Layout.fillWidth: true
@@ -2940,14 +2942,15 @@ BrandWindow {
                             Layout.fillWidth: true
                             spacing: 10
                             FeatureIcon {
-                                iconName: "trackInsight"
+                                iconName: trackAnalysisCard.accompaniesCredit ? "chat" : "trackInsight"
                                 Layout.preferredWidth: 24
                                 Layout.preferredHeight: 24
                                 Accessible.ignored: true
                             }
                             Text {
                                 objectName: "trackInsightAnalysisHeading"
-                                text: root.tr("track_insight_analysis_heading")
+                                text: root.tr(trackAnalysisCard.accompaniesCredit
+                                    ? "track_insight_interpretation" : "track_insight_analysis_heading")
                                 textFormat: Text.PlainText
                                 color: BrandTheme.colors.text
                                 font.pixelSize: 21
