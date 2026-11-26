@@ -147,7 +147,7 @@ def test_qml_has_touch_readable_glass_controls_and_scrollable_settings() -> None
     assert "anchors.topMargin: 16" in now_block
     assert "anchors.rightMargin: 16" in now_block
     assert "PageToolbar {" in now_block
-    assert 'title: root.tr("now_playing")' in now_block
+    assert 'title: root.playbackScreenTitle("now_playing")' in now_block
     assert 'anchors.bottomMargin: root.edge + 96' in now_block
     assert "width: Math.min(parent.width, parent.height)" in now_block
     assert "cache: true" in now_block
@@ -220,8 +220,8 @@ def test_qml_has_touch_readable_glass_controls_and_scrollable_settings() -> None
     assert "ModalBlocker {}" in main_qml
     assert "onClicked: function(mouse)" in main_qml
     assert "onWheel: function(wheel)" in main_qml
-    assert 'root.tr("queue")' in main_qml
-    assert 'root.tr("playlists")' in main_qml
+    assert 'root.playbackScreenTitle("queue")' in main_qml
+    assert 'root.playbackScreenTitle("playlists")' in main_qml
     assert "djconnect.queueItems" in main_qml
     assert "djconnect.playlistItems" in main_qml
     assert 'emptyText: root.tr("empty_queue")' in main_qml

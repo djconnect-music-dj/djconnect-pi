@@ -301,6 +301,13 @@ BrandWindow {
         return djconnect.t(key)
     }
 
+    function playbackScreenTitle(key) {
+        const title = root.tr(key)
+        return djconnect.demoMode ? title + " · " + root.tr("demo_mode") : title
+    }
+
+    readonly property string playbackConnectionText: djconnect.demoMode ? root.tr("demo_mode") : djconnect.connectionType
+
     function trackInsightLabel(value) {
         var key = String(value || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "")
         var labels = {
@@ -1173,7 +1180,7 @@ BrandWindow {
                 } ]
                 showConnection: true
                 connectionLabel: root.tr("connection_type")
-                connectionText: djconnect.connectionType
+                connectionText: root.playbackConnectionText
 
                 GlassButton {
                     id: searchToggle
@@ -1579,10 +1586,10 @@ BrandWindow {
             spacing: 10
 
             PageToolbar {
-                title: root.tr("now_playing")
+                title: root.playbackScreenTitle("now_playing")
                 showConnection: true
                 connectionLabel: root.tr("connection_type")
-                connectionText: djconnect.connectionType
+                connectionText: root.playbackConnectionText
                 Layout.fillWidth: true
 
                 BusyIndicator {
@@ -1963,10 +1970,10 @@ BrandWindow {
             spacing: 10
 
             PageToolbar {
-                title: root.tr("control")
+                title: root.playbackScreenTitle("control")
                 showConnection: true
                 connectionLabel: root.tr("connection_type")
-                connectionText: djconnect.connectionType
+                connectionText: root.playbackConnectionText
                 Layout.fillWidth: true
 
                 BusyIndicator {
@@ -2985,7 +2992,7 @@ BrandWindow {
         z: 16
         sourceComponent: MediaListPanel {
             objectName: "queuePanel"
-            heading: root.tr("queue")
+            heading: root.playbackScreenTitle("queue")
             emptyText: root.tr("empty_queue")
             searchLabel: root.tr("media_search_queue")
             refreshLabel: root.tr("refresh_queue")
@@ -3003,7 +3010,7 @@ BrandWindow {
         z: 16
         sourceComponent: MediaListPanel {
             objectName: "playlistsPanel"
-            heading: root.tr("playlists")
+            heading: root.playbackScreenTitle("playlists")
             emptyText: root.tr("empty_playlists")
             searchLabel: root.tr("media_search_playlists")
             refreshLabel: root.tr("refresh_playlists")
@@ -3436,7 +3443,7 @@ BrandWindow {
             spacing: 12
 
             PageToolbar {
-                title: root.tr("track_insight")
+                title: root.playbackScreenTitle("track_insight")
                 showLeading: !trackInsightPanel.hasLiveSession || trackInsightPanel.canChooseSessionMood
                 leading: [
                     GlassButton {
@@ -3468,7 +3475,7 @@ BrandWindow {
                 ]
                 showConnection: true
                 connectionLabel: root.tr("connection_type")
-                connectionText: djconnect.connectionType
+                connectionText: root.playbackConnectionText
                 Layout.fillWidth: true
 
                 RefreshIconButton {
@@ -4349,11 +4356,11 @@ BrandWindow {
             spacing: root.wallProfile ? 22 : 10
 
             PageToolbar {
-                title: root.tr("music_discovery")
+                title: root.playbackScreenTitle("music_discovery")
                 Layout.preferredHeight: compact ? implicitHeight : 140
                 showConnection: true
                 connectionLabel: root.tr("connection_type")
-                connectionText: djconnect.connectionType
+                connectionText: root.playbackConnectionText
                 Layout.fillWidth: true
 
                 RefreshIconButton {
@@ -5011,11 +5018,11 @@ BrandWindow {
             spacing: 14
 
             PageToolbar {
-                title: root.tr("music_dna")
+                title: root.playbackScreenTitle("music_dna")
                 leading: [ GlassButton { iconName: "back"; tertiary: true; implicitWidth: 52; Accessible.name: root.tr("more"); onClicked: root.activeScreen = "more" } ]
                 showConnection: true
                 connectionLabel: root.tr("connection_type")
-                connectionText: djconnect.connectionType
+                connectionText: root.playbackConnectionText
                 Layout.fillWidth: true
 
                 RefreshIconButton {
@@ -5766,10 +5773,10 @@ BrandWindow {
             spacing: 10
 
             PageToolbar {
-                title: root.tr("ask_dj")
+                title: root.playbackScreenTitle("ask_dj")
                 showConnection: true
                 connectionLabel: root.tr("connection_type")
-                connectionText: djconnect.connectionType
+                connectionText: root.playbackConnectionText
                 Layout.fillWidth: true
 
                 GlassButton {
