@@ -2972,6 +2972,7 @@ Item {
         property string selectedMatchId: ""
         property var pendingArchiveMatch: null
         property string typedSearchQuery: ""
+        readonly property bool searchInProgress: !!typedSearchQuery || screen.searchRefreshPending || screen.owner.searchBusy
         readonly property var result: screen.archiveSearchAvailable ? screen.owner.archiveSearchState : screen.state.search
         readonly property var matches: screen.archiveSearchAvailable ? (result.sessions || []) : (result.matches || [])
         readonly property string searchError: result.error || screen.state.error
@@ -3118,7 +3119,7 @@ Item {
                 }
                 GlassButton {
                     objectName: "sessionSearchSubmit"
-                    iconName: screen.owner.searchBusy ? "" : searchPanel.hasArchiveResults ? "refresh" : "search"
+                    iconName: searchPanel.searchInProgress ? "" : searchPanel.hasArchiveResults ? "refresh" : "search"
                     Accessible.name: searchPanel.hasArchiveResults ? screen.tr("session_archive_refresh_search") : screen.searchLabel
                     implicitWidth: 56
                     enabled: !screen.owner.busy && searchInput.text.trim().length > 0
@@ -3128,7 +3129,7 @@ Item {
                         anchors.centerIn: parent
                         width: 28
                         height: width
-                        visible: screen.owner.searchBusy
+                        visible: searchPanel.searchInProgress
                         running: visible
                         Accessible.name: screen.tr("loading")
                     }
@@ -3276,7 +3277,7 @@ Item {
                         onClicked: { screen.rememberSearch(); screen.owner.moreSearch() }
                     }
                     BusyIndicator {
-                        visible: screen.owner.busy && !screen.owner.searchBusy
+                        visible: screen.owner.busy && !searchPanel.searchInProgress
                         running: visible
                         Layout.alignment: Qt.AlignHCenter
                     }
