@@ -21,7 +21,7 @@ from PySide6.QtCore import (
 from PySide6.QtGui import QColor, QGuiApplication, QKeySequence
 from PySide6.QtQml import QQmlApplicationEngine, QQmlEngine, QQmlExpression
 from PySide6.QtQuickControls2 import QQuickStyle
-from PySide6.QtTest import QTest
+from PySide6.QtTest import QSignalSpy, QTest
 from shiboken6 import delete
 
 from djconnect_pi.app import DJConnectBackend
@@ -152,7 +152,11 @@ def main():
                 window.setHeight(height)
                 window.setProperty("splashVisible", False)
                 window.setProperty("activeScreen", "session")
-                QTest.qWait(450)  # Let the startup overlay finish its exit animation.
+                assert QTest.qWaitForWindowExposed(window, 3000), f"Test window not exposed at {width}x{height}"
+                splash = one(window.contentItem(), "launchSplash")
+                if splash.property("visible"):
+                    QSignalSpy(splash.visibleChanged).wait(3000)
+                assert not splash.property("visible"), f"Startup overlay still intercepts input at {width}x{height}"
                 assert one(window.contentItem(), "navIcon-session").property("iconColor").name() == "#ffffff"
                 screen = window.findChild(QObject, "djSessionScreen")
                 mode_strip = one(screen, "sessionModeStrip")
