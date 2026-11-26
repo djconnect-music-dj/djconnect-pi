@@ -810,6 +810,7 @@ def main():
                 timing_title = one(screen, "sessionSavedTimingTitle")
                 start_time = one(screen, "sessionSavedStartTime")
                 end_time = one(screen, "sessionSavedEndTime")
+                interrupted_status = one(screen, "sessionSavedInterruptedStatus")
                 for language in LANGUAGES:
                     backend.setLanguage(language)
                     QTest.qWait(65)
@@ -820,6 +821,10 @@ def main():
                         assert label.property("visible") and label.property("text") == template.replace("%1", timing[kind])
                         assert label.property("contentWidth") <= label.width() + 1
                     assert end_time.mapToItem(start_time, 0, 0).y() >= start_time.height()
+                    assert interrupted_status.property("visible")
+                    assert interrupted_status.property("text") == TRANSLATIONS[language]["session_history_interrupted"]
+                    status_origin = interrupted_status.mapToItem(end_time, 0, 0)
+                    assert abs(status_origin.x()) <= 1 and status_origin.y() >= end_time.height()
                 entry = {
                     "entry_id": "archived-contribution", "session_id": saved["session_id"], "order": 1,
                     "kind": "conversation_dj", "role": "assistant", "turn_id": "archived-turn",

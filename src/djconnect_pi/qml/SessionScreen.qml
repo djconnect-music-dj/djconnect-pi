@@ -171,6 +171,17 @@ Item {
         onClicked: sessionRequested(modelData.session_id)
     }
 
+    component SavedInterruptionNote: Text {
+        visible: screen.historical && !!screen.state.timeline.session
+            && screen.state.timeline.session.lifecycle_status === "INTERRUPTED"
+        text: screen.tr("session_history_interrupted")
+        textFormat: Text.PlainText
+        color: BrandTheme.colors.muted
+        font.pixelSize: 17
+        Layout.fillWidth: true
+        wrapMode: Text.WordWrap
+    }
+
     component LiveMomentCard: GlassCard {
         id: liveCard
         objectName: "sessionLiveMomentCard"
@@ -2268,16 +2279,9 @@ Item {
                     + (screen.currentHistory ? screen.savedDurationSuffix(screen.state.timeline.session) : "")
                 color: BrandTheme.colors.muted; font.pixelSize: 20
             }
-            Text {
-                objectName: "sessionSavedInterruptedStatus"
-                visible: screen.historical && !!screen.state.timeline.session
+            SavedInterruptionNote {
+                visible: screen.historical && screen.currentHistory && !!screen.state.timeline.session
                     && screen.state.timeline.session.lifecycle_status === "INTERRUPTED"
-                text: screen.tr("session_history_interrupted")
-                textFormat: Text.PlainText
-                color: BrandTheme.colors.muted
-                font.pixelSize: 17
-                Layout.fillWidth: true
-                wrapMode: Text.WordWrap
             }
             RowLayout {
                 id: savedHeader
@@ -2327,6 +2331,7 @@ Item {
                         wrapMode: Text.WordWrap
                         Layout.fillWidth: true
                     }
+                    SavedInterruptionNote { objectName: "sessionSavedInterruptedStatus" }
                     Repeater {
                         objectName: "sessionSavedSummary"
                         model: screen.state.saved_summary || []
