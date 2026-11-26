@@ -494,6 +494,23 @@ def main():
         QMetaObject.invokeMethod(detail, "open")
         backend._set_music_discovery_busy(True)
         QTest.qWait(240)
+        artwork = window.findChild(QObject, "discoveryDetailArtwork")
+        fallback = artwork.findChild(QObject, "discoveryArtworkFallback")
+        spinner = artwork.findChild(QObject, "discoveryArtworkSpinner")
+        cover = artwork.findChild(QObject, "discoveryArtworkImage")
+        assert fallback.property("visible") and not spinner.property("visible")
+        card = visual_item(window.contentItem(), "discoveryCardArtwork")
+        card_spinner = card.findChild(QObject, "discoveryArtworkSpinner")
+        backend._music_discovery_playing_id = "fixture-track"
+        backend.musicDiscoveryChanged.emit()
+        assert card_spinner.property("visible") and not spinner.property("visible")
+        backend._clear_music_discovery_playing()
+        assert not card_spinner.property("visible")
+        assert artwork.setProperty("recommendation", {
+            "imageUrl": (ROOT / "src/djconnect_pi/qml/brand-mark-128.png").as_uri(),
+        })
+        QTest.qWait(120)
+        assert cover.property("visible") and not fallback.property("visible") and not spinner.property("visible")
         backend._set_music_discovery_busy(False)
         assert detail.property("opened")
         backend._apply_music_discovery_data({"success": False, "error": "music_discovery_play_failed"})

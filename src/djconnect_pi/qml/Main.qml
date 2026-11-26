@@ -3222,7 +3222,8 @@ BrandWindow {
         imageItem: cover
         active: visible && (root.activeScreen === "discover" || root.activeScreen === "musicdna") && !root.screenBlanked
         leaseKey: djconnect.activeProfileId + "|" + (recommendation.payload || "")
-        property string displayIcon: "discover"
+        property string displayIcon: djconnect.demoMode ? "music" : "discover"
+        property bool playbackPending: false
         readonly property real expiresAt: recommendation.imageExpiresAt || 0
         property bool expired: false
         function checkImageExpiry() {
@@ -3241,10 +3242,11 @@ BrandWindow {
         clip: true
 
         FeatureIcon {
+            objectName: "discoveryArtworkFallback"
             anchors.centerIn: parent
             width: Math.min(42, parent.width * 0.7); height: width
             iconName: artwork.displayIcon
-            visible: cover.status !== Image.Ready
+            visible: cover.status === Image.Null || cover.status === Image.Error
         }
         Image {
             id: cover
@@ -3269,6 +3271,18 @@ BrandWindow {
             visible: cover.visible && !!artwork.recommendation.imageSourceUrl
             Accessible.name: "Spotify"
             TapHandler { onTapped: Qt.openUrlExternally(artwork.recommendation.imageSourceUrl) }
+        }
+        Rectangle {
+            anchors.fill: parent
+            radius: Math.max(0, artwork.radius - artwork.contentInset)
+            color: "#5c000000"
+            visible: artwork.active && artwork.playbackPending
+        }
+        LoadingSpinner {
+            objectName: "discoveryArtworkSpinner"
+            anchors.centerIn: parent
+            visible: artwork.active && (artwork.playbackPending || cover.status === Image.Loading)
+            running: visible
         }
     }
 
@@ -3535,15 +3549,12 @@ BrandWindow {
                                                 id: recommendationContent
                                                 spacing: 4
                                                 DiscoveryArtwork {
+                                                    objectName: "discoveryCardArtwork"
                                                     recommendation: recommendationCard.modelData
                                                     Layout.fillWidth: true
                                                     Layout.preferredHeight: shelfItems.tileWidth
-                                                    LoadingSpinner {
-                                                        anchors.centerIn: parent
-                                                        visible: djconnect.musicDiscoveryPlayingId.length > 0
-                                                            && djconnect.musicDiscoveryPlayingId === recommendationCard.modelData.discoveryItemId
-                                                        running: visible
-                                                    }
+                                                    playbackPending: djconnect.musicDiscoveryPlayingId.length > 0
+                                                        && djconnect.musicDiscoveryPlayingId === recommendationCard.modelData.discoveryItemId
                                                 }
                                                 Text {
                                                     text: recommendationCard.modelData.title
@@ -3657,6 +3668,7 @@ BrandWindow {
                         Layout.fillWidth: true
                         spacing: 12
                         DiscoveryArtwork {
+                            objectName: "discoveryDetailArtwork"
                             recommendation: discoveryDetail.item || ({})
                             Layout.preferredWidth: 96
                             Layout.preferredHeight: 96

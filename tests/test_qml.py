@@ -480,7 +480,7 @@ def test_qml_control_screen_has_favorite_icon_between_shuffle_and_repeat() -> No
 
 def test_qml_track_insight_panel_renders_contract_fields() -> None:
     main_qml = files("djconnect_pi.qml").joinpath("Main.qml").read_text(encoding="utf-8")
-    panel = main_qml[main_qml.index("id: trackInsightPanel") : main_qml.index("id: musicDiscoveryPanel")]
+    panel = main_qml[main_qml.index("id: trackInsightPanel") : main_qml.index("component DiscoveryArtwork")]
 
     assert 'visible: root.activeScreen === "trackinsight"' in main_qml
     assert 'property string requestedInsightKey: ""' in panel
