@@ -4210,7 +4210,7 @@ def test_backend_shuffle_and_repeat_dispatch_commands(tmp_path: Path) -> None:
     backend = DJConnectBackend(tmp_path / "config.json")
     backend.cfg.paired = True
     backend.cfg.device_token = "fixture-token"
-    backend._run = lambda label, worker: worker()
+    backend._executor.submit = Mock()
     backend.client.command = Mock(side_effect=[
         {"success": False, "playback": {"shuffle": True, "title": "Rejected snapshot"}},
         {"success": True, "playback": {"shuffle": True}},
@@ -4221,9 +4221,16 @@ def test_backend_shuffle_and_repeat_dispatch_commands(tmp_path: Path) -> None:
     original_title = backend.title
 
     backend.toggleShuffle()
+    assert backend.playbackModePending and backend.shuffle is True
+    assert backend.playback.shuffle is False
+    backend.toggleShuffle()
+    backend._executor.submit.assert_called_once()
+    backend._executor.submit.call_args.args[0]()
+    assert not backend.playbackModePending
     assert backend.shuffle is False
     assert backend.title == original_title
     assert backend.toastText == backend.tr_key("command_failed")
+    backend._executor.submit = lambda worker: worker()
     backend.toggleShuffle()
     assert backend.shuffle is True
     backend.cycleRepeat()

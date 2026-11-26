@@ -178,6 +178,7 @@ class DJConnectBackend(QObject):
     _controlVolumeFinished = Signal()
     shuffleChanged = Signal()
     repeatChanged = Signal()
+    playbackModePendingChanged = Signal()
     outputDeviceChanged = Signal()
     progressChanged = Signal()
     pairedChanged = Signal()
@@ -225,7 +226,7 @@ class DJConnectBackend(QObject):
     debugScreenRequested = Signal(str)
 
     _playbackReady = Signal(object)
-    _playbackModeReady = Signal(object, str, object)
+    _playbackModeFinished = Signal(object, object)
     _statusReady = Signal(str)
     _pairingReady = Signal(bool, str)
     _busyReady = Signal(bool)
@@ -373,6 +374,7 @@ class DJConnectBackend(QObject):
         self._playback_seek_gesture = None
         self._control_volume_intent = None
         self._control_volume_pending = False
+        self._pending_playback_mode: tuple[tuple, str, bool | str] | None = None
         self._controlVolumeFinished.connect(self._finish_control_volume)
         self.settingsChanged.connect(self.controlVolumeChanged.emit)
         self.profileChanged.connect(self.cancelControlVolume)
@@ -386,7 +388,10 @@ class DJConnectBackend(QObject):
         self._event_timer.timeout.connect(self._poll_local_events)
         self._event_timer.start()
         self._playbackReady.connect(self._apply_playback)
-        self._playbackModeReady.connect(self._apply_playback_mode)
+        self._playbackModeFinished.connect(self._finish_playback_mode)
+        for signal in (self.outputDeviceChanged, self.profileChanged, self.pairedChanged,
+                       self.demoModeChanged, self.settingsChanged):
+            signal.connect(self._invalidate_playback_mode)
         self._statusReady.connect(self._set_status_text)
         self._pairingReady.connect(self._apply_pairing)
         self._busyReady.connect(self._set_busy)
@@ -804,11 +809,19 @@ class DJConnectBackend(QObject):
 
     @Property(bool, notify=shuffleChanged)
     def shuffle(self) -> bool:
+        if self._pending_playback_mode and self._pending_playback_mode[1] == "shuffle":
+            return bool(self._pending_playback_mode[2])
         return self.playback.shuffle
 
     @Property(str, notify=repeatChanged)
     def repeat(self) -> str:
+        if self._pending_playback_mode and self._pending_playback_mode[1] == "repeat":
+            return str(self._pending_playback_mode[2])
         return self.playback.repeat
+
+    @Property(bool, notify=playbackModePendingChanged)
+    def playbackModePending(self) -> bool:
+        return self._pending_playback_mode is not None
 
     @Property(int, notify=progressChanged)
     def positionSeconds(self) -> int:
@@ -1811,28 +1824,53 @@ class DJConnectBackend(QObject):
     def _request_playback_mode(self, mode: str, value: bool | str) -> None:
         context = self._playback_mode_context()
         if self._demo_mode:
-            self._apply_playback_mode(context, mode, value)
+            self._apply_playback_mode(mode, value)
             return
-        if self.busy or not self.paired:
+        if self.busy or self.playbackModePending or not self.paired:
             return
-        self._run(self.tr_key(mode), lambda: self._playback_mode_worker(context, mode, value))
 
-    def _playback_mode_worker(self, context: tuple, mode: str, value: bool | str) -> None:
-        if self._demo_mode or context != self._playback_mode_context():
-            return
+        request = (context, mode, value)
+        self._set_pending_playback_mode(request)
+        outcome = None
+
+        def worker() -> None:
+            nonlocal outcome
+            outcome = self._playback_mode_worker(request)
+
+        self._run(self.tr_key(mode), worker, done=lambda: self._playbackModeFinished.emit(request, outcome))
+
+    def _set_pending_playback_mode(self, request: tuple[tuple, str, bool | str] | None) -> None:
+        self._pending_playback_mode = request
+        self.playbackModePendingChanged.emit()
+        self.shuffleChanged.emit()
+        self.repeatChanged.emit()
+
+    @Slot()
+    def _invalidate_playback_mode(self) -> None:
+        if self._pending_playback_mode and self._pending_playback_mode[0] != self._playback_mode_context():
+            self._set_pending_playback_mode(None)
+
+    def _playback_mode_worker(self, request: tuple[tuple, str, bool | str]) -> str | None:
+        context, mode, value = request
+        if self._pending_playback_mode is not request or context != self._playback_mode_context():
+            return None
         data = self.client.command(f"set_{mode}", value=value)
         self._persist_backend_summary()
         if context != self._playback_mode_context():
-            return
+            return None
         if data.get("success") is False or data.get("backend_available") is False:
-            self._playbackModeReady.emit(context, mode, None)
-            return
+            return "rejected"
         if not self._playback_mode_matches(data, mode, value):
+            # A provider can acknowledge the command before its playback state propagates.
+            time.sleep(0.35)
+            if self._pending_playback_mode is not request or context != self._playback_mode_context():
+                return None
             data = self.client.command("status")
             self._persist_backend_summary()
         if (data.get("success") is not False and data.get("backend_available") is not False
                 and self._playback_mode_matches(data, mode, value)):
-            self._playbackModeReady.emit(context, mode, value)
+            return "confirmed"
+        return None
 
     @staticmethod
     def _playback_mode_matches(data: dict, mode: str, value: bool | str) -> bool:
@@ -1841,13 +1879,19 @@ class DJConnectBackend(QObject):
         observed = snapshot.get("repeat_state", snapshot.get(mode)) if mode == "repeat" else snapshot.get(mode)
         return type(observed) is type(value) and observed == value
 
-    @Slot(object, str, object)
-    def _apply_playback_mode(self, context: tuple, mode: str, value: bool | str | None) -> None:
-        if self._shutting_down or context != self._playback_mode_context():
+    @Slot(object, object)
+    def _finish_playback_mode(self, request: tuple[tuple, str, bool | str], outcome: str | None) -> None:
+        if self._shutting_down or self._pending_playback_mode is not request:
             return
-        if value is None:
-            self.showToastForContext(self.tr_key("command_failed"), "connectivity")
-            return
+        context, mode, value = request
+        if context == self._playback_mode_context():
+            if outcome == "confirmed":
+                self._apply_playback_mode(mode, value)
+            elif outcome == "rejected":
+                self.showToastForContext(self.tr_key("command_failed"), "connectivity")
+        self._set_pending_playback_mode(None)
+
+    def _apply_playback_mode(self, mode: str, value: bool | str) -> None:
         if mode == "shuffle" and isinstance(value, bool):
             self.playback.shuffle = value
             self.shuffleChanged.emit()

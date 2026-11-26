@@ -1853,7 +1853,7 @@ BrandWindow {
                     iconName: "shuffle"
                     visible: djconnect.demoMode || djconnect.musicBackendSupportsShuffle
                     checked: djconnect.shuffle
-                    enabled: nowPanel.playbackActionsAvailable && !djconnect.busy
+                    enabled: nowPanel.playbackActionsAvailable && !djconnect.busy && !djconnect.playbackModePending
                         && (djconnect.demoMode || djconnect.musicBackendAvailable)
                     Accessible.name: root.tr("shuffle")
                     Accessible.description: modeLabel
@@ -1868,7 +1868,7 @@ BrandWindow {
                     iconName: djconnect.repeat === "track" ? "repeat_one" : "repeat"
                     visible: djconnect.demoMode || djconnect.musicBackendSupportsRepeat
                     checked: djconnect.repeat !== "off"
-                    enabled: nowPanel.playbackActionsAvailable && !djconnect.busy
+                    enabled: nowPanel.playbackActionsAvailable && !djconnect.busy && !djconnect.playbackModePending
                         && (djconnect.demoMode || djconnect.musicBackendAvailable)
                     Accessible.name: root.tr("repeat")
                     Accessible.description: modeLabel
@@ -2293,6 +2293,7 @@ BrandWindow {
                 IconButton {
                     iconName: "shuffle"
                     active: djconnect.shuffle
+                    enabled: !djconnect.busy && !djconnect.playbackModePending
                     onClicked: djconnect.toggleShuffle()
                 }
 
@@ -2307,6 +2308,7 @@ BrandWindow {
                 IconButton {
                     iconName: djconnect.repeat === "track" ? "repeatOne" : djconnect.repeat === "context" ? "repeat" : "repeatOff"
                     active: djconnect.repeat !== "off"
+                    enabled: !djconnect.busy && !djconnect.playbackModePending
                     onClicked: djconnect.cycleRepeat()
                 }
             }
