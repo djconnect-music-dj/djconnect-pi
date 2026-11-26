@@ -318,6 +318,20 @@ def test_music_dna_parser_accepts_disabled_profile() -> None:
     assert parsed == {"enabled": False, "summary": "", "sections": []}
 
 
+def test_music_dna_updated_at_prefers_profile_date_and_clears_on_failed_read(tmp_path: Path) -> None:
+    ensure_app()
+    backend = DJConnectBackend(tmp_path / "config.json")
+    payload = {"success": True, "enabled": True, "updated_at": "2026-10-20T14:20:00Z",
+               "profile": {"updated_at": "2026-10-19T14:10:00Z"}}
+    backend._apply_music_dna_data(payload)
+    assert backend.musicDnaUpdatedAt == "2026-10-19T14:10:00Z"
+    payload["profile"]["updated_at"] = "2026-10-19T14:10:00"
+    backend._apply_music_dna_data(payload)
+    assert backend.musicDnaUpdatedAt == "2026-10-20T14:20:00Z"
+    backend._apply_music_dna_data({"success": False, "error": "transient"})
+    assert backend.musicDnaUpdatedAt == ""
+
+
 def test_music_dna_parser_accepts_enabled_summary_only_profile() -> None:
     parsed = parse_music_dna_profile({"success": True, "enabled": True, "profile": {"summary": "You lean toward warm synths."}})
 

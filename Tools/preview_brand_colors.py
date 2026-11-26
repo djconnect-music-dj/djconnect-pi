@@ -377,6 +377,19 @@ def main():
         assert not no_profile.property("visible")
         backend._set_demo_music_dna(True)
         assert not no_profile.property("visible")
+        backend._demo_mode = False
+        backend._apply_music_dna_data({
+            "success": True, "enabled": True,
+            "profile": {"summary": "Fixture profile", "updated_at": "2026-10-19T14:10:00Z"},
+        })
+        backend._demo_mode = True
+        QTest.qWait(65)
+        footer = visual_item(window.contentItem(), "musicDnaUpdatedFooter")
+        assert footer.property("visible")
+        assert footer.property("text") == backend.t("music_dna_updated_at").replace(
+            "%1", backend.djSession.formatTimestamp("2026-10-19T14:10:00Z", True))
+        backend._set_demo_music_dna(True)
+        assert not footer.property("visible")
         backend.setLanguage("nl")
         window.setProperty("activeScreen", "session")
         for runtime_state in ("opening", "ending"):

@@ -4142,6 +4142,23 @@ BrandWindow {
                             }
                         }
                     }
+                    Text {
+                        objectName: "musicDnaUpdatedFooter"
+                        readonly property string updatedTime: {
+                            root.trVersion
+                            return djconnect.djSession.formatTimestamp(djconnect.musicDnaUpdatedAt, true)
+                        }
+                        visible: updatedTime.length > 0
+                        text: root.tr("music_dna_updated_at").replace("%1", updatedTime)
+                        textFormat: Text.PlainText
+                        color: BrandTheme.colors.muted
+                        horizontalAlignment: Text.AlignHCenter
+                        font.pixelSize: 15
+                        wrapMode: Text.WordWrap
+                        Layout.columnSpan: musicDnaGrid.columns
+                        Layout.fillWidth: true
+                        Layout.bottomMargin: 8
+                    }
                 }
             }
             Item {

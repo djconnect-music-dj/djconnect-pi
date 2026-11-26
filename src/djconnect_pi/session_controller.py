@@ -345,7 +345,8 @@ class SessionController(QObject):
             "has_more_sessions": bool(self._history_cursor) and self._history_pages < 5}
 
     @Slot(str, result=str)
-    def formatTimestamp(self, value):
+    @Slot(str, bool, result=str)
+    def formatTimestamp(self, value, omit_today_date=False):
         if timestamp(value) is None:
             return ""
         parsed = QDateTime.fromString(value, Qt.DateFormat.ISODateWithMs)
@@ -354,7 +355,10 @@ class SessionController(QObject):
         if not parsed.isValid():
             return ""
         language = self.backend.cfg.language
-        return QLocale(locale_for_language(language)).toString(parsed.toLocalTime(), translate(language, "session_datetime_format"))
+        local = parsed.toLocalTime()
+        date_format = ("HH:mm" if omit_today_date and local.date() == QDateTime.currentDateTime().date()
+                       else translate(language, "session_datetime_format"))
+        return QLocale(locale_for_language(language)).toString(local, date_format)
 
     @Slot("QVariantMap", result=str)
     def formatSavedDuration(self, session):
