@@ -375,6 +375,10 @@ Canvas {
             } else if (iconName === "copy") {
                 roundRect(11, 4, 15, 20, 2)
                 line(8, 10, 6, 10); line(6, 10, 6, 28); line(6, 28, 20, 28)
+            } else if (iconName === "text_cursor") {
+                line(16, 7, 16, 25)
+                line(12, 7, 20, 7)
+                line(12, 25, 20, 25)
             } else if (iconName === "document") {
                 roundRect(8, 4, 16, 24, 2)
                 line(12, 11, 20, 11); line(12, 16, 20, 16); line(12, 21, 17, 21)

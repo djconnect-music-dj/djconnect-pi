@@ -5168,6 +5168,17 @@ BrandWindow {
             }
         }
 
+        function useMessageAsDraft(messageText) {
+            const draft = (messageText || "").trim()
+            if (!draft || historyOffline || !visible || !askDjChatInput.enabled) return
+            closeHelp()
+            if (searchOpen) closeSearch(false)
+            askDjChatInput.text = draft
+            askDjChatInput.forceActiveFocus()
+            askDjChatInput.cursorPosition = askDjChatInput.text.length
+            chatKeyboardOpen = true
+        }
+
         function clearChatDraft() {
             root.askDjDraft = ""
             chatKeyboardOpen = false
@@ -5633,19 +5644,32 @@ BrandWindow {
                                     Layout.fillWidth: true
                                 }
 
-                                GlassButton {
-                                    objectName: "askDjAnswerFeedback"
-                                    visible: !askDjPanel.historyOffline && modelData.role === "assistant" && !bubble.systemBubble
-                                        && !!modelData.id && !!modelData.text
-                                    iconName: "chat"; tertiary: true
-                                    Accessible.name: root.tr("ask_dj_feedback_title")
-                                    ToolTip.text: Accessible.name
-                                    ToolTip.visible: hovered
+                                RowLayout {
+                                    visible: !askDjPanel.historyOffline && !bubble.systemBubble && !!(modelData.text || "").trim()
                                     Layout.alignment: Qt.AlignRight
-                                    onClicked: {
-                                        askDjPanel.chatKeyboardOpen = false
-                                        askDjPanel.feedbackMessageId = modelData.id
-                                        if (askDjPanel.feedbackAnswer) askDjFeedbackPopup.open()
+                                    GlassButton {
+                                        objectName: "askDjUseMessageAsDraft"
+                                        enabled: askDjChatInput.enabled
+                                        iconName: "text_cursor"; tertiary: true
+                                        readonly property string actionLabel: root.tr(askDjChatInput.text.trim().length
+                                            ? "ask_dj_replace_draft" : "ask_dj_use_as_draft")
+                                        Accessible.name: actionLabel
+                                        ToolTip.text: actionLabel
+                                        ToolTip.visible: hovered
+                                        onClicked: askDjPanel.useMessageAsDraft(modelData.text)
+                                    }
+                                    GlassButton {
+                                        objectName: "askDjAnswerFeedback"
+                                        visible: modelData.role === "assistant" && !!modelData.id
+                                        iconName: "chat"; tertiary: true
+                                        Accessible.name: root.tr("ask_dj_feedback_title")
+                                        ToolTip.text: Accessible.name
+                                        ToolTip.visible: hovered
+                                        onClicked: {
+                                            askDjPanel.chatKeyboardOpen = false
+                                            askDjPanel.feedbackMessageId = modelData.id
+                                            if (askDjPanel.feedbackAnswer) askDjFeedbackPopup.open()
+                                        }
                                     }
                                 }
 
