@@ -1848,7 +1848,10 @@ BrandWindow {
     CompactPageLoader {
         visible: root.activeScreen === "control"
         z: 10
-        onVisibleChanged: if (!visible) djconnect.cancelControlVolume()
+        onVisibleChanged: {
+            if (visible && !root.wallProfile) djconnect.refreshControlOutputs(false)
+            else djconnect.cancelControlVolume()
+        }
         sourceComponent: PlaybackControlPage {}
     }
 

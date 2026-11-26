@@ -201,7 +201,7 @@ class DJConnectBackend(QObject):
     _mediaArtworkReady = Signal(str, object, object)
     _outputDeviceRejected = Signal(str, str)
     _outputChoiceFinished = Signal(object, bool)
-    _controlOutputsFinished = Signal(object, object)
+    _controlOutputsFinished = Signal(object, object, bool)
     _backendAvailableReady = Signal(bool)
     _toastReady = Signal(str, int, str)
     _askDjReady = Signal(object)
@@ -1654,9 +1654,11 @@ class DJConnectBackend(QObject):
         self._select_output(value)
 
     @Slot()
-    def refreshControlOutputs(self) -> None:
+    @Slot(bool)
+    def refreshControlOutputs(self, manual: bool = True) -> None:
         if self._demo_mode:
-            self.showToastForContext(self.tr_key("session_output_updated"), "playback")
+            if manual:
+                self.showToastForContext(self.tr_key("session_output_updated"), "playback")
             return
         if (not self.paired or not self.backendAvailable or self._pending_output_choice
                 or self._control_outputs_request is not None):
@@ -1682,10 +1684,10 @@ class DJConnectBackend(QObject):
                 observed = self.client.playback_from_status({"output_devices": rows})
 
         self._run(self.tr_key("session_output_refresh"), worker,
-                  done=lambda: self._controlOutputsFinished.emit(context, observed), interactive=False)
+                  done=lambda: self._controlOutputsFinished.emit(context, observed, manual), interactive=False)
 
-    @Slot(object, object)
-    def _finish_control_outputs(self, context, observed: Playback | None) -> None:
+    @Slot(object, object, bool)
+    def _finish_control_outputs(self, context, observed: Playback | None, manual: bool) -> None:
         if self._control_outputs_request is not context:
             return
         self._control_outputs_request = None
@@ -1693,8 +1695,9 @@ class DJConnectBackend(QObject):
             if observed is not None:
                 self.playback.output_devices = observed.output_devices
                 self.playback.output_device_details = observed.output_device_details
-            key = "session_output_updated" if observed is not None else "session_output_unavailable"
-            self.showToastForContext(self.tr_key(key), "playback")
+            if manual:
+                key = "session_output_updated" if observed is not None else "session_output_unavailable"
+                self.showToastForContext(self.tr_key(key), "playback")
         self.outputDeviceChanged.emit()
 
     @Slot(str)

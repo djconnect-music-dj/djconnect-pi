@@ -190,6 +190,20 @@ def main():
             backend.playback.output_device_id = ""
             backend.playback.output_device = ""
             backend.outputDeviceChanged.emit()
+            backend.hideToast()
+            backend._demo_mode = False
+            backend.cfg.paired, backend.cfg.device_token = True, "synthetic-not-a-credential"
+            backend._set_backend_available(True)
+            with patch.object(backend, "_run") as inventory:
+                window.setProperty("activeScreen", "control")
+                QTest.qWait(80)
+                assert backend.controlOutputsRefreshing
+                backend.outputDeviceChanged.emit()
+                inventory.assert_called_once()
+                inventory.call_args.kwargs["done"]()
+                assert not backend.controlOutputsRefreshing and not backend.toastVisible
+            backend._demo_mode = True
+            backend.cfg.paired, backend.cfg.device_token = False, ""
         track = {"title": "Repeated track title with more detail " * 12, "uri": "spotify:track:fixture-a", "index": 4}
         backend._queue_items = parse_queue_items({"queue": [
             track, track, {"title": "Other track", "uri": "spotify:track:fixture-b", "index": 5},
