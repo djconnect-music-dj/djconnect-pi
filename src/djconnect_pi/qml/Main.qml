@@ -1115,7 +1115,7 @@ BrandWindow {
                         rightPadding: leftPadding
                         text: modelData.title || ""
                         Accessible.name: text
-                        enabled: !!modelData.uri && !djconnect.mediaPlaybackBusy
+                        enabled: !!modelData.uri && !panel.loading && !djconnect.mediaPlaybackBusy
                         opacity: enabled ? 1 : 0.58
                         onClicked: djconnect.playMediaItem(panel.playCommand, panel.itemPayload(modelData))
                         background: GlassSurface {
