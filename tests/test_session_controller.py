@@ -365,6 +365,16 @@ def test_demo_session_never_uses_server_or_survives_demo_exit(controller):
     owner.refreshSaved(live_match["entry_id"])
     owner.firstEntries()
     assert positions == ["", live_match["entry_id"], ""]
+    backend.playback = SimpleNamespace(title="Harbor Lights", artist="Nora Vale", album="Tidal Lines",
+                                       uri="demo:track:harbor", position_seconds=0,
+                                       duration_seconds=180, is_playing=True)
+    owner.demo_playback_changed(track_changed=True)
+    owner.demo_playback_changed()
+    owner.readCurrentHistory()
+    plays = [row for row in owner.state["timeline"]["entries"] if row["kind"] == "playback_observed"]
+    assert len(plays) == 1
+    assert plays[0]["historical_playback"] == {"title": "Harbor Lights", "artist": "Nora Vale", "album": "Tidal Lines"}
+    assert "uri" not in plays[0]["playback"]
     owner.end("demo-session")
     assert not owner.state["flow_rows"] and not owner.sendQuestion("No session")
     assert not owner.state["timeline"]
@@ -374,6 +384,8 @@ def test_demo_session_never_uses_server_or_survives_demo_exit(controller):
     assert len(owner.archiveRows) == 1
     owner.searchArchive("something absent from the session")
     assert owner.archiveSearchState["sessions"] == []
+    owner.searchArchive("TIDAL LINES")
+    assert owner.archiveSearchState["sessions"] == owner.archiveRows
     owner.searchArchive("LISTEN TO NEXT")
     found = owner.archiveSearchState["sessions"]
     assert found == owner.archiveRows and found[0]["read_only"]
@@ -385,6 +397,10 @@ def test_demo_session_never_uses_server_or_survives_demo_exit(controller):
     assert saved_match["entry_id"] == live_match["entry_id"]
     owner.openEntry(found[0]["session_id"], saved_match["entry_id"])
     assert owner.state["timeline"]["selected_entry_id"] == saved_match["entry_id"]
+    owner.search(found[0]["session_id"], "NORA")
+    track_match, = owner.state["search"]["matches"]
+    assert track_match["entry_id"] == plays[0]["entry_id"]
+    assert "<b><u>Nora</u></b>" in track_match["highlighted_text"]
     owner.closeSaved()
     owner.start("party")
     assert owner.state["mood"] == "party"

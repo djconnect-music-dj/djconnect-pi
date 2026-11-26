@@ -34,6 +34,7 @@ from .session_history_view import (
     accepted_question,
     confirmed_question_entry,
     conversation_entries,
+    demo_search_body,
     demo_search_matches,
     flow_contributions,
     live_presentations,
@@ -909,16 +910,21 @@ class SessionController(QObject):
             return self._timeline
         return {}
 
-    def _append_demo_entry(self, kind, text):
+    def _append_demo_entry(self, kind, text, **presentation):
         entry_id = uuid4().hex
         self._demo_flow = [*self._demo_flow[-99:], {
             "entry_id": entry_id, "session_id": self._session["session_id"],
-            "kind": kind, "text": text, "occurred_at": datetime.now(UTC).isoformat(),
+            "kind": kind, "text": text, "occurred_at": datetime.now(UTC).isoformat(), **presentation,
         }]
         return entry_id
 
-    def demo_playback_changed(self):
+    def demo_playback_changed(self, *, track_changed=False):
         if self.backend.demoMode and self._session:
+            if track_changed:
+                playback = self.backend.playback
+                details = {"title": playback.title, "artist": playback.artist, "album": playback.album}
+                self._append_demo_entry("playback_observed", "", historical_playback=details,
+                                        playback={**details, "coverage": "observed_playing_not_full_listen"})
             self.changed.emit()
 
     def _demo_playback(self):
@@ -1542,7 +1548,7 @@ class SessionController(QObject):
             for record in reversed(self._demo_archives.values()):
                 header = record["session"]
                 if (needle in _archive_search_text(self.formatArchiveTiming(header))
-                        or any(needle in _archive_search_text(row["text"]) for row in record["entries"])):
+                        or any(needle in _archive_search_text(demo_search_body(row)) for row in record["entries"])):
                     matches.append(header)
             self._archive_search = {"query": query, "sessions": matches, "complete": True}
             self.changed.emit()

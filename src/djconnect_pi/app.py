@@ -3725,8 +3725,9 @@ class DJConnectBackend(QObject):
         self.imageUrlChanged.emit()
         self.playingChanged.emit()
         self.progressChanged.emit()
-        self.djSession.demo_playback_changed()
-        if previous_uri != self.playback.uri:
+        track_changed = previous_uri != self.playback.uri
+        self.djSession.demo_playback_changed(track_changed=track_changed)
+        if track_changed:
             self.trackInsightPlaybackItemChanged.emit()
             self.playbackTrackChanged.emit()
 

@@ -160,11 +160,18 @@ def _render_highlighted_spans(body, spans):
     return "".join(fragments).replace("\n", "<br>")
 
 
+def demo_search_body(row):
+    if row["text"]:
+        return row["text"]
+    playback = row.get("historical_playback", {})
+    return " · ".join(value for value in (playback.get("title"), playback.get("artist"), playback.get("album")) if value)
+
+
 def demo_search_matches(entries, query):
     pattern = re.compile(re.escape(query), re.IGNORECASE)
     matches = []
     for row in entries:
-        body = row["text"]
+        body = demo_search_body(row)
         spans = [match.span() for match in pattern.finditer(body)]
         if spans:
             matches.append({**row, "highlighted_text": _render_highlighted_spans(body, spans)})
