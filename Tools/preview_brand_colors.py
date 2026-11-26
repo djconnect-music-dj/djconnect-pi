@@ -1083,9 +1083,24 @@ def main():
         window.setProperty("aboutOpen", True)
         capture("about")
         window.setProperty("aboutOpen", False)
+        backend.cfg.log_level = "INFO"
         backend.showLogs()
         capture("logs")
+        logs = visual_item(window.contentItem(), "logsView")
+        for locale in ("en", "nl", "de", "fr", "es"):
+            backend.setLanguage(locale)
+            QMetaObject.invokeMethod(visual_item(logs, "logsSearchOpen"), "clicked")
+            search_close = visual_item(logs, "logsSearchClose")
+            assert search_close.property("visible") and search_close.property("iconName") == "close"
+            assert QAccessible.queryAccessibleInterface(search_close).text(QAccessible.Text.Name) == backend.t("close_search")
+            search_input = visual_item(logs, "logsSearchInput")
+            search_input.setProperty("text", "sample")
+            capture("logs-search-" + locale)
+            QMetaObject.invokeMethod(search_close, "clicked")
+            assert not logs.property("searching") and search_input.property("text") == ""
         backend.hideLogs()
+        backend.cfg.log_level = "OFF"
+        backend.setLanguage("nl")
         window.setProperty("rebootConfirmOpen", True)
         capture("confirmation")
         backend.shutdown()

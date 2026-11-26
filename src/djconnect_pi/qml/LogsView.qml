@@ -179,7 +179,8 @@ Item {
                         onClicked: view.moveMatch(1)
                     }
                     LogAction {
-                        iconName: "end"; Accessible.name: view.tr("close")
+                        objectName: "logsSearchClose"
+                        iconName: "close"; Accessible.name: view.tr("close_search")
                         background: Item {}
                         onClicked: view.closeSearch()
                     }
