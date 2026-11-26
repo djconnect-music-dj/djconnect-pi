@@ -1199,7 +1199,9 @@ BrandWindow {
                     }
                 }
                 ColumnLayout {
-                    anchors.centerIn: parent
+                    objectName: "mediaEmptyState"
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    y: Math.max(0, (Math.min(parent.height, 360) - height) / 2)
                     width: parent.width
                     visible: panel.matches.length === 0
                     spacing: 14
@@ -1211,7 +1213,9 @@ BrandWindow {
                         Layout.preferredHeight: Layout.preferredWidth
                     }
                     Text {
-                        text: panel.items.length > 0 ? root.tr("media_no_matches") : panel.emptyText
+                        objectName: "mediaEmptyStateMessage"
+                        text: panel.items.length > 0 ? root.tr("media_no_matches")
+                            : panel.loading ? root.tr("loading") : panel.emptyText
                         textFormat: Text.PlainText
                         color: BrandTheme.colors.muted
                         font.pixelSize: panel.compact ? 20 : 24
