@@ -17,12 +17,13 @@ Item {
     property bool searching: false
     property bool keyboardOpen: false
     property int matchIndex: -1
-    readonly property var matches: findMatches(lines, searchInput.text)
+    readonly property string query: searchInput.text.trim()
+    readonly property var matches: findMatches(lines, query)
     readonly property var currentMatch: matches[matchIndex] || null
 
     function tr(key) { backend.translationVersion; return backend.t(key) }
     function findMatches(rows, query) {
-        if (!query.trim()) return []
+        if (!query) return []
         var result = []
         var pattern = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "giu")
         for (var row = 0; row < rows.length; row++) {
@@ -169,7 +170,8 @@ Item {
                         }
                     }
                     Text {
-                        visible: searchInput.text.length > 0
+                        objectName: "logsSearchMatchCount"
+                        visible: view.query.length > 0
                         text: view.matches.length ? (view.matchIndex + 1) + " / " + view.matches.length : view.tr("logs_no_matches")
                         color: BrandTheme.colors.muted; font.pixelSize: 15
                     }

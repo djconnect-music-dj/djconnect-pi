@@ -1127,6 +1127,12 @@ def main():
             assert logs.property("matchIndex") == 0
             QTest.keyClick(window, Qt.Key.Key_Down)
             assert logs.property("matchIndex") == 1 and search_input.property("activeFocus")
+            search_count = visual_item(logs, "logsSearchMatchCount")
+            search_input.setProperty("text", "  sample  ")
+            assert logs.property("matchIndex") == 1 and search_count.property("text") == "2 / 3"
+            assert search_input.property("text") == "  sample  " and search_count.property("visible")
+            search_input.setProperty("text", "   ")
+            assert logs.property("matchIndex") == -1 and not search_count.property("visible")
             QTest.keyClick(window, Qt.Key.Key_Escape)
             assert not logs.property("searching") and search_input.property("text") == ""
         backend.hideLogs()
