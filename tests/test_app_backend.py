@@ -11,7 +11,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 import requests
-from PySide6.QtCore import QCoreApplication
+from PySide6.QtCore import QCoreApplication, QUrl
 from shiboken6 import delete, isValid
 
 from djconnect_pi import __version__
@@ -3117,6 +3117,40 @@ def test_backend_sync_config_updates_device_name_when_it_is_the_only_change(tmp_
 
     assert backend.deviceName == "Living room Pi"
     settings_changed.assert_called_once()
+
+
+@pytest.mark.parametrize("profile_changes", [False, True])
+def test_export_ask_dj_history_only_saves_for_the_original_profile(tmp_path: Path, profile_changes: bool) -> None:
+    ensure_app()
+    config_path = tmp_path / "config.json"
+    save_config(config_path, Config(paired=True, device_token="fixture-token", active_profile_id="original",
+                                    active_profile_type="personal"))
+    backend = DJConnectBackend(config_path)
+    backend._set_backend_available(True)
+    backend._executor.submit = Mock()
+    destination = tmp_path / "history.json"
+    export = {"messages": [{"text": "Een testvraag"}]}
+
+    def read_export():
+        if profile_changes:
+            backend.cfg.active_profile_id = "another"
+        return export
+
+    backend.client.ask_dj_history_export = Mock(side_effect=read_export)
+    url = QUrl.fromLocalFile(str(destination))
+    backend.exportAskDjHistory(url, backend.musicDnaContextRevision - 1)
+    backend._executor.submit.assert_not_called()
+
+    backend.exportAskDjHistory(url, backend.musicDnaContextRevision)
+    backend._executor.submit.call_args.args[0]()
+    backend.client.ask_dj_history_export.assert_called_once_with()
+    assert not backend.askDjBusy
+    if profile_changes:
+        assert not destination.exists()
+    else:
+        assert json.loads(destination.read_text()) == export
+        assert destination.stat().st_mode & 0o077 == 0
+        assert backend.toastText == backend.t("ask_dj_export_saved")
 
 
 def test_backend_displays_package_version_separately_from_protocol_version(tmp_path: Path) -> None:

@@ -109,7 +109,7 @@ def test_client_contract_does_not_use_raw_ask_dj_or_old_search_aliases() -> None
     ]
     forbidden_patterns = {
         "raw Ask DJ route": re.compile(r"/api/djconnect/v1/ask_dj(?:[\"'`\s]|$)"),
-        "HA Ask DJ service": re.compile(r"\bdjconnect\.ask_dj\b"),
+        "HA Ask DJ service": re.compile(r"\bdjconnect\.ask_dj\b(?!\.history\.export\b)"),
         "spotify search alias": re.compile(r"\bspotify_search_query\b"),
         "last spotify search alias": re.compile(r"\blast_spotify_search\b"),
     }
@@ -1638,6 +1638,26 @@ def test_music_dna_export_import_remain_http_only_when_websocket_routes_advertis
     ]
     assert captured[0][1]["music_dna_key"] == "dna-1"
     assert captured[1][1]["profile"] == {"summary": "Imported"}
+
+
+def test_ask_dj_history_export_requests_the_profile_export_route() -> None:
+    cfg = Config(ha_url="http://ha.local:8123", device_id="fixture", device_token="fixture-token", paired=True,
+                 active_profile_id="profile-fixture")
+    client = HAClient(cfg)
+    export = {"success": True, "format": "djconnect.ask_dj.history.export", "schema_version": 1,
+              "history_scope": "profile", "owner_profile_id": "profile-fixture", "messages": []}
+
+    with patch("djconnect_pi.ha.requests.post", return_value=FakeResponse(200, export)) as post:
+        assert client.ask_dj_history_export() == export
+
+    assert post.call_args.args == ("http://ha.local:8123/api/djconnect/v1/ask_dj/history/export",)
+    assert post.call_args.kwargs["json"]["conversation_scope"] == "profile"
+    assert post.call_args.kwargs["json"]["identity"]["device_id"] == cfg.device_id
+
+    for invalid in ({"schema_version": True}, {"owner_profile_id": "another-profile"}):
+        with patch("djconnect_pi.ha.requests.post", return_value=FakeResponse(200, {**export, **invalid})):
+            with pytest.raises(DJConnectError, match="invalid_ask_dj_history_export"):
+                client.ask_dj_history_export()
 
 
 def test_music_dna_uses_advertised_http_fallback_path_when_websocket_command_missing() -> None:

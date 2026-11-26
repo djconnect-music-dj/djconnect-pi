@@ -268,6 +268,20 @@ class HAClient:
         self._validate_ha_version(data)
         return data
 
+    def ask_dj_history_export(self) -> dict[str, Any]:
+        url = self._djconnect_url("ask_dj/history/export")
+        body = self._ask_dj_payload(conversation_scope="profile")
+        response = requests.post(url, json=body, headers=self._headers(), timeout=self.timeout)
+        data = self._json(response)
+        self._validate_ha_version(data)
+        if (data.get("success") is not True or data.get("format") != "djconnect.ask_dj.history.export"
+                or type(data.get("schema_version")) is not int or data["schema_version"] != 1
+                or data.get("history_scope") != "profile"
+                or data.get("owner_profile_id") != self.cfg.active_profile_id
+                or not self.cfg.active_profile_id or not isinstance(data.get("messages"), list)):
+            raise DJConnectError("invalid_ask_dj_history_export")
+        return data
+
     def ask_dj_history_clear(self) -> dict[str, Any]:
         body = self._ask_dj_payload()
         data = self._try_websocket("djconnect/ask_dj/history/clear", body, command="djconnect/ask_dj/history/clear", timeout=self.timeout)

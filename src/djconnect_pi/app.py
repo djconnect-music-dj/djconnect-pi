@@ -498,6 +498,10 @@ class DJConnectBackend(QObject):
     def personalProfileActive(self) -> bool:
         return self.cfg.active_profile_type == "personal"
 
+    @Property(bool, notify=profileChanged)
+    def askDjHistoryExportAllowed(self) -> bool:
+        return bool(self.personalProfileActive and session_profile_id(self.cfg) and not self.cfg.private_session)
+
     @Property(str, notify=statusTextChanged)
     def statusText(self) -> str:
         return self._status_text
@@ -1875,6 +1879,52 @@ class DJConnectBackend(QObject):
     @Slot()
     def refreshAskDjHistory(self) -> None:
         self._load_ask_dj_history(show_toast=True, action="refreshed")
+
+    @Slot(QUrl, int)
+    def exportAskDjHistory(self, destination: QUrl, revision: int) -> None:
+        ticket = self._private_read_context()
+        self._sync_config_from_disk()
+        if (revision != self._music_dna_context_revision or ticket != self._private_read_context()
+                or not destination.isLocalFile() or not destination.toLocalFile()
+                or not self.paired or self._demo_mode or self._ask_dj_busy or not self.askDjHistoryExportAllowed
+                or not self._backend_available or self._version_mismatch_visible
+                or not self._application_foreground or self._shutting_down):
+            return
+
+        def current() -> bool:
+            return (self._application_foreground and not self._shutting_down and not self._demo_mode
+                    and ticket == self._private_read_context())
+
+        def export() -> None:
+            if not current():
+                return
+            try:
+                data = self.client.ask_dj_history_export()
+            except (AuthenticationError, ProtocolVersionMismatch):
+                if current():
+                    raise
+                return
+            except (DJConnectError, requests.RequestException):
+                if current():
+                    self._toastReady.emit(self.tr_key("ask_dj_export_failed"), 3500, "askdj")
+                return
+            if not current():
+                return
+            contents = json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8") + b"\n"
+            target = QSaveFile(destination.toLocalFile())
+            saved = False
+            if target.open(QIODevice.OpenModeFlag.WriteOnly):
+                if (target.setPermissions(QSaveFile.Permission.ReadOwner | QSaveFile.Permission.WriteOwner)
+                        and target.write(contents) == len(contents) and current()):
+                    saved = target.commit()
+                else:
+                    target.cancelWriting()
+            if current():
+                key = "ask_dj_export_saved" if saved else "ask_dj_export_failed"
+                self._toastReady.emit(self.tr_key(key), 3500, "askdj")
+
+        self._set_ask_dj_busy(True)
+        self._run(self.tr_key("ask_dj_export"), export, done=lambda: self._set_ask_dj_busy(False), interactive=False)
 
     @Slot()
     @Slot(int)

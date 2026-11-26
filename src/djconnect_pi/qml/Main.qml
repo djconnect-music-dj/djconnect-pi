@@ -1,6 +1,7 @@
 import QtQuick
 import "BrandTheme.js" as BrandTheme
 import QtQuick.Controls
+import QtQuick.Dialogs
 import QtQuick.Layouts
 import QtQuick.Window
 import "MoodTheme.js" as MoodTheme
@@ -2313,6 +2314,18 @@ BrandWindow {
         readonly property bool canChangeMusicDna: djconnect.musicDnaLoaded && !djconnect.musicDnaBusy
             && (djconnect.paired || djconnect.demoMode)
 
+        FileDialog {
+            id: askDjExportDialog
+            objectName: "askDjExportDialog"
+            property int profileRevision: 0
+            title: root.tr("ask_dj_export")
+            fileMode: FileDialog.SaveFile
+            options: FileDialog.DontUseNativeDialog
+            defaultSuffix: "json"
+            nameFilters: ["JSON (*.json)"]
+            onAccepted: djconnect.exportAskDjHistory(selectedFile, profileRevision)
+        }
+
         ProfileReadOnOpen {
             surfaceVisible: settingsPanel.visible
             busy: djconnect.musicDnaBusy
@@ -2739,6 +2752,20 @@ BrandWindow {
                         root.musicDnaConfirmationRevision = djconnect.musicDnaContextRevision
                         root.musicDnaClearConfirmOpen = true
                     }
+                }
+            }
+
+            PurpleButton {
+                objectName: "askDjExportButton"
+                text: root.tr("ask_dj_export")
+                font.pixelSize: 24
+                Layout.fillWidth: true
+                Layout.preferredHeight: 58
+                enabled: djconnect.paired && djconnect.askDjHistoryExportAllowed && djconnect.backendAvailable
+                    && !djconnect.demoMode && !djconnect.versionMismatchVisible && !djconnect.askDjBusy
+                onClicked: {
+                    askDjExportDialog.profileRevision = djconnect.musicDnaContextRevision
+                    askDjExportDialog.open()
                 }
             }
 
