@@ -656,6 +656,19 @@ def test_music_dna_parser_renders_optional_blocks_and_hides_empty_cards() -> Non
     assert "secret" not in repr(cards)
 
 
+def test_music_dna_summary_prefers_profile_totals_over_preview_list_lengths() -> None:
+    profile = {"track_count": 42, "artist_count": 0, "recent_tracks": [{"title": "New"}],
+               "favorite_artists": [{"name": "Artist"}]}
+    for track_count, artist_count, expected in (
+        (42, 0, {"music_dna_card_tracks": "42", "music_dna_card_artists": "0"}),
+        (True, -1, {"music_dna_card_recent_tracks": "1", "music_dna_card_artists": "1"}),
+    ):
+        profile.update(track_count=track_count, artist_count=artist_count)
+        cards = parse_music_dna_profile({"enabled": True, "profile": profile})["sections"]
+        assert cards[0]["key"] == "music_dna_card_summary"
+        assert {row["labelKey"]: row["title"] for row in cards[0]["rows"]} == expected
+
+
 def test_music_dna_parser_hides_ineligible_blocks() -> None:
     parsed = parse_music_dna_profile(
         {

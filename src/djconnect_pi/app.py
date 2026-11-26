@@ -6379,6 +6379,11 @@ def _music_dna_cards(profile: dict[str, object], ha_url: str) -> list[dict[str, 
     genres = ", ".join(entry["title"] for entry in rows(profile.get("favorite_genres"), limit=10))
     tracks = profile.get("recent_tracks")
     artists = profile.get("favorite_artists")
+    track_count = profile.get("track_count")
+    artist_count = profile.get("artist_count")
+    tracks_total = type(track_count) is int and track_count >= 0
+    if type(artist_count) is not int or artist_count < 0:
+        artist_count = len(artists) if isinstance(artists, list) else None
     mood = block("mood")
     mood_average = mood.get("average")
     has_mood_average = type(mood_average) in (int, float) and 0 <= mood_average <= 100
@@ -6387,8 +6392,9 @@ def _music_dna_cards(profile: dict[str, object], ha_url: str) -> list[dict[str, 
     mood_zone_key = zones.get(zone.lower(), "") if isinstance(zone, str) else ""
     summary = [{"labelKey": "music_dna_card_" + key, "title": str(value)}
                for key, value in (("playtime", duration),
-                                  ("recent_tracks", len(tracks) if isinstance(tracks, list) else None),
-                                  ("artists", len(artists) if isinstance(artists, list) else None),
+                                  ("tracks", track_count if tracks_total else None),
+                                  ("recent_tracks", len(tracks) if not tracks_total and isinstance(tracks, list) else None),
+                                  ("artists", artist_count),
                                   ("favorite_genres", genres)) if value is not None and value != ""]
     if mood_zone_key:
         summary.append({"labelKey": "music_dna_card_profile_mood", "valueKey": mood_zone_key})
