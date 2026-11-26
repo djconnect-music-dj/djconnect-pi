@@ -2561,6 +2561,10 @@ Item {
         readonly property int optionsRow: overArtwork ? 0 : 2
         readonly property int seekRow: overArtwork ? 2 : 0
         spacing: 8
+        function focusFirstControl() {
+            const first = [seekBackTransport, previousTransport, refreshTransport].find(button => button.visible && button.enabled)
+            if (first) first.forceActiveFocus(Qt.PopupFocusReason)
+        }
         Item { visible: transportControls.overArtwork; Layout.fillHeight: true }
         Text {
             objectName: "sessionTransportTrackTitle"
@@ -2602,52 +2606,76 @@ Item {
             rowSpacing: 8
             columnSpacing: 12
             SessionTransportButton {
+                id: repeatTransport
                 objectName: "sessionPlaybackRepeat"
                 Layout.row: transportControls.optionsRow; Layout.column: 0
+                KeyNavigation.tab: transportControls.overArtwork ? null : shuffleTransport
+                KeyNavigation.backtab: transportControls.overArtwork ? null : nextTransport
                 commandName: "repeat"
                 buttonSize: transportControls.buttonSize
             }
             SessionTransportButton {
+                id: shuffleTransport
                 objectName: "sessionPlaybackShuffle"
                 Layout.row: transportControls.optionsRow; Layout.column: 1
+                KeyNavigation.tab: transportControls.overArtwork ? null : favoriteTransport
+                KeyNavigation.backtab: transportControls.overArtwork ? null : repeatTransport
                 commandName: "shuffle"
                 buttonSize: transportControls.buttonSize
             }
             SessionTransportButton {
+                id: favoriteTransport
                 objectName: "sessionArtworkFavorite"
                 Layout.row: transportControls.optionsRow; Layout.column: 2
+                KeyNavigation.tab: transportControls.overArtwork ? null : seekBackTransport
+                KeyNavigation.backtab: transportControls.overArtwork ? null : shuffleTransport
                 commandName: "toggle_favorite"
                 iconName: "heart"
                 buttonSize: transportControls.buttonSize
             }
             SessionTransportButton {
+                id: previousTransport
                 objectName: "sessionPlaybackPrevious"
                 Layout.row: 1; Layout.column: 0
+                KeyNavigation.tab: transportControls.overArtwork ? null : toggleTransport
+                KeyNavigation.backtab: transportControls.overArtwork ? null : seekForwardTransport
                 commandName: "previous"
                 buttonSize: transportControls.buttonSize
             }
             SessionTransportButton {
+                id: toggleTransport
                 objectName: "sessionPlaybackToggle"
                 Layout.row: 1; Layout.column: 1
+                KeyNavigation.tab: transportControls.overArtwork ? null : nextTransport
+                KeyNavigation.backtab: transportControls.overArtwork ? null : previousTransport
                 commandName: screen.state.playback.state === "playing" ? "pause" : "play"
                 buttonSize: transportControls.buttonSize
                 checked: true
             }
             SessionTransportButton {
+                id: nextTransport
                 objectName: "sessionPlaybackNext"
                 Layout.row: 1; Layout.column: 2
+                KeyNavigation.tab: transportControls.overArtwork ? null : repeatTransport
+                KeyNavigation.backtab: transportControls.overArtwork ? null : toggleTransport
                 commandName: "next"
                 buttonSize: transportControls.buttonSize
             }
             SessionTransportButton {
+                id: seekBackTransport
                 objectName: "sessionPlaybackSeekBack"
                 Layout.row: transportControls.seekRow; Layout.column: 0
+                KeyNavigation.tab: transportControls.overArtwork ? null : seekForwardTransport
+                KeyNavigation.backtab: transportControls.overArtwork ? null : favoriteTransport
                 commandName: "seek_back_15"
                 buttonSize: transportControls.buttonSize
             }
             SessionTransportButton {
+                id: seekForwardTransport
                 objectName: "sessionPlaybackSeekForward"
                 Layout.row: transportControls.seekRow; Layout.column: 2
+                KeyNavigation.tab: transportControls.overArtwork ? null : previousTransport
+                KeyNavigation.backtab: transportControls.overArtwork ? null : seekBackTransport
                 commandName: "seek_forward_15"
                 buttonSize: transportControls.buttonSize
             }
@@ -2665,6 +2693,7 @@ Item {
             wrapMode: Text.WordWrap
         }
         GlassButton {
+            id: refreshTransport
             objectName: "trackArtworkPlaybackRefresh"
             visible: screen.state.playback_control.status === "uncertain"
             Layout.alignment: Qt.AlignHCenter
@@ -2739,9 +2768,11 @@ Item {
         compactWidth: 320
         wideWidth: 320
         focus: true
+        onOpened: if (transportLoader.item) transportLoader.item.focusFirstControl()
         onAboutToHide: if (screen.owner) screen.owner.cancelPlaybackIntent()
         background: GlassSurface { elevated: true; popover: !screen.compact }
         contentItem: Loader {
+            id: transportLoader
             active: transportPanel.visible
             sourceComponent: SessionTransportControls {
                 buttonSize: Math.min(screen.compact ? 64 : 72, (transportPanel.availableWidth - 24) / 3)

@@ -472,6 +472,20 @@ def main():
                 assert abs(seek_back.y() - seek_forward.y()) <= 1
                 assert seek_back.y() + seek_back.height() < previous_track.y()
                 assert transport_position.mapToItem(seek_back, 0, transport_position.height()).y() <= 0
+                assert previous_track.property('activeFocus')
+                saved_capabilities = backend.cfg.music_backend_capabilities
+                backend.cfg.music_backend_capabilities = {**saved_capabilities, 'supports_seek': True}
+                owner.changed.emit()
+                assert seek_back.property('enabled') and seek_forward.property('enabled')
+                QQmlExpression(engine.rootContext(), seek_back, 'forceActiveFocus()').evaluate()
+                QTest.keyClick(window, Qt.Key.Key_Tab)
+                assert seek_forward.property('activeFocus')
+                QTest.keyClick(window, Qt.Key.Key_Tab)
+                assert previous_track.property('activeFocus')
+                QTest.keyClick(window, Qt.Key.Key_Backtab, Qt.KeyboardModifier.ShiftModifier)
+                assert seek_forward.property('activeFocus')
+                backend.cfg.music_backend_capabilities = saved_capabilities
+                owner.changed.emit()
                 capture('direct-playback-controls')
 
                 original_session = owner._session
