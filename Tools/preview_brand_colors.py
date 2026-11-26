@@ -17,6 +17,7 @@ from PySide6.QtQuickControls2 import QQuickStyle
 from PySide6.QtTest import QTest
 from shiboken6 import delete
 
+from djconnect_pi import __version__
 from djconnect_pi.app import DJConnectBackend, parse_ask_dj_messages, parse_playlist_items, parse_queue_items
 from djconnect_pi.brand_theme import apply_palette
 from djconnect_pi.config import Config, save_config
@@ -1495,6 +1496,8 @@ def main():
         window.setProperty("activeScreen", "now")
         window.setProperty("aboutOpen", True)
         capture("about")
+        app_version = visual_item(window.contentItem(), "aboutAppVersion")
+        assert app_version.property("visible") and app_version.property("text") == __version__
         device_name = visual_item(window.contentItem(), "aboutDeviceName")
         assert device_name.property("visible") and device_name.property("text") == "Fixture living room Pi"
         website = visual_item(window.contentItem(), "aboutWebsiteLink")

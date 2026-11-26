@@ -14,6 +14,7 @@ import requests
 from PySide6.QtCore import QCoreApplication
 from shiboken6 import delete, isValid
 
+from djconnect_pi import __version__
 from djconnect_pi.app import (
     DJConnectBackend,
     SaveCurrentTrackError,
@@ -3116,6 +3117,15 @@ def test_backend_sync_config_updates_device_name_when_it_is_the_only_change(tmp_
 
     assert backend.deviceName == "Living room Pi"
     settings_changed.assert_called_once()
+
+
+def test_backend_displays_package_version_separately_from_protocol_version(tmp_path: Path) -> None:
+    ensure_app()
+    backend = DJConnectBackend(tmp_path / "config.json")
+    backend.cfg.version = "99.0.0"
+
+    assert backend.version == __version__
+    assert backend.protocolVersion == "99.0.0"
 
 
 def test_switching_logging_off_clears_app_logs_and_hides_the_open_view(tmp_path, monkeypatch):

@@ -39,6 +39,7 @@ from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuick import QQuickWindow
 from PySide6.QtQuickControls2 import QQuickStyle
 
+from . import __version__
 from .artwork_palette import displayed_artwork_tint
 from .brand_theme import apply_palette
 from .config import (
@@ -820,7 +821,7 @@ class DJConnectBackend(QObject):
 
     @Property(str, constant=True)
     def version(self) -> str:
-        return self.cfg.version
+        return __version__
 
     @Property(str, constant=True)
     def protocolVersion(self) -> str:

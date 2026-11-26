@@ -7141,7 +7141,14 @@ BrandWindow {
                     Layout.fillWidth: true
 
                     Text { text: root.tr("version"); color: BrandTheme.colors.muted; font.pixelSize: 20; font.bold: true; horizontalAlignment: Text.AlignRight; Layout.preferredWidth: 190 }
-                    Text { text: djconnect.version; color: BrandTheme.colors.text; font.pixelSize: 20; Layout.fillWidth: true }
+                    Text {
+                        objectName: "aboutAppVersion"
+                        text: djconnect.version
+                        textFormat: Text.PlainText
+                        color: BrandTheme.colors.text
+                        font.pixelSize: 20
+                        Layout.fillWidth: true
+                    }
                     Text { text: root.tr("device_name"); color: BrandTheme.colors.muted; font.pixelSize: 20; font.bold: true; horizontalAlignment: Text.AlignRight; Layout.preferredWidth: 190 }
                     Text {
                         objectName: "aboutDeviceName"
