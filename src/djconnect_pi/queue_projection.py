@@ -17,14 +17,15 @@ def compact_adjacent_tracks(items: list[dict[str, object]]) -> list[dict[str, ob
         position = (item.get("contextUri"), index) if uri and type(index) is int and index >= 0 else None
         key = (
             signature,
+            str(item.get("album") or "").strip().casefold(),
             str(item.get("imageUrl") or "").strip(),
             position,
         )
-        if key != previous:
+        if not uri or key != previous:
             compacted.append(item)
         previous = key
-    # A feed consisting only of replicated current-track placeholders is empty.
-    if len(items) > 1 and len(compacted) == 1:
+    # Keep an actionable row if the provider supplied a queue position.
+    if len(items) > 1 and len(compacted) == 1 and position is None:
         return []
     if len(items) >= 4 and len(signatures) == 1 and not any(signature[0] for signature in signatures):
         return []

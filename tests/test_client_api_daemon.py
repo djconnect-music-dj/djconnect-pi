@@ -27,6 +27,10 @@ def test_client_api_daemon_queue_parser_hides_repeated_current_track() -> None:
     )
 
     assert queue == []
+    positioned = client_api_daemon._parse_queue_items({"queue": [
+        {"title": "Mind Games", "uri": "spotify:track:mind-games", "index": 9},
+    ] * 5})
+    assert [item["index"] for item in positioned] == [9]
 
 
 def test_client_api_daemon_queue_parser_accepts_nested_artist_contract() -> None:
