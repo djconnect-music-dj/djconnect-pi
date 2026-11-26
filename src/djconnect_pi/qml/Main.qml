@@ -185,13 +185,17 @@ BrandWindow {
     property bool askDjClearConfirmOpen: false
     property int askDjClearConfirmationRevision: -1
     property string askDjDraft: ""
+    property var pendingMediaStart: null
     readonly property int askDjDraftContextRevision: djconnect.musicDnaContextRevision
     onAskDjDraftContextRevisionChanged: askDjDraft = ""
     Connections {
         target: djconnect
-        function onProfileChanged() { root.askDjDraft = "" }
-        function onPairedChanged() { root.askDjDraft = "" }
-        function onDemoModeChanged() { root.askDjDraft = "" }
+        function onProfileChanged() { root.askDjDraft = ""; root.pendingMediaStart = null }
+        function onPairedChanged() { root.askDjDraft = ""; root.pendingMediaStart = null }
+        function onDemoModeChanged() { root.askDjDraft = ""; root.pendingMediaStart = null }
+        function onMediaActivityChanged() {
+            if (!djconnect.mediaPlaybackBusy) root.pendingMediaStart = null
+        }
     }
     property bool musicDnaDisableConfirmOpen: false
     property bool musicDnaClearConfirmOpen: false
@@ -228,7 +232,13 @@ BrandWindow {
                 source.forceActiveFocus(Qt.PopupFocusReason)
         })
     }
-    onScreenBlankedChanged: if (screenBlanked) trackArtworkOpen = false
+    onActiveChanged: if (!active) pendingMediaStart = null
+    onScreenBlankedChanged: {
+        if (screenBlanked) {
+            trackArtworkOpen = false
+            pendingMediaStart = null
+        }
+    }
     function showTrackArtwork(fromSession, automatic) {
         if (!trackArtworkViewOpen || (automatic && trackArtworkOpen && !trackArtworkDismissTimer.running))
             return
@@ -1013,7 +1023,6 @@ BrandWindow {
         property var items: []
         property bool searching: false
         property bool keyboardOpen: false
-        property var pendingMediaItem: null
         property var refreshReading: null
         property int selectedMatchIndex: 0
         readonly property bool compact: width < 900
@@ -1089,9 +1098,9 @@ BrandWindow {
             keyboardOpen = showKeyboard
             searchInput.forceActiveFocus()
         }
-        function closeSearch(resetPending) {
-            const restoreFocus = !resetPending && searching && visible
-            if (resetPending) { pendingMediaItem = null; refreshReading = null }
+        function closeSearch(resetReading) {
+            const restoreFocus = !resetReading && searching && visible
+            if (resetReading) refreshReading = null
             keyboardOpen = false
             searching = false
             searchInput.clear()
@@ -1099,8 +1108,9 @@ BrandWindow {
         }
 
         function isPendingMediaItem(item) {
-            const pending = pendingMediaItem
-            if (!pending) return false
+            const start = root.pendingMediaStart
+            if (!start || start.command !== playCommand) return false
+            const pending = start.item
             if (pending === item) return true
             if (playCommand === "start_playlist") return !!pending.uri && pending.uri === item.uri
             return playCommand === "play_context_at" && Number.isInteger(pending.index)
@@ -1148,9 +1158,6 @@ BrandWindow {
             target: djconnect
             function onProfileChanged() { panel.closeSearch(true) }
             function onPairedChanged() { panel.closeSearch(true) }
-            function onMediaActivityChanged() {
-                if (!djconnect.mediaPlaybackBusy) panel.pendingMediaItem = null
-            }
         }
         Connections {
             target: root
@@ -1304,9 +1311,10 @@ BrandWindow {
                         enabled: hasPlayableUri && panel.playbackAvailable && !panel.loading && !djconnect.mediaPlaybackBusy
                         opacity: enabled || starting ? 1 : 0.58
                         onClicked: {
-                            panel.pendingMediaItem = modelData
+                            if (djconnect.mediaPlaybackBusy) return
+                            root.pendingMediaStart = {command: panel.playCommand, item: modelData}
                             djconnect.playMediaItem(panel.playCommand, panel.itemPayload(modelData))
-                            if (!djconnect.mediaPlaybackBusy) panel.pendingMediaItem = null
+                            if (!djconnect.mediaPlaybackBusy) root.pendingMediaStart = null
                         }
                         background: GlassSurface {
                             introduction: true
