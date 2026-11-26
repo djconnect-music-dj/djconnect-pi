@@ -669,6 +669,20 @@ def test_music_dna_shows_profile_mood_separately_from_energy():
                for card in parse_music_dna_profile({"enabled": True, "profile": profile})["sections"])
 
 
+@pytest.mark.parametrize(("danceability", "intensity", "expected"), [
+    (0, 74, [("danceability", 0), ("intensity", 74)]),
+    (True, 101, []),
+    ("25", 50, [("intensity", 50)]),
+])
+def test_music_dna_energy_uses_available_secondary_metrics(danceability, intensity, expected):
+    profile = {"energy_profile": {"energy_percent": 68, "sample_count": 4, "zone": "energy",
+                                  "danceability_percent": danceability, "intensity_percent": intensity}}
+    energy, = parse_music_dna_profile({"enabled": True, "profile": profile})["sections"]
+    assert energy["key"] == "music_dna_card_energy" and energy["metric"] == 68 and energy["count"] == 4
+    assert energy["rows"] == [{"valueKey": "mood_energy"}] + [
+        {"labelKey": "music_dna_card_" + metric, "percent": percent} for metric, percent in expected]
+
+
 def test_music_discovery_feed_renders_backend_sections_in_order_without_assumed_ids() -> None:
     parsed = parse_music_discovery_feed(
         {

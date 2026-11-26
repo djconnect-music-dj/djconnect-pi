@@ -5940,9 +5940,15 @@ def _music_dna_cards(profile: dict[str, object], ha_url: str) -> list[dict[str, 
     percent = energy.get("energy_percent")
     energy_zone = energy.get("zone")
     if type(percent) in (int, float) and 0 <= percent <= 100:
-        card("energy", "waveform", metric=percent, count=energy.get("sample_count"),
-             entries=[{"valueKey": zones[energy_zone.lower()]}]
-             if isinstance(energy_zone, str) and energy_zone.lower() in zones else [])
+        energy_rows = [{"valueKey": zones[energy_zone.lower()]}] if (
+            isinstance(energy_zone, str) and energy_zone.lower() in zones) else []
+        for name in ("danceability", "intensity"):
+            secondary = energy.get(name + "_percent")
+            if type(secondary) in (int, float) and 0 <= secondary <= 100:
+                energy_rows.append({"labelKey": "music_dna_card_" + name, "percent": secondary})
+        sample_count = energy.get("sample_count")
+        card("energy", "mood_energy", metric=percent, entries=energy_rows,
+             count=sample_count if type(sample_count) is int and sample_count >= 0 else None)
     rhythm = block("listening_rhythm")
     card("rhythm", "history", entries=percentages(rhythm.get("dayparts"), "daypart", dayparts),
          groups=grouped("weekdays", percentages(rhythm.get("weekdays"), "weekday", weekdays)))

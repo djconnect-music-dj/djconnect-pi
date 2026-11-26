@@ -4463,6 +4463,7 @@ BrandWindow {
         id: meter
         required property real value
         property string label: ""
+        readonly property real roundedValue: Math.round(value * 10) / 10
         spacing: 5
         RowLayout {
             Layout.fillWidth: true
@@ -4474,7 +4475,11 @@ BrandWindow {
                 Layout.fillWidth: true
                 wrapMode: Text.Wrap
             }
-            Text { text: Number(meter.value.toFixed(1)).toLocaleString(Qt.locale(djconnect.language)) + "%"; color: BrandTheme.colors.text; font.bold: true; font.pixelSize: 17 }
+            Text {
+                text: meter.roundedValue.toLocaleString(Qt.locale(djconnect.language), "f",
+                    Number.isInteger(meter.roundedValue) ? 0 : 1) + "%"
+                color: BrandTheme.colors.text; font.bold: true; font.pixelSize: 17
+            }
         }
         Rectangle {
             Layout.fillWidth: true
@@ -4821,7 +4826,8 @@ BrandWindow {
                                 }
                                 Text {
                                     visible: typeof dnaCard.modelData.count === "number"
-                                    text: visible ? root.tr("music_dna_card_signals").replace("%1", dnaCard.modelData.count) : ""
+                                    text: visible ? root.tr(dnaCard.modelData.key === "music_dna_card_energy"
+                                        ? "music_dna_card_analyses" : "music_dna_card_signals").replace("%1", dnaCard.modelData.count) : ""
                                     textFormat: Text.PlainText
                                     color: BrandTheme.colors.muted
                                     font.pixelSize: 17

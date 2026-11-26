@@ -1316,7 +1316,9 @@ _MUSIC_DNA_CARD_TRANSLATIONS = {
     "music_dna_card_favorite_genres": ('Favorite genres', 'Favoriete genres', 'Lieblingsgenres', 'Genres favoris', 'Géneros favoritos'),
     "music_dna_card_favorite_artists": ('Favorite artists', 'Favoriete artiesten', 'Lieblingskünstler', 'Artistes favoris', 'Artistas favoritos'),
     "music_dna_card_artists": ('Artists', 'Artiesten', 'Künstler', 'Artistes', 'Artistas'),
-    "music_dna_card_energy": ('Taste profile', 'Smaakrichting', 'Geschmacksprofil', 'Profil musical', 'Perfil musical'),
+    "music_dna_card_energy": ('Energy profile', 'Energieprofiel', 'Energieprofil', 'Profil énergétique', 'Perfil de energía'),
+    "music_dna_card_danceability": ('Danceability', 'Dansbaarheid', 'Tanzbarkeit', 'Dansabilité', 'Bailabilidad'),
+    "music_dna_card_intensity": ('Intensity', 'Intensiteit', 'Intensität', 'Intensité', 'Intensidad'),
     "music_dna_card_profile_mood": ('Profile mood', 'Profielstemming', 'Profilstimmung', 'Ambiance du profil', 'Estado de ánimo del perfil'),
     "music_dna_card_rhythm": ('Listening rhythm', 'Luisterritme', 'Hörrhythmus', 'Rythme d’écoute', 'Ritmo de escucha'),
     "music_dna_card_mood_mix": ('Mood mix', 'Mood mix', 'Stimmungsmix', 'Mélange d’ambiances', 'Mezcla de ambientes'),
@@ -1350,6 +1352,7 @@ _MUSIC_DNA_CARD_TRANSLATIONS = {
     "music_dna_card_sunday": ('Sunday', 'Zondag', 'Sonntag', 'Dimanche', 'Domingo'),
     "music_dna_card_average": ('Average %1/100', 'Gemiddeld %1/100', 'Durchschnitt %1/100', 'Moyenne %1/100', 'Media %1/100'),
     "music_dna_card_signals": ('%1 signals', '%1 signalen', '%1 Signale', '%1 signaux', '%1 señales'),
+    "music_dna_card_analyses": ('%1 analyses', '%1 analyses', '%1 Analysen', '%1 analyses', '%1 análisis'),
     "music_dna_card_basis": ('Signals', 'Signalen', 'Signale', 'Signaux', 'Señales'),
     "music_dna_card_plays": ('%1 plays', '%1 keer', '%1 Wiedergaben', '%1 écoutes', '%1 reproducciones'),
 }
