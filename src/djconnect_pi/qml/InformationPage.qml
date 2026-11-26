@@ -9,6 +9,7 @@ Item {
     property bool privacy: false
     property bool feedback: false
     property bool feedbackOpenFailed: false
+    property string fontLicense: ""
     signal back()
     function tr(key) { backend.translationVersion; return backend.t(key) }
     ColumnLayout {
@@ -92,10 +93,38 @@ Item {
                     Text { text: page.tr("legal_oss"); textFormat: Text.PlainText; color: BrandTheme.colors.text; font.pixelSize: 26; font.bold: true; wrapMode: Text.WordWrap; Layout.fillWidth: true }
                     Text { text: page.tr("legal_oss_body"); textFormat: Text.PlainText; color: BrandTheme.colors.text; font.pixelSize: 22; wrapMode: Text.WordWrap; Layout.fillWidth: true }
                     GlassButton { text: page.tr("legal_license"); onClicked: Qt.openUrlExternally("https://github.com/djconnect-music-dj/djconnect-pi/blob/main/LICENSE") }
+                    GlassButton {
+                        id: fontLicenseDisclosure
+                        objectName: "legalFontLicenseDisclosure"
+                        text: page.tr("legal_inter_license")
+                        checkable: true
+                        iconName: checked ? "arrow_down" : "chevron_right"
+                        textAlignment: Text.AlignLeft
+                        wrapText: true
+                        Layout.fillWidth: true
+                        onClicked: if (checked && !page.fontLicense) page.fontLicense = page.backend.bundledFontLicense()
+                    }
+                    TextArea {
+                        objectName: "legalFontLicenseText"
+                        visible: fontLicenseDisclosure.checked
+                        text: visible ? (page.fontLicense || page.tr("legal_license_unavailable")) : ""
+                        textFormat: TextEdit.PlainText
+                        readOnly: true
+                        selectByMouse: true
+                        wrapMode: TextEdit.Wrap
+                        color: BrandTheme.colors.text
+                        font.pixelSize: 17
+                        background: Item {}
+                        Layout.fillWidth: true
+                    }
                 }
             }
         }
     }
-    onVisibleChanged: { feedbackOpenFailed = false; if (visible) scroll.contentItem.contentY = 0 }
+    onVisibleChanged: {
+        feedbackOpenFailed = false
+        fontLicenseDisclosure.checked = false
+        if (visible) scroll.contentItem.contentY = 0
+    }
     onFeedbackChanged: { feedbackOpenFailed = false; scroll.contentItem.contentY = 0 }
 }

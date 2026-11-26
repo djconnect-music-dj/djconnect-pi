@@ -1371,6 +1371,13 @@ class DJConnectBackend(QObject):
                            "body": translate(self.cfg.language, "feedback_issue_template")})
         return QDesktopServices.openUrl(QUrl("https://github.com/djconnect-music-dj/djconnect-pi/issues/new?" + query))
 
+    @Slot(result=str)
+    def bundledFontLicense(self) -> str:
+        try:
+            return files("djconnect_pi").joinpath("fonts", "LICENSE.txt").read_text(encoding="utf-8")
+        except OSError:
+            return ""
+
     @Slot(str)
     @Slot(str, str)
     @Slot(str, str, str)
