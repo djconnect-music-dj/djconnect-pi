@@ -785,6 +785,19 @@ class DJConnectBackend(QObject):
     def trackInsightText(self) -> str:
         return self._track_insight_text
 
+    @Property("QVariantMap", notify=trackInsightChanged)
+    def trackInsightShareDescriptors(self) -> dict[str, str]:
+        descriptors = {}
+        for section in self._track_insight_sections:
+            kind = section.get("kind")
+            if kind not in {"genre", "vibe"} or kind in descriptors:
+                continue
+            candidates = [section.get("body"), *section.get("details", [])]
+            value = next((text for item in candidates if (text := bounded_text(item, 128).strip())), "")
+            if value:
+                descriptors[kind] = value
+        return descriptors
+
     @Property(str, notify=trackInsightChanged)
     def trackInsightShareText(self) -> str:
         if not self._track_insight_title or not self._track_insight_text:
@@ -797,7 +810,9 @@ class DJConnectBackend(QObject):
                     and self._track_insight_deadline <= self._session_controller._clock.now()):
                 return ""
         heading = " — ".join(value for value in (self._track_insight_title, self._track_insight_artist) if value)
-        parts = [heading, self._track_insight_text]
+        descriptors = self.trackInsightShareDescriptors
+        descriptor_line = " · ".join(descriptors[key] for key in ("genre", "vibe") if key in descriptors)
+        parts = [value for value in (heading, descriptor_line, self._track_insight_text) if value]
         if self._demo_mode:
             parts.insert(0, self.tr_key("demo_mode"))
         credit = self._track_insight_verified_credit

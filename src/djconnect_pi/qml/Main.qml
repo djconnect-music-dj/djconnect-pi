@@ -3346,6 +3346,8 @@ BrandWindow {
                             trackTitle: visible ? djconnect.trackInsightTitle : ""
                             artist: visible ? djconnect.trackInsightArtist : ""
                             summary: visible ? djconnect.trackInsightText : ""
+                            genre: visible ? djconnect.trackInsightShareDescriptors.genre || "" : ""
+                            vibe: visible ? djconnect.trackInsightShareDescriptors.vibe || "" : ""
                             artworkUrl: visible ? djconnect.trackInsightImageUrl : ""
                             badge: root.tr(djconnect.demoMode ? "demo_mode" : "track_insight")
                             creditLabel: visible && djconnect.trackInsightVerifiedCredit.url

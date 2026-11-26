@@ -11,6 +11,8 @@ Rectangle {
     required property string artworkUrl
     required property string badge
     required property string creditLabel
+    required property string genre
+    required property string vibe
     property bool animate: false
     property real motionPhase: 0
     readonly property real contentPadding: width * 0.07
@@ -91,6 +93,36 @@ Rectangle {
             font.pixelSize: Math.max(12, card.width * 0.056)
             horizontalAlignment: Text.AlignHCenter; elide: Text.ElideRight
             Layout.fillWidth: true
+        }
+        RowLayout {
+            visible: !!card.genre || !!card.vibe
+            Layout.fillWidth: true
+            spacing: card.width * 0.03
+            Rectangle {
+                visible: !!card.genre
+                Layout.preferredWidth: Math.min(genreLabel.implicitWidth + 12, parent.width * (card.vibe ? 0.47 : 1))
+                Layout.preferredHeight: genreLabel.implicitHeight + 6
+                radius: height / 2
+                color: BrandTheme.alpha(BrandTheme.colors.actionBlue, "30")
+                Text {
+                    id: genreLabel
+                    objectName: "trackInsightShareGenre"
+                    anchors.fill: parent; anchors.leftMargin: 6; anchors.rightMargin: 6
+                    text: card.genre
+                    textFormat: Text.PlainText; color: BrandTheme.colors.text
+                    font.pixelSize: Math.max(12, card.width * 0.049)
+                    verticalAlignment: Text.AlignVCenter; horizontalAlignment: Text.AlignHCenter
+                    elide: Text.ElideRight
+                }
+            }
+            Text {
+                objectName: "trackInsightShareVibe"
+                visible: !!card.vibe
+                text: card.vibe
+                textFormat: Text.PlainText; color: BrandTheme.colors.muted
+                font.pixelSize: Math.max(12, card.width * 0.049)
+                elide: Text.ElideRight; Layout.fillWidth: true
+            }
         }
         Text {
             text: card.summary
