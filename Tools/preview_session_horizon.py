@@ -396,7 +396,8 @@ def main():
                 owner._error = ""
                 owner._sessions = [
                     {"session_id": status.lower(), "lifecycle_status": status,
-                     "created_at": "2026-11-25T10:00:00Z"} for status in ("INTERRUPTED", "ENDED")
+                     "created_at": "2026-11-25T10:00:00Z", "started_at": "2026-11-25T10:15:00Z",
+                     "interrupted_at": "2026-11-25T10:42:00Z"} for status in ("INTERRUPTED", "ENDED")
                 ]
                 owner.changed.emit()
                 QTest.qWait(65)
@@ -408,7 +409,9 @@ def main():
                 for language in LANGUAGES:
                     backend.setLanguage(language)
                     QTest.qWait(65)
-                    assert title.property("text").startswith(TRANSLATIONS[language]["session_title"])
+                    assert "27" in title.property("text") and " – " in title.property("text")
+                    ended_title = one(ended, "sessionArchiveRowTitle").property("text")
+                    assert TRANSLATIONS[language]["session_archive_end_unknown"] in ended_title
                     assert status.property("visible") and status.property("text") == TRANSLATIONS[language]["session_history_interrupted"]
                 assert status.mapToItem(title, 0, 0).y() >= title.height()
                 assert arrow.property("visible") and arrow.mapToItem(title, 0, 0).x() >= title.width()

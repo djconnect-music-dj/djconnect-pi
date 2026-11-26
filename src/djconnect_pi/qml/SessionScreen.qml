@@ -1920,8 +1920,10 @@ Item {
                         }
                     }
                     enabled: !screen.owner.busy && !screen.archiveIntent
-                    text: screen.tr("session_title") + " · " + screen.displayDate(modelData.started_at || modelData.created_at)
-                        + screen.savedDurationSuffix(modelData)
+                    text: {
+                        screen.backend.translationVersion
+                        return screen.owner.formatArchiveTiming(modelData) || screen.tr("session_title")
+                    }
                     onClicked: screen.openArchiveSession(modelData.session_id)
                 }
             }

@@ -62,6 +62,13 @@ from .session_vibecast import VibeCastSender
 from .shared_settings import CHOICES
 
 
+def _saved_end_timestamp(session):
+    end_value = session.get("ended_at")
+    if not end_value and session.get("lifecycle_status") == "INTERRUPTED":
+        end_value = session.get("interrupted_at")
+    return timestamp(end_value)
+
+
 class SessionController(QObject):
     changed = Signal()
     refreshingChanged = Signal()
@@ -338,10 +345,7 @@ class SessionController(QObject):
         if status not in ("ENDED", "INTERRUPTED"):
             return ""
         start = timestamp(session.get("started_at"))
-        end_stamp = session.get("ended_at")
-        if status == "INTERRUPTED" and not end_stamp:
-            end_stamp = session.get("interrupted_at")
-        end = timestamp(end_stamp)
+        end = _saved_end_timestamp(session)
         if start is None or end is None or end < start:
             return ""
         hours, minutes = divmod(int((end - start) // 60), 60)
@@ -353,6 +357,30 @@ class SessionController(QObject):
         if minutes:
             return translate(language, "session_duration_minutes").replace("%1", str(minutes))
         return translate(language, "session_duration_subminute")
+
+    @Slot("QVariantMap", result=str)
+    def formatArchiveTiming(self, session):
+        language = self.backend.cfg.language
+        locale = QLocale(locale_for_language(language))
+        date_format = translate(language, "session_archive_date_format")
+        started = timestamp(session.get("started_at"))
+        anchor = started if started is not None else timestamp(session.get("created_at"))
+        if anchor is None:
+            return ""
+        date = QDateTime.fromMSecsSinceEpoch(int(anchor * 1000)).toLocalTime()
+        title = locale.toString(date, date_format)
+        duration = self.formatSavedDuration(session)
+        if duration:
+            title += " – " + duration
+        start_label = (locale.toString(date, "HH:mm") if started is not None
+                       else translate(language, "session_archive_start_unknown"))
+        ended = _saved_end_timestamp(session)
+        end_label = translate(language, "session_archive_end_unknown")
+        if ended is not None and (started is None or ended >= started):
+            end = QDateTime.fromMSecsSinceEpoch(int(ended * 1000)).toLocalTime()
+            end_format = "HH:mm" if started is not None and date.date() == end.date() else date_format + " HH:mm"
+            end_label = locale.toString(end, end_format)
+        return f"{title} ({start_label} – {end_label})"
 
     @Property("QVariantMap", notify=playbackArtworkChanged)
     def playbackArtwork(self):

@@ -817,6 +817,22 @@ def test_saved_duration_uses_confirmed_timestamps(controller, session, expected)
     assert owner.formatSavedDuration({"started_at": "2026-10-18T12:34:00Z", **session}) == expected
 
 
+def test_archive_timing_labels_unconfirmed_times_and_adds_the_end_date_after_midnight(controller):
+    owner, _ = controller
+    interrupted = {
+        "lifecycle_status": "INTERRUPTED",
+        "created_at": "2026-10-18T12:00:00Z",
+        "started_at": "2026-10-18T12:34:00Z",
+        "interrupted_at": "2026-10-19T14:35:00Z",
+    }
+    complete = owner.formatArchiveTiming(interrupted)
+    assert "26 u 1 min" in complete and complete.count("2026") == 2
+    missing_start = owner.formatArchiveTiming({**interrupted, "started_at": ""})
+    assert "begintijd onbekend" in missing_start and missing_start.count("2026") == 2
+    reversed_order = owner.formatArchiveTiming({**interrupted, "interrupted_at": "2026-10-18T12:33:00Z"})
+    assert "eindtijd onbekend" in reversed_order and reversed_order.count("2026") == 1
+
+
 def paged_timeline(owner):
     from copy import deepcopy
 
