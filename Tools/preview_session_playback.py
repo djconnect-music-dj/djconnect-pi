@@ -528,6 +528,7 @@ def main():
                 QTest.keyClick(window, Qt.Key.Key_Escape)
                 QTest.qWait(120)
                 assert not transport_panel.property('opened') and not intents
+                assert progress.property('activeFocus')
 
                 insight = window.findChild(QObject, 'sessionPlaybackInsight')
                 original_playback = backend.playback

@@ -1807,8 +1807,7 @@ Item {
                             onVisibleChanged: if (!visible && transportPanel) transportPanel.close()
                             onEnabledChanged: if (!enabled && transportPanel) transportPanel.close()
                             onCurrentTrackClicked: {
-                                transportPanel.captureSource(progressButton)
-                                transportPanel.open()
+                                transportPanel.openFromControl(progressButton)
                             }
                             contentItem: RowLayout {
                                 SessionPlaybackPositionBar {
@@ -2768,8 +2767,24 @@ Item {
         compactWidth: 320
         wideWidth: 320
         focus: true
+        property Item openingControl: null
+        property string openingScope: ""
+        function openFromControl(source) {
+            openingControl = source
+            openingScope = screen.playbackMenuScope
+            captureSource(source)
+            open()
+        }
         onOpened: if (transportLoader.item) transportLoader.item.focusFirstControl()
         onAboutToHide: if (screen.owner) screen.owner.cancelPlaybackIntent()
+        onClosed: {
+            const source = openingControl
+            const sameScope = openingScope === screen.playbackMenuScope
+            openingControl = null
+            openingScope = ""
+            if (sameScope && screen.liveViewOpen && !screen.showForecast && source && source.visible && source.enabled)
+                source.forceActiveFocus(Qt.PopupFocusReason)
+        }
         background: GlassSurface { elevated: true; popover: !screen.compact }
         contentItem: Loader {
             id: transportLoader
