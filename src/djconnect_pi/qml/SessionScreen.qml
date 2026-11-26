@@ -2155,7 +2155,8 @@ Item {
             }
             GlassButton {
                 objectName: "sessionReadCurrentHistory"
-                visible: !screen.historical && screen.state.history_available && screen.state.session_id.length > 0
+                visible: !screen.historical && (screen.state.history_available || screen.backend.demoMode)
+                    && screen.state.session_id.length > 0
                 text: screen.tr("session_history_first"); enabled: !screen.owner.busy
                 onClicked: screen.openCurrentHistory()
             }

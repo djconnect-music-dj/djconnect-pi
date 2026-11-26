@@ -851,6 +851,8 @@ class SessionController(QObject):
             self._append_demo_entry("dj_moment", translate(self.backend.cfg.language, "demo_session_welcome"))
         elif action == "end":
             if self._session:
+                if self._timeline.get("session", {}).get("session_id") == self._session["session_id"]:
+                    self._timeline = {}
                 sid = "demo-archive-" + uuid4().hex
                 header = {
                     "session_id": sid, "started_at": self._session["started_at"],
@@ -870,6 +872,18 @@ class SessionController(QObject):
             self._history_loaded = True
         elif action == "timeline" and value in self._demo_archives:
             self._timeline = deepcopy(self._demo_archives[value])
+        elif action in {"timeline_page", "timeline_refresh"}:
+            timeline = self._visible_demo_timeline(value["session_id"])
+            if not timeline:
+                return
+            self._timeline = deepcopy(timeline)
+            self._timeline.pop("selected_entry_id", None)
+            anchor = value.get("entry_id", "")
+            if not any(row["entry_id"] == anchor for row in self._timeline["entries"]):
+                anchor = ""
+            self.changed.emit()
+            self.timelineUpdated.emit(anchor)
+            return
         elif action == "search":
             sid, query = value["session_id"], value["query"]
             timeline = self._visible_demo_timeline(sid)
@@ -889,10 +903,10 @@ class SessionController(QObject):
         self.changed.emit()
 
     def _visible_demo_timeline(self, session_id):
-        if self._timeline.get("session", {}).get("session_id") == session_id:
-            return self._timeline
         if self._session.get("session_id") == session_id:
             return {"session": self._session, "entries": self._demo_flow}
+        if self._timeline.get("session", {}).get("session_id") == session_id:
+            return self._timeline
         return {}
 
     def _append_demo_entry(self, kind, text):

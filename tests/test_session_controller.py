@@ -354,8 +354,20 @@ def test_demo_session_never_uses_server_or_survives_demo_exit(controller):
     owner.search("demo-session", "LISTEN")
     live_match, = owner.state["search"]["matches"]
     assert "<b><u>listen</u></b>" in live_match["highlighted_text"]
+    positions = []
+    owner.timelineUpdated.connect(positions.append)
+    owner.readCurrentHistory()
+    current_timeline = owner.state["timeline"]
+    assert current_timeline["session"]["session_id"] == "demo-session"
+    assert [entry["kind"] for entry in current_timeline["entries"]] == [
+        "dj_moment", "conversation_user", "conversation_dj",
+    ]
+    owner.refreshSaved(live_match["entry_id"])
+    owner.firstEntries()
+    assert positions == ["", live_match["entry_id"], ""]
     owner.end("demo-session")
     assert not owner.state["flow_rows"] and not owner.sendQuestion("No session")
+    assert not owner.state["timeline"]
     assert not owner.state["started_at"]
     assert owner.state["loaded"] and not owner.state["session_id"]
     owner.loadHistory()
