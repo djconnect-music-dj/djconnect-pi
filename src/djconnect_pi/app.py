@@ -2885,6 +2885,13 @@ class DJConnectBackend(QObject):
         self.showToastForContext(self.tr_key("device_id_copied"), "connectivity")
 
     @Slot()
+    def copyPairingCode(self) -> None:
+        if self.paired or self._demo_mode or not self.pairingCode:
+            return
+        QGuiApplication.clipboard().setText(self.pairingCode)
+        self.showToastForContext(self.tr_key("copied"), "connectivity")
+
+    @Slot()
     def clearLogs(self) -> None:
         _LOGGER.info("User cleared logs from touch UI")
         path = Path(self.cfg.log_file)

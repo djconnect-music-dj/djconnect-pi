@@ -6531,25 +6531,44 @@ BrandWindow {
                 border.width: root.liquidGlassEnabled ? 1 : 0
                 border.color: "#48ffffff"
 
-                ColumnLayout {
+                RowLayout {
                     anchors.fill: parent
                     anchors.margins: 16
-                    spacing: 4
+                    spacing: 12
 
-                    Text {
-                        text: root.tr("pairing_code")
-                        color: BrandTheme.colors.muted
-                        font.pixelSize: 18
-                        font.bold: true
+                    ColumnLayout {
                         Layout.fillWidth: true
+                        spacing: 4
+
+                        Text {
+                            text: root.tr("pairing_code")
+                            color: BrandTheme.colors.muted
+                            font.pixelSize: 18
+                            font.bold: true
+                            Layout.fillWidth: true
+                        }
+
+                        Text {
+                            text: djconnect.pairingCode
+                            textFormat: Text.PlainText
+                            color: BrandTheme.colors.text
+                            font.pixelSize: 36
+                            font.bold: true
+                            Layout.fillWidth: true
+                        }
                     }
 
-                    Text {
-                        text: djconnect.pairingCode
-                        color: BrandTheme.colors.text
-                        font.pixelSize: 36
-                        font.bold: true
-                        Layout.fillWidth: true
+                    GlassButton {
+                        objectName: "copyPairingCode"
+                        readonly property string copyLabel: root.tr("copy_pairing_code")
+                        iconName: "copy"; tertiary: true
+                        Layout.preferredWidth: 56
+                        Layout.preferredHeight: 56
+                        Accessible.name: copyLabel
+                        ToolTip.text: copyLabel
+                        ToolTip.visible: hovered
+                        enabled: djconnect.pairingCode.length > 0
+                        onClicked: djconnect.copyPairingCode()
                     }
                 }
             }
