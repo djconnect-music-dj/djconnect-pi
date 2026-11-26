@@ -3944,6 +3944,41 @@ def test_queued_discovery_consent_does_not_enable_music_dna_in_another_profile(t
     send.assert_not_called()
 
 
+@pytest.mark.parametrize("reported_device", ["speaker-a", "speaker-b"])
+def test_now_playing_seek_requires_the_same_observed_output(tmp_path: Path, reported_device: str) -> None:
+    ensure_app()
+    backend = DJConnectBackend(tmp_path / "config.json")
+    backend.cfg.paired = True
+    backend.cfg.device_token = "fixture"
+    backend.cfg.ha_url = "http://fixture.invalid"
+    backend.cfg.active_profile_id = backend.cfg.explicit_profile_id = "fixture"
+    backend.cfg.music_backend = "spotify_direct"
+    backend.cfg.music_backend_available = True
+    backend.cfg.music_backend_revision = 3
+    backend.cfg.music_backend_capabilities = {"supports_seek": True}
+    backend._apply_playback(Playback(uri="fixture:track", duration_seconds=240, output_device_id="speaker-a"))
+    backend._run = Mock()
+    backend._refresh_worker = Mock()
+    transport = backend.djSession.transport
+    transport.playback_status = Mock(return_value={
+        "music_backend": "spotify_direct", "music_backend_revision": 3,
+        "backend_available": True, "music_backend_available": True,
+        "music_backend_capabilities": {"supports_seek": True},
+        "playback": {"uri": "fixture:track", "has_playback": True,
+                     "device": {"id": reported_device, "active": True, "is_restricted": False}},
+    })
+    transport.playback_adjustment = Mock()
+    backend.seekPlayback(15000)
+    backend._run.assert_called_once()
+    backend._run.call_args.args[1]()
+    if reported_device == "speaker-a":
+        transport.playback_adjustment.assert_called_once_with(transport.binding(), "seek_relative", 15000)
+        backend._refresh_worker.assert_called_once()
+    else:
+        transport.playback_adjustment.assert_not_called()
+        backend._refresh_worker.assert_not_called()
+
+
 @pytest.mark.parametrize("transition", ["none", "speaker", "profile", "item", "foreground", "fresh_speaker"])
 def test_control_volume_rechecks_original_context_before_sending(tmp_path: Path, transition: str) -> None:
     ensure_app()

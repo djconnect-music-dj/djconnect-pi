@@ -128,6 +128,10 @@ def main():
             assert time_label.property("text") == "1:15 / 4:00"
             assert position.mapToScene(QPointF(0, position.height())).y() <= controls.mapToScene(QPointF()).y()
             capture("now-playback-position")
+            tap_now_control("nowSeekBack")
+            assert backend.positionSeconds == 60
+            tap_now_control("nowSeekForward")
+            assert backend.positionSeconds == 75
             backend.playback.duration_seconds = 0
             backend.progressChanged.emit()
             assert not position.property("visible") and controls.property("visible")

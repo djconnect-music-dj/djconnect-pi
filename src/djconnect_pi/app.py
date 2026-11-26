@@ -309,6 +309,7 @@ class DJConnectBackend(QObject):
         self._shared_owner_context = self._shared_settings.context()
         self._session_controller.ownerScopeChanged.connect(self._session_owner_changed)
         self._control_volume_serial = 0
+        self._playback_seek_epoch = 0
         self._control_volume_intent = None
         self._control_volume_pending = False
         self._controlVolumeFinished.connect(self._finish_control_volume)
@@ -684,6 +685,14 @@ class DJConnectBackend(QObject):
     @Property(int, notify=progressChanged)
     def durationSeconds(self) -> int:
         return self.playback.duration_seconds
+
+    @Property(bool, notify=settingsChanged)
+    def musicBackendSupportsSeek(self) -> bool:
+        return self.cfg.music_backend_capabilities.get("supports_seek") is True
+
+    @Property(bool, notify=outputDeviceChanged)
+    def playbackSeekOutputKnown(self) -> bool:
+        return bool(output_id(self.playback.output_device_id))
 
     @Property(float, notify=progressChanged)
     def trackProgress(self) -> float:
@@ -1339,6 +1348,7 @@ class DJConnectBackend(QObject):
         if foreground != self._application_foreground:
             self._application_foreground = foreground
             if not foreground:
+                self.cancelPlaybackSeek()
                 self._track_insight_revision += 1
                 self._clear_track_insight()
         self._session_controller.setForeground(foreground)
@@ -1376,6 +1386,68 @@ class DJConnectBackend(QObject):
         self._set_ask_dj_busy(True)
         self._run(self.tr_key("track_insight"), lambda: self._track_insight_worker(playback, scope),
                   done=lambda: self._set_ask_dj_busy(False))
+
+    def _playback_seek_context(self, playback: Playback) -> tuple | None:
+        if (not self.paired or not session_profile_id(self.cfg) or not self.musicBackendAvailable
+                or not self.musicBackendSupportsSeek or not playback.uri or playback.duration_seconds <= 0
+                or not output_id(playback.output_device_id)):
+            return None
+        return (self._private_read_context(), self.cfg.music_backend, self.cfg.music_backend_revision,
+                playback.uri, playback.output_device_id)
+
+    @Slot()
+    def cancelPlaybackSeek(self) -> None:
+        self._playback_seek_epoch += 1
+
+    @Slot(int)
+    def seekPlayback(self, offset_ms: int) -> None:
+        if offset_ms not in (-15000, 15000) or self.playback.duration_seconds <= 0:
+            return
+        if self._demo_mode:
+            self.playback.position_seconds = max(0, min(self.playback.duration_seconds - 1,
+                                                       self.playback.position_seconds + offset_ms // 1000))
+            self.progressChanged.emit()
+            self.djSession.demo_playback_changed()
+            return
+        context = self._playback_seek_context(self.playback)
+        if self.busy or not self._session_controller._foreground or context is None:
+            return
+        transport = self._session_controller.transport
+        try:
+            binding = transport.binding()
+        except SessionError:
+            return
+        self.cancelPlaybackSeek()
+        epoch = self._playback_seek_epoch
+
+        def current() -> bool:
+            return (self._session_controller._foreground and epoch == self._playback_seek_epoch
+                    and context == self._playback_seek_context(self.playback))
+
+        def worker() -> None:
+            if not current():
+                return
+            _, backend, revision, uri, output = context
+            try:
+                status = transport.playback_status(binding)
+                observed = status.get("playback")
+                device = observed.get("device") if isinstance(observed, dict) else None
+                capabilities = status.get("music_backend_capabilities")
+                if (not current() or status.get("music_backend") != backend
+                        or type(status.get("music_backend_revision")) is not int or status["music_backend_revision"] != revision
+                        or status.get("backend_available") is not True or status.get("music_backend_available") is not True
+                        or not isinstance(capabilities, dict) or capabilities.get("supports_seek") is not True
+                        or not isinstance(observed, dict) or observed.get("has_playback") is not True or observed.get("uri") != uri
+                        or not isinstance(device, dict) or device.get("active") is not True
+                        or device.get("is_restricted") is not False or device.get("id") != output):
+                    return
+                transport.playback_adjustment(binding, "seek_relative", offset_ms)
+            except SessionError:
+                return
+            if current():
+                self._refresh_worker()
+
+        self._run(self.tr_key("seek_back_15" if offset_ms < 0 else "seek_forward_15"), worker)
 
     def _control_volume_context(self, playback: Playback) -> tuple | None:
         if self._demo_mode:
@@ -2946,6 +3018,8 @@ class DJConnectBackend(QObject):
             self.versionMismatchChanged.emit()
         old = self.playback
         old_volume_context = self._control_volume_context(old)
+        if self._playback_seek_context(old) != self._playback_seek_context(playback):
+            self.cancelPlaybackSeek()
         self.playback = playback
         if old_volume_context != self._control_volume_context(playback):
             self.cancelControlVolume()
@@ -2977,6 +3051,7 @@ class DJConnectBackend(QObject):
             self.repeatChanged.emit()
         if (
             old.output_device != playback.output_device
+            or old.output_device_id != playback.output_device_id
             or old.output_devices != playback.output_devices
             or old.output_device_details != playback.output_device_details
         ):

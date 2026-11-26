@@ -1510,6 +1510,7 @@ BrandWindow {
         id: nowLoader
         visible: root.activeScreen === "now"
         z: 5
+        onVisibleChanged: if (!visible) djconnect.cancelPlaybackSeek()
         sourceComponent: NowPlayingPage {}
     }
 
@@ -1518,6 +1519,8 @@ BrandWindow {
         objectName: "nowPanel"
         readonly property alias artworkTint: nowArtworkPalette.tint
         readonly property bool playbackActionsAvailable: djconnect.demoMode || (djconnect.paired && djconnect.backendAvailable)
+        readonly property bool seekActionsAvailable: playbackActionsAvailable && djconnect.durationSeconds > 0 && !djconnect.busy
+            && (djconnect.demoMode || (djconnect.musicBackendAvailable && djconnect.playbackSeekOutputKnown))
 
         AppBackground {}
 
@@ -1714,6 +1717,15 @@ BrandWindow {
                     anchors.margins: 10
                     spacing: 10
                     GlassButton {
+                        objectName: "nowSeekBack"
+                        Layout.fillWidth: true
+                        iconName: "seek_back_15"
+                        Accessible.name: root.tr("seek_back_15")
+                        visible: djconnect.demoMode || djconnect.musicBackendSupportsSeek
+                        enabled: nowPanel.seekActionsAvailable
+                        onClicked: djconnect.seekPlayback(-15000)
+                    }
+                    GlassButton {
                         objectName: "nowPreviousTrack"
                         Layout.fillWidth: true
                         iconName: "previous"
@@ -1737,6 +1749,15 @@ BrandWindow {
                         Accessible.name: root.tr("session_playback_next_track")
                         enabled: nowPanel.playbackActionsAvailable
                         onClicked: djconnect.next()
+                    }
+                    GlassButton {
+                        objectName: "nowSeekForward"
+                        Layout.fillWidth: true
+                        iconName: "seek_forward_15"
+                        Accessible.name: root.tr("seek_forward_15")
+                        visible: djconnect.demoMode || djconnect.musicBackendSupportsSeek
+                        enabled: nowPanel.seekActionsAvailable
+                        onClicked: djconnect.seekPlayback(15000)
                     }
                 }
             }
