@@ -3160,6 +3160,24 @@ BrandWindow {
                                     wrapMode: Text.Wrap
                                     Layout.fillWidth: true
                                 }
+                                GlassSurface {
+                                    objectName: "trackInsightPlaybackTime"
+                                    visible: trackInsightSubject.hasPlaybackSubject && djconnect.durationSeconds > 0
+                                        && (!trackInsightSubject.hasInsightSubject || djconnect.trackInsightMatchesPlayback)
+                                    Layout.alignment: root.wallProfile ? Qt.AlignHCenter : Qt.AlignLeft
+                                    implicitWidth: insightTime.implicitWidth + 20
+                                    implicitHeight: insightTime.implicitHeight + 10
+                                    radius: height / 2
+                                    Text {
+                                        id: insightTime
+                                        objectName: "trackInsightPlaybackTimeLabel"
+                                        anchors.centerIn: parent
+                                        text: djconnect.progressLabel.replace("/", " / ")
+                                        color: BrandTheme.colors.muted
+                                        font.pixelSize: root.wallProfile ? 18 : 15
+                                        font.bold: true
+                                    }
+                                }
                             }
                         }
                     }

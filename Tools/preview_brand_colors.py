@@ -543,16 +543,22 @@ def main():
             subject_title = visual_item(subject, "trackInsightSubjectTitle")
             assert subject.property("visible") and subject_title.property("text") == backend.title
             with patch("djconnect_pi.app.subprocess.run"):
-                backend._apply_playback(Playback(title="Fixture next track", artist="Fixture artist", uri="fixture:next-track"))
+                backend._apply_playback(Playback(title="Fixture next track", artist="Fixture artist", uri="fixture:next-track",
+                                                 position_seconds=75, duration_seconds=240))
             QTest.qWait(65)
             assert subject_title.property("text") == "Fixture next track"
             assert visual_item(subject, "trackInsightSubjectMetadata").property("text") == "Fixture artist"
+            time_chip = visual_item(subject, "trackInsightPlaybackTime")
+            time_label = visual_item(time_chip, "trackInsightPlaybackTimeLabel")
+            assert time_chip.property("visible") and time_label.property("text") == "1:15 / 4:00"
+            capture("track-insight-playback-position")
             assert not analysis_text.property("visible")
         backend._set_ask_dj_busy(False)
         with (patch.object(backend, "_sync_config_from_disk"), patch.object(backend, "_run") as request,
               patch("djconnect_pi.app.subprocess.run")):
             backend._apply_playback(Playback(title="Playing fixture", uri="fixture:auto-first", is_playing=True))
             QTest.qWait(65)
+            assert not time_chip.property("visible")
             request.assert_called_once()
             backend._apply_playback(Playback(title="Following fixture", uri="fixture:auto-next", is_playing=True))
             QTest.qWait(65)

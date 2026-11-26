@@ -606,6 +606,10 @@ class DJConnectBackend(QObject):
     def trackInsightTitle(self) -> str:
         return self._track_insight_title
 
+    @Property(bool, notify=trackInsightChanged)
+    def trackInsightMatchesPlayback(self) -> bool:
+        return self._demo_mode or self._track_insight_result_scope == self._track_insight_scope()
+
     @Property(str, notify=trackInsightPlaybackItemChanged)
     def trackInsightPlaybackItemId(self) -> str:
         uri = self.playback.uri.strip()
