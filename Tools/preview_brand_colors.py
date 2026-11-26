@@ -10,8 +10,8 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 import requests
-from PySide6.QtCore import Q_ARG, Q_RETURN_ARG, QMetaObject, QObject, QPointF, Qt, QTimer, qInstallMessageHandler
-from PySide6.QtGui import QAccessible, QGuiApplication, QKeySequence
+from PySide6.QtCore import Q_ARG, Q_RETURN_ARG, QMetaObject, QObject, QPointF, Qt, QTimer, QUrl, Slot, qInstallMessageHandler
+from PySide6.QtGui import QAccessible, QDesktopServices, QGuiApplication, QKeySequence
 from PySide6.QtQml import QQmlApplicationEngine, QQmlExpression
 from PySide6.QtQuickControls2 import QQuickStyle
 from PySide6.QtTest import QTest
@@ -28,6 +28,16 @@ from djconnect_pi.session_transport import SessionError
 from djconnect_pi.update_ui import UpdateUiBackend
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+class RecordedUrls(QObject):
+    def __init__(self):
+        super().__init__()
+        self.urls = []
+
+    @Slot(QUrl)
+    def record(self, url):
+        self.urls.append(url.toString())
 
 
 def main():
@@ -1484,6 +1494,16 @@ def main():
         window.setProperty("activeScreen", "now")
         window.setProperty("aboutOpen", True)
         capture("about")
+        website = visual_item(window.contentItem(), "aboutWebsiteLink")
+        assert website.property("visible") and website.property("enabled")
+        recorded = RecordedUrls()
+        QDesktopServices.setUrlHandler("https", recorded, "record")
+        try:
+            point = website.mapToScene(QPointF(website.width() / 2, website.height() / 2)).toPoint()
+            QTest.mouseClick(window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, point)
+            assert recorded.urls == ["https://djconnect.dev"], (width, point, recorded.urls)
+        finally:
+            QDesktopServices.unsetUrlHandler("https")
         window.setProperty("aboutOpen", False)
         backend.cfg.log_level = "INFO"
         log_path = Path(backend.cfg.log_file)

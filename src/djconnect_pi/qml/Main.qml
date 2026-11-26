@@ -7147,7 +7147,13 @@ BrandWindow {
                     Text { text: root.tr("client_type"); color: BrandTheme.colors.muted; font.pixelSize: 20; font.bold: true; horizontalAlignment: Text.AlignRight; Layout.preferredWidth: 190 }
                     Text { text: djconnect.clientType; color: BrandTheme.colors.text; font.pixelSize: 20; Layout.fillWidth: true }
                     Text { text: root.tr("website"); color: BrandTheme.colors.muted; font.pixelSize: 20; font.bold: true; horizontalAlignment: Text.AlignRight; Layout.preferredWidth: 190 }
-                    Text { text: "https://djconnect.dev"; color: BrandTheme.colors.text; font.pixelSize: 20; Layout.fillWidth: true; elide: Text.ElideRight }
+                    GlassButton {
+                        objectName: "aboutWebsiteLink"
+                        text: "https://djconnect.dev"
+                        iconName: "globe"
+                        Layout.alignment: Qt.AlignLeft
+                        onClicked: Qt.openUrlExternally(text)
+                    }
                     Text { text: root.tr("web_address"); color: BrandTheme.colors.muted; font.pixelSize: 20; font.bold: true; horizontalAlignment: Text.AlignRight; Layout.preferredWidth: 190 }
                     Text { text: djconnect.webPortalUrl; color: BrandTheme.colors.text; font.pixelSize: 18; Layout.fillWidth: true; elide: Text.ElideMiddle }
                     Text { text: root.tr("device_id"); color: BrandTheme.colors.muted; font.pixelSize: 20; font.bold: true; horizontalAlignment: Text.AlignRight; Layout.preferredWidth: 190 }
