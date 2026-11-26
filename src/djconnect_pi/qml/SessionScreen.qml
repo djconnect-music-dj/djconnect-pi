@@ -2314,10 +2314,11 @@ Item {
                     readonly property bool volumeKnown: typeof modelData.volume_percent === "number"
                     readonly property string volumeLabel: volumeKnown ? modelData.volume_percent + "%" : "–"
                     width: outputChoices.width
-                    text: modelData.name + (screen.compact && modelData.active ? " · " + screen.tr("session_output_current") : "")
+                    text: modelData.name
                     Accessible.name: modelData.name + (modelData.active ? " · " + screen.tr("session_output_current") : "")
                     Accessible.description: volumeKnown ? screen.tr("volume") + " " + volumeLabel : ""
                     checked: modelData.active
+                    cornerRadius: 14
                     opacity: modelData.active ? 1 : (enabled ? 1 : 0.4)
                     enabled: !!screen.state.playback_control.enabled && !modelData.active
                     implicitHeight: Math.max(56, outputChoiceLabels.implicitHeight + 28)
@@ -2325,30 +2326,32 @@ Item {
                         spacing: 12
                         FeatureIcon {
                             objectName: "sessionOutputChoiceSpeaker"
-                            visible: !screen.compact
                             iconName: "speaker"
                             Layout.preferredWidth: 24; Layout.preferredHeight: 24
                         }
                         ColumnLayout {
                             id: outputChoiceLabels
                             Layout.fillWidth: true
+                            Layout.minimumWidth: 0
                             spacing: 2
                             Text {
-                                text: outputChoice.text; textFormat: Text.PlainText; wrapMode: Text.WordWrap
+                                objectName: "sessionOutputChoiceName"
+                                text: outputChoice.text; textFormat: Text.PlainText; wrapMode: Text.Wrap
                                 font: outputChoice.font; color: BrandTheme.colors.text
                                 Layout.fillWidth: true
-                                horizontalAlignment: screen.compact ? Text.AlignHCenter : Text.AlignLeft
+                                horizontalAlignment: Text.AlignLeft
                             }
                             Text {
                                 objectName: "sessionOutputChoiceVolume"
                                 text: outputChoice.volumeLabel; textFormat: Text.PlainText
                                 color: BrandTheme.colors.muted; font.pixelSize: 15
                                 Layout.fillWidth: true
-                                horizontalAlignment: screen.compact ? Text.AlignHCenter : Text.AlignLeft
+                                horizontalAlignment: Text.AlignLeft
                                 Accessible.ignored: true
                             }
                         }
                         Text {
+                            objectName: "sessionOutputChoiceCheck"
                             visible: outputChoice.modelData.active
                             text: "✓"; color: BrandTheme.colors.text; font.pixelSize: 20
                             Accessible.ignored: true

@@ -453,7 +453,8 @@ def main():
                 })
                 owner.transport.playback_status.return_value = observed
                 owner.transport.playback_outputs = Mock(return_value={**observed, 'devices': [
-                    {'id': 'synthetic-output', 'name': speaker_name, 'active': True, 'cached': False, 'is_restricted': False},
+                    {'id': 'synthetic-output', 'name': speaker_name, 'active': True, 'cached': False, 'is_restricted': False,
+                     'supports_volume': True, 'volume_percent': 11},
                     {'id': 'synthetic-alternative', 'name': 'Synthetic second speaker', 'active': False, 'cached': False, 'is_restricted': False},
                 ]})
                 owner.changed.emit()
@@ -477,9 +478,20 @@ def main():
                 assert output_label.mapToItem(output_shortcut, 0, output_label.height()).y() <= output_shortcut.height()
                 selected_output = visual(window.contentItem(), 'sessionOutputChoice-synthetic-output')
                 assert selected_output.property('checked') and not selected_output.property('enabled')
-                speaker_icon = visual(selected_output, 'sessionOutputChoiceSpeaker')
-                assert speaker_icon.property('visible') == (width == 1200)
-                assert speaker_icon.property('iconName') == 'speaker'
+                alternative_output = visual(window.contentItem(), 'sessionOutputChoice-synthetic-alternative')
+                assert alternative_output.property('enabled') and not alternative_output.property('checked')
+                for row, name, volume, active in (
+                    (selected_output, speaker_name, '11%', True),
+                    (alternative_output, 'Synthetic second speaker', '–', False),
+                ):
+                    speaker_icon = visual(row, 'sessionOutputChoiceSpeaker')
+                    row_name = visual(row, 'sessionOutputChoiceName')
+                    row_volume = visual(row, 'sessionOutputChoiceVolume')
+                    check = visual(row, 'sessionOutputChoiceCheck')
+                    assert speaker_icon.property('visible') and speaker_icon.property('iconName') == 'speaker'
+                    assert row_name.property('text') == name and not row_name.property('truncated')
+                    assert row_volume.property('text') == volume and check.property('visible') == active
+                    assert row_name.mapToItem(row, 0, 0).x() == row_volume.mapToItem(row, 0, 0).x()
                 capture('direct-output-inventory')
                 click('sessionOutputClose')
                 QTest.qWait(120)
