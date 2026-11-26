@@ -400,9 +400,15 @@ def main():
                 owner._archive_search = {"query": "fixture", "complete": True, "sessions": [
                     {"session_id": "hidden-on-current-page", "lifecycle_status": "ENDED",
                      "created_at": "2026-11-25T10:00:00Z", "_history_deadline": owner._clock.now() + 60},
+                    {"session_id": "second-archive-match", "lifecycle_status": "ENDED",
+                     "created_at": "2026-11-24T10:00:00Z", "_history_deadline": owner._clock.now() + 60},
                 ]}
                 owner.changed.emit()
                 QTest.qWait(65)
+                QTest.keyClick(window, Qt.Key.Key_Up)
+                assert archive_panel.property("selectedMatchId") == "second-archive-match"
+                QTest.keyClick(window, Qt.Key.Key_Down)
+                assert archive_panel.property("selectedMatchId") == "hidden-on-current-page"
                 search_scroll = window.findChild(QObject, "sessionSearchScroll")
                 cached_results = owner.archiveSearchState
                 with patch.object(owner, "_launch") as verify:

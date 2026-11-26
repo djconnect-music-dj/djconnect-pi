@@ -2881,12 +2881,12 @@ Item {
             screen.owner.clearArchiveSearch()
         }
         function moveMatch(delta) {
-            var count = matches.length
-            if (!count) return
-            var index = selectedMatchIndex < 0 ? (delta < 0 ? count - 1 : 0)
+            const count = matches.length
+            if (!matchingQuery || !count) return false
+            const index = selectedMatchIndex < 0 ? (delta < 0 ? count - 1 : 0)
                 : (selectedMatchIndex + delta + count) % count
-            var card = (screen.archiveSearchAvailable ? archiveSearchRows : searchRows).itemAt(index)
-            if (!card) return
+            const card = (screen.archiveSearchAvailable ? archiveSearchRows : searchRows).itemAt(index)
+            if (!card) return false
             selectedMatchId = matchId(card.modelData)
             var flick = searchScroll.contentItem
             flick.cancelFlick()
@@ -2894,6 +2894,7 @@ Item {
             var top = flick.contentY + card.mapToItem(flick, 0, 0).y
             flick.contentY = Math.max(0, Math.min(top, flick.contentHeight - flick.height))
             screen.rememberSearch()
+            return true
         }
         readonly property int bodyMargin: keyboardVisible ? 20 : 0
         function submitSearch() {
@@ -2934,6 +2935,8 @@ Item {
                     onTextEdited: searchPanel.resetSearch()
                     TapHandler { onTapped: searchPanel.keyboardVisible = true }
                     onAccepted: searchPanel.submitSearch()
+                    Keys.onUpPressed: function(event) { event.accepted = searchPanel.moveMatch(-1) }
+                    Keys.onDownPressed: function(event) { event.accepted = searchPanel.moveMatch(1) }
                 }
                 GlassButton {
                     iconName: screen.owner.searchBusy ? "" : "search"
