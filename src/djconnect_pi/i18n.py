@@ -1693,6 +1693,8 @@ _SESSION_COMPOSER_TRANSLATIONS = {
     "ha_connection_unavailable": ("Connection unavailable", "Verbinding niet beschikbaar", "Verbindung nicht verfügbar", "Connexion indisponible", "Conexión no disponible"),
     "ha_transport_http": ("HTTP", "HTTP", "HTTP", "HTTP", "HTTP"),
     "ha_transport_https": ("HTTPS · TLS", "HTTPS · TLS", "HTTPS · TLS", "HTTPS · TLS", "HTTPS · TLS"),
+    "privacy_full_statement": ("Full privacy statement", "Volledige privacyverklaring", "Vollständige Datenschutzerklärung", "Déclaration de confidentialité complète", "Declaración de privacidad completa"),
+    "privacy_open_failed": ("Could not open the privacy statement.", "De privacyverklaring kon niet worden geopend.", "Die Datenschutzerklärung konnte nicht geöffnet werden.", "Impossible d’ouvrir la déclaration de confidentialité.", "No se pudo abrir la declaración de privacidad."),
     "session_connection_offline": ("DJ Session is offline", "DJ-sessie is offline", "DJ-Session ist offline", "Session DJ hors ligne", "Sesión DJ sin conexión"),
     "session_connection_retrying": ("Reconnecting to the DJ Session", "Opnieuw verbinden met de DJ-sessie", "Verbindung zur DJ-Session wird wiederhergestellt", "Reconnexion à la session DJ", "Reconectando con la sesión DJ"),
     "music_backend_available_state": ("Available", "Beschikbaar", "Verfügbar", "Disponible", "Disponible"),

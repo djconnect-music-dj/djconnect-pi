@@ -1240,6 +1240,13 @@ class DJConnectBackend(QObject):
                            "body": translate(self.cfg.language, "feedback_issue_template")})
         return QDesktopServices.openUrl(QUrl("https://github.com/djconnect-music-dj/djconnect-pi/issues/new?" + query))
 
+    @Slot()
+    def openPrivacyStatement(self) -> None:
+        language = normalize_language(self.cfg.language)
+        path = "privacy" if language == "nl" else f"{language}/privacy"
+        if not QDesktopServices.openUrl(QUrl(f"https://djconnect.dev/{path}")):
+            self.showToastForContext(self.tr_key("privacy_open_failed"), "connectivity")
+
     @Slot(str, result=str)
     def t(self, key: str) -> str:
         return self.tr_key(key)

@@ -45,6 +45,13 @@ Item {
                         model: ["privacy_data_body", "privacy_tokens_body", "privacy_ai_body"]
                         Text { required property string modelData; text: page.tr(modelData); textFormat: Text.PlainText; color: BrandTheme.colors.text; font.pixelSize: 22; wrapMode: Text.WordWrap; Layout.fillWidth: true }
                     }
+                    GlassButton {
+                        objectName: "privacyOpenStatement"
+                        text: page.tr("privacy_full_statement")
+                        iconName: "globe"
+                        Layout.fillWidth: true
+                        onClicked: page.backend.openPrivacyStatement()
+                    }
                 }
                 GlassCard {
                     visible: !page.privacy && !page.feedback
