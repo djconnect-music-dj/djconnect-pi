@@ -672,6 +672,7 @@ def main():
             with (patch.object(backend.client, "music_dna_profile", side_effect=[
                       {"success": True, "enabled": False, "profile": {}},
                       requests.ReadTimeout,
+                      {"success": True, "enabled": False, "profile": {}},
                   ]), patch.object(backend, "_persist_backend_summary")):
                 request.call_args.args[1]()
                 request.call_args.kwargs["done"]()
@@ -682,6 +683,16 @@ def main():
                 request.call_args.args[1]()
                 request.call_args.kwargs["done"]()
                 assert backend.toastText == backend.t("music_dna_profile_unavailable") and unavailable.property("visible")
+                recovery = window.findChild(QObject, "musicDnaRecoveryTimer")
+                assert recovery.property("running")
+                backend.hideToast()
+                recovery.setProperty("interval", 25)
+                QTest.qWait(85)
+                assert request.call_count == 3 and not recovery.property("running")
+                request.call_args.args[1]()
+                request.call_args.kwargs["done"]()
+                assert opt_in.property("visible") and not backend.toastVisible
+                assert not backend.musicDnaNeedsRecovery and not recovery.property("running")
         backend.cfg.paired, backend.cfg.device_token = False, ""
         backend.pairedChanged.emit()
         backend._apply_music_dna_data({"success": True, "enabled": False, "profile": {}})

@@ -125,8 +125,13 @@ class _ProfileReadResult(dict):
         self.owner_context = context
 
 
-class _MusicDnaRefreshResult(_ProfileReadResult):
-    """Result of an explicit refresh that needs a user-visible outcome."""
+class _MusicDnaProfileResult(_ProfileReadResult):
+    """Profile read outcome and local refresh behavior, outside the wire payload."""
+
+    def __init__(self, data, context, *, manual: bool, retryable: bool):
+        super().__init__(data, context)
+        self.manual = manual
+        self.retryable = retryable
 
 
 class _TrackInsightResult(dict):
@@ -267,6 +272,7 @@ class DJConnectBackend(QObject):
         self._music_dna_updated_at = ""
         self._music_dna_summary = ""
         self._music_dna_error = ""
+        self._music_dna_needs_recovery = False
         self._music_dna_sections: list[dict[str, object]] = []
         self._music_dna_busy = False
         self._music_discovery_items: list[dict[str, object]] = []
@@ -562,6 +568,10 @@ class DJConnectBackend(QObject):
     @Property(str, notify=musicDnaChanged)
     def musicDnaError(self) -> str:
         return self._music_dna_error
+
+    @Property(bool, notify=musicDnaChanged)
+    def musicDnaNeedsRecovery(self) -> bool:
+        return self._music_dna_needs_recovery
 
     @Property(str, notify=musicDnaChanged)
     def musicDnaSummary(self) -> str:
@@ -2746,6 +2756,7 @@ class DJConnectBackend(QObject):
         if ticket is not None and ticket != current:
             return
         ticket = current
+        retryable = False
         try:
             data = self.client.music_dna_profile()
             if ticket != self._private_read_context():
@@ -2757,10 +2768,12 @@ class DJConnectBackend(QObject):
             raise
         except ProfileContextError as exc:
             data = {"success": False, "error": exc.code}
-        except (DJConnectError, requests.RequestException):
+        except (BackendUnavailable, requests.RequestException):
             data = {"success": False, "error": "music_dna_unavailable"}
-        result = _MusicDnaRefreshResult(data, ticket) if manual else self._profile_read_result(data, ticket)
-        self._musicDnaReady.emit(result)
+            retryable = True
+        except DJConnectError:
+            data = {"success": False, "error": "music_dna_unavailable"}
+        self._musicDnaReady.emit(_MusicDnaProfileResult(data, ticket, manual=manual, retryable=retryable))
 
     def _music_dna_settings_worker(self, *, ticket=None, **settings: object) -> None:
         current = self._private_read_context()
@@ -3425,6 +3438,7 @@ class DJConnectBackend(QObject):
         self._music_dna_updated_at = ""
         self._music_dna_summary = ""
         self._music_dna_error = ""
+        self._music_dna_needs_recovery = False
         self._music_dna_sections = []
         self._set_music_discovery_items([])
         self._music_discovery_empty_text = ""
@@ -3482,6 +3496,8 @@ class DJConnectBackend(QObject):
             return
         if not isinstance(data, dict):
             return
+        profile_read = isinstance(data, _MusicDnaProfileResult)
+        self._music_dna_needs_recovery = profile_read and data.retryable
         if data.get("success") is False:
             code = data.get("error")
             key = "session_profile_missing" if isinstance(code, str) and code in PROFILE_ERROR_CODES | {"music_dna_context_changed"} else "backend_unavailable"
@@ -3490,7 +3506,7 @@ class DJConnectBackend(QObject):
             self._music_dna_sections = []
             self._music_dna_updated_at = ""
             self.musicDnaChanged.emit()
-            if isinstance(data, _MusicDnaRefreshResult):
+            if profile_read and data.manual:
                 notice_key = key if key == "session_profile_missing" else "music_dna_profile_unavailable"
                 self._show_toast(self.tr_key(notice_key), 2200, "musicdna")
             return
@@ -3509,7 +3525,7 @@ class DJConnectBackend(QObject):
         self._music_dna_sections = list(parsed["sections"])
         self._set_backend_available(True)
         self.musicDnaChanged.emit()
-        if isinstance(data, _MusicDnaRefreshResult):
+        if profile_read and data.manual:
             notice_key = "music_dna_updated" if self._music_dna_loaded else "music_dna_profile_unavailable"
             self._show_toast(self.tr_key(notice_key), 2200, "musicdna")
 

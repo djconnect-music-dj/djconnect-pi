@@ -4397,10 +4397,19 @@ BrandWindow {
         color: "transparent"
 
         ProfileReadOnOpen {
+            id: musicDnaProfileRead
             surfaceVisible: musicDnaPanel.visible
             busy: djconnect.musicDnaBusy
             loaded: djconnect.musicDnaLoaded
             onRequested: djconnect.loadMusicDna()
+        }
+
+        Timer {
+            objectName: "musicDnaRecoveryTimer"
+            interval: 30000
+            running: musicDnaProfileRead.canLoadProfile && djconnect.musicDnaNeedsRecovery
+            repeat: true
+            onTriggered: djconnect.loadMusicDna()
         }
 
         ModalBlocker {}
