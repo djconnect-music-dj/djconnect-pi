@@ -4484,9 +4484,10 @@ BrandWindow {
 
         function moveMatch(offset) {
             if (!matches.length)
-                return
+                return false
             selectMatch((selectedMatch + offset + matches.length) % matches.length)
             centerSelectedMatch()
+            return true
         }
 
         ModalBlocker {}
@@ -4582,6 +4583,8 @@ BrandWindow {
                             else
                                 askDjPanel.moveMatch(1)
                         }
+                        Keys.onUpPressed: function(event) { event.accepted = askDjPanel.moveMatch(-1) }
+                        Keys.onDownPressed: function(event) { event.accepted = askDjPanel.moveMatch(1) }
                         Keys.onEscapePressed: {
                             if (askDjPanel.searchKeyboardOpen)
                                 askDjPanel.dismissSearchKeyboard()

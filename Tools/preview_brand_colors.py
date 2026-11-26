@@ -698,7 +698,10 @@ def main():
         backend.pairedChanged.emit()
         backend._set_demo_music_dna(True)
         backend._ask_dj_messages = parse_ask_dj_messages({"messages": [
-            {"id": "ask-fixture", "role": "user", "text": "Previous question"},
+            {"id": "ask-first", "role": "user", "text": "First question"},
+            {"id": "ask-second", "role": "user", "text": "Second question"},
+            {"id": "ask-third", "role": "user", "text": "Third question"},
+            {"id": "ask-unrelated", "role": "assistant", "text": "An unrelated reply"},
         ]})
         backend.askDjChanged.emit()
         window.setProperty("activeScreen", "askdj")
@@ -711,6 +714,15 @@ def main():
         find_input = visual_item(ask_dj, "askDjSearchInput")
         assert ask_dj.property("searchOpen") and not ask_dj.property("searchKeyboardOpen")
         assert find_input.property("activeFocus") and draft.property("text") == "Unsent draft"
+        find_input.setProperty("text", "question")
+        ask_count = visual_item(ask_dj, "askDjSearchCount")
+        assert ask_count.property("text") == "1/3"
+        QTest.keyClick(window, Qt.Key.Key_Up)
+        assert ask_count.property("text") == "3/3" and ask_dj.property("selectedMessageId") == "ask-third"
+        QTest.keyClick(window, Qt.Key.Key_Down)
+        assert ask_count.property("text") == "1/3" and ask_dj.property("selectedMessageId") == "ask-first"
+        QTest.keyClick(window, Qt.Key.Key_Return)
+        assert ask_count.property("text") == "2/3" and ask_dj.property("selectedMessageId") == "ask-second"
         QTest.keyClick(window, Qt.Key.Key_Escape)
         assert not ask_dj.property("searchOpen") and draft.property("text") == "Unsent draft"
         backend.setLanguage("nl")
