@@ -6943,26 +6943,33 @@ BrandWindow {
         sourceComponent: FocusScope {
             id: artworkOverlay
             objectName: "trackArtworkOverlay"
+            readonly property bool playbackButtonsEnabled: !!sharedSessionScreen.state.playback_control.enabled
+            onPlaybackButtonsEnabledChanged: {
+                if (!playbackButtonsEnabled) Qt.callLater(restoreControlFocus)
+            }
             function focusOverlay() {
                 if (root.trackArtworkOpeningControl) closeArtworkButton.forceActiveFocus(Qt.PopupFocusReason)
                 else forceActiveFocus()
             }
-            function focusAfterControlsLost() {
-                if (!root.trackArtworkOpen || root.trackArtworkCanControl || !visible) return
-                if (!closeArtworkButton.activeFocus && !expandedSource.spotifyFocusTarget.activeFocus)
-                    closeArtworkButton.forceActiveFocus(Qt.PopupFocusReason)
+            function restoreControlFocus() {
+                if (!root.trackArtworkOpen || !visible || activeControls().includes(root.activeFocusItem)) return
+                const fallback = artworkControlsToggle.enabled ? artworkControlsToggle : closeArtworkButton
+                fallback.forceActiveFocus(Qt.PopupFocusReason)
             }
             Connections {
                 target: root
                 function onTrackArtworkCanControlChanged() {
-                    if (!root.trackArtworkCanControl) Qt.callLater(artworkOverlay.focusAfterControlsLost)
+                    if (!root.trackArtworkCanControl) Qt.callLater(artworkOverlay.restoreControlFocus)
                 }
             }
-            function moveControlFocus(backward) {
+            function activeControls() {
                 const playback = artworkTransportLoader.item
-                const targets = [closeArtworkButton, artworkControlsToggle]
+                return [closeArtworkButton, artworkControlsToggle]
                     .concat(playback ? playback.artworkFocusOrder : [], [expandedSource.spotifyFocusTarget])
                     .filter(control => control.visible && control.enabled && control.activeFocusOnTab)
+            }
+            function moveControlFocus(backward) {
+                const targets = activeControls()
                 const index = targets.indexOf(root.activeFocusItem)
                 const next = index < 0 ? (backward ? targets.length - 1 : 0)
                     : (index + (backward ? -1 : 1) + targets.length) % targets.length
