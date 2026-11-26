@@ -579,6 +579,10 @@ def main():
                 ]
                 owner.changed.emit()
                 QTest.qWait(65)
+                archive_more = one(screen, "sessionArchiveMore")
+                archive_more_spinner = one(screen, "sessionArchiveMoreSpinner")
+                assert archive_more.property("enabled") and not archive_more_spinner.property("visible")
+                more_size = archive_more.size()
                 with patch.object(owner, "_launch", side_effect=start_history_read) as archive_read:
                     drag_scroll(window, archive_scroll, touch, -65)
                     archive_read.assert_not_called()
@@ -588,7 +592,12 @@ def main():
                     drag_scroll(window, archive_scroll, touch, -230)
                     QTest.qWait(350)
                     archive_read.assert_called_once_with("history_more", owner._archive_request(2))
+                    assert archive_more_spinner.property("running") and archive_more.property("opacity") == 0
+                    assert archive_more.size() == more_size and not archive_more.property("enabled")
+                    assert not one(screen, "sessionHistoryBusy").property("visible")
                 owner._set_running()
+                owner.changed.emit()
+                assert archive_more.property("enabled") and not archive_more_spinner.property("visible")
                 owner._history_cursor = ""
                 owner._sessions = []
                 owner._error = "unavailable"

@@ -653,6 +653,7 @@ Item {
     }
     property var archiveIntent: null
     property bool archiveReadActive: false
+    property bool archiveMoreLoading: false
     property var archiveReturn: null
     property var archiveDetailReturn: null
     property string archiveLayoutMark: ""
@@ -663,7 +664,7 @@ Item {
         archiveLayoutMark = ""; archivePositionTries = 0; archivePositionApplied = false
         archivePosition.restart()
     }
-    function cancelArchiveRead() { archiveRead.stop(); archivePosition.stop(); archiveIntent = null; archiveReadActive = false; archiveReturn = null }
+    function cancelArchiveRead() { archiveRead.stop(); archivePosition.stop(); archiveIntent = null; archiveReadActive = false; archiveMoreLoading = false; archiveReturn = null }
     function rememberArchive() {
         archiveReturn = null
         var flick = historyScroll.contentItem
@@ -722,6 +723,8 @@ Item {
         rememberArchive()
         archiveReadActive = true
         owner.moreHistory()
+        archiveReadActive = owner.busy
+        archiveMoreLoading = archiveReadActive
     }
     Timer {
         id: archiveRead; interval: 0
@@ -1120,7 +1123,10 @@ Item {
             screen.scheduleArchivePosition()
         }
         function onChanged() {
-            if (!screen.owner.busy) screen.archiveReadActive = false
+            if (!screen.owner.busy) {
+                screen.archiveReadActive = false
+                screen.archiveMoreLoading = false
+            }
             if (!screen.historical || screen.currentHistory || screen.state.timeline.session) screen.cancelArchiveRead()
             if (screen.archiveIntent && !screen.owner.busy) archiveRead.restart()
             if (!searchPanel.result.query) screen.cancelSearchRead()
@@ -2272,13 +2278,30 @@ Item {
                 GlassButton { objectName: "sessionHistoryPrevious"; text: screen.tr("session_history_previous"); visible: screen.state.has_previous_entries; enabled: !screen.owner.busy; onClicked: screen.owner.previousEntries(screen.readingAnchor()) }
                 GlassButton { objectName: "sessionHistoryNext"; text: screen.tr("session_history_next"); visible: !!screen.state.timeline.next_cursor; enabled: !screen.owner.busy; onClicked: screen.owner.nextEntries(screen.readingAnchor(), screen.readingOffset) }
             }
-            GlassButton {
-                id: archiveMore
-                objectName: "sessionArchiveMore"
+            Item {
                 visible: screen.historical && !screen.currentHistory && !screen.state.timeline.session && screen.state.has_more_sessions
-                enabled: !screen.historyReadOutstanding && !screen.archiveReadActive
-                text: screen.tr("session_more")
-                onClicked: screen.loadMoreArchive()
+                implicitWidth: archiveMore.implicitWidth
+                implicitHeight: archiveMore.implicitHeight
+                GlassButton {
+                    id: archiveMore
+                    objectName: "sessionArchiveMore"
+                    anchors.fill: parent
+                    enabled: !screen.historyReadOutstanding && !screen.archiveReadActive
+                    opacity: screen.archiveMoreLoading ? 0 : enabled ? 1 : 0.4
+                    Accessible.ignored: screen.archiveMoreLoading
+                    text: screen.tr("session_more")
+                    onClicked: screen.loadMoreArchive()
+                }
+                BusyIndicator {
+                    id: archiveMoreSpinner
+                    objectName: "sessionArchiveMoreSpinner"
+                    anchors.centerIn: parent
+                    width: 32
+                    height: width
+                    visible: screen.archiveMoreLoading
+                    running: visible
+                    Accessible.name: screen.tr("loading")
+                }
             }
             Text { objectName: "sessionArchiveLimit"; visible: screen.historical && !screen.state.timeline.session && screen.state.history_limit_reached; text: screen.tr("session_archive_limit"); textFormat: Text.PlainText; color: BrandTheme.colors.muted; font.pixelSize: 18; wrapMode: Text.WordWrap; Layout.fillWidth: true }
 
@@ -2290,8 +2313,10 @@ Item {
                 GlassButton { objectName: "sessionArchiveNewest"; text: screen.tr("session_archive_newest"); visible: screen.state.archive_older_window; enabled: !screen.owner.busy && !screen.archiveIntent; onClicked: screen.changeArchiveWindow("newest") }
             }
             BusyIndicator {
+                objectName: "sessionHistoryBusy"
                 visible: screen.owner.busy && !screen.owner.refreshing
                     && !(screen.historical && pullRefreshSpinner.visible)
+                    && !archiveMoreSpinner.visible
                 running: visible
                 Layout.alignment: Qt.AlignHCenter
             }
