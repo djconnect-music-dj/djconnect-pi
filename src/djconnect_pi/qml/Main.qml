@@ -5121,11 +5121,13 @@ BrandWindow {
             width: Math.min(askDjPanel.width - 40, 620)
             modal: true
             padding: 20
-            property bool noteKeyboardOpen: false
+            property Item keyboardTarget: null
+            onAboutToShow: answerText.text = askDjPanel.feedbackAnswer ? askDjPanel.feedbackAnswer.text : ""
             onClosed: {
                 askDjPanel.feedbackMessageId = ""
-                noteKeyboardOpen = false
+                keyboardTarget = null
                 feedbackNote.clear()
+                answerText.clear()
             }
             contentItem: ColumnLayout {
                 spacing: 12
@@ -5135,20 +5137,26 @@ BrandWindow {
                     wrapMode: Text.Wrap; Layout.fillWidth: true
                 }
                 ScrollView {
-                    visible: !askDjFeedbackPopup.noteKeyboardOpen
-                    Layout.fillWidth: true; Layout.preferredHeight: Math.min(answerText.implicitHeight, 180)
+                    id: answerScroll
+                    visible: !!askDjPanel.feedbackAnswer
+                        && (!askDjFeedbackPopup.keyboardTarget || askDjFeedbackPopup.keyboardTarget === answerText)
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: Math.max(56, Math.min(answerText.implicitHeight, askDjFeedbackPopup.keyboardTarget ? 112 : 180))
                     contentWidth: availableWidth; clip: true
-                    Text {
+                    TextArea {
                         id: answerText
                         objectName: "askDjFeedbackAnswer"
-                        width: parent.width
-                        text: askDjPanel.feedbackAnswer ? askDjPanel.feedbackAnswer.text : ""
-                        textFormat: Text.PlainText; wrapMode: Text.Wrap
+                        width: answerScroll.availableWidth
+                        textFormat: TextEdit.PlainText; wrapMode: TextEdit.Wrap
+                        selectByMouse: true
+                        Accessible.name: root.tr("ask_dj_feedback_edit_answer")
                         color: BrandTheme.colors.text; font.pixelSize: 20
+                        background: GlassSurface { radius: 18; interactive: true; focused: answerText.activeFocus }
+                        TapHandler { onTapped: askDjFeedbackPopup.keyboardTarget = answerText }
                     }
                 }
                 Text {
-                    visible: !askDjFeedbackPopup.noteKeyboardOpen
+                    visible: !askDjFeedbackPopup.keyboardTarget
                     text: root.tr("ask_dj_feedback_review"); textFormat: Text.PlainText
                     color: BrandTheme.colors.muted; font.pixelSize: 18
                     wrapMode: Text.Wrap; Layout.fillWidth: true
@@ -5156,6 +5164,8 @@ BrandWindow {
                 TextField {
                     id: feedbackNote
                     objectName: "askDjFeedbackNote"
+                    visible: !!askDjPanel.feedbackAnswer
+                        && (!askDjFeedbackPopup.keyboardTarget || askDjFeedbackPopup.keyboardTarget === feedbackNote)
                     placeholderText: root.tr("ask_dj_feedback_note_prompt")
                     Accessible.name: placeholderText
                     maximumLength: 1200
@@ -5163,28 +5173,29 @@ BrandWindow {
                     background: GlassSurface { radius: 18; interactive: true; focused: feedbackNote.activeFocus }
                     Layout.fillWidth: true
                     Layout.minimumHeight: 48
-                    onAccepted: askDjFeedbackPopup.noteKeyboardOpen = false
-                    TapHandler { onTapped: askDjFeedbackPopup.noteKeyboardOpen = true }
+                    onAccepted: askDjFeedbackPopup.keyboardTarget = null
+                    TapHandler { onTapped: askDjFeedbackPopup.keyboardTarget = feedbackNote }
                 }
                 SearchKeyboardDock {
-                    visible: askDjFeedbackPopup.noteKeyboardOpen
+                    visible: !!askDjFeedbackPopup.keyboardTarget
                     Layout.fillWidth: true
                     backend: djconnect
-                    target: feedbackNote
+                    target: askDjFeedbackPopup.keyboardTarget
                     keyboardName: "askDjFeedbackNoteKeyboard"
-                    onSubmitted: askDjFeedbackPopup.noteKeyboardOpen = false
-                    onDismissed: askDjFeedbackPopup.noteKeyboardOpen = false
+                    onSubmitted: askDjFeedbackPopup.keyboardTarget = null
+                    onDismissed: askDjFeedbackPopup.keyboardTarget = null
                 }
                 GlassButton {
                     objectName: "askDjFeedbackCopy"
-                    visible: !askDjFeedbackPopup.noteKeyboardOpen
+                    visible: !askDjFeedbackPopup.keyboardTarget
                     iconName: "copy"; text: root.tr(feedbackNote.text.trim().length ? "ask_dj_feedback_copy_with_note" : "ask_dj_feedback_copy")
-                    Layout.fillWidth: true; enabled: !!askDjPanel.feedbackAnswer
-                    onClicked: djconnect.copyAskDjFeedbackAnswer(askDjPanel.feedbackMessageId, feedbackNote.text)
+                    Layout.fillWidth: true
+                    enabled: !!askDjPanel.feedbackAnswer && !!(answerText.text.trim() || feedbackNote.text.trim())
+                    onClicked: djconnect.copyAskDjFeedbackAnswer(askDjPanel.feedbackMessageId, feedbackNote.text, answerText.text)
                 }
                 GlassButton {
                     objectName: "askDjFeedbackOpenIssue"
-                    visible: !askDjFeedbackPopup.noteKeyboardOpen
+                    visible: !askDjFeedbackPopup.keyboardTarget
                     iconName: "globe"; text: root.tr("feedback_open")
                     Layout.fillWidth: true; enabled: !!askDjPanel.feedbackAnswer
                     onClicked: {
@@ -5193,7 +5204,7 @@ BrandWindow {
                     }
                 }
                 GlassButton {
-                    visible: !askDjFeedbackPopup.noteKeyboardOpen
+                    visible: !askDjFeedbackPopup.keyboardTarget
                     text: root.tr("close"); tertiary: true; Layout.fillWidth: true
                     onClicked: askDjFeedbackPopup.close()
                 }

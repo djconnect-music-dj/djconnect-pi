@@ -1244,7 +1244,8 @@ class DJConnectBackend(QObject):
 
     @Slot(str)
     @Slot(str, str)
-    def copyAskDjFeedbackAnswer(self, message_id: str, note: str = "") -> None:
+    @Slot(str, str, str)
+    def copyAskDjFeedbackAnswer(self, message_id: str, note: str = "", edited_answer: str | None = None) -> None:
         if (not message_id or not self._application_foreground
                 or (not self._demo_mode and (not self.paired or not self.backendAvailable or self.versionMismatchVisible))):
             return
@@ -1252,10 +1253,11 @@ class DJConnectBackend(QObject):
             if (message.get("id") == message_id and message.get("role") == "assistant"
                     and message.get("messageKind") not in {"system", "status"} and message.get("text")):
                 note = note.strip()[:1200]
-                answer = message["text"]
-                if note:
-                    answer = f"{self.tr_key('ask_dj_feedback_note')}:\n{note}\n\n{answer}"
-                QGuiApplication.clipboard().setText(answer)
+                answer = message["text"] if edited_answer is None else edited_answer.strip()
+                if not answer and not note:
+                    return
+                details = f"{self.tr_key('ask_dj_feedback_note')}:\n{note}" if note else ""
+                QGuiApplication.clipboard().setText("\n\n".join(part for part in (details, answer) if part))
                 self.showToastForContext(self.tr_key("copied"), "connectivity")
                 return
 
