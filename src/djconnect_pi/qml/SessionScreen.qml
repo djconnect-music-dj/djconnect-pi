@@ -1631,11 +1631,29 @@ Item {
                     SessionConfirmationAvatar {
                         objectName: "sessionWaitingAvatar"
                         mood: screen.state.mood || ""
+                        visible: !waitingCard.playbackPaused
                         Accessible.ignored: !waitingCard.compactIdle
                         Layout.preferredWidth: 64
                         Layout.preferredHeight: 64
                         Accessible.role: Accessible.StaticText
                         Accessible.name: screen.tr("session_listening")
+                    }
+                    Rectangle {
+                        objectName: "sessionWaitingPauseBadge"
+                        visible: waitingCard.playbackPaused
+                        Layout.alignment: Qt.AlignTop
+                        Layout.preferredWidth: 64
+                        Layout.preferredHeight: 64
+                        radius: width / 2
+                        color: "#99000000"
+                        Accessible.ignored: true
+                        FeatureIcon {
+                            anchors.centerIn: parent
+                            width: 30
+                            height: width
+                            iconName: "pause"
+                            iconColor: BrandTheme.colors.muted
+                        }
                     }
                     ColumnLayout {
                         visible: !waitingCard.compactIdle

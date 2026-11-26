@@ -334,6 +334,9 @@ def main():
                 owner.changed.emit()
                 QTest.qWait(80)
                 assert waiting.property('compactIdle') and waiting.width() < 120
+                waiting_avatar = window.findChild(QObject, 'sessionWaitingAvatar')
+                paused_badge = window.findChild(QObject, 'sessionWaitingPauseBadge')
+                assert waiting_avatar.property('visible') and not paused_badge.property('visible')
                 assert window.findChild(QObject, 'sessionCompactEnd').property('enabled')
                 assert window.findChild(QObject, 'sessionCompactEnd').property('visible')
                 capture('confirmed-idle-compact')
@@ -342,7 +345,9 @@ def main():
                 QTest.qWait(80)
                 paused_detail = window.findChild(QObject, 'sessionWaitingPausedDetail')
                 waiting_title = window.findChild(QObject, 'sessionWaitingTitle')
-                assert paused_detail.property('visible')
+                assert paused_detail.property('visible') and paused_badge.property('visible')
+                assert not waiting_avatar.property('visible')
+                assert paused_badge.width() == 64 and paused_badge.height() == 64
                 assert waiting_title.property('text') == TRANSLATIONS[language]['session_playback_paused']
                 assert paused_detail.property('text') == TRANSLATIONS[language]['session_playback_paused_detail']
                 assert window.findChild(QObject, 'sessionExpandedEnd').property('enabled')
@@ -355,6 +360,7 @@ def main():
                 QTest.qWait(80)
                 assert waiting_vinyl.property('visible') and not metadata.property('visible')
                 assert not paused_detail.property('visible')
+                assert waiting_avatar.property('visible') and not paused_badge.property('visible')
                 assert waiting_title.property('text') == TRANSLATIONS[language]['session_start_here']
                 hint_key = 'session_start_here_ask' if owner.state['composer_available'] else 'session_start_here_music'
                 assert start_hint.property('visible') and start_hint.property('text') == TRANSLATIONS[language][hint_key]
