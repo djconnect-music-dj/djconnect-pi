@@ -43,8 +43,11 @@ Item {
     property var owner: backend.djSession
     property var state: owner.screenState
     readonly property bool connectionOffline: !backend.demoMode && (state.connection_offline || state.error === "offline")
+    readonly property bool connectionMusicUnavailable: !backend.demoMode && !connectionOffline && backend.paired
+        && backend.backendAvailable && backend.musicBackendId.length > 0 && !backend.musicBackendAvailable
     readonly property string connectionStatusText: backend.demoMode ? tr("demo_mode")
-        : connectionOffline ? tr("session_connection_offline") : backend.connectionType
+        : connectionOffline ? tr("session_connection_offline")
+        : connectionMusicUnavailable ? tr("backend_unavailable") : backend.connectionType
     readonly property var archiveSessions: visible && historical && !currentHistory && !state.timeline.session
         ? owner.archiveRows : []
     readonly property bool archiveEmpty: historical && !currentHistory && !owner.busy && !state.error
@@ -1292,8 +1295,9 @@ Item {
                 anchors.centerIn: parent; spacing: 2
                 GlassButton {
                     objectName: "sessionToolbarConnection"
-                    iconName: screen.connectionOffline ? "info" : "globe"
+                    iconName: screen.connectionOffline || screen.connectionMusicUnavailable ? "info" : "globe"
                     foregroundColor: screen.connectionOffline ? BrandTheme.colors.danger
+                        : screen.connectionMusicUnavailable ? BrandTheme.colors.warning
                         : screen.idleWelcome ? BrandTheme.colors.cyan : BrandTheme.colors.text
                     Accessible.name: screen.tr("connection_type")
                     Accessible.description: screen.connectionStatusText
@@ -3401,7 +3405,16 @@ Item {
             Text {
                 objectName: "sessionConnectionType"
                 text: screen.connectionStatusText; textFormat: Text.PlainText
-                font.pixelSize: 22; color: screen.connectionOffline ? BrandTheme.colors.danger : BrandTheme.colors.muted
+                font.pixelSize: 22
+                color: screen.connectionOffline ? BrandTheme.colors.danger
+                    : screen.connectionMusicUnavailable ? BrandTheme.colors.warning : BrandTheme.colors.muted
+                wrapMode: Text.WordWrap; Layout.fillWidth: true
+            }
+            Text {
+                objectName: "sessionConnectionTransport"
+                visible: screen.connectionMusicUnavailable
+                text: screen.backend.connectionType; textFormat: Text.PlainText
+                font.pixelSize: 18; color: BrandTheme.colors.muted
                 wrapMode: Text.WordWrap; Layout.fillWidth: true
             }
             GlassButton {

@@ -461,12 +461,26 @@ def main():
                     assert connection_accessible.text(QAccessible.Text.Description) == expected_connection
                     connection_type = one(connection_info.property("contentItem"), "sessionConnectionType")
                     assert connection_type.property("text") == expected_connection
+                    connection_transport = one(connection_info.property("contentItem"), "sessionConnectionTransport")
+                    original_backend = (backend.cfg.music_backend, backend.cfg.music_backend_available, backend.backendAvailable)
+                    backend.cfg.music_backend = "spotify_direct"
+                    backend.cfg.music_backend_available = False
+                    backend._set_backend_available(True)
+                    backend.settingsChanged.emit()
+                    assert connection.property("iconName") == "info"
+                    assert connection_type.property("text") == TRANSLATIONS[language]["backend_unavailable"]
+                    assert connection_accessible.text(QAccessible.Text.Description) == connection_type.property("text")
+                    assert connection_transport.property("visible") and connection_transport.property("text") == expected_connection
                     owner._error = "offline"
                     owner.changed.emit()
                     assert connection.property("iconName") == "info"
                     expected_offline = TRANSLATIONS[language]["session_connection_offline"]
                     assert connection_accessible.text(QAccessible.Text.Description) == expected_offline
                     assert connection_type.property("text") == expected_offline
+                    assert not connection_transport.property("visible")
+                    backend.cfg.music_backend, backend.cfg.music_backend_available, was_available = original_backend
+                    backend._set_backend_available(was_available)
+                    backend.settingsChanged.emit()
                     owner._connection_offline = True
                     owner._error = "unavailable"
                     owner.changed.emit()
@@ -482,7 +496,6 @@ def main():
                     assert window.property("aboutOpen") and window.property("activeScreen") == "history"
                     assert not connection_info.property("visible")
                     backend_status = window.findChild(QObject, "aboutMusicBackendStatus")
-                    original_backend = (backend.cfg.music_backend, backend.cfg.music_backend_available, backend.backendAvailable)
                     for identifier, provider_ready, connection_ready in (
                         ("", True, True), ("spotify_direct", False, True), ("spotify_direct", True, False),
                         ("spotify_direct", True, True),
