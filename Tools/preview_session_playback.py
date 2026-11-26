@@ -466,6 +466,12 @@ def main():
                 transport_progress = visual(transport_panel.property('contentItem'), 'sessionTransportProgress')
                 assert transport_position.property('visible') and transport_position.property('text') == owner.state['playback']['time_label']
                 assert transport_progress.property('value') == owner.state['playback']['progress']
+                seek_back = visual(transport_panel.property('contentItem'), 'sessionPlaybackSeekBack')
+                seek_forward = visual(transport_panel.property('contentItem'), 'sessionPlaybackSeekForward')
+                previous_track = visual(transport_panel.property('contentItem'), 'sessionPlaybackPrevious')
+                assert abs(seek_back.y() - seek_forward.y()) <= 1
+                assert seek_back.y() + seek_back.height() < previous_track.y()
+                assert transport_position.mapToItem(seek_back, 0, transport_position.height()).y() <= 0
                 capture('direct-playback-controls')
 
                 original_session = owner._session

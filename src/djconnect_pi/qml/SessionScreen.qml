@@ -2558,6 +2558,8 @@ Item {
         id: transportControls
         required property real buttonSize
         property bool overArtwork: false
+        readonly property int optionsRow: overArtwork ? 0 : 2
+        readonly property int seekRow: overArtwork ? 2 : 0
         spacing: 8
         Item { visible: transportControls.overArtwork; Layout.fillHeight: true }
         Text {
@@ -2601,44 +2603,51 @@ Item {
             columnSpacing: 12
             SessionTransportButton {
                 objectName: "sessionPlaybackRepeat"
+                Layout.row: transportControls.optionsRow; Layout.column: 0
                 commandName: "repeat"
                 buttonSize: transportControls.buttonSize
             }
             SessionTransportButton {
                 objectName: "sessionPlaybackShuffle"
+                Layout.row: transportControls.optionsRow; Layout.column: 1
                 commandName: "shuffle"
                 buttonSize: transportControls.buttonSize
             }
             SessionTransportButton {
                 objectName: "sessionArtworkFavorite"
+                Layout.row: transportControls.optionsRow; Layout.column: 2
                 commandName: "toggle_favorite"
                 iconName: "heart"
                 buttonSize: transportControls.buttonSize
             }
             SessionTransportButton {
                 objectName: "sessionPlaybackPrevious"
+                Layout.row: 1; Layout.column: 0
                 commandName: "previous"
                 buttonSize: transportControls.buttonSize
             }
             SessionTransportButton {
                 objectName: "sessionPlaybackToggle"
+                Layout.row: 1; Layout.column: 1
                 commandName: screen.state.playback.state === "playing" ? "pause" : "play"
                 buttonSize: transportControls.buttonSize
                 checked: true
             }
             SessionTransportButton {
                 objectName: "sessionPlaybackNext"
+                Layout.row: 1; Layout.column: 2
                 commandName: "next"
                 buttonSize: transportControls.buttonSize
             }
             SessionTransportButton {
                 objectName: "sessionPlaybackSeekBack"
+                Layout.row: transportControls.seekRow; Layout.column: 0
                 commandName: "seek_back_15"
                 buttonSize: transportControls.buttonSize
             }
-            Item {}
             SessionTransportButton {
                 objectName: "sessionPlaybackSeekForward"
+                Layout.row: transportControls.seekRow; Layout.column: 2
                 commandName: "seek_forward_15"
                 buttonSize: transportControls.buttonSize
             }
