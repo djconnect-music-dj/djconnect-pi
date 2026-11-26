@@ -2919,6 +2919,9 @@ Item {
             if (pendingArchiveMatchId) Qt.callLater(restoreArchiveMatch)
             if (screen.searchReturn && screen.archiveSearchAvailable)
                 Qt.callLater(screen.scheduleArchiveSearchPosition)
+            else if (screen.archiveSearchAvailable && !pendingArchiveMatchId && !selectedMatchId
+                    && matches.length && result.query === searchInput.text.trim())
+                selectedMatchId = matchId(matches[0])
         }
         onMatchingQueryChanged: if (pendingArchiveMatchId) Qt.callLater(restoreArchiveMatch)
         function resetSearch() {

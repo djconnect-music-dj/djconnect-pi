@@ -426,6 +426,8 @@ def main():
                 ]}
                 owner.changed.emit()
                 QTest.qWait(65)
+                assert archive_panel.property("selectedMatchId") == "hidden-on-current-page"
+                assert archive_panel.property("selectedMatchIndex") == 0
                 QTest.keyClick(window, Qt.Key.Key_Up)
                 assert archive_panel.property("selectedMatchId") == "second-archive-match"
                 QTest.keyClick(window, Qt.Key.Key_Down)
