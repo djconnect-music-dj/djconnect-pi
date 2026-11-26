@@ -710,11 +710,14 @@ def main():
                     QTest.qWait(65)
                     assert len(intents) == 1
                     output_status = window.findChild(QObject, 'sessionOutputStatus')
+                    switch_spinner = window.findChild(QObject, 'sessionOutputSwitchSpinner')
+                    assert switch_spinner.property('running')
                     assert output_status.property('text') == TRANSLATIONS[language]['session_output_switching'].replace('%1', 'Speaker 2')
                     click('sessionOutputClose')
                     intents.pop()()
                     QTest.qWait(80)
                     transfer.assert_not_called()
+                    assert not switch_spinner.property('running')
                     assert not output_panel.property('pendingOutputName')
                 observed['playback']['volume_percent'] = 0
                 owner.transport.playback_status.side_effect = SessionError('unavailable')

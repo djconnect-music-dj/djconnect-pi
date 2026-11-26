@@ -2957,6 +2957,7 @@ Item {
         property bool manualRefreshPending: false
         property var refreshAnchor: null
         property string pendingOutputName: ""
+        readonly property bool switchingOutput: !!pendingOutputName && screen.state.playback_control.status === "sending"
         function openForCurrentItem(source) {
             openFromControl(source, () => screen.owner.readPlaybackOutputs(screen.state.session_id, screen.state.playback.item_id))
         }
@@ -3120,19 +3121,29 @@ Item {
                     onClicked: outputsPanel.chooseOutput(modelData.id, modelData.name)
                 }
             }
-            Text {
-                objectName: "sessionOutputStatus"
-                Layout.fillWidth: true; wrapMode: Text.WordWrap; textFormat: Text.PlainText
-                color: BrandTheme.colors.muted; font.pixelSize: 18
-                visible: text.length > 0
-                text: screen.state.playback_control.reading_outputs ? screen.tr("loading")
-                    : screen.state.playback_control.status === "sending" && outputsPanel.pendingOutputName
-                        ? screen.tr("session_output_switching").replace("%1", () => outputsPanel.pendingOutputName)
-                    : screen.state.playback_control.status === "sending" ? screen.tr("session_question_sending")
-                    : screen.state.playback_control.status === "uncertain" ? screen.tr("session_uncertain")
-                    : screen.state.playback_control.outputs_status === "unavailable" ? screen.tr("session_output_unavailable")
-                    : screen.state.playback_control.status === "accepted" ? screen.tr("session_playback_sent")
-                    : outputsPanel.observation.lease !== undefined && outputsPanel.choices.length <= 1 ? screen.tr("session_output_empty") : ""
+            RowLayout {
+                Layout.fillWidth: true
+                visible: outputStatus.text.length > 0
+                BusyIndicator {
+                    objectName: "sessionOutputSwitchSpinner"
+                    visible: outputsPanel.switchingOutput
+                    running: visible
+                    Layout.preferredWidth: 24; Layout.preferredHeight: 24
+                    Accessible.ignored: true
+                }
+                Text {
+                    id: outputStatus
+                    objectName: "sessionOutputStatus"
+                    Layout.fillWidth: true; wrapMode: Text.WordWrap; textFormat: Text.PlainText
+                    color: BrandTheme.colors.muted; font.pixelSize: 18
+                    text: screen.state.playback_control.reading_outputs ? screen.tr("loading")
+                        : outputsPanel.switchingOutput ? screen.tr("session_output_switching").replace("%1", () => outputsPanel.pendingOutputName)
+                        : screen.state.playback_control.status === "sending" ? screen.tr("session_question_sending")
+                        : screen.state.playback_control.status === "uncertain" ? screen.tr("session_uncertain")
+                        : screen.state.playback_control.outputs_status === "unavailable" ? screen.tr("session_output_unavailable")
+                        : screen.state.playback_control.status === "accepted" ? screen.tr("session_playback_sent")
+                        : outputsPanel.observation.lease !== undefined && outputsPanel.choices.length <= 1 ? screen.tr("session_output_empty") : ""
+                }
             }
             RowLayout {
                 Layout.fillWidth: true
