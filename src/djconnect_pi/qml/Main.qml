@@ -3311,6 +3311,10 @@ BrandWindow {
         function closeDetail() { discoveryDetail.close() }
         color: "transparent"
 
+        readonly property bool requiresMusicDna: djconnect.musicDnaLoaded ? !djconnect.musicDnaEnabled
+            : djconnect.musicDiscoveryDnaDisabled
+        readonly property bool showEmptyFeed: sections.length === 0 && !djconnect.musicDiscoveryBusy
+
         readonly property var sections: {
             const groups = []
             for (const item of djconnect.musicDiscoveryItems) {
@@ -3381,7 +3385,7 @@ BrandWindow {
                         flickable: discoveryFlick
                         canRefresh: musicDiscoveryPanel.visible && root.active && !root.screenBlanked
                             && !musicDiscoveryPanel.detailVisible && djconnect.paired && !djconnect.demoMode
-                            && djconnect.musicDnaEnabled && !djconnect.musicDiscoveryConsentRejected
+                            && !musicDiscoveryPanel.requiresMusicDna
                             && !djconnect.musicDiscoveryBusy && musicDiscoveryPanel.sections.length > 0
                         onRefreshRequested: djconnect.refreshMusicDiscovery()
                     }
@@ -3400,10 +3404,10 @@ BrandWindow {
                         }
 
                         GlassSurface {
+                            objectName: "discoveryMusicDnaGate"
                             hero: true
-                            visible: djconnect.musicDiscoveryItems.length === 0
-                                     && djconnect.musicDiscoveryError.length === 0 && !djconnect.musicDiscoveryBusy
-                                     && (!djconnect.musicDnaEnabled || djconnect.musicDiscoveryConsentRejected)
+                            visible: musicDiscoveryPanel.showEmptyFeed && musicDiscoveryPanel.requiresMusicDna
+                                && djconnect.musicDiscoveryError.length === 0
                             Layout.fillWidth: true
                             Layout.preferredHeight: discoveryMusicDnaDisabledColumn.implicitHeight + 28
                             radius: root.standardButtonRadius
@@ -3444,11 +3448,16 @@ BrandWindow {
                         }
 
                         Text {
-                            visible: (djconnect.musicDnaEnabled || djconnect.musicDiscoveryError.length > 0)
-                                     && djconnect.musicDiscoveryItems.length === 0 && !djconnect.musicDiscoveryBusy
-                                     && !djconnect.musicDiscoveryConsentRejected
+                            objectName: "discoveryEmptyFeedText"
+                            visible: musicDiscoveryPanel.showEmptyFeed && (!musicDiscoveryPanel.requiresMusicDna
+                                || djconnect.musicDiscoveryError.length > 0)
                             textFormat: Text.PlainText
-                            text: djconnect.musicDiscoveryError.length > 0 ? djconnect.musicDiscoveryError : (djconnect.musicDiscoveryEmptyText.length > 0 ? djconnect.musicDiscoveryEmptyText : root.tr("music_discovery_empty"))
+                            text: {
+                                if (djconnect.musicDiscoveryError.length > 0) return djconnect.musicDiscoveryError
+                                if (!djconnect.musicDiscoveryDnaDisabled && djconnect.musicDiscoveryEmptyText.length > 0)
+                                    return djconnect.musicDiscoveryEmptyText
+                                return root.tr("music_discovery_empty")
+                            }
                             color: BrandTheme.colors.muted
                             font.pixelSize: 20
                             horizontalAlignment: Text.AlignHCenter

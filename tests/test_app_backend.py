@@ -186,7 +186,10 @@ def test_music_discovery_disabled_backend_reason_shows_empty_state(tmp_path: Pat
 
     backend.client.music_discovery_feed.assert_called_once()
     assert backend.musicDiscoveryItems == []
+    assert backend.musicDiscoveryDnaDisabled
     assert backend.musicDiscoveryEmptyText == "music_dna_disabled"
+    backend._clear_profile_scoped_caches(preserve_session=True)
+    assert not backend.musicDiscoveryDnaDisabled
 
 
 def test_music_discovery_accept_enables_music_dna_and_loads_feed(tmp_path: Path) -> None:

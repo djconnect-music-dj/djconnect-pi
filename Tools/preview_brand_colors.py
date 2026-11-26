@@ -466,6 +466,30 @@ def main():
         QMetaObject.invokeMethod(accept, "clicked")
         assert backend.musicDnaEnabled
         backend._set_demo_music_dna(True)
+        window.setProperty("activeScreen", "discover")
+        QTest.qWait(65)
+        gate = visual_item(window.contentItem(), "discoveryMusicDnaGate")
+        empty_feed = visual_item(window.contentItem(), "discoveryEmptyFeedText")
+        backend.cfg.paired, backend.cfg.device_token = True, "synthetic-not-a-credential"
+        backend.pairedChanged.emit()
+        backend._demo_mode = False
+        backend.demoModeChanged.emit()
+        backend._clear_profile_scoped_caches(preserve_session=True)
+        backend._set_music_discovery_busy(True)
+        assert not gate.property("visible") and not empty_feed.property("visible")
+        backend._set_music_discovery_busy(False)
+        assert not gate.property("visible") and empty_feed.property("visible")
+        backend._apply_music_discovery_data({"success": False, "error": "music_dna_context_changed"})
+        assert not gate.property("visible") and empty_feed.property("text") == backend.t("session_profile_missing")
+        backend._apply_music_discovery_data({"success": False, "error": "music_dna_disabled"})
+        assert gate.property("visible") and not empty_feed.property("visible")
+        backend._apply_music_dna_data({"success": True, "enabled": True})
+        assert not gate.property("visible") and empty_feed.property("text") == backend.t("music_discovery_empty")
+        backend._demo_mode = True
+        backend.demoModeChanged.emit()
+        backend.cfg.paired, backend.cfg.device_token = False, ""
+        backend.pairedChanged.emit()
+        backend._set_demo_music_dna(True)
         backend.setLanguage("nl")
         window.setProperty("activeScreen", "session")
         for runtime_state in ("opening", "ending"):

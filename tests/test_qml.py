@@ -554,8 +554,10 @@ def test_qml_music_discovery_nav_and_panel() -> None:
     assert "loading: djconnect.musicDiscoveryBusy" in discover_block
     assert "djconnect.refreshMusicDiscovery()" in discover_block
     assert "id: discoveryMusicDnaDisabledColumn" in discover_block
-    assert "(!djconnect.musicDnaEnabled || djconnect.musicDiscoveryConsentRejected)" in discover_block
-    assert "&& djconnect.musicDiscoveryError.length === 0 && !djconnect.musicDiscoveryBusy" in discover_block
+    assert "djconnect.musicDnaLoaded ? !djconnect.musicDnaEnabled" in discover_block
+    assert ": djconnect.musicDiscoveryDnaDisabled" in discover_block
+    assert "sections.length === 0 && !djconnect.musicDiscoveryBusy" in discover_block
+    assert "&& djconnect.musicDiscoveryError.length === 0" in discover_block
     assert 'root.tr("music_dna_disabled")' in discover_block
     assert 'text: root.tr("music_discovery_enable")' in discover_block
     assert "orientation: ListView.Horizontal" in discover_block
