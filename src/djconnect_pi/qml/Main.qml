@@ -1066,9 +1066,11 @@ BrandWindow {
 
         function isPendingMediaItem(item) {
             const pending = pendingMediaItem
-            return pending !== null && (pending === item || (playCommand === "play_context_at"
-                && Number.isInteger(pending.index) && pending.index === item.index
-                && pending.uri === item.uri && pending.contextUri === item.contextUri))
+            if (!pending) return false
+            if (pending === item) return true
+            if (playCommand === "start_playlist") return !!pending.uri && pending.uri === item.uri
+            return playCommand === "play_context_at" && Number.isInteger(pending.index)
+                && pending.index === item.index && pending.uri === item.uri && pending.contextUri === item.contextUri
         }
 
         function itemPayload(item) {

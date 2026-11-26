@@ -400,6 +400,20 @@ def main():
             QMetaObject.invokeMethod(media_refresh, "clicked")
             submit.call_args.args[0]()
         assert backend.toastText == backend.t("playlists_updated") and backend.toastIcon == "playlists"
+        with patch.object(backend, "_run") as pending_start:
+            QMetaObject.invokeMethod(visual_item(playlist_panel, "mediaItemRow-0"), "clicked")
+            pending_start.assert_called_once()
+            assert visual_item(playlist_panel, "mediaItemRow-0").property("starting")
+            backend._playlist_items = parse_playlist_items({"playlists": [
+                {"name": "Refreshed playlist", "uri": "spotify:playlist:different-playlist"},
+                {"name": "Renamed while starting", "uri": "spotify:playlist:fixture-only"},
+            ]})
+            backend.mediaListsChanged.emit()
+            capture("playlist-starting-after-update")
+            assert not visual_item(playlist_panel, "mediaItemRow-0").property("starting")
+            assert visual_item(playlist_panel, "mediaItemRow-1").property("starting")
+            pending_start.call_args.kwargs["done"]()
+            assert not visual_item(playlist_panel, "mediaItemRow-1").property("starting")
         backend.playback = Playback(title="Confirmed previous track", uri="fixture:previous")
         with (patch.object(backend.client, "command", return_value={"success": True}),
               patch.object(backend, "_persist_backend_summary"),
