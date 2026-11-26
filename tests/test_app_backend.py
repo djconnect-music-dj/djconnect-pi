@@ -44,6 +44,7 @@ from djconnect_pi.ha import (
     StaleBackendAction,
     UnsupportedBackendCapability,
 )
+from djconnect_pi.session_transport import SessionError
 
 
 @pytest.fixture(autouse=True)
@@ -423,6 +424,29 @@ def test_ask_dj_send_is_not_queued_offline_or_with_an_incompatible_backend(tmp_p
 
     assert backend.sendAskDjQuestion("Keep this draft") is False
     backend._question_executor.submit.assert_not_called()
+    assert not backend.askDjBusy and backend.askDjMessages == []
+
+
+@pytest.mark.parametrize("accepted", [False, True])
+def test_ask_dj_distinguishes_missing_answer_from_unconfirmed_delivery(tmp_path, accepted):
+    ensure_app()
+    config_path = tmp_path / "config.json"
+    save_config(config_path, Config(paired=True, device_token="fixture", ha_url="http://fixture.invalid"))
+    backend = DJConnectBackend(config_path)
+    backend._question_executor.submit = Mock()
+    transport = backend.djSession.transport
+    transport.binding = Mock(return_value=object())
+    transport.private_scope_owner = Mock(return_value="owner")
+    transport.standalone_question = Mock(side_effect=None if accepted else SessionError("uncertain"))
+    transport.standalone_history = Mock(side_effect=SessionError("unavailable"))
+
+    assert backend.sendAskDjQuestion("Is there an answer?")
+    backend._question_executor.submit.call_args.args[0]()
+
+    transport.standalone_question.assert_called_once()
+    assert transport.standalone_history.call_count == int(accepted)
+    key = "session_question_accepted_unavailable" if accepted else "session_question_uncertain"
+    assert backend.toastText == backend.t(key)
     assert not backend.askDjBusy and backend.askDjMessages == []
 
 

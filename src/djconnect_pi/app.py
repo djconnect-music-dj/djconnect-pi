@@ -1642,6 +1642,7 @@ class DJConnectBackend(QObject):
                     and ticket == self._private_read_context() and binding == transport.binding())
 
         def send():
+            accepted = False
             try:
                 if not current():
                     return
@@ -1652,6 +1653,7 @@ class DJConnectBackend(QObject):
                     self._toastReady.emit(self.tr_key("session_profile_missing"), 5000, "askdj")
                     return
                 transport.standalone_question(binding, text, message_id, owner)
+                accepted = True
                 if not current():
                     return
                 history = transport.standalone_history(binding, owner)
@@ -1659,7 +1661,8 @@ class DJConnectBackend(QObject):
                     self._askDjReady.emit(self._profile_read_result(history, ticket))
             except SessionError:
                 if ticket == self._private_read_context() and self._application_foreground:
-                    self._toastReady.emit(self.tr_key("session_uncertain"), 5000, "askdj")
+                    key = "session_question_accepted_unavailable" if accepted else "session_question_uncertain"
+                    self._toastReady.emit(self.tr_key(key), 5000, "askdj")
 
         def execute():
             try:
