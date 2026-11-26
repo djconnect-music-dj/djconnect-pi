@@ -269,6 +269,12 @@ Canvas {
                 ctx.quadraticCurveTo(px(22), py(4), px(16), py(9))
                 ctx.lineTo(px(16), py(26))
                 ctx.stroke()
+            } else if (iconName === "newspaper") {
+                roundRect(5, 6, 22, 20, 2)
+                line(9, 11, 23, 11)
+                roundRect(9, 15, 5, 6, 1)
+                line(18, 15, 23, 15)
+                line(18, 21, 23, 21)
             } else if (iconName === "sparkles") {
                 star(19, 19, 11); star(8, 8, 5); star(23, 5, 3)
             } else if (iconName === "playlists") {

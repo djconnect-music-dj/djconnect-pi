@@ -202,11 +202,12 @@ Item {
             Layout.fillWidth: true
             spacing: 8
             SessionContributionHeading {
-                visible: modelData.settings_confirmation === true
-                label: screen.tr("session_dj_contribution")
+                visible: modelData.flow_bulletin === true || modelData.settings_confirmation === true
+                iconName: modelData.flow_bulletin === true ? "newspaper" : "sparkles"
+                label: screen.tr(modelData.flow_bulletin === true ? "session_dj_bulletin" : "session_dj_contribution")
             }
             Text {
-                visible: modelData.settings_confirmation !== true
+                visible: modelData.flow_bulletin !== true && modelData.settings_confirmation !== true
                 text: modelData.title
                 textFormat: Text.PlainText
                 color: BrandTheme.colors.text

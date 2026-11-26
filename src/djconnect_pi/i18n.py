@@ -1827,6 +1827,7 @@ _SESSION_COMPOSER_TRANSLATIONS = {
     "session_you": ("You", "Jij", "Du", "Vous", "Tú"),
     "session_dj": ("DJ", "DJ", "DJ", "DJ", "DJ"),
     "session_dj_contribution": ("DJ contribution", "DJ-bijdrage", "DJ-Beitrag", "Contribution du DJ", "Contribución del DJ"),
+    "session_dj_bulletin": ("DJ Bulletin", "DJ Bulletin", "DJ-Bulletin", "Bulletin du DJ", "Boletín del DJ"),
 }
 for _key, _values in _SESSION_COMPOSER_TRANSLATIONS.items():
     for _language, _value in zip(("en", "nl", "de", "fr", "es"), _values):
