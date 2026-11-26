@@ -6027,6 +6027,20 @@ BrandWindow {
                                     visible: !askDjPanel.historyOffline && !bubble.systemBubble && !!(modelData.text || "").trim()
                                     Layout.alignment: Qt.AlignRight
                                     GlassButton {
+                                        objectName: "askDjOpenCurrentTrackInsight"
+                                        visible: modelData.role === "assistant"
+                                            && String(modelData.origin || "").trim().toLowerCase() === "play_now"
+                                        enabled: !djconnect.askDjBusy && (djconnect.demoMode || djconnect.paired)
+                                        iconName: "trackInsight"
+                                        text: root.tr("track_insight")
+                                        tertiary: true
+                                        onClicked: {
+                                            if (!visible || !enabled || askDjPanel.historyOffline) return
+                                            askDjPanel.chatKeyboardOpen = false
+                                            root.activeScreen = "trackinsight"
+                                        }
+                                    }
+                                    GlassButton {
                                         objectName: "askDjUseMessageAsDraft"
                                         enabled: askDjChatInput.enabled
                                         iconName: "text_cursor"; tertiary: true
