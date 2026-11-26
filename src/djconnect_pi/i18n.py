@@ -1663,6 +1663,8 @@ _SESSION_COMPOSER_TRANSLATIONS = {
         "No se pudo enviar tu opinión.",
     ),
     "music_discovery_quality_spotify_recommendation": ("Spotify recommendation", "Spotify-aanbeveling", "Spotify-Empfehlung", "Recommandation Spotify", "Recomendación de Spotify"),
+    "music_discovery_quality_labels": ("Recommendation quality", "Kwaliteit van de aanbeveling", "Qualität der Empfehlung", "Qualité de la recommandation", "Calidad de la recomendación"),
+    "music_discovery_source_labels": ("Recommendation sources", "Bronnen van de aanbeveling", "Quellen der Empfehlung", "Sources de la recommandation", "Fuentes de la recomendación"),
     "music_discovery_quality_fresh_candidate": ("New recommendation", "Nieuwe aanbeveling", "Neue Empfehlung", "Nouvelle recommandation", "Nueva recomendación"),
     "music_discovery_quality_known_favorite": ("Known favorite", "Bekende favoriet", "Bekannter Favorit", "Favori connu", "Favorito conocido"),
     "music_discovery_quality_rediscover": ("Rediscover", "Herontdek", "Wiederentdecken", "Redécouvrir", "Redescubrir"),

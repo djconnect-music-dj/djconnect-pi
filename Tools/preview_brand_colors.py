@@ -699,7 +699,9 @@ def main():
         backend._apply_music_discovery_data({"success": True, "feedback_supported": True, "sections": [
             {"id": "fixture-shelf", "title": "Recommendations", "items": [
                 {"id": "fixture-track", "kind": "track", "title": "Closeable recommendation",
-                 "uri": "spotify:track:fixture", "reason": "A long recommendation explanation with listening context. " * 110},
+                 "uri": "spotify:track:fixture", "reason": "A long recommendation explanation with listening context. " * 110,
+                 "quality_factors": ["spotify_recommendation", "fresh_candidate", "favorite_artist_match", "top_artist_match", "has_artwork", "variant_title_penalty"],
+                 "reason_sources": ["djconnect_music_dna", "spotify_catalog", "spotify_top_tracks", "spotify_top_artists", "spotify_recently_played", "accepted_recommendations"]},
             ]},
         ]})
         QTest.qWait(65)
@@ -724,12 +726,23 @@ def main():
             play = visual_item(window.contentItem(), "discoveryDetailPlay")
             feedback = visual_item(window.contentItem(), "discoveryDetailFeedback")
             assert play.mapToItem(scroller, QPointF()).y() > scroller.height()
+            strips = [visual_item(window.contentItem(), name) for name in ("discoveryQualityStrip", "discoverySourceStrip")]
+            for strip, label_key in zip(strips, ("music_discovery_quality_labels", "music_discovery_source_labels")):
+                QTest.keyClick(window, Qt.Key.Key_Tab)
+                assert strip.property("activeFocus") and strip.property("contentWidth") > strip.width()
+                assert QAccessible.queryAccessibleInterface(strip).text(QAccessible.Text.Name) == backend.t(label_key)
+                start_x = strip.property("originX")
+                strip.setProperty("contentX", start_x)
+                QTest.keyClick(window, Qt.Key.Key_Right)
+                assert strip.property("contentX") > start_x and strip.property("activeFocus")
+                QTest.keyClick(window, Qt.Key.Key_Left)
+                assert abs(strip.property("contentX") - start_x) < 1
             for action in (play, feedback):
                 QTest.keyClick(window, Qt.Key.Key_Tab)
                 top = action.mapToItem(scroller, QPointF()).y()
                 assert action.property("activeFocus") and top >= -1 and top + action.height() <= scroller.height() + 1
             capture("discovery-detail-keyboard-actions-" + locale)
-            for action in (play, close_detail):
+            for action in (play, *reversed(strips), close_detail):
                 QTest.keyClick(window, Qt.Key.Key_Backtab, Qt.KeyboardModifier.ShiftModifier)
                 top = action.mapToItem(scroller, QPointF()).y()
                 assert action.property("activeFocus") and top >= -1 and top + action.height() <= scroller.height() + 1

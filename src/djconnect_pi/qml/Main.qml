@@ -3348,13 +3348,29 @@ BrandWindow {
     component DiscoveryChipStrip: Flickable {
         id: strip
         property var values: []
+        property string accessibleLabel: ""
         visible: values.length > 0
+        activeFocusOnTab: visible && contentWidth > width
+        Accessible.role: Accessible.Pane
+        Accessible.name: accessibleLabel
         implicitHeight: chips.implicitHeight + 8
         contentWidth: chips.implicitWidth
         contentHeight: height
         flickableDirection: Flickable.HorizontalFlick
         boundsBehavior: Flickable.StopAtBounds
         clip: true
+
+        Keys.onLeftPressed: strip.scrollLabels(-1)
+        Keys.onRightPressed: strip.scrollLabels(1)
+        ScrollBar.horizontal: ScrollBar {
+            policy: strip.activeFocus ? ScrollBar.AlwaysOn : ScrollBar.AlwaysOff
+        }
+
+        function scrollLabels(direction) {
+            cancelFlick()
+            contentX = Math.max(originX, Math.min(contentX + direction * width / 2,
+                                                 originX + Math.max(0, contentWidth - width)))
+        }
 
         RowLayout {
             id: chips
@@ -3880,15 +3896,21 @@ BrandWindow {
                     }
 
                     DiscoveryChipStrip {
+                        id: recommendationQualityStrip
                         objectName: "discoveryQualityStrip"
                         values: discoveryDetail.qualityChips
+                        accessibleLabel: root.tr("music_discovery_quality_labels")
                         Layout.fillWidth: true
+                        onActiveFocusChanged: discoveryDetail.revealFocusedControl(recommendationQualityStrip)
                     }
 
                     DiscoveryChipStrip {
+                        id: recommendationSourceStrip
                         objectName: "discoverySourceStrip"
                         values: discoveryDetail.sourceChips
+                        accessibleLabel: root.tr("music_discovery_source_labels")
                         Layout.fillWidth: true
+                        onActiveFocusChanged: discoveryDetail.revealFocusedControl(recommendationSourceStrip)
                     }
 
                     GlassButton {
