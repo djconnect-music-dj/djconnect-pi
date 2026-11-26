@@ -668,6 +668,10 @@ Item {
     }
     readonly property bool historyNavigationBlocked: searchPanel.visible || archiveDeletePanel.visible || contentDeletePanel.visible
         || moreChoices.visible || connectionInfo.visible || choices.visible
+    readonly property string timelineExtendScope: historyViewOpen && timelineExtend.visible && timelineExtend.enabled
+        && backend.paired && !backend.demoMode && !historyNavigationBlocked && !state.error
+        && !owner.refreshing && !historyReadPending
+        ? JSON.stringify([historyPullScope, state.timeline.revision, state.timeline.next_cursor]) : ""
     function navigateBackFromHistory() {
         if (!historical) return
         if (currentHistory) {
@@ -1105,6 +1109,7 @@ Item {
         property string flowDragContext: ""
         property string automaticLoadContext: ""
         property string archiveDragScope: ""
+        property string timelineDragScope: ""
         property real dragStart: 0
         function onDraggingChanged() {
             var flick = historyScroll.contentItem
@@ -1112,6 +1117,7 @@ Item {
             flowDragContext = flowLoadOlder.visible && screen.visible ? screen.composerContext : ""
             archiveDragScope = archiveMore.visible && archiveMore.enabled && screen.backend.paired
                 && !screen.backend.demoMode && !searchPanel.visible ? screen.historyPullScope : ""
+            timelineDragScope = screen.timelineExtendScope
             dragStart = flick.contentY
             archivePosition.stop()
             screen.archiveReturn = null
@@ -1124,11 +1130,18 @@ Item {
             flowDragContext = ""
             const archiveScope = archiveDragScope
             archiveDragScope = ""
+            const timelineScope = timelineDragScope
+            timelineDragScope = ""
             var flick = historyScroll.contentItem
             if (flick.contentY <= dragStart) return
             if (archiveScope && archiveScope === screen.historyPullScope
                     && flick.contentY + flick.height >= flick.originY + flick.contentHeight - 24) {
                 screen.loadMoreArchive()
+                return
+            }
+            if (timelineScope && timelineScope === screen.timelineExtendScope
+                    && flick.contentY + flick.height >= flick.originY + flick.contentHeight - 24) {
+                screen.owner.extendEntries(screen.readingAnchor(), screen.readingOffset)
                 return
             }
             if (!dragContext || dragContext !== screen.composerContext || dragContext === automaticLoadContext
@@ -2404,6 +2417,7 @@ Item {
                 endedAt: screen.historical && header.session_id && typeof endStamp === "string" ? endStamp : ""
             }
             GlassButton {
+                id: timelineExtend
                 objectName: "sessionHistoryExtend"
                 visible: screen.historical && !!screen.state.timeline.session && screen.state.timeline._page_cursor === "" && !!screen.state.timeline.next_cursor && (screen.state.timeline._prefix_pages || 1) < 5
                 text: screen.tr("session_more"); enabled: !screen.owner.busy
