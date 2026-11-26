@@ -1967,6 +1967,20 @@ def test_queue_parser_compacts_adjacent_duplicates_and_keeps_later_repeats() -> 
     assert [item["index"] for item in queue] == [4, 5, 6]
 
 
+def test_queue_parser_keeps_consecutive_repeats_with_distinct_positions():
+    track = {"title": "Repeat", "uri": "spotify:track:fixture"}
+    queue = parse_queue_items({"queue": [{**track, "index": index} for index in (4, 5, 6)]})
+    assert [item["index"] for item in queue] == [4, 5, 6]
+
+
+def test_queue_parser_recognizes_repeated_placeholders_with_different_artwork():
+    queue = parse_queue_items({"queue": [
+        {"title": "Repeat", "artist": "Artist", "image_url": f"https://example.test/{index}.jpg"}
+        for index in range(4)
+    ]})
+    assert queue == []
+
+
 @pytest.mark.parametrize("kind", ["queue", "playlists"])
 def test_compact_media_list_publishes_artwork_sources_without_prefetch(tmp_path, kind):
     ensure_app()

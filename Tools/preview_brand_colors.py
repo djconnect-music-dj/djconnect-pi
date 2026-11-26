@@ -152,6 +152,14 @@ def main():
         search_input.setProperty("text", "fixture 0")
         QTest.qWait(80)
         assert count.property("text") == "1 / 10"
+        search_input.setProperty("text", "no matching track")
+        queue_empty_message = visual_item(queue_panel, "mediaEmptyStateMessage")
+        assert queue_empty_message.property("text") == backend.t("media_no_matches")
+        backend._queue_items = parse_queue_items({"queue": [
+            {"title": "Placeholder", "image_url": f"https://example.test/{index}.jpg"} for index in range(4)
+        ]})
+        backend.mediaListsChanged.emit()
+        assert queue_empty_message.property("text") == backend.t("empty_queue")
         backend._playlist_items = parse_playlist_items({"playlists": [{
             "name": "Long playlist title with more detail " * 12,
             "owner": "Fixture curator", "uri": "spotify:playlist:fixture-only",
