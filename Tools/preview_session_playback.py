@@ -555,6 +555,23 @@ def main():
                      'supports_volume': True, 'volume_percent': 11},
                     {'id': 'synthetic-alternative', 'name': 'Speaker 2', 'active': False, 'cached': False, 'is_restricted': False},
                 ]})
+                owner._session['broadcast']['playback']['target_name'] = ''
+                owner.changed.emit()
+                QTest.qWait(80)
+                output_shortcut = window.findChild(QObject, 'sessionCurrentOutput')
+                assert output_shortcut.property('visible') and output_shortcut.property('enabled')
+                expected_output_action = TRANSLATIONS[language]['session_output_choose']
+                assert output_shortcut.property('text') == expected_output_action
+                assert QAccessible.queryAccessibleInterface(output_shortcut).text(QAccessible.Text.Name) == expected_output_action
+                click('sessionCurrentOutput')
+                assert output_panel.property('opened') and len(intents) == 1
+                intents.pop()()
+                QTest.qWait(80)
+                owner.transport.playback_outputs.assert_called_once()
+                assert visual(window.contentItem(), 'sessionOutputChoice-synthetic-output').property('checked')
+                QQmlExpression(engine.rootContext(), output_panel, 'close()').evaluate()
+                owner.transport.playback_outputs.reset_mock()
+                owner._session['broadcast']['playback']['target_name'] = speaker_name
                 owner.changed.emit()
                 QTest.qWait(80)
                 click('sessionCurrentOutput')

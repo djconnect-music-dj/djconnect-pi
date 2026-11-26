@@ -1840,7 +1840,8 @@ Item {
                         }
                     }
                     RowLayout {
-                        visible: playbackSources.ready && (!!screen.state.playback.target_name || volumeShortcut.visible)
+                        visible: playbackSources.ready && (!!outputShortcut.currentOutput || outputShortcut.canChooseOutput
+                            || volumeShortcut.visible)
                         Layout.row: 2
                         Layout.column: screen.compact ? 0 : 1
                         Layout.columnSpan: screen.compact ? 2 : 1
@@ -1848,13 +1849,16 @@ Item {
                         SessionPlaybackShortcut {
                             id: outputShortcut
                             objectName: "sessionCurrentOutput"
-                            visible: !!text
-                            enabled: !!screen.state.playback_control.enabled && !!screen.state.playback_control.outputs_supported
+                            readonly property string currentOutput: (screen.state.playback.target_name || "").trim()
+                            readonly property bool canChooseOutput: !!screen.state.playback_control.available
+                                && !!screen.state.playback_control.outputs_supported
+                            visible: !!currentOutput || canChooseOutput
+                            enabled: canChooseOutput && !!screen.state.playback_control.enabled
                             iconName: "speaker"
-                            text: screen.state.playback.target_name || ""
+                            text: currentOutput || screen.tr("session_output_choose")
                             textAlignment: Text.AlignLeft
                             wrapText: true
-                            Accessible.name: screen.tr("output_device") + ": " + text
+                            Accessible.name: currentOutput ? screen.tr("output_device") + ": " + text : text
                             Layout.fillWidth: true
                             Layout.minimumWidth: 0
                             opacity: 1
