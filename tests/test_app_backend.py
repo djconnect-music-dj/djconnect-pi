@@ -2779,7 +2779,8 @@ def test_backend_manual_refresh_clears_pending_output_device(tmp_path: Path) -> 
     assert backend.toastText == backend.t("refreshing")
 
 
-def test_backend_ask_dj_refresh_shows_toast(tmp_path: Path) -> None:
+@pytest.mark.parametrize("failure", [False, True])
+def test_backend_ask_dj_refresh_shows_toast(tmp_path: Path, failure: bool) -> None:
     ensure_app()
     backend = DJConnectBackend(tmp_path / "config.json")
     backend.cfg.paired = True
@@ -2791,12 +2792,23 @@ def test_backend_ask_dj_refresh_shows_toast(tmp_path: Path) -> None:
 
     backend._run = fake_run  # type: ignore[method-assign]
     backend._sync_config_from_disk = lambda: None  # type: ignore[method-assign]
+    original = {"id": "history-fixture", "role": "assistant", "text": "Previously loaded"}
+    backend._apply_ask_dj_data({"success": True, "messages": [original]})
+    backend.client.ask_dj_history = Mock(
+        side_effect=requests.ConnectionError("Fixture network failure") if failure else None,
+        return_value={"success": True, "messages": []},
+    )
 
     backend.refreshAskDjHistory()
 
     assert backend.toastText == backend.t("refreshing")
     assert calls
     assert calls[0][0] == backend.t("ask_dj")
+    calls[0][1]()
+    result_key = "ask_dj_history_refresh_failed" if failure else "ask_dj_history_updated"
+    assert backend.toastText == backend.t(result_key) and backend.toastIcon == "chat"
+    assert backend.backendAvailable is not failure
+    assert [item["id"] for item in backend.askDjMessages] == ["history-fixture"]
 
 
 def test_backend_music_dna_refresh_shows_toast(tmp_path: Path) -> None:

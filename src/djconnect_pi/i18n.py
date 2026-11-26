@@ -1498,6 +1498,8 @@ for _key, _values in _LOG_SEARCH_TRANSLATIONS.items():
 
 _KEYBOARD_TRANSLATIONS = {
     "ask_dj_search_history": ("Search Ask DJ history", "Zoek in Ask DJ", "Ask-DJ-Verlauf durchsuchen", "Rechercher dans Ask DJ", "Buscar en Ask DJ"),
+    "ask_dj_history_updated": ("Ask DJ history updated", "Ask DJ-geschiedenis vernieuwd", "Ask-DJ-Verlauf aktualisiert", "Historique Ask DJ actualisé", "Historial de Ask DJ actualizado"),
+    "ask_dj_history_refresh_failed": ("Could not refresh Ask DJ history", "Ask DJ-geschiedenis kon niet worden vernieuwd", "Ask-DJ-Verlauf konnte nicht aktualisiert werden", "Impossible d’actualiser l’historique Ask DJ", "No se pudo actualizar el historial de Ask DJ"),
     "ask_dj_offline_title": ("Ask DJ is offline", "Ask DJ is offline", "Ask DJ ist offline", "Ask DJ est hors ligne", "Ask DJ está sin conexión"),
     "ask_dj_offline_history": (
         "Messages shown here may be out of date.",

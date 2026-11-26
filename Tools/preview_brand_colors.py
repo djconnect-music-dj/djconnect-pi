@@ -811,6 +811,18 @@ def main():
             {"id": "late-old-answer", "role": "assistant", "text": "Deleted answer"},
         ]})
         assert ask_history.property("count") == 0
+        refresh_ask = visual_item(ask_dj, "askDjRefreshButton")
+        ask_response = {"success": True, "clear_revision": 2, "history_revision": 11, "messages": [
+            {"id": "new-answer", "role": "assistant", "text": "New answer"},
+        ]}
+        with (patch.object(backend, "_sync_config_from_disk"),
+              patch.object(backend.client, "ask_dj_history", return_value=ask_response),
+              patch.object(backend._executor, "submit") as dispatch):
+            QMetaObject.invokeMethod(refresh_ask, "clicked")
+            assert backend.toastText == backend.t("refreshing")
+            dispatch.call_args.args[0]()
+        assert ask_history.property("count") == 1
+        assert backend.toastText == backend.t("ask_dj_history_updated")
         backend._demo_mode = True
         backend.demoModeChanged.emit()
         backend.cfg.paired, backend.cfg.device_token = False, ""

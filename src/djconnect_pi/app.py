@@ -202,6 +202,7 @@ class DJConnectBackend(QObject):
     _backendAvailableReady = Signal(bool)
     _toastReady = Signal(str, int, str)
     _askDjReady = Signal(object)
+    _askDjRefreshReady = Signal(object)
     _askDjClearReady = Signal(object)
     _musicDnaReady = Signal(object)
     _musicDiscoveryReady = Signal(object)
@@ -333,6 +334,7 @@ class DJConnectBackend(QObject):
         self._backendAvailableReady.connect(self._set_backend_available)
         self._toastReady.connect(self._show_toast)
         self._askDjReady.connect(self._apply_ask_dj_data)
+        self._askDjRefreshReady.connect(self._apply_ask_dj_refresh_result)
         self._askDjClearReady.connect(self._apply_ask_dj_clear_result)
         self._musicDnaReady.connect(self._apply_music_dna_data)
         self._musicDiscoveryReady.connect(self._apply_music_discovery_data)
@@ -1623,7 +1625,9 @@ class DJConnectBackend(QObject):
         if show_toast:
             self.showToastForContext(self.tr_key("refreshing"), "askdj")
         self._set_ask_dj_busy(True)
-        self._run(self.tr_key("ask_dj"), self._load_ask_dj_history_worker, done=lambda: self._set_ask_dj_busy(False))
+        ticket = self._private_read_context()
+        self._run(self.tr_key("ask_dj"), lambda: self._load_ask_dj_history_worker(ticket=ticket, show_toast=show_toast),
+                  done=lambda: self._set_ask_dj_busy(False))
 
     @Slot(str, result=bool)
     def sendAskDjQuestion(self, text: str) -> bool:
@@ -2345,8 +2349,9 @@ class DJConnectBackend(QObject):
         _LOGGER.info("Playlist list displayed in %.0fms", _elapsed_ms(started))
         self._cache_media_artwork_async("playlists", items)
 
-    def _load_ask_dj_history_worker(self) -> None:
-        ticket = self._private_read_context()
+    def _load_ask_dj_history_worker(self, *, ticket, show_toast: bool) -> None:
+        if ticket != self._private_read_context():
+            return
         try:
             data = self.client.ask_dj_history(self._ask_dj_history_revision)
             if ticket != self._private_read_context():
@@ -2354,9 +2359,27 @@ class DJConnectBackend(QObject):
             self._apply_profile_context(data)
             ticket = self._private_read_context()
             self._persist_backend_summary()
+        except (AuthenticationError, ProtocolVersionMismatch):
+            if ticket == self._private_read_context():
+                raise
+            return
         except (DJConnectError, requests.RequestException) as exc:
-            raise BackendUnavailable("Ask DJ unavailable") from exc
-        self._askDjReady.emit(self._profile_read_result(data, ticket))
+            if ticket != self._private_read_context():
+                return
+            if not show_toast:
+                raise BackendUnavailable("Ask DJ unavailable") from exc
+            data = {"success": False, "_transport_unavailable": True}
+        ready = self._askDjRefreshReady if show_toast else self._askDjReady
+        ready.emit(self._profile_read_result(data, ticket))
+
+    @Slot(object)
+    def _apply_ask_dj_refresh_result(self, data: object) -> None:
+        if self._demo_mode or not self._profile_result_current(data):
+            return
+        if isinstance(data, dict) and data.get("success") is False and data.get("_transport_unavailable") is True:
+            self._set_backend_available(False)
+        key = "ask_dj_history_updated" if self._apply_ask_dj_data(data) else "ask_dj_history_refresh_failed"
+        self._show_toast(self.tr_key(key), 2500, "askdj")
 
     def _send_ask_dj_action_worker(self, action: dict[str, object]) -> None:
         ticket = self._private_read_context()
