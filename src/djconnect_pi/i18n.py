@@ -1629,6 +1629,7 @@ _SESSION_COMPOSER_TRANSLATIONS = {
     "session_archive_retry": ("Reload", "Opnieuw laden", "Erneut laden", "Recharger", "Volver a cargar"),
     "session_archive_updated": ("Saved sessions updated", "Opgeslagen sessies vernieuwd", "Gespeicherte Sessions aktualisiert", "Sessions enregistrées actualisées", "Sesiones guardadas actualizadas"),
     "session_archive_refresh_failed": ("Could not refresh saved sessions", "Opgeslagen sessies konden niet worden vernieuwd", "Gespeicherte Sessions konnten nicht aktualisiert werden", "Impossible d’actualiser les sessions enregistrées", "No se pudieron actualizar las sesiones guardadas"),
+    "session_archive_refresh_search": ("Refresh search results", "Zoekresultaten verversen", "Suchergebnisse aktualisieren", "Actualiser les résultats de recherche", "Actualizar los resultados de búsqueda"),
     "music_discovery_load_failed": (
         "Could not load recommendations.",
         "Aanbevelingen konden niet worden geladen.",

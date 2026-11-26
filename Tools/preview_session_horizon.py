@@ -18,7 +18,7 @@ from PySide6.QtCore import (
     QTimer,
     qInstallMessageHandler,
 )
-from PySide6.QtGui import QColor, QGuiApplication, QKeySequence
+from PySide6.QtGui import QAccessible, QColor, QGuiApplication, QKeySequence
 from PySide6.QtQml import QQmlApplicationEngine, QQmlEngine, QQmlExpression
 from PySide6.QtQuickControls2 import QQuickStyle
 from PySide6.QtTest import QSignalSpy, QTest
@@ -400,6 +400,8 @@ def main():
                 QTest.keyClick(window, find.key(), find.keyboardModifiers())
                 QTest.qWait(65)
                 assert archive_field.property("placeholderText") == TRANSLATIONS[language]["session_archive_search"]
+                search_submit = window.findChild(QObject, "sessionSearchSubmit")
+                assert search_submit.property("iconName") == "search"
                 with patch.object(owner, "_launch") as verify:
                     QTest.keyClick(window, Qt.Key.Key_F)
                     QTest.qWait(180)
@@ -495,8 +497,11 @@ def main():
                     QTest.qWait(65)
                     assert archive_panel.property("selectedMatchId") == "hidden-on-current-page"
                     assert archive_panel.property("selectedMatchIndex") == 1
+                assert search_submit.property("iconName") == "refresh"
+                search_accessible = QAccessible.queryAccessibleInterface(search_submit)
+                assert search_accessible.text(QAccessible.Text.Name) == TRANSLATIONS[language]["session_archive_refresh_search"]
                 with patch.object(owner, "_launch") as verify:
-                    pull_down(window, search_scroll, touch, 230)
+                    click(window, search_submit)
                     verify.assert_called_once_with("archive_search", "fixture")
                 owner.changed.emit()
                 QTest.qWait(65)

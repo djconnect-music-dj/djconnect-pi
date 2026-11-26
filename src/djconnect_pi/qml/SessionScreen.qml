@@ -3059,8 +3059,11 @@ Item {
                     Keys.onEscapePressed: searchPanel.closeFromInput()
                 }
                 GlassButton {
-                    iconName: screen.owner.searchBusy ? "" : "search"
-                    Accessible.name: screen.searchLabel
+                    objectName: "sessionSearchSubmit"
+                    readonly property bool refreshesArchiveResults: screen.archiveSearchAvailable
+                        && searchPanel.matchingQuery && "sessions" in searchPanel.result && !searchPanel.searchError
+                    iconName: screen.owner.searchBusy ? "" : refreshesArchiveResults ? "refresh" : "search"
+                    Accessible.name: refreshesArchiveResults ? screen.tr("session_archive_refresh_search") : screen.searchLabel
                     implicitWidth: 56
                     enabled: !screen.owner.busy && searchInput.text.trim().length > 0
                     onClicked: searchPanel.submitSearch()
