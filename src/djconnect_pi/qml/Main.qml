@@ -3690,9 +3690,13 @@ BrandWindow {
                 const score = item.qualityScore
                 if (typeof score === "number" && Number.isInteger(score) && score >= 0 && score <= 100)
                     chips.push(score + "/100")
-                return chips.concat(Array.from(item.qualityFactors || []).filter(function(factor) {
-                    return typeof factor === "string" && factor.length > 0
-                }))
+                for (const factor of Array.from(item.qualityFactors || [])) {
+                    if (typeof factor !== "string" || !/^[a-z_]+$/.test(factor)) continue
+                    const key = "music_discovery_quality_" + factor
+                    const label = root.tr(key)
+                    if (label !== key) chips.push(label)
+                }
+                return chips
             }
             anchors.centerIn: Overlay.overlay
             width: Math.min(root.width - 40, 520)
