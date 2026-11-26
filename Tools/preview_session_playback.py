@@ -192,8 +192,10 @@ def main():
                     lead_gap = metadata.mapToScene(QPointF()).y() - mode_strip.mapToScene(QPointF(0, mode_strip.height())).y()
                     assert abs(lead_gap - (20 if width == 720 else 26)) <= 1, (width, language, lead_gap)
                 assert visual(window.contentItem(), 'sessionPlaybackVinyl') is None
-                expected_cover_size = 120 if width == 720 else 2 * round(270 * min(1.45, width / 835))
+                cover_width_limit = metadata.property('availableWidth') / 2
+                expected_cover_size = min(120, int(cover_width_limit)) if width == 720 else int(cover_width_limit)
                 assert artwork_button.width() == artwork_button.height() == expected_cover_size
+                assert artwork_button.width() <= cover_width_limit
                 assert artwork_button.mapToItem(metadata, 0, 0).x() >= 0
                 assert artwork_button.mapToItem(metadata, artwork_button.width(), artwork_button.height()).x() <= metadata.width()
                 meter = window.findChild(QObject, 'sessionPlaybackMeter')
