@@ -379,13 +379,13 @@ def test_qml_ask_dj_screen_keeps_history_actions_and_text_composer() -> None:
     assert "id: askDjClearButton" in ask_dj_block
     assert 'ToolTip.text: root.tr("ask_dj_clear_chat")' in ask_dj_block
     assert 'iconName: "trash"' in ask_dj_block
-    assert "enabled: !djconnect.askDjBusy && djconnect.askDjMessages.length > 0" in ask_dj_block
+    assert "enabled: !askDjPanel.historyOffline && !djconnect.askDjBusy && djconnect.askDjMessages.length > 0" in ask_dj_block
     assert "root.askDjClearConfirmOpen = true" in ask_dj_block
     assert "id: askDjClearConfirmPanel" in main_qml
     assert "visible: root.askDjClearConfirmOpen" in main_qml
     assert 'root.tr("ask_dj_clear_confirm_title")' in main_qml
     assert 'root.tr("ask_dj_clear_confirm_message")' in main_qml
-    assert "djconnect.clearAskDjHistory()" in main_qml
+    assert "djconnect.clearAskDjHistory(root.askDjClearConfirmationRevision)" in main_qml
     assert "visible: djconnect.askDjBusy" in main_qml
     assert "enabled: !djconnect.askDjBusy" in main_qml
     assert "root.askDjClearConfirmOpen && djconnect.askDjMessages.length === 0" in main_qml

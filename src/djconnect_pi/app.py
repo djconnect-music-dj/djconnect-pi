@@ -1594,16 +1594,24 @@ class DJConnectBackend(QObject):
         self._load_ask_dj_history(show_toast=True, action="refreshed")
 
     @Slot()
-    def clearAskDjHistory(self) -> None:
+    @Slot(int)
+    def clearAskDjHistory(self, revision: int | None = None) -> None:
+        if revision is not None and revision != self._music_dna_context_revision:
+            return
         if self._demo_mode:
             self._clear_ask_dj_cache()
             return
+        ticket = self._private_read_context()
         self._sync_config_from_disk()
-        if self._demo_mode or not self.paired or self._ask_dj_busy:
+        if (self._demo_mode or not self.paired or self._ask_dj_busy
+                or not self._backend_available or self._version_mismatch_visible
+                or ticket != self._private_read_context()
+                or (revision is not None and revision != self._music_dna_context_revision)):
             return
         _LOGGER.info("User requested Ask DJ chat history clear")
         self._set_ask_dj_busy(True)
-        self._run(self.tr_key("ask_dj_clear_chat"), self._clear_ask_dj_history_worker, done=lambda: self._set_ask_dj_busy(False))
+        self._run(self.tr_key("ask_dj_clear_chat"), lambda: self._clear_ask_dj_history_worker(ticket=ticket),
+                  done=lambda: self._set_ask_dj_busy(False))
 
     def _load_ask_dj_history(self, *, show_toast: bool, action: str) -> None:
         self._sync_config_from_disk()
@@ -2371,14 +2379,19 @@ class DJConnectBackend(QObject):
         self._persist_backend_summary()
         self._askDjReady.emit(self._profile_read_result(data, ticket))
 
-    def _clear_ask_dj_history_worker(self) -> None:
-        ticket = self._private_read_context()
+    def _clear_ask_dj_history_worker(self, *, ticket=None) -> None:
+        current = self._private_read_context()
+        if ticket is not None and ticket != current:
+            return
+        ticket = current
         try:
             data = self.client.ask_dj_history_clear()
         except (AuthenticationError, ProtocolVersionMismatch):
             raise
         except (DJConnectError, requests.RequestException) as exc:
             raise BackendUnavailable("Ask DJ clear unavailable") from exc
+        if ticket != self._private_read_context():
+            return
         self._persist_backend_summary()
         self._askDjReady.emit(self._profile_read_result(data, ticket))
         self._toastReady.emit(self.tr_key("ask_dj_cleared"), 2500, "askdj")

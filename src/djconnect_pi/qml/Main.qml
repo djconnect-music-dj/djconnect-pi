@@ -182,6 +182,7 @@ BrandWindow {
     property bool shutdownConfirmOpen: false
     property bool clearLogsConfirmOpen: false
     property bool askDjClearConfirmOpen: false
+    property int askDjClearConfirmationRevision: -1
     property bool musicDnaDisableConfirmOpen: false
     property bool musicDnaClearConfirmOpen: false
     property int musicDnaConfirmationRevision: -1
@@ -4386,7 +4387,7 @@ BrandWindow {
         property bool chatKeyboardOpen: false
         property string pendingQuestionText: ""
         readonly property int profileContextRevision: djconnect.musicDnaContextRevision
-        onProfileContextRevisionChanged: pendingQuestionText = ""
+        onProfileContextRevisionChanged: clearQuestionUi()
         readonly property bool historyOffline: !djconnect.demoMode
             && (!djconnect.paired || !djconnect.backendAvailable || djconnect.versionMismatchVisible)
 
@@ -4406,6 +4407,7 @@ BrandWindow {
         }
 
         function clearQuestionUi() {
+            root.askDjClearConfirmOpen = false
             pendingQuestionText = ""
             clearChatDraft()
         }
@@ -4558,13 +4560,17 @@ BrandWindow {
                 GlassButton { iconName: "back"; tertiary: true; implicitWidth: 52; Accessible.name: root.tr("more"); onClicked: root.activeScreen = "more" },
                 Button {
                     id: askDjClearButton
-                    enabled: !djconnect.askDjBusy && djconnect.askDjMessages.length > 0
+                    objectName: "askDjClearButton"
+                    enabled: !askDjPanel.historyOffline && !djconnect.askDjBusy && djconnect.askDjMessages.length > 0
                     ToolTip.visible: hovered
                     ToolTip.text: root.tr("ask_dj_clear_chat")
                     Accessible.name: root.tr("ask_dj_clear_chat")
                     Layout.preferredWidth: 48
                     Layout.preferredHeight: 48
-                    onClicked: root.askDjClearConfirmOpen = true
+                    onClicked: {
+                        root.askDjClearConfirmationRevision = askDjPanel.profileContextRevision
+                        root.askDjClearConfirmOpen = true
+                    }
                     contentItem: MenuIcon {
                         iconName: "trash"
                         iconColor: askDjClearButton.enabled ? BrandTheme.colors.text : BrandTheme.colors.disabledText
@@ -6298,11 +6304,13 @@ BrandWindow {
                 }
 
                 DangerButton {
+                    objectName: "askDjClearConfirmButton"
                     text: root.tr("clear")
-                    enabled: !djconnect.askDjBusy
+                    enabled: !djconnect.askDjBusy && (djconnect.demoMode || (djconnect.paired
+                        && djconnect.backendAvailable && !djconnect.versionMismatchVisible))
                     Layout.fillWidth: true
                     Layout.preferredHeight: 56
-                    onClicked: djconnect.clearAskDjHistory()
+                    onClicked: djconnect.clearAskDjHistory(root.askDjClearConfirmationRevision)
                 }
 
                 PurpleButton {

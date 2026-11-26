@@ -785,6 +785,18 @@ def main():
             question_request.assert_called_once()
         assert backend.toastText == backend.t("session_question_accepted_unavailable")
         assert not pending_question.property("visible")
+        clear_ask = window.findChild(QObject, "askDjClearButton")
+        QMetaObject.invokeMethod(clear_ask, "clicked")
+        assert window.property("askDjClearConfirmOpen")
+        confirm_clear = window.findChild(QObject, "askDjClearConfirmButton")
+        assert confirm_clear.property("enabled")
+        backend._set_backend_available(False)
+        assert not confirm_clear.property("enabled")
+        backend._set_backend_available(True)
+        backend._music_dna_context_revision += 1
+        backend.musicDnaChanged.emit()
+        assert not window.property("askDjClearConfirmOpen")
+        assert visual_item(ask_dj, "askDjMessagesView").property("count") == 4
         backend._demo_mode = True
         backend.demoModeChanged.emit()
         backend.cfg.paired, backend.cfg.device_token = False, ""

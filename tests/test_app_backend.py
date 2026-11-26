@@ -1465,6 +1465,32 @@ def test_ask_dj_clear_and_trim_revisions_are_server_authoritative(tmp_path: Path
     assert backend._ask_dj_history_revision == 12
 
 
+@pytest.mark.parametrize("transition", ["revision", "config", "queued"])
+def test_ask_dj_clear_does_not_cross_conversation_scope(tmp_path, transition):
+    ensure_app()
+    config_path = tmp_path / "config.json"
+    save_config(config_path, Config(paired=True, device_token="fixture", ha_url="http://fixture.invalid"))
+    backend = DJConnectBackend(config_path)
+    backend.cfg.active_profile_id = "profile-a"
+    backend._sync_config_from_disk = Mock()
+    backend._run = Mock()
+    backend.client.ask_dj_history_clear = Mock()
+    revision = backend.musicDnaContextRevision
+    if transition == "revision":
+        backend._clear_profile_scoped_caches(preserve_session=True)
+    elif transition == "config":
+        backend._sync_config_from_disk.side_effect = lambda: setattr(backend.cfg, "active_profile_id", "profile-b")
+
+    backend.clearAskDjHistory(revision)
+    if transition == "queued":
+        worker = backend._run.call_args.args[1]
+        backend.cfg.active_profile_id = "profile-b"
+        worker()
+    else:
+        backend._run.assert_not_called()
+    backend.client.ask_dj_history_clear.assert_not_called()
+
+
 def test_ask_dj_clear_history_success_clears_local_messages_and_revisions(tmp_path: Path) -> None:
     ensure_app()
     backend = DJConnectBackend(tmp_path / "config.json")
