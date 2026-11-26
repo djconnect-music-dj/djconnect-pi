@@ -101,6 +101,7 @@ TOAST_CONTEXT_ICONS = {
     "playlists": "playlists",
     "settings": "settings",
     "connectivity": "info",
+    "refresh": "refresh",
     "home_assistant": "info",
     "updates": "logs",
     "diagnostics": "logs",

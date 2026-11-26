@@ -93,6 +93,7 @@ class SessionController(QObject):
     pendingQuestionReady = Signal()
     searchUpdated = Signal()
     historyUpdated = Signal()
+    archiveRefreshFinished = Signal(bool)
     archiveInvalidated = Signal()
     archivePositioned = Signal(str, float)
     timelineUpdated = Signal(str)
@@ -1170,8 +1171,12 @@ class SessionController(QObject):
             "scope": self._history_scope, "before": self._history_before, "trail": deepcopy(self._history_trail)}
 
     @Slot()
-    def loadHistory(self):
-        self._launch("history", {"pages": 1, "window_change": True})
+    @Slot(bool)
+    def loadHistory(self, manual=False):
+        request = {"pages": 1, "window_change": True}
+        if manual:
+            request["manual_refresh"] = True
+        self._launch("history", request)
 
     @Slot()
     def moreHistory(self):
@@ -1179,9 +1184,13 @@ class SessionController(QObject):
             self._launch("history_more", self._archive_request(self._history_pages + 1))
 
     @Slot()
-    def refreshArchive(self):
+    @Slot(bool)
+    def refreshArchive(self, manual=False):
         if self._history_loaded and not self._timeline:
-            self._launch("history_refresh", self._archive_request())
+            request = self._archive_request()
+            if manual:
+                request["manual_refresh"] = True
+            self._launch("history_refresh", request)
 
     @Slot(str, float)
     def olderSessions(self, session_id="", offset=0):
@@ -1643,6 +1652,8 @@ class SessionController(QObject):
 
         def worker():
             result = {"serial": serial, "binding": binding, "action": action, "view_epoch": view_epoch, "question_epoch": question_epoch, "raw_binding": raw_binding}
+            if action in {"history", "history_refresh"} and value.get("manual_refresh"):
+                result["manual_archive_refresh"] = True
             def read_active(*, isolated=False):
                 try:
                     response = self.transport.active(binding, isolated=True) if isolated else self.transport.active(binding)
@@ -2022,6 +2033,8 @@ class SessionController(QObject):
             self._timeline_trail = []
             self._error = result["error"]
             self.changed.emit()
+            if result.get("manual_archive_refresh"):
+                self.archiveRefreshFinished.emit(False)
             return
         if (result["action"] == "refresh"
                 and (result.get("error") in {"offline", "unavailable"} or result.get("invalid_active_read"))
@@ -2190,6 +2203,8 @@ class SessionController(QObject):
             self.questionConfirmed.emit(confirmed)
         if "history" in result and "error" not in result:
             self.historyUpdated.emit()
+            if result.get("manual_archive_refresh"):
+                self.archiveRefreshFinished.emit(True)
             if result["history"].get("_window_change"):
                 reading = result["history"].get("_reading", {})
                 if any(row["session_id"] == reading.get("session_id") for row in self._sessions):

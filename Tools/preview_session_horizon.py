@@ -510,6 +510,7 @@ def main():
                 archive_flick = archive_scroll.property("contentItem")
                 archive_flick.setProperty("contentY", archive_flick.property("originY"))
                 expected_window = owner._archive_request()
+                expected_manual_refresh = {**expected_window, "manual_refresh": True}
                 pull_spinner = one(screen, "sessionPullRefreshSpinner")
                 def start_history_read(action, _):
                     owner._set_running(1, action)
@@ -519,7 +520,7 @@ def main():
                     archive_read.assert_not_called()
                     assert not pull_spinner.property("visible")
                     pull_down(window, archive_scroll, touch, 230)
-                    archive_read.assert_called_once_with("history_refresh", expected_window)
+                    archive_read.assert_called_once_with("history_refresh", expected_manual_refresh)
                     assert pull_spinner.property("visible")
                     assert pull_spinner.y() == archive_scroll.y() + 8
                 owner._set_running()
@@ -532,12 +533,17 @@ def main():
                 with patch.object(owner, "_launch", side_effect=start_history_read) as archive_read:
                     QTest.qWait(300)
                     click(window, toolbar_refresh)
-                    archive_read.assert_called_once_with("history_refresh", expected_window)
+                    archive_read.assert_called_once_with("history_refresh", expected_manual_refresh)
                     assert toolbar_spinner.property("visible") and not toolbar_refresh.property("enabled")
                     assert not pull_spinner.property("visible")
                 owner._set_running()
                 owner.changed.emit()
                 assert not toolbar_spinner.property("visible") and toolbar_refresh.property("enabled")
+                owner.archiveRefreshFinished.emit(True)
+                assert backend.toastText == TRANSLATIONS[language]["session_archive_updated"]
+                owner.archiveRefreshFinished.emit(False)
+                assert backend.toastText == TRANSLATIONS[language]["session_archive_refresh_failed"]
+                backend.hideToast()
                 owner._error = "unavailable"
                 owner.changed.emit()
                 assert not archive_empty.property("visible") and not archive_window_empty.property("visible")

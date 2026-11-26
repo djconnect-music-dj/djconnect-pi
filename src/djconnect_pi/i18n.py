@@ -1627,6 +1627,8 @@ _SESSION_COMPOSER_TRANSLATIONS = {
     "session_archive_limit": ("More sessions are available on the server. This screen shows at most 100.", "Er staan meer sessies op de server. Dit scherm toont er maximaal 100.", "Weitere Sitzungen sind auf dem Server verfügbar. Dieser Bildschirm zeigt höchstens 100.", "D’autres sessions sont disponibles sur le serveur. Cet écran en affiche au maximum 100.", "Hay más sesiones disponibles en el servidor. Esta pantalla muestra como máximo 100."),
     "session_saved_reopen": ("Open again", "Opnieuw openen", "Erneut öffnen", "Ouvrir à nouveau", "Volver a abrir"),
     "session_archive_retry": ("Reload", "Opnieuw laden", "Erneut laden", "Recharger", "Volver a cargar"),
+    "session_archive_updated": ("Saved sessions updated", "Opgeslagen sessies vernieuwd", "Gespeicherte Sessions aktualisiert", "Sessions enregistrées actualisées", "Sesiones guardadas actualizadas"),
+    "session_archive_refresh_failed": ("Could not refresh saved sessions", "Opgeslagen sessies konden niet worden vernieuwd", "Gespeicherte Sessions konnten nicht aktualisiert werden", "Impossible d’actualiser les sessions enregistrées", "No se pudieron actualizar las sesiones guardadas"),
     "music_discovery_load_failed": (
         "Could not load recommendations.",
         "Aanbevelingen konden niet worden geladen.",

@@ -354,7 +354,7 @@ Item {
         if (owner.refreshing) pullRefreshView = view
     }
     function refreshHistoryFromPull() {
-        refreshHistory()
+        refreshHistory(true)
         historyPullRefreshing = historyReadOutstanding
     }
 
@@ -600,6 +600,7 @@ Item {
     property bool historyReadPending: false
     property string historyReadKind: "archive"
     property string historyReadSession: ""
+    property bool historyReadManual: false
     function openCurrentHistory() {
         if (!state.session_id) return
         if (!historical) rememberFlow()
@@ -611,10 +612,11 @@ Item {
         owner.closeSaved()
         historyRead.restart()
     }
-    function openArchive() {
+    function openArchive(manual) {
         clearFlowReturn()
         historyReadPending = true
         historyReadKind = "archive"
+        historyReadManual = !!manual
         historyReadProfile = scopeProfileId
         navigate("history")
         owner.closeSaved()
@@ -625,9 +627,10 @@ Item {
         interval: 0
         onTriggered: {
             if (screen.historyReadPending && screen.visible && screen.historical && screen.historyReadProfile === screen.scopeProfileId && !screen.owner.busy) {
-                if (screen.historyReadKind === "archive" && !screen.currentHistory) screen.owner.loadHistory()
+                if (screen.historyReadKind === "archive" && !screen.currentHistory) screen.owner.loadHistory(screen.historyReadManual)
                 else if (screen.historyReadKind === "current" && screen.currentHistory && screen.historyReadSession === screen.state.session_id) screen.owner.readCurrentHistory()
                 screen.historyReadPending = false
+                screen.historyReadManual = false
                 screen.historyReadSession = ""
                 screen.historyReadProfile = ""
             }
@@ -641,12 +644,12 @@ Item {
         else if (state.timeline.session) returnArchiveDetail()
         else { owner.closeSaved(); navigate("more") }
     }
-    function refreshHistory() {
+    function refreshHistory(manual) {
         if (!historical) return
         if (state.timeline.session) owner.refreshSaved(readingAnchor())
         else if (currentHistory) openCurrentHistory()
-        else if (state.history_loaded) refreshArchiveList()
-        else openArchive()
+        else if (state.history_loaded) refreshArchiveList(manual)
+        else openArchive(manual)
     }
     property var archiveIntent: null
     property bool archiveReadActive: false
@@ -708,10 +711,10 @@ Item {
         else if (direction === "newer") owner.newerSessions()
         else owner.loadHistory()
     }
-    function refreshArchiveList() {
+    function refreshArchiveList(manual) {
         if (!visible || !historical || currentHistory || state.timeline.session || archiveIntent || archiveReadActive) return
         rememberArchive()
-        archiveIntent = {profile: scopeProfileId}
+        archiveIntent = {profile: scopeProfileId, manual: !!manual}
         archiveRead.restart()
     }
     Timer {
@@ -719,7 +722,7 @@ Item {
         onTriggered: {
             var intent = screen.archiveIntent
             if (!intent || screen.owner.busy) return
-            if (screen.visible && screen.historical && !screen.currentHistory && !screen.state.timeline.session && intent.profile === screen.scopeProfileId) { screen.archiveReadActive = true; screen.owner.refreshArchive() }
+            if (screen.visible && screen.historical && !screen.currentHistory && !screen.state.timeline.session && intent.profile === screen.scopeProfileId) { screen.archiveReadActive = true; screen.owner.refreshArchive(!!intent.manual) }
             screen.archiveIntent = null
         }
     }
@@ -1084,6 +1087,10 @@ Item {
         function onTimelineUpdated(anchor) { screen.restoreReading(anchor) }
         function onTimelinePositioned(anchor, offset) { screen.readingOffset = offset; screen.restoreReading(anchor) }
         function onHistoryUpdated() { screen.scheduleArchivePosition() }
+        function onArchiveRefreshFinished(succeeded) {
+            if (screen.historyViewOpen && !screen.currentHistory && !screen.state.timeline.session)
+                screen.backend.showToastForContext(screen.tr(succeeded ? "session_archive_updated" : "session_archive_refresh_failed"), "refresh")
+        }
         function onArchiveInvalidated() {
             screen.cancelArchiveRead(); screen.archiveReturn = null; screen.archiveDetailReturn = null
             screen.archiveSearchOrigin = null; screen.pendingArchiveSearchReturn = null
@@ -1248,7 +1255,7 @@ Item {
                     onClicked: {
                         if (refreshing) return
                         if (screen.historical) {
-                            screen.refreshHistory()
+                            screen.refreshHistory(true)
                             screen.historyToolbarRefreshing = screen.historyReadOutstanding
                         } else screen.owner.refresh()
                         screen.backend.pollSharedSettings()
@@ -1529,7 +1536,7 @@ Item {
                     text: screen.tr(screen.state.saved_open_retry ? "session_saved_reopen" : "session_archive_retry")
                     onClicked: {
                         if (screen.state.saved_open_retry) screen.owner.retrySavedOpen()
-                        else screen.refreshHistory()
+                        else screen.refreshHistory(true)
                     }
                 }
             }
