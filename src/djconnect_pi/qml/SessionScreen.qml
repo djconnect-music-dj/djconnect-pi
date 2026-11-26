@@ -3070,7 +3070,7 @@ Item {
             }
             submitSearch()
         }
-        function closeFromInput() {
+        function closeAndRestoreFocus() {
             restoreControlFocus = true
             close()
         }
@@ -3101,6 +3101,9 @@ Item {
             RowLayout {
                 Layout.fillWidth: true
                 Layout.leftMargin: searchPanel.bodyMargin; Layout.rightMargin: searchPanel.bodyMargin
+                Keys.onUpPressed: function(event) { event.accepted = searchPanel.moveMatch(-1) }
+                Keys.onDownPressed: function(event) { event.accepted = searchPanel.moveMatch(1) }
+                Keys.onEscapePressed: searchPanel.closeAndRestoreFocus()
                 TextField {
                     id: searchInput
                     objectName: "sessionSearchInput"
@@ -3113,9 +3116,6 @@ Item {
                     onTextEdited: searchPanel.editSearch()
                     TapHandler { onTapped: searchPanel.keyboardVisible = true }
                     onAccepted: searchPanel.acceptSearchInput()
-                    Keys.onUpPressed: function(event) { event.accepted = searchPanel.moveMatch(-1) }
-                    Keys.onDownPressed: function(event) { event.accepted = searchPanel.moveMatch(1) }
-                    Keys.onEscapePressed: searchPanel.closeFromInput()
                 }
                 GlassButton {
                     objectName: "sessionSearchSubmit"
@@ -3153,7 +3153,7 @@ Item {
                     enabled: searchPanel.matches.length > 0
                     onClicked: searchPanel.moveMatch(1)
                 }
-                GlassButton { text: screen.tr("close_search"); onClicked: searchPanel.closeFromInput() }
+                GlassButton { text: screen.tr("close_search"); onClicked: searchPanel.closeAndRestoreFocus() }
             }
             RowLayout {
                 Layout.leftMargin: searchPanel.bodyMargin; Layout.rightMargin: searchPanel.bodyMargin

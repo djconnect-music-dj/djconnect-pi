@@ -444,6 +444,15 @@ def main():
                 assert archive_panel.property("selectedMatchId") == "hidden-on-current-page"
                 assert archive_panel.property("selectedMatchIndex") == 0
                 assert archive_count.property("text") == "1 / 2"
+                next_match = window.findChild(QObject, "sessionSearchNextMatch")
+                focus_next_match = QQmlExpression(engine.rootContext(), next_match, "forceActiveFocus()")
+                focus_next_match.evaluate()
+                assert next_match.property("activeFocus")
+                QTest.keyClick(window, Qt.Key.Key_Down)
+                assert archive_panel.property("selectedMatchId") == "second-archive-match"
+                QTest.keyClick(window, Qt.Key.Key_Up)
+                assert archive_panel.property("selectedMatchId") == "hidden-on-current-page"
+                QQmlExpression(engine.rootContext(), archive_field, "forceActiveFocus()").evaluate()
                 QTest.keyClick(window, Qt.Key.Key_Up)
                 assert archive_panel.property("selectedMatchId") == "second-archive-match"
                 with patch.object(owner, "_launch") as verify:
@@ -550,8 +559,11 @@ def main():
                     coverage = window.findChild(QObject, "sessionSearchCoverage")
                     assert coverage.property("visible")
                     assert coverage.property("text") == TRANSLATIONS[language]["session_archive_search_partial"]
-                close_archive_search.evaluate()
+                focus_next_match.evaluate()
+                assert next_match.property("activeFocus")
+                QTest.keyClick(window, Qt.Key.Key_Escape)
                 QTest.qWait(300)
+                assert not archive_panel.property("visible") and archive_search.property("activeFocus")
                 owner._history_start = "fixture-older-window"
                 owner.changed.emit()
                 assert not archive_empty.property("visible") and archive_window_empty.property("visible")
