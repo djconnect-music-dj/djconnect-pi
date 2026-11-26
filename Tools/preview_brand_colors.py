@@ -1172,6 +1172,20 @@ def main():
             QTest.keyClick(window, Qt.Key.Key_Escape)
             assert not logs.property("searching") and search_input.property("text") == ""
             assert search_toggle.property("activeFocus")
+            QTest.keyClick(window, log_find.key(), log_find.keyboardModifiers())
+            search_input.setProperty("text", "sample")
+            log_path.write_text("", encoding="utf-8")
+            QMetaObject.invokeMethod(logs_refresh, "clicked")
+            empty_logs = visual_item(logs, "logsEmptyMessage")
+            assert empty_logs.property("visible") and empty_logs.property("text") == backend.t("logs_empty")
+            assert not logs.property("searching") and search_input.property("text") == ""
+            assert not search_toggle.property("enabled") and logs_refresh.property("enabled")
+            QTest.keyClick(window, log_find.key(), log_find.keyboardModifiers())
+            assert not logs.property("searching")
+            capture("logs-empty-" + locale)
+            log_path.write_text("\n".join(reversed(log_lines)), encoding="utf-8")
+            QMetaObject.invokeMethod(logs_refresh, "clicked")
+            assert not empty_logs.property("visible") and search_toggle.property("enabled")
         backend.hideLogs()
         backend.cfg.log_level = "OFF"
         backend.setLanguage("nl")

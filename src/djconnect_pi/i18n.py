@@ -1483,6 +1483,7 @@ _LOG_SEARCH_TRANSLATIONS = {
     "logs_previous_match": ("Previous match", "Vorig resultaat", "Vorheriger Treffer", "Résultat précédent", "Coincidencia anterior"),
     "logs_next_match": ("Next match", "Volgend resultaat", "Nächster Treffer", "Résultat suivant", "Coincidencia siguiente"),
     "logs_no_matches": ("No matches", "Geen resultaten", "Keine Treffer", "Aucun résultat", "Sin coincidencias"),
+    "logs_empty": ("No log entries", "Geen logregels", "Keine Protokolleinträge", "Aucune entrée dans le journal", "No hay entradas en el registro"),
     "clear_logs_confirm_message": (
         "This clears the local DJConnect log file. New entries will be recorded as usual.",
         "Dit wist het lokale DJConnect-logbestand. Nieuwe regels worden daarna gewoon vastgelegd.",

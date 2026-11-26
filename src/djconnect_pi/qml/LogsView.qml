@@ -102,7 +102,7 @@ Item {
         keyboardOpen = false
         searching = false
         searchInput.clear()
-        if (restoreFocus) searchToggle.forceActiveFocus()
+        if (restoreFocus && searchToggle.enabled) searchToggle.forceActiveFocus()
     }
     function submitSearch() {
         keyboardOpen = false
@@ -115,10 +115,11 @@ Item {
         Qt.callLater(positionCurrentMatch)
     }
     onVisibleChanged: if (!visible) closeSearch()
+    onLinesChanged: if (!lines.length && searching) closeSearch()
 
     Shortcut {
         sequences: [StandardKey.Find]
-        enabled: view.visible && view.findShortcutEnabled && !view.confirmationOpen
+        enabled: view.visible && view.findShortcutEnabled && !view.confirmationOpen && searchToggle.enabled
         onActivated: view.showSearch(false)
     }
 
@@ -156,6 +157,7 @@ Item {
                         objectName: "logsSearchOpen"
                         iconName: "search"; Accessible.name: view.tr(view.searching ? "close_search" : "logs_search")
                         checked: view.searching
+                        enabled: view.lines.length > 0
                         background: Item {}
                         foregroundColor: checked ? BrandTheme.colors.actionAccent : BrandTheme.colors.text
                         onClicked: view.searching ? view.closeSearch() : view.showSearch(true)
@@ -252,6 +254,7 @@ Item {
             ListView {
                 id: logRows
                 objectName: "logRows"
+                visible: view.lines.length > 0
                 Layout.fillWidth: true; Layout.fillHeight: true; Layout.minimumHeight: 0
                 model: view.lines
                 clip: true
@@ -276,6 +279,31 @@ Item {
                         font.family: "monospace"; font.pixelSize: view.compact ? 16 : 20
                         color: BrandTheme.colors.text
                         wrapMode: Text.Wrap
+                        Layout.fillWidth: true
+                    }
+                }
+            }
+            Item {
+                visible: view.lines.length === 0
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                ColumnLayout {
+                    anchors.centerIn: parent
+                    width: Math.min(parent.width, 420)
+                    spacing: 12
+                    FeatureIcon {
+                        iconName: "logs"
+                        Layout.alignment: Qt.AlignHCenter
+                        Layout.preferredWidth: 44
+                        Layout.preferredHeight: 44
+                    }
+                    Text {
+                        objectName: "logsEmptyMessage"
+                        text: view.tr("logs_empty")
+                        color: BrandTheme.colors.muted
+                        font.pixelSize: view.compact ? 19 : 23
+                        horizontalAlignment: Text.AlignHCenter
+                        wrapMode: Text.WordWrap
                         Layout.fillWidth: true
                     }
                 }
