@@ -1938,7 +1938,9 @@ Item {
             }
             Text {
                 visible: screen.historical && !!screen.state.timeline.session
-                text: screen.tr(screen.state.archive_delete.available ? "session_saved_title" : "session_history_view_readonly") + screen.savedDurationSuffix(screen.state.timeline.session); color: BrandTheme.colors.muted; font.pixelSize: 20
+                text: screen.tr(screen.state.archive_delete.available ? "session_saved_title" : "session_history_view_readonly")
+                    + (screen.currentHistory ? screen.savedDurationSuffix(screen.state.timeline.session) : "")
+                color: BrandTheme.colors.muted; font.pixelSize: 20
             }
             Text {
                 objectName: "sessionSavedInterruptedStatus"
@@ -1951,28 +1953,65 @@ Item {
                 Layout.fillWidth: true
                 wrapMode: Text.WordWrap
             }
-            GlassButton {
-                visible: screen.historical && !!screen.state.timeline.session
-                text: screen.tr("session_history_first"); enabled: !screen.owner.busy
-                onClicked: screen.owner.firstEntries()
-            }
             RowLayout {
+                id: savedHeader
+                readonly property var timing: {
+                    screen.backend.translationVersion
+                    return visible ? screen.owner.archiveTiming(screen.state.timeline.session) : ({})
+                }
                 visible: screen.historical && !screen.currentHistory && !!screen.state.timeline.session
                 Layout.fillWidth: true
                 spacing: 12
                 SavedMoodMark {
                     objectName: "sessionSavedMoodMark"
                     metrics: screen.state.saved_summary || []
+                    Layout.alignment: Qt.AlignTop
                 }
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 4
+                    Text {
+                        objectName: "sessionSavedTimingTitle"
+                        visible: !!savedHeader.timing.title
+                        text: savedHeader.timing.title || ""
+                        color: BrandTheme.colors.text
+                        font.bold: true
+                        font.pixelSize: 22
+                        textFormat: Text.PlainText
+                        wrapMode: Text.WordWrap
+                        Layout.fillWidth: true
+                    }
+                    Text {
+                        objectName: "sessionSavedStartTime"
+                        visible: !!savedHeader.timing.start
+                        text: screen.tr("session_archive_start_label").replace("%1", savedHeader.timing.start || "")
+                        color: BrandTheme.colors.muted
+                        font.pixelSize: 18
+                        textFormat: Text.PlainText
+                        wrapMode: Text.WordWrap
+                        Layout.fillWidth: true
+                    }
+                    Text {
+                        objectName: "sessionSavedEndTime"
+                        visible: !!savedHeader.timing.end
+                        text: screen.tr("session_archive_end_label").replace("%1", savedHeader.timing.end || "")
+                        color: BrandTheme.colors.muted
+                        font.pixelSize: 18
+                        textFormat: Text.PlainText
+                        wrapMode: Text.WordWrap
+                        Layout.fillWidth: true
+                    }
                     Repeater {
                         objectName: "sessionSavedSummary"
                         model: screen.state.saved_summary || []
                         SessionSummaryMetric { objectName: "sessionSavedSummaryMetric" }
                     }
                 }
+            }
+            GlassButton {
+                visible: screen.historical && !!screen.state.timeline.session
+                text: screen.tr("session_history_first"); enabled: !screen.owner.busy
+                onClicked: screen.owner.firstEntries()
             }
             GlassButton {
                 objectName: "sessionDeleteSaved"

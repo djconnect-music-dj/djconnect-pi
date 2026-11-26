@@ -360,13 +360,18 @@ class SessionController(QObject):
 
     @Slot("QVariantMap", result=str)
     def formatArchiveTiming(self, session):
+        timing = self.archiveTiming(session)
+        return "{title} ({start} – {end})".format(**timing) if timing else ""
+
+    @Slot("QVariantMap", result="QVariantMap")
+    def archiveTiming(self, session):
         language = self.backend.cfg.language
         locale = QLocale(locale_for_language(language))
         date_format = translate(language, "session_archive_date_format")
         started = timestamp(session.get("started_at"))
         anchor = started if started is not None else timestamp(session.get("created_at"))
         if anchor is None:
-            return ""
+            return {}
         date = QDateTime.fromMSecsSinceEpoch(int(anchor * 1000)).toLocalTime()
         title = locale.toString(date, date_format)
         duration = self.formatSavedDuration(session)
@@ -380,7 +385,7 @@ class SessionController(QObject):
             end = QDateTime.fromMSecsSinceEpoch(int(ended * 1000)).toLocalTime()
             end_format = "HH:mm" if started is not None and date.date() == end.date() else date_format + " HH:mm"
             end_label = locale.toString(end, end_format)
-        return f"{title} ({start_label} – {end_label})"
+        return {"title": title, "start": start_label, "end": end_label}
 
     @Property("QVariantMap", notify=playbackArtworkChanged)
     def playbackArtwork(self):

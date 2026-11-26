@@ -419,6 +419,22 @@ def main():
                 with patch.object(owner, "_launch") as open_session:
                     click(window, interrupted)
                     open_session.assert_called_once_with("timeline", "interrupted")
+                saved = owner._sessions[0]
+                owner._timeline = {"session": saved, "revision": "fixture-saved", "entries": []}
+                owner.changed.emit()
+                timing_title = one(screen, "sessionSavedTimingTitle")
+                start_time = one(screen, "sessionSavedStartTime")
+                end_time = one(screen, "sessionSavedEndTime")
+                for language in LANGUAGES:
+                    backend.setLanguage(language)
+                    QTest.qWait(65)
+                    timing = owner.archiveTiming(saved)
+                    assert timing_title.property("visible") and timing_title.property("text") == timing["title"]
+                    for label, kind in ((start_time, "start"), (end_time, "end")):
+                        template = TRANSLATIONS[language][f"session_archive_{kind}_label"]
+                        assert label.property("visible") and label.property("text") == template.replace("%1", timing[kind])
+                        assert label.property("contentWidth") <= label.width() + 1
+                    assert end_time.mapToItem(start_time, 0, 0).y() >= start_time.height()
                 backend.shutdown()
                 delete(window)
                 delete(engine)
