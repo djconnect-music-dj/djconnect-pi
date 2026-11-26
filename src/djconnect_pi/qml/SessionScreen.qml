@@ -1811,16 +1811,9 @@ Item {
                                 transportPanel.open()
                             }
                             contentItem: RowLayout {
-                                ProgressBar {
-                                    id: playbackProgress
+                                SessionPlaybackPositionBar {
                                     objectName: "sessionPlaybackBar"
-                                    value: screen.state.playback.progress || 0; Layout.fillWidth: true
-                                    Accessible.ignored: true
-                                    background: Rectangle { implicitHeight: 6; radius: 3; color: BrandTheme.colors.text; opacity: 0.18 }
-                                    contentItem: Item {
-                                        implicitHeight: 6
-                                        Rectangle { width: playbackProgress.visualPosition * parent.width; height: parent.height; radius: 3; color: BrandTheme.colors.text }
-                                    }
+                                    Layout.fillWidth: true
                                 }
                                 Text {
                                     id: playbackTime
@@ -2522,6 +2515,16 @@ Item {
         Layout.fillWidth: true
         wrapMode: Text.WordWrap
     }
+    component SessionPlaybackPositionBar: ProgressBar {
+        id: positionBar
+        value: screen.state.playback.progress || 0
+        Accessible.ignored: true
+        background: Rectangle { implicitHeight: 6; radius: 3; color: BrandTheme.colors.text; opacity: 0.18 }
+        contentItem: Item {
+            implicitHeight: 6
+            Rectangle { width: positionBar.visualPosition * parent.width; height: parent.height; radius: 3; color: BrandTheme.colors.text }
+        }
+    }
     component SessionPlaybackShortcut: GlassButton {
         signal currentTrackClicked()
         readonly property int transportEpoch: screen.state.playback_control.transport_epoch || 0
@@ -2568,6 +2571,22 @@ Item {
             color: BrandTheme.colors.muted; font.pixelSize: 18
             wrapMode: Text.Wrap; maximumLineCount: 2; elide: Text.ElideRight
             Layout.fillWidth: true
+        }
+        ColumnLayout {
+            visible: !transportControls.overArtwork && playbackSources.ready && positionText.text.length > 0
+            Layout.fillWidth: true
+            spacing: 4
+            SessionPlaybackPositionBar {
+                objectName: "sessionTransportProgress"
+                Layout.fillWidth: true
+            }
+            Text {
+                id: positionText
+                objectName: "sessionTransportPosition"
+                text: screen.state.playback.time_label || ""; textFormat: Text.PlainText
+                color: BrandTheme.colors.muted; font.pixelSize: 16; font.features: ({ "tnum": 1 })
+                Layout.alignment: Qt.AlignRight
+            }
         }
         GridLayout {
             Layout.alignment: Qt.AlignHCenter

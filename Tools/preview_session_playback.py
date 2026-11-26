@@ -452,17 +452,24 @@ def main():
                 assert transport_title.property('visible') and transport_title.property('text') == owner.state['playback']['title']
                 assert transport_artist.property('visible') and transport_artist.property('text') == owner.state['playback']['artist']
                 assert transport_artist.y() >= transport_title.y() + transport_title.height()
+                transport_position = visual(transport_panel.property('contentItem'), 'sessionTransportPosition')
+                transport_progress = visual(transport_panel.property('contentItem'), 'sessionTransportProgress')
+                assert transport_position.property('visible') and transport_position.property('text') == owner.state['playback']['time_label']
+                assert transport_progress.property('value') == owner.state['playback']['progress']
                 capture('direct-playback-controls')
 
                 original_session = owner._session
                 owner._session = deepcopy(original_session)
                 current_playback = owner._session['broadcast']['playback']
                 panel_position = (transport_panel.property('x'), transport_panel.property('y'))
+                transport_bar_width = transport_progress.width()
                 current_playback['position_ms'] += 750
                 owner.changed.emit()
                 QTest.qWait(60)
                 assert transport_panel.property('opened') and not intents
                 assert (transport_panel.property('x'), transport_panel.property('y')) == panel_position
+                assert abs(transport_progress.width() - transport_bar_width) <= 1
+                assert transport_position.property('text') == owner.state['playback']['time_label']
                 click('sessionPlaybackPrevious')
                 assert len(intents) == 1
                 intents.pop()()
