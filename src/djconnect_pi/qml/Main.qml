@@ -3161,16 +3161,15 @@ BrandWindow {
                     contentHeight: discoveryContent.implicitHeight
                     boundsBehavior: Flickable.DragOverBounds
                     flickableDirection: Flickable.VerticalFlick
-                    property bool refreshArmed: false
-                    onDragStarted: refreshArmed = false
-                    onVerticalOvershootChanged: {
-                        if (dragging && verticalOvershoot < -64)
-                            refreshArmed = true
-                    }
-                    onDragEnded: {
-                        if (refreshArmed && !djconnect.musicDiscoveryBusy && djconnect.musicDiscoveryItems.length > 0)
-                            djconnect.refreshMusicDiscovery()
-                        refreshArmed = false
+
+                    PullToRefresh {
+                        objectName: "discoveryPullToRefresh"
+                        flickable: discoveryFlick
+                        canRefresh: musicDiscoveryPanel.visible && root.active && !root.screenBlanked
+                            && !musicDiscoveryPanel.detailVisible && djconnect.paired && !djconnect.demoMode
+                            && djconnect.musicDnaEnabled && !djconnect.musicDiscoveryConsentRejected
+                            && !djconnect.musicDiscoveryBusy && musicDiscoveryPanel.sections.length > 0
+                        onRefreshRequested: djconnect.refreshMusicDiscovery()
                     }
 
                     ColumnLayout {
