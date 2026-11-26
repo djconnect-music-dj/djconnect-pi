@@ -1302,11 +1302,11 @@ Item {
                     iconName: refreshing ? "" : "refresh"
                     Accessible.name: screen.tr("refresh")
                     implicitWidth: 52; background: Item {}
-                    enabled: screen.historical ? screen.backend.paired && !screen.backend.demoMode
-                        && !screen.historyReadOutstanding && !screen.archiveReadActive
-                        : !screen.owner.busy || screen.owner.refreshing
+                    enabled: screen.backend.paired && !screen.backend.demoMode && !refreshing
+                        && (screen.historical ? !screen.historyReadOutstanding && !screen.archiveReadActive : !screen.owner.busy)
+                    opacity: enabled || refreshing ? 1 : 0.4
                     onClicked: {
-                        if (refreshing) return
+                        if (!enabled) return
                         if (screen.historical) {
                             screen.refreshHistory(true)
                             screen.historyToolbarRefreshing = screen.historyReadOutstanding

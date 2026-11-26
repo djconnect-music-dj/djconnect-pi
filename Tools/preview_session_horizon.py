@@ -261,12 +261,21 @@ def main():
                                 assert poll_timer is not None
                                 flow_view = window.findChild(QObject, "sessionHistoryScroll")
                                 spinner = one(screen, "sessionPullRefreshSpinner")
+                                live_refresh = one(screen, "sessionRefresh")
+                                live_spinner = one(live_refresh, "sessionRefreshSpinner")
+                                refresh_size = live_refresh.size()
                                 with QSignalBlocker(poll_timer), patch.object(owner, "_launch", side_effect=(
                                     lambda action, *, background=False, manual_refresh=False: owner._set_running(1, action, background=background)
                                 )) as refresh:
+                                    assert live_refresh.property("enabled")
                                     owner.poll()
                                     assert owner.refreshing and not spinner.property("visible")
+                                    assert not live_refresh.property("enabled") and live_spinner.property("running")
+                                    assert live_refresh.property("opacity") == 1 and live_refresh.size() == refresh_size
+                                    click(window, live_refresh)
+                                    refresh.assert_called_once_with("refresh", background=True)
                                     owner._set_running()
+                                    assert live_refresh.property("enabled") and not live_spinner.property("visible")
                                     refresh.reset_mock()
                                     for view, switch in ((flow_view, horizon), (forecast_scroll, flow)):
                                         view_flickable = view.property("contentItem")
