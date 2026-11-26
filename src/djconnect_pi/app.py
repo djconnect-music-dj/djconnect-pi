@@ -3592,7 +3592,8 @@ class DJConnectBackend(QObject):
         self._set_backend_available(True)
         self.musicDiscoveryChanged.emit()
         if manual:
-            self._show_toast(self.tr_key("music_discovery_updated"), 2200, "discover")
+            notice_key = "music_discovery_rate_limited" if data.get("rate_limited") is True else "music_discovery_updated"
+            self._show_toast(self.tr_key(notice_key), 2200, "discover")
 
     @Slot(object)
     def _apply_track_insight_data(self, data: object) -> None:

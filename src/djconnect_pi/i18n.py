@@ -1671,6 +1671,13 @@ _SESSION_COMPOSER_TRANSLATIONS = {
         "Recommendations updated", "Aanbevelingen vernieuwd", "Empfehlungen aktualisiert",
         "Recommandations actualisées", "Recomendaciones actualizadas",
     ),
+    "music_discovery_rate_limited": (
+        "Please wait before refreshing again. Showing the latest available recommendations.",
+        "Wacht even met opnieuw vernieuwen. Je ziet de laatst beschikbare aanbevelingen.",
+        "Bitte warte vor der nächsten Aktualisierung. Die letzten verfügbaren Empfehlungen werden angezeigt.",
+        "Patientez avant d’actualiser à nouveau. Les dernières recommandations disponibles sont affichées.",
+        "Espera antes de actualizar de nuevo. Se muestran las últimas recomendaciones disponibles.",
+    ),
     "music_discovery_play_failed": (
         "Could not play this recommendation.",
         "Deze aanbeveling kon niet worden afgespeeld.",

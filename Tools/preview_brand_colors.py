@@ -923,9 +923,15 @@ def main():
         assert not detail.property("opened")
         with (patch.object(backend, "_sync_config_from_disk"), patch.object(backend, "_run") as refresh_request,
               patch.object(backend.client, "music_discovery_refresh", side_effect=[
-                  requests.ReadTimeout, {"success": True, "sections": []},
+                  requests.ReadTimeout,
+                  {"success": True, "rate_limited": True, "sections": [
+                      {"id": "fixture-shelf", "title": "Recommendations", "items": [
+                          {"id": "fixture-track", "title": refreshed_title},
+                      ]},
+                  ]},
+                  {"success": True, "sections": []},
               ]), patch.object(backend, "_persist_backend_summary")):
-            for key in ("music_discovery_load_failed", "music_discovery_updated"):
+            for key in ("music_discovery_load_failed", "music_discovery_rate_limited", "music_discovery_updated"):
                 QMetaObject.invokeMethod(discovery_refresh, "clicked")
                 assert discovery_refresh.property("loading")
                 refresh_request.call_args.args[1]()
@@ -934,7 +940,9 @@ def main():
                 if key == "music_discovery_load_failed":
                     assert empty_feed.property("visible") and empty_feed.property("text") == backend.t(key)
                     assert backend.musicDiscoveryItems[0]["title"] == refreshed_title
-            assert refresh_request.call_count == 2
+                if key == "music_discovery_rate_limited":
+                    assert not empty_feed.property("visible") and backend.musicDiscoveryItems[0]["title"] == refreshed_title
+            assert refresh_request.call_count == 3
             assert empty_feed.property("text") == backend.t("music_discovery_empty")
         with patch.object(backend, "_sync_config_from_disk"), patch.object(backend, "_run") as request:
             QTest.qWait(65)
