@@ -2148,10 +2148,12 @@ class DJConnectBackend(QObject):
         data = self.client.command(command, **payload)
         self._persist_backend_summary()
         self._suppress_next_playback_navigation = command == "play_context_at"
-        self._playbackReady.emit(self.client.playback_from_status(data))
+        has_playback = _contains_playback_payload(data)
+        if has_playback:
+            self._playbackReady.emit(self.client.playback_from_status(data))
         if command == "start_playlist":
             self._load_queue_worker()
-        else:
+        if command == "play_context_at" or not has_playback:
             self._refresh_worker()
         _LOGGER.info("Media item command %s completed in %.0fms", command, _elapsed_ms(started))
 

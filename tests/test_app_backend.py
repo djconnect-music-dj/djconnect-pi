@@ -3133,6 +3133,24 @@ def test_backend_queue_item_worker_sends_direct_uri_without_required_context(tmp
     ]
 
 
+@pytest.mark.parametrize("command", ["play_context_at", "start_playlist"])
+def test_media_command_ack_waits_for_playback_status_without_clearing_current_track(tmp_path: Path, command: str) -> None:
+    ensure_app()
+    backend = DJConnectBackend(tmp_path / "config.json")
+    backend.playback = Playback(title="Current track")
+    backend.client.command = Mock(return_value={"success": True})
+    backend.client.playback_from_status = Mock()
+    backend._refresh_worker = Mock()
+    backend._load_queue_worker = Mock()
+
+    backend._play_media_item_worker(command, {"value": "fixture:uri"})
+
+    assert backend.title == "Current track"
+    backend.client.playback_from_status.assert_not_called()
+    backend._refresh_worker.assert_called_once_with()
+    assert backend._load_queue_worker.call_count == int(command == "start_playlist")
+
+
 def test_backend_queue_item_play_uses_play_context_at_command(tmp_path: Path) -> None:
     ensure_app()
     backend = DJConnectBackend(tmp_path / "config.json")

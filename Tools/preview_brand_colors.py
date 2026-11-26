@@ -20,6 +20,7 @@ from djconnect_pi.app import DJConnectBackend, parse_playlist_items, parse_queue
 from djconnect_pi.brand_theme import apply_palette
 from djconnect_pi.config import Config, save_config
 from djconnect_pi.expiry_clock import ExpiryClock
+from djconnect_pi.ha import Playback
 from djconnect_pi.session_history_view import presented_history, search_page
 from djconnect_pi.session_projection import history_page, timestamp
 from djconnect_pi.update_ui import UpdateUiBackend
@@ -166,6 +167,19 @@ def main():
         assert visual_item(playlist_panel, "mediaRefresh").property("enabled")
         backend._set_backend_available(True)
         assert visual_item(playlist_panel, "mediaItemRow-0").property("enabled")
+        backend.playback = Playback(title="Confirmed previous track", uri="fixture:previous")
+        with (patch.object(backend.client, "command", return_value={"success": True}),
+              patch.object(backend, "_persist_backend_summary"),
+              patch.object(backend, "_load_queue_worker"),
+              patch.object(backend, "_refresh_worker") as refresh,
+              patch("djconnect_pi.app.subprocess.run")):
+            backend._play_media_item_worker("start_playlist", {"uri": "fixture:playlist"})
+            refresh.assert_called_once_with()
+            assert backend.title == "Confirmed previous track"
+            assert window.property("activeScreen") == "playlists"
+            backend._apply_playback(Playback(title="Confirmed playlist track", uri="fixture:started", is_playing=True))
+            assert backend.title == "Confirmed playlist track" and window.property("activeScreen") == "playlists"
+            assert not window.property("trackArtworkOpen")
         backend.cfg.music_backend_available = False
         backend.settingsChanged.emit()
         assert not visual_item(playlist_panel, "mediaItemRow-0").property("enabled")
