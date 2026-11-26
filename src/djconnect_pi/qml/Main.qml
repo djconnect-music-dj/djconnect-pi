@@ -4935,6 +4935,7 @@ BrandWindow {
         objectName: "askDjPanel"
         color: "transparent"
         property bool chatKeyboardOpen: false
+        property bool helpOpen: false
         property string pendingQuestionText: ""
         readonly property int profileContextRevision: djconnect.musicDnaContextRevision
         onProfileContextRevisionChanged: clearQuestionUi(false)
@@ -4961,8 +4962,15 @@ BrandWindow {
             root.askDjClearConfirmOpen = false
             pendingQuestionText = ""
             readingAnchor = null
+            closeHelp()
             if (clearDraft) clearChatDraft()
             else chatKeyboardOpen = false
+        }
+
+        function closeHelp() {
+            if (!helpOpen) return
+            helpOpen = false
+            djconnect.closeAskDjHelp()
         }
 
         Connections {
@@ -4977,8 +4985,16 @@ BrandWindow {
         }
         Connections {
             target: root
-            function onActiveChanged() { if (!root.active) askDjPanel.pendingQuestionText = "" }
-            function onScreenBlankedChanged() { if (root.screenBlanked) askDjPanel.pendingQuestionText = "" }
+            function onActiveChanged() {
+                if (root.active) return
+                askDjPanel.pendingQuestionText = ""
+                askDjPanel.closeHelp()
+            }
+            function onScreenBlankedChanged() {
+                if (!root.screenBlanked) return
+                askDjPanel.pendingQuestionText = ""
+                askDjPanel.closeHelp()
+            }
         }
 
         property bool searchOpen: false
@@ -5058,6 +5074,7 @@ BrandWindow {
         }
 
         function openSearch(showKeyboard) {
+            closeHelp()
             if (!searchOpen) returnFocusToChat = !showKeyboard && askDjChatInput.activeFocus
             chatKeyboardOpen = false
             searchOpen = true
@@ -6071,6 +6088,85 @@ BrandWindow {
             }
 
             GlassSurface {
+                objectName: "askDjHelpPanel"
+                visible: askDjPanel.helpOpen
+                Layout.fillWidth: true
+                Layout.preferredHeight: Math.min(340, askDjPanel.height * 0.36)
+                radius: 22; elevated: true
+
+                ColumnLayout {
+                    anchors.fill: parent
+                    anchors.margins: 10
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Text {
+                            text: root.tr("ask_dj_example_questions")
+                            color: BrandTheme.colors.text
+                            font.bold: true
+                            font.pixelSize: 19
+                            Layout.fillWidth: true
+                        }
+                        GlassButton {
+                            iconName: "refresh"; tertiary: true
+                            Accessible.name: root.tr("refresh")
+                            enabled: !djconnect.askDjHelpBusy
+                            onClicked: djconnect.openAskDjHelp()
+                        }
+                        GlassButton {
+                            iconName: "close"; tertiary: true
+                            Accessible.name: root.tr("close")
+                            onClicked: askDjPanel.closeHelp()
+                        }
+                    }
+                    Text {
+                        objectName: "askDjHelpStatus"
+                        visible: djconnect.askDjHelpBusy || djconnect.askDjHelpSections.length === 0
+                        text: root.tr(djconnect.askDjHelpBusy ? "loading" : "ask_dj_examples_unavailable")
+                        color: BrandTheme.colors.muted
+                        wrapMode: Text.WordWrap
+                        Layout.fillWidth: true
+                    }
+                    ScrollView {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        clip: true
+                        contentWidth: availableWidth
+                        ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+                        ColumnLayout {
+                            width: parent.width
+                            Repeater {
+                                model: djconnect.askDjHelpSections
+                                delegate: ColumnLayout {
+                                    required property var modelData
+                                    Layout.fillWidth: true
+                                    Text {
+                                        text: modelData.title
+                                        color: BrandTheme.colors.text
+                                        font.bold: true
+                                        font.pixelSize: 17
+                                        Layout.fillWidth: true
+                                    }
+                                    Repeater {
+                                        model: modelData.examples
+                                        delegate: Text {
+                                            required property var modelData
+                                            objectName: "askDjHelpExample"
+                                            text: modelData.text
+                                            textFormat: Text.PlainText
+                                            color: BrandTheme.colors.muted
+                                            wrapMode: Text.WordWrap
+                                            font.pixelSize: 16
+                                            Layout.fillWidth: true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            GlassSurface {
                 objectName: "askDjChatBar"
                 visible: !askDjPanel.searchOpen
                 Layout.fillWidth: true
@@ -6097,6 +6193,22 @@ BrandWindow {
                         background: GlassSurface { radius: 24; interactive: true; focused: askDjChatInput.activeFocus }
                         TapHandler { onTapped: askDjPanel.chatKeyboardOpen = true }
                         onAccepted: askDjPanel.sendQuestion()
+                    }
+                    GlassButton {
+                        objectName: "askDjHelpToggle"
+                        iconName: "info"; tertiary: true
+                        Accessible.name: root.tr("ask_dj_example_questions")
+                        Layout.preferredWidth: 48; Layout.fillHeight: true
+                        enabled: djconnect.paired && !djconnect.demoMode
+                        onClicked: {
+                            if (askDjPanel.helpOpen) {
+                                askDjPanel.closeHelp()
+                            } else {
+                                askDjPanel.chatKeyboardOpen = false
+                                askDjPanel.helpOpen = true
+                                djconnect.openAskDjHelp()
+                            }
+                        }
                     }
                     GlassButton {
                         id: askDjSend

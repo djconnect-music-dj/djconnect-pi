@@ -43,6 +43,39 @@ def _exact_int(value, expected):
     return type(value) is int and value == expected
 
 
+def compatible_catalogue(data):
+    capabilities = data.get("capabilities")
+    contracts = data.get("contract_versions")
+    descriptor = data.get("ask_dj_examples")
+    return (data.get("success") is True and isinstance(capabilities, dict)
+            and capabilities.get("ask_dj_examples") is True and isinstance(contracts, dict)
+            and _exact_int(contracts.get("ask_dj_examples"), 1) and isinstance(descriptor, dict)
+            and _exact_int(descriptor.get("schema_version"), 1)
+            and _exact_int(descriptor.get("revision"), CATALOGUE_REVISION)
+            and descriptor.get("catalogue_id") == CATALOGUE_ID
+            and descriptor.get("sha256") == CATALOGUE_SHA256 and descriptor.get("qualified") is True)
+
+
+def global_help_sections(language, eligible_ids, music_backend, supported_features):
+    catalogue = _catalogue()
+    flags = {"paired", "online", "backend_available"}
+    flags.update(key for key in supported_features if key.startswith("supports_"))
+    if music_backend == "spotify_direct":
+        flags.add("spotify")
+    prompts = {}
+    for entry in sorted(catalogue["entries"], key=lambda entry: (entry["help_rank"], entry["id"])):
+        if (entry["id"] not in eligible_ids or "ask_dj" not in entry["surfaces"] or entry["contracts"]
+                or entry["publication"] != "qualified_v1" or not (set(entry["requires"]) - {"agent_available"}) <= flags
+                or entry["qualification"][language]["state"] != "qualified_owner_route"):
+            continue
+        text = entry["templates"][language]
+        for slot in entry["slots"]:
+            text = text.replace("{" + slot + "}", catalogue["slot_labels"][slot][language])
+        prompts.setdefault(entry["group"], []).append({"text": text})
+    return [{"title": group["labels"][language], "examples": prompts[group["id"]]}
+            for group in catalogue["groups"] if group["id"] in prompts]
+
+
 @dataclass(frozen=True)
 class HelpRequest:
     surface: str

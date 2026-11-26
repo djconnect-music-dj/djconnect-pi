@@ -43,6 +43,7 @@ from PySide6.QtQuickControls2 import QQuickStyle
 
 from . import __version__
 from .artwork_palette import displayed_artwork_tint
+from .ask_dj_help import compatible_catalogue, global_help_sections
 from .brand_theme import apply_palette
 from .config import (
     CLIENT_TYPE,
@@ -79,6 +80,7 @@ from .session_controller import SessionController
 from .session_playback_control import output_id
 from .session_playback_control import reference as session_playback_reference
 from .session_projection import safe_link, timestamp, volume_observation
+from .expiry_clock import elapsed_time
 from .session_transport import SessionError, session_profile_id
 from .shared_settings import SettingsError
 from .system_info import log_raspberry_pi_system_info
@@ -232,6 +234,8 @@ class DJConnectBackend(QObject):
     _askDjReady = Signal(object)
     _askDjRefreshReady = Signal(object)
     _askDjClearReady = Signal(object)
+    askDjHelpChanged = Signal()
+    _askDjHelpReady = Signal(object, object)
     _musicDnaReady = Signal(object)
     _musicDnaImportPrepared = Signal(object, object, object)
     _musicDnaImportFinished = Signal(object, object, str)
@@ -283,6 +287,9 @@ class DJConnectBackend(QObject):
         self._ask_dj_history_revision = 0
         self._ask_dj_clear_revision = 0
         self._ask_dj_busy = False
+        self._ask_dj_help_request = None
+        self._ask_dj_help_busy = False
+        self._ask_dj_help_sections = []
         self._music_dna_enabled = False
         self._music_dna_loaded = False
         self._music_dna_context_revision = 0
@@ -380,6 +387,15 @@ class DJConnectBackend(QObject):
         self._askDjReady.connect(self._apply_ask_dj_data)
         self._askDjRefreshReady.connect(self._apply_ask_dj_refresh_result)
         self._askDjClearReady.connect(self._apply_ask_dj_clear_result)
+        self._askDjHelpReady.connect(self._apply_ask_dj_help)
+        self._ask_dj_help_timer = QTimer(self)
+        self._ask_dj_help_timer.setSingleShot(True)
+        self._ask_dj_help_timer.setTimerType(Qt.TimerType.PreciseTimer)
+        self._ask_dj_help_timer.timeout.connect(self.closeAskDjHelp)
+        for signal in (self.profileChanged, self.pairedChanged, self.languageChanged,
+                       self.backendAvailableChanged, self.demoModeChanged, self.versionMismatchChanged,
+                       self.settingsChanged):
+            signal.connect(self._invalidate_ask_dj_help_if_changed)
         self._musicDnaReady.connect(self._apply_music_dna_data)
         self._musicDnaImportPrepared.connect(self._apply_music_dna_import)
         self._musicDnaImportFinished.connect(self._finish_music_dna_import)
@@ -577,6 +593,16 @@ class DJConnectBackend(QObject):
     @Property(bool, notify=askDjChanged)
     def askDjBusy(self) -> bool:
         return self._ask_dj_busy
+
+    @Property("QVariantList", notify=askDjHelpChanged)
+    def askDjHelpSections(self) -> list:
+        if self._ask_dj_help_is_current(self._ask_dj_help_request):
+            return self._ask_dj_help_sections
+        return []
+
+    @Property(bool, notify=askDjHelpChanged)
+    def askDjHelpBusy(self) -> bool:
+        return self._ask_dj_help_busy
 
     @Property(bool, notify=musicDnaChanged)
     def musicDnaEnabled(self) -> bool:
@@ -1452,6 +1478,7 @@ class DJConnectBackend(QObject):
             self._application_foreground = foreground
             if not foreground:
                 self.cancelPlaybackSeek()
+                self.closeAskDjHelp()
                 self._track_insight_revision += 1
                 self._clear_track_insight()
         self._session_controller.setForeground(foreground)
@@ -1912,6 +1939,75 @@ class DJConnectBackend(QObject):
     @Slot()
     def refreshAskDjHistory(self) -> None:
         self._load_ask_dj_history(show_toast=True, action="refreshed")
+
+    def _ask_dj_help_context(self):
+        cfg = self.cfg
+        if (not self._application_foreground or self._shutting_down or self._demo_mode or not self.paired
+                or cfg.private_session or not self._backend_available or self._version_mismatch_visible
+                or cfg.music_backend_available is not True):
+            return None
+        return (self._private_read_context(), cfg.music_backend,
+                frozenset(key for key, value in (cfg.music_backend_capabilities or {}).items() if value is True))
+
+    def _ask_dj_help_is_current(self, request):
+        return (request is not None and self._ask_dj_help_request is request
+                and elapsed_time() < request[1] and request[0] == self._ask_dj_help_context())
+
+    def _invalidate_ask_dj_help_if_changed(self):
+        if self._ask_dj_help_request is not None and not self._ask_dj_help_is_current(self._ask_dj_help_request):
+            self.closeAskDjHelp()
+
+    @Slot()
+    def openAskDjHelp(self) -> None:
+        self.closeAskDjHelp()
+        self._sync_config_from_disk()
+        context = self._ask_dj_help_context()
+        if context is None:
+            return
+        transport = self._session_controller.transport
+        try:
+            binding = transport.binding()
+        except SessionError:
+            return
+        if not binding.resolved_profile_id:
+            return
+        request = (context, elapsed_time() + 15)
+        self._ask_dj_help_request = request
+        self._ask_dj_help_busy = True
+        self._ask_dj_help_timer.start(15_000)
+        self.askDjHelpChanged.emit()
+        _, music_backend, supported_features = context
+
+        def read():
+            sections = []
+            try:
+                if self._ask_dj_help_is_current(request) and compatible_catalogue(transport.capabilities(binding, isolated=True)):
+                    if self._ask_dj_help_is_current(request):
+                        observation = transport.ask_dj_help(binding, "ask_dj")
+                        if observation.available:
+                            sections = global_help_sections(binding.language, observation.eligible_ids,
+                                                            music_backend, supported_features)
+            except (SessionError, OSError, ValueError):
+                pass
+            self._askDjHelpReady.emit(request, sections)
+
+        self._executor.submit(read)
+
+    @Slot(object, object)
+    def _apply_ask_dj_help(self, request, sections):
+        if self._ask_dj_help_is_current(request):
+            self._ask_dj_help_busy = False
+            self._ask_dj_help_sections = sections
+            self.askDjHelpChanged.emit()
+
+    @Slot()
+    def closeAskDjHelp(self) -> None:
+        if self._ask_dj_help_request is not None:
+            self._ask_dj_help_timer.stop()
+            self._ask_dj_help_request = None
+            self._ask_dj_help_busy = False
+            self._ask_dj_help_sections = []
+            self.askDjHelpChanged.emit()
 
     @Slot(QUrl, int)
     def exportAskDjHistory(self, destination: QUrl, revision: int) -> None:
@@ -3668,6 +3764,7 @@ class DJConnectBackend(QObject):
     def _session_owner_changed(self):
         if self._shutting_down:
             return
+        self.closeAskDjHelp()
         self._clear_profile_scoped_caches(preserve_session=True)
         self._invalidate_shared_settings_if_context_changed()
         timer = getattr(self, "_settings_reconcile_timer", None)
@@ -4130,6 +4227,7 @@ class DJConnectBackend(QObject):
     @Slot()
     def shutdown(self) -> None:
         self._shutting_down = True
+        self.closeAskDjHelp()
         self._edge_back_gesture.cancel()
         _LOGGER.info("Stopping DJConnect Pi client backend")
         self._poll_timer.stop()
