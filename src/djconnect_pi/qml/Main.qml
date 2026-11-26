@@ -801,12 +801,14 @@ BrandWindow {
         property string iconName: "play"
         property bool primary: false
         property bool active: false
+        property bool waiting: false
 
         Layout.fillWidth: true
         Layout.fillHeight: true
         contentItem: Canvas {
             id: iconCanvas
             anchors.fill: parent
+            visible: !control.waiting
             antialiasing: true
             onPaint: {
                 var ctx = getContext("2d")
@@ -913,6 +915,16 @@ BrandWindow {
                 function onIconNameChanged() { iconCanvas.requestPaint() }
                 function onActiveChanged() { iconCanvas.requestPaint() }
                 function onDownChanged() { iconCanvas.requestPaint() }
+            }
+        }
+        Loader {
+            anchors.centerIn: parent
+            width: 42
+            height: width
+            active: control.waiting
+            sourceComponent: BusyIndicator {
+                objectName: "playbackControlFavoriteSpinner"
+                running: true
             }
         }
         background: GlassSurface {
@@ -2307,10 +2319,12 @@ BrandWindow {
                 }
 
                 IconButton {
+                    objectName: "playbackControlFavorite"
                     iconName: djconnect.currentTrackFavorite ? "heartFilled" : "heart"
                     active: djconnect.currentTrackFavorite
                     enabled: djconnect.favoriteAvailable && !djconnect.favoriteBusy
-                    opacity: djconnect.favoriteAvailable ? (djconnect.favoriteBusy ? 0.55 : 1.0) : 0.0
+                    waiting: djconnect.favoriteAvailable && djconnect.favoriteBusy
+                    opacity: djconnect.favoriteAvailable ? 1.0 : 0.0
                     onClicked: djconnect.saveCurrentTrack()
                 }
 
