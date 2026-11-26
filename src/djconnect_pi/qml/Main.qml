@@ -3337,10 +3337,23 @@ BrandWindow {
                         }
                     }
                 }
-                ProgressBar {
+                RowLayout {
                     visible: insightSharePopup.clipRunning
                     Layout.fillWidth: true
-                    value: insightSharePopup.clipProgress
+                    ProgressBar {
+                        value: insightSharePopup.clipProgress
+                        Layout.fillWidth: true
+                    }
+                    GlassButton {
+                        objectName: "trackInsightClipCancel"
+                        text: root.tr("cancel")
+                        tertiary: true
+                        onClicked: {
+                            insightSharePopup.exportGeneration += 1
+                            djconnect.cancelTrackInsightClip()
+                            djconnect.showToastForContext(root.tr("track_insight_clip_cancelled"), "trackinsight")
+                        }
+                    }
                 }
                 RowLayout {
                     Layout.fillWidth: true
