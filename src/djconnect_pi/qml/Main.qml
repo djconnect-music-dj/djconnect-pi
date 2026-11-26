@@ -965,6 +965,7 @@ BrandWindow {
         readonly property bool compact: width < 900
         readonly property bool playbackAvailable: djconnect.demoMode || (djconnect.paired && djconnect.backendAvailable
             && djconnect.musicBackendAvailable && !djconnect.versionMismatchVisible)
+        readonly property bool refreshAvailable: playbackAvailable && !loading
         readonly property string query: searchInput.text.trim()
         readonly property var matches: filterItems(items, query)
         signal refreshRequested()
@@ -1090,7 +1091,8 @@ BrandWindow {
                 RefreshIconButton {
                     objectName: "mediaRefresh"
                     loading: panel.loading
-                    onClicked: if (!loading) panel.refreshRequested()
+                    enabled: panel.refreshAvailable
+                    onClicked: if (panel.refreshAvailable) panel.refreshRequested()
                 }
             }
             Control {
@@ -1164,8 +1166,8 @@ BrandWindow {
                         objectName: "mediaPullToRefresh"
                         flickable: mediaRows
                         canRefresh: panel.visible && root.active && !root.screenBlanked
-                            && djconnect.paired && !djconnect.demoMode && !panel.loading && !panel.searching
-                        onRefreshRequested: panel.refreshRequested()
+                            && panel.refreshAvailable && !djconnect.demoMode && !panel.searching
+                        onRefreshRequested: if (canRefresh) panel.refreshRequested()
                     }
 
                     delegate: Button {

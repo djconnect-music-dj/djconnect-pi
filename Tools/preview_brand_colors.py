@@ -188,9 +188,22 @@ def main():
         backend._set_backend_available(False)
         QTest.qWait(65)
         assert not visual_item(playlist_panel, "mediaItemRow-0").property("enabled")
-        assert visual_item(playlist_panel, "mediaRefresh").property("enabled")
+        media_refresh = visual_item(playlist_panel, "mediaRefresh")
+        media_pull_refresh = playlist_panel.findChild(QObject, "mediaPullToRefresh")
+        playlist_panel.setProperty("searching", False)
+        assert not media_refresh.property("enabled") and not media_pull_refresh.property("canRefresh")
+        with patch.object(backend, "_run") as request:
+            QMetaObject.invokeMethod(media_refresh, "clicked")
+            QMetaObject.invokeMethod(media_pull_refresh, "refreshRequested")
+            request.assert_not_called()
         backend._set_backend_available(True)
         assert visual_item(playlist_panel, "mediaItemRow-0").property("enabled")
+        assert media_refresh.property("enabled") and media_pull_refresh.property("canRefresh")
+        backend._media_loads_in_flight.add("playlists")
+        backend.mediaActivityChanged.emit()
+        assert media_refresh.property("loading") and not media_refresh.property("enabled")
+        assert not media_pull_refresh.property("canRefresh")
+        backend._finish_media_list_load("playlists")
         backend.playback = Playback(title="Confirmed previous track", uri="fixture:previous")
         with (patch.object(backend.client, "command", return_value={"success": True}),
               patch.object(backend, "_persist_backend_summary"),
