@@ -94,9 +94,11 @@ Item {
         searchInput.forceActiveFocus()
     }
     function closeSearch() {
+        const restoreFocus = searching && visible && !confirmationOpen
         keyboardOpen = false
         searching = false
         searchInput.clear()
+        if (restoreFocus) searchToggle.forceActiveFocus()
     }
     function submitSearch() {
         keyboardOpen = false
@@ -144,6 +146,7 @@ Item {
                     anchors.centerIn: parent
                     spacing: 0
                     LogAction {
+                        id: searchToggle
                         objectName: "logsSearchOpen"
                         iconName: "search"; Accessible.name: view.tr(view.searching ? "close_search" : "logs_search")
                         checked: view.searching

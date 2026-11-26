@@ -1106,11 +1106,13 @@ def main():
             capture("logs-search-" + locale)
             QMetaObject.invokeMethod(search_close, "clicked")
             assert not logs.property("searching") and search_input.property("text") == ""
+            assert search_toggle.property("activeFocus")
             QMetaObject.invokeMethod(search_toggle, "clicked")
             search_input.setProperty("text", "another sample")
             QMetaObject.invokeMethod(search_toggle, "clicked")
             assert not search_toggle.property("checked") and not logs.property("searching")
             assert not logs.property("keyboardOpen") and search_input.property("text") == ""
+            assert search_toggle.property("activeFocus")
             assert search_toggle_accessible.text(QAccessible.Text.Name) == backend.t("logs_search")
             QTest.keyClick(window, log_find.key(), log_find.keyboardModifiers())
             assert logs.property("searching") and not logs.property("keyboardOpen") and search_input.property("activeFocus")
@@ -1158,6 +1160,7 @@ def main():
             assert logs.property("matchIndex") == -1 and not search_count.property("visible")
             QTest.keyClick(window, Qt.Key.Key_Escape)
             assert not logs.property("searching") and search_input.property("text") == ""
+            assert search_toggle.property("activeFocus")
         backend.hideLogs()
         backend.cfg.log_level = "OFF"
         backend.setLanguage("nl")
