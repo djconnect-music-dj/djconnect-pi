@@ -88,7 +88,7 @@ def main():
         for screen in ["session", "history", "now", "control", "queue", "playlists", "askdj", "trackinsight", "discover", "musicdna", "more", "settings", "games", "legal", "privacy", "feedback"]:
             window.setProperty("activeScreen", screen)
             capture(screen)
-        track = {"title": "Repeated track", "uri": "spotify:track:fixture-a", "index": 4}
+        track = {"title": "Repeated track title with more detail " * 12, "uri": "spotify:track:fixture-a", "index": 4}
         backend._queue_items = parse_queue_items({"queue": [
             track, track, {"title": "Other track", "uri": "spotify:track:fixture-b", "index": 5},
             {**track, "index": 6},
@@ -102,6 +102,15 @@ def main():
         assert repeated_row.property("text") == track["title"]
         payload = QQmlExpression(engine.rootContext(), repeated_row, "modelData.index")
         assert payload.evaluate()[0] == 6 and not payload.hasError()
+        long_title = visual_item(repeated_row, "mediaTrackTitle")
+        short_title = visual_item(visual_item(media_rows, "mediaItemRow-1"), "mediaTrackTitle")
+        assert long_title.property("scrolling") and not short_title.property("scrolling")
+        QTest.qWait(1450)
+        assert long_title.property("shift") > 0
+        long_title.setProperty("reduceMotion", True)
+        label = visual_item(long_title, "mediaOverflowLabel")
+        assert not long_title.property("scrolling") and long_title.property("shift") == 0
+        assert label.property("lineCount") > 1 and not label.property("truncated")
         window.setProperty("activeScreen", "session")
         for runtime_state in ("opening", "ending"):
             backend.djSession._session["runtime_state"] = runtime_state

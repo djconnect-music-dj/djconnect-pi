@@ -894,6 +894,53 @@ BrandWindow {
         }
     }
 
+    component MediaOverflowText: Item {
+        id: overflowLabel
+        property alias text: label.text
+        property alias color: label.color
+        property alias font: label.font
+        property int stationaryLines: 1
+        property bool queueLabel: false
+        property bool inViewport: false
+        property bool reduceMotion: GlassStyle.reduceMotion
+        property real shift: 0
+        readonly property real overflow: Math.max(0, metrics.advanceWidth - width)
+        readonly property bool scrolling: queueLabel && root.active && GlassStyle.awake && !reduceMotion && overflow > 1
+        implicitHeight: label.implicitHeight
+        clip: scrolling
+
+        TextMetrics { id: metrics; text: label.text; font: label.font }
+        Text {
+            id: label
+            objectName: "mediaOverflowLabel"
+            x: -overflowLabel.shift
+            width: overflowLabel.scrolling ? Math.ceil(metrics.advanceWidth) : overflowLabel.width
+            textFormat: Text.PlainText
+            wrapMode: overflowLabel.scrolling ? Text.NoWrap : Text.Wrap
+            maximumLineCount: overflowLabel.queueLabel && overflowLabel.reduceMotion ? 2147483647
+                : overflowLabel.scrolling ? 1 : overflowLabel.stationaryLines
+            elide: overflowLabel.scrolling || (overflowLabel.queueLabel && overflowLabel.reduceMotion)
+                ? Text.ElideNone : Text.ElideRight
+        }
+        SequentialAnimation {
+            running: overflowLabel.scrolling && overflowLabel.inViewport && overflowLabel.visible
+            loops: Animation.Infinite
+            onRunningChanged: if (!running) overflowLabel.shift = 0
+            PauseAnimation { duration: 1250 }
+            NumberAnimation {
+                target: overflowLabel; property: "shift"
+                from: 0; to: overflowLabel.overflow
+                duration: Math.round(overflowLabel.overflow * 1000 / 28)
+            }
+            PauseAnimation { duration: 1250 }
+            NumberAnimation {
+                target: overflowLabel; property: "shift"
+                from: overflowLabel.overflow; to: 0
+                duration: Math.round(overflowLabel.overflow * 1000 / 28)
+            }
+        }
+    }
+
     component MediaListPanel: Rectangle {
         id: panel
         property string heading: ""
@@ -1144,35 +1191,38 @@ BrandWindow {
                             }
                             ColumnLayout {
                                 id: mediaText
+                                readonly property bool trackQueue: panel.playCommand === "play_context_at"
+                                readonly property bool onScreen: mediaRow.y + mediaRow.height > mediaRows.contentY
+                                    && mediaRow.y < mediaRows.contentY + mediaRows.height
                                 Layout.fillWidth: true
                                 spacing: 3
-                                Text {
+                                MediaOverflowText {
+                                    objectName: "mediaTrackTitle"
                                     text: mediaRow.text
-                                    textFormat: Text.PlainText
                                     color: BrandTheme.colors.text
                                     font.pixelSize: panel.compact ? 20 : 24
                                     font.weight: Font.DemiBold
-                                    wrapMode: Text.Wrap
-                                    maximumLineCount: 2
-                                    elide: Text.ElideRight
+                                    stationaryLines: 2
+                                    queueLabel: mediaText.trackQueue
+                                    inViewport: mediaText.onScreen
                                     Layout.fillWidth: true
                                 }
-                                Text {
+                                MediaOverflowText {
                                     text: mediaRow.modelData.subtitle || ""
-                                    textFormat: Text.PlainText
                                     visible: text.length > 0
                                     color: BrandTheme.colors.muted
                                     font.pixelSize: panel.compact ? 16 : 19
-                                    elide: Text.ElideRight
+                                    queueLabel: mediaText.trackQueue
+                                    inViewport: mediaText.onScreen
                                     Layout.fillWidth: true
                                 }
-                                Text {
+                                MediaOverflowText {
                                     text: mediaRow.modelData.album || ""
-                                    textFormat: Text.PlainText
                                     visible: text.length > 0 && text !== (mediaRow.modelData.subtitle || "")
                                     color: BrandTheme.colors.muted
                                     font.pixelSize: panel.compact ? 14 : 16
-                                    elide: Text.ElideRight
+                                    queueLabel: mediaText.trackQueue
+                                    inViewport: mediaText.onScreen
                                     Layout.fillWidth: true
                                 }
                             }
