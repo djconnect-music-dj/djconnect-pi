@@ -729,15 +729,18 @@ def main():
                 search_field.setProperty("text", "fixture")
                 search_empty = window.findChild(QObject, "sessionSearchEmpty")
                 search_message = window.findChild(QObject, "sessionSearchEmptyMessage")
+                session_count = window.findChild(QObject, "sessionSearchMatchCount")
                 owner._search = {"session_id": saved["session_id"], "query": "fixture", "complete": False, "matches": []}
                 owner.changed.emit()
                 assert not search_empty.property("visible")
+                assert not session_count.property("visible")
                 owner._search["complete"] = True
                 owner.changed.emit()
                 for language in LANGUAGES:
                     backend.setLanguage(language)
                     QTest.qWait(65)
                     assert search_empty.property("visible")
+                    assert session_count.property("visible") and session_count.property("text") == "0"
                     assert search_message.property("text") == TRANSLATIONS[language]["session_search_empty"]
                     assert search_message.property("contentWidth") <= search_message.width() + 1
                 completed_search = owner._search
@@ -800,6 +803,7 @@ def main():
                 owner._set_running(1, "search_refresh")
                 owner.changed.emit()
                 assert search_progress.property("visible") and search_progress.property("running")
+                assert not session_count.property("visible")
                 assert not search_empty.property("visible")
                 owner._set_running(1, "timeline_refresh")
                 owner.changed.emit()

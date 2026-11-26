@@ -2998,7 +2998,7 @@ Item {
             && "sessions" in result && !searchError
         readonly property int selectedMatchIndex: matches.findIndex(function(row) { return matchId(row) === selectedMatchId })
         readonly property bool noMatches: matchingQuery && result.complete === true
-            && matches.length === 0 && !screen.owner.busy && !searchError
+            && matches.length === 0 && !searchInProgress && !screen.owner.busy && !searchError
         function matchId(row) { return screen.archiveSearchAvailable ? row.session_id : row.entry_id }
         function findMatchIndex(id, fallbackIndex) {
             const index = matches.findIndex(row => matchId(row) === id)
@@ -3162,7 +3162,7 @@ Item {
                 }
                 Text {
                     objectName: "sessionSearchMatchCount"
-                    visible: searchPanel.matches.length > 0 || (screen.archiveSearchAvailable && searchPanel.noMatches)
+                    visible: searchPanel.matches.length > 0 || searchPanel.noMatches
                     text: searchPanel.selectedMatchIndex < 0 ? String(searchPanel.matches.length)
                         : (searchPanel.selectedMatchIndex + 1) + " / " + searchPanel.matches.length
                     color: BrandTheme.colors.muted; font.pixelSize: 17
