@@ -6855,7 +6855,10 @@ BrandWindow {
         onLoaded: item.forceActiveFocus()
         sourceComponent: FocusScope {
             objectName: "trackArtworkOverlay"
-            Keys.onEscapePressed: root.trackArtworkControlsOpen = false
+            Keys.onEscapePressed: {
+                if (root.trackArtworkControlsOpen) root.trackArtworkControlsOpen = false
+                else root.trackArtworkOpen = false
+            }
 
             Rectangle {
                 anchors.fill: parent

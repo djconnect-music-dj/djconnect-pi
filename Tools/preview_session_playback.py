@@ -295,8 +295,12 @@ def main():
                 assert image.pixelColor(round(center.x() * scale), round(center.y() * scale)).name() == '#00ffff'
                 click('expandedTrackArtwork')
                 assert shade.property('visible')
-                click('closeTrackArtwork')
-                assert not window.property('trackArtworkOpen')
+                QTest.keyClick(window, Qt.Key.Key_Escape)
+                QTest.qWait(60)
+                assert not shade.property('visible') and window.property('trackArtworkOpen')
+                QTest.keyClick(window, Qt.Key.Key_Escape)
+                QTest.qWait(60)
+                assert not window.property('trackArtworkOpen') and window.property('activeScreen') == 'session'
                 for x, y in ((8, 8), (artwork_button.width() - 8, artwork_button.height() - 8)):
                     origin = artwork_button.mapToScene(QPointF(x, y))
                     QTest.mouseClick(window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier,
