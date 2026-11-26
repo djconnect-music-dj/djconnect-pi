@@ -4384,6 +4384,9 @@ BrandWindow {
         objectName: "askDjPanel"
         color: "transparent"
         property bool chatKeyboardOpen: false
+        property string pendingQuestionText: ""
+        readonly property int profileContextRevision: djconnect.musicDnaContextRevision
+        onProfileContextRevisionChanged: pendingQuestionText = ""
         readonly property bool historyOffline: !djconnect.demoMode
             && (!djconnect.paired || !djconnect.backendAvailable || djconnect.versionMismatchVisible)
 
@@ -4394,17 +4397,30 @@ BrandWindow {
         }
 
         function sendQuestion() {
-            if (askDjSend.enabled && djconnect.sendAskDjQuestion(askDjChatInput.text)) {
+            const question = askDjChatInput.text.trim()
+            if (askDjSend.enabled && djconnect.sendAskDjQuestion(question)) {
+                if (djconnect.askDjBusy) pendingQuestionText = question
                 clearChatDraft()
                 Qt.callLater(scrollToTop)
             }
         }
 
+        function clearQuestionUi() {
+            pendingQuestionText = ""
+            clearChatDraft()
+        }
+
         Connections {
             target: djconnect
-            function onProfileChanged() { askDjPanel.clearChatDraft() }
-            function onPairedChanged() { askDjPanel.clearChatDraft() }
-            function onDemoModeChanged() { askDjPanel.clearChatDraft() }
+            function onProfileChanged() { askDjPanel.clearQuestionUi() }
+            function onPairedChanged() { askDjPanel.clearQuestionUi() }
+            function onDemoModeChanged() { askDjPanel.clearQuestionUi() }
+            function onAskDjChanged() { if (!djconnect.askDjBusy) askDjPanel.pendingQuestionText = "" }
+        }
+        Connections {
+            target: root
+            function onActiveChanged() { if (!root.active) askDjPanel.pendingQuestionText = "" }
+            function onScreenBlankedChanged() { if (root.screenBlanked) askDjPanel.pendingQuestionText = "" }
         }
 
         property bool searchOpen: false
@@ -4431,7 +4447,7 @@ BrandWindow {
             onActivated: askDjPanel.openSearch(false)
         }
 
-        onVisibleChanged: if (!visible) { closeSearch(); clearChatDraft() }
+        onVisibleChanged: if (!visible) { closeSearch(); clearQuestionUi() }
         onMatchesChanged: {
             if (!searchOpen)
                 return
@@ -5390,6 +5406,38 @@ BrandWindow {
                             wrapMode: Text.WordWrap
                             Layout.fillWidth: true
                         }
+                    }
+                }
+            }
+
+            GlassSurface {
+                objectName: "askDjPendingQuestion"
+                visible: !askDjPanel.searchOpen && askDjPanel.pendingQuestionText.length > 0
+                Layout.fillWidth: true
+                implicitHeight: pendingQuestionContent.implicitHeight + 20
+                radius: 22
+
+                ColumnLayout {
+                    id: pendingQuestionContent
+                    anchors.fill: parent
+                    anchors.margins: 10
+                    spacing: 4
+                    Text {
+                        objectName: "askDjPendingQuestionText"
+                        text: askDjPanel.pendingQuestionText
+                        textFormat: Text.PlainText
+                        color: BrandTheme.colors.text
+                        font.pixelSize: 18
+                        maximumLineCount: 3
+                        wrapMode: Text.Wrap
+                        elide: Text.ElideRight
+                        Layout.fillWidth: true
+                    }
+                    Text {
+                        text: root.tr("session_question_sending")
+                        color: BrandTheme.colors.muted
+                        font.pixelSize: 15
+                        Layout.fillWidth: true
                     }
                 }
             }

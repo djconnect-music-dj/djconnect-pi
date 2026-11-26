@@ -392,7 +392,8 @@ def test_qml_ask_dj_screen_keeps_history_actions_and_text_composer() -> None:
     assert 'root.tr("ask_dj_readonly_hint")' not in ask_dj_block
     assert "djconnect.sendAskDjAction(modelData.payload" in ask_dj_block
     assert 'objectName: "askDjChatBar"' in ask_dj_block
-    assert "djconnect.sendAskDjQuestion(askDjChatInput.text)" in ask_dj_block
+    assert "const question = askDjChatInput.text.trim()" in ask_dj_block
+    assert "djconnect.sendAskDjQuestion(question)" in ask_dj_block
     assert 'keyboardName: "askDjChatKeyboard"' in ask_dj_block
     assert 'objectName: "askDjSearchInput"' in ask_dj_block
     assert 'root.tr("ask_dj_input_placeholder")' not in ask_dj_block

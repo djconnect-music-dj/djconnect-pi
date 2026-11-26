@@ -766,6 +766,18 @@ def main():
             send_question.property("enabled"), draft.property("text"), backend.paired, backend.backendAvailable,
         )
         assert not offline_notice.property("visible")
+        pending_question = visual_item(ask_dj, "askDjPendingQuestion")
+        assert not pending_question.property("visible")
+        with (patch.object(backend, "_sync_config_from_disk"),
+              patch.object(backend.djSession.transport, "binding", return_value=object()),
+              patch.object(backend._question_executor, "submit") as dispatch):
+            QMetaObject.invokeMethod(send_question, "clicked")
+            dispatch.assert_called_once()
+        assert pending_question.property("visible") and draft.property("text") == ""
+        assert visual_item(ask_dj, "askDjPendingQuestionText").property("text") == "Keep this offline draft"
+        assert visual_item(ask_dj, "askDjMessagesView").property("count") == 4
+        backend._set_ask_dj_busy(False)
+        assert not pending_question.property("visible")
         backend._demo_mode = True
         backend.demoModeChanged.emit()
         backend.cfg.paired, backend.cfg.device_token = False, ""
