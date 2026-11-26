@@ -2803,18 +2803,28 @@ BrandWindow {
                         }
                     }
 
-                    Flow {
+                    GridLayout {
+                        objectName: "trackInsightMetricsGrid"
                         visible: djconnect.trackInsightItems.length > 0
-                        spacing: 8
+                        columns: Math.max(1, Math.min(3, djconnect.trackInsightItems.length,
+                            Math.floor((trackInsightScroll.availableWidth + columnSpacing) / (172 + columnSpacing))))
+                        rowSpacing: 8
+                        columnSpacing: 8
                         Layout.fillWidth: true
 
                         Repeater {
                             model: djconnect.trackInsightItems
 
                             GlassSurface {
+                                required property var modelData
+                                required property int index
+                                objectName: "trackInsightMetric-" + index
                                 border.color: root.moodColor("focus")
-                                width: Math.max(132, trackMetricContent.implicitWidth + 24)
-                                height: 64
+                                Layout.fillWidth: true
+                                Layout.preferredWidth: 1
+                                Layout.minimumWidth: 0
+                                Layout.preferredHeight: Math.max(64, trackMetricContent.implicitHeight + 16)
+                                Layout.alignment: Qt.AlignTop
                                 radius: root.standardButtonRadius
 
                                 ColumnLayout {
@@ -2825,20 +2835,25 @@ BrandWindow {
 
                                     Text {
                                         text: root.trackInsightLabel(modelData.title || modelData.kind || "")
+                                        textFormat: Text.PlainText
+                                        wrapMode: Text.Wrap
                                         color: BrandTheme.colors.text
                                         font.pixelSize: 15
                                         font.bold: true
-                                        elide: Text.ElideRight
                                         Layout.fillWidth: true
+                                        Layout.minimumWidth: 0
                                     }
 
                                     Text {
                                         text: modelData.value || ""
+                                        visible: text.length > 0
+                                        textFormat: Text.PlainText
+                                        wrapMode: Text.Wrap
                                         color: BrandTheme.colors.muted
                                         font.pixelSize: 19
                                         font.bold: true
-                                        elide: Text.ElideRight
                                         Layout.fillWidth: true
+                                        Layout.minimumWidth: 0
                                     }
                                 }
                             }
