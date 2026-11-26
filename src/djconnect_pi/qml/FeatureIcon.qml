@@ -200,6 +200,10 @@ Canvas {
             } else if (iconName === "output") {
                 roundRect(4, 5, 24, 17, 2)
                 line(10, 27, 22, 27); line(16, 22, 16, 27)
+            } else if (iconName === "speaker") {
+                roundRect(8, 4, 16, 24, 2)
+                circle(16, 11, 2, true)
+                circle(16, 20, 4, false)
             } else if (iconName === "vibecast") {
                 line(4, 5, 26, 5); line(26, 5, 26, 17)
                 line(4, 5, 4, 21); line(4, 21, 15, 21)

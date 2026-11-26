@@ -458,9 +458,14 @@ def main():
                 assert output_panel.property('opened') and not popup.property('opened') and len(intents) == 1
                 intents.pop()()
                 QTest.qWait(80)
-                assert_popup_anchor(window.findChild(QObject, 'sessionCurrentOutput'), output_panel)
+                output_shortcut = window.findChild(QObject, 'sessionCurrentOutput')
+                assert_popup_anchor(output_shortcut, output_panel)
+                assert output_shortcut.property('iconName') == 'speaker'
                 selected_output = visual(window.contentItem(), 'sessionOutputChoice-synthetic-output')
                 assert selected_output.property('checked') and not selected_output.property('enabled')
+                speaker_icon = visual(selected_output, 'sessionOutputChoiceSpeaker')
+                assert speaker_icon.property('visible') == (width == 1200)
+                assert speaker_icon.property('iconName') == 'speaker'
                 capture('direct-output-inventory')
                 click('sessionOutputClose')
                 QTest.qWait(120)

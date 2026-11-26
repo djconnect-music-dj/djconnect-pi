@@ -1414,7 +1414,7 @@ Item {
                             objectName: "sessionCurrentOutput"
                             visible: !!text
                             enabled: !!screen.state.playback_control.enabled && !!screen.state.playback_control.outputs_supported
-                            iconName: "output"
+                            iconName: "speaker"
                             text: screen.state.playback.target_name || ""
                             Accessible.name: screen.tr("output_device") + ": " + text
                             Layout.fillWidth: true
@@ -2320,8 +2320,9 @@ Item {
                     contentItem: RowLayout {
                         spacing: 12
                         FeatureIcon {
+                            objectName: "sessionOutputChoiceSpeaker"
                             visible: !screen.compact
-                            iconName: "voice"
+                            iconName: "speaker"
                             Layout.preferredWidth: 24; Layout.preferredHeight: 24
                         }
                         ColumnLayout {
