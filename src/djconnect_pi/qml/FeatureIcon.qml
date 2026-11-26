@@ -377,6 +377,9 @@ Canvas {
                 line(16, 11, 16, 21)
             } else if (iconName === "back") {
                 line(20, 7, 11, 16); line(11, 16, 20, 25)
+            } else if (iconName === "chevron_right") {
+                ctx.beginPath(); ctx.moveTo(px(12), py(7)); ctx.lineTo(px(21), py(16))
+                ctx.lineTo(px(12), py(25)); ctx.stroke()
             } else if (iconName === "arrow_up") {
                 line(16, 25, 16, 7)
                 line(8, 15, 16, 7); line(16, 7, 24, 15)

@@ -1869,9 +1869,12 @@ Item {
                 GlassButton {
                     required property var modelData
                     id: archiveRow
+                    readonly property string lifecycleNote: modelData.lifecycle_status === "INTERRUPTED"
+                        ? screen.tr("session_history_interrupted") : ""
                     Layout.fillWidth: true
                     implicitHeight: Math.max(78, contentItem.implicitHeight + topPadding + bottomPadding)
                     objectName: "sessionArchiveRow"
+                    Accessible.description: lifecycleNote
                     contentItem: RowLayout {
                         spacing: 12
                         SavedMoodMark {
@@ -1882,11 +1885,23 @@ Item {
                             Layout.fillWidth: true
                             spacing: 4
                             Text {
+                                objectName: "sessionArchiveRowTitle"
                                 text: archiveRow.text
                                 font: archiveRow.font
                                 color: archiveRow.foregroundColor
                                 textFormat: Text.PlainText
                                 wrapMode: Text.WordWrap
+                                Layout.fillWidth: true
+                            }
+                            Text {
+                                objectName: "sessionArchiveRowStatus"
+                                text: archiveRow.lifecycleNote
+                                visible: text.length > 0
+                                textFormat: Text.PlainText
+                                wrapMode: Text.WordWrap
+                                color: BrandTheme.colors.muted
+                                font.pixelSize: 16
+                                Accessible.ignored: true
                                 Layout.fillWidth: true
                             }
                             Repeater {
@@ -1895,11 +1910,18 @@ Item {
                                 SessionSummaryMetric { compactMetric: true }
                             }
                         }
+                        FeatureIcon {
+                            objectName: "sessionArchiveRowChevron"
+                            iconName: "chevron_right"
+                            iconColor: BrandTheme.colors.muted
+                            Accessible.ignored: true
+                            Layout.preferredWidth: 22
+                            Layout.preferredHeight: Layout.preferredWidth
+                        }
                     }
                     enabled: !screen.owner.busy && !screen.archiveIntent
                     text: screen.tr("session_title") + " · " + screen.displayDate(modelData.started_at || modelData.created_at)
                         + screen.savedDurationSuffix(modelData)
-                        + (modelData.lifecycle_status === "INTERRUPTED" ? "\n" + screen.tr("session_history_interrupted") : "")
                     onClicked: screen.openArchiveSession(modelData.session_id)
                 }
             }

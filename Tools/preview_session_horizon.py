@@ -393,6 +393,29 @@ def main():
                 owner._error = "unavailable"
                 owner.changed.emit()
                 assert not archive_empty.property("visible") and not archive_window_empty.property("visible")
+                owner._error = ""
+                owner._sessions = [
+                    {"session_id": status.lower(), "lifecycle_status": status,
+                     "created_at": "2026-11-25T10:00:00Z"} for status in ("INTERRUPTED", "ENDED")
+                ]
+                owner.changed.emit()
+                QTest.qWait(65)
+                interrupted, ended = visual_items(screen, "sessionArchiveRow")
+                title = one(interrupted, "sessionArchiveRowTitle")
+                status = one(interrupted, "sessionArchiveRowStatus")
+                arrow = one(interrupted, "sessionArchiveRowChevron")
+                assert not one(ended, "sessionArchiveRowStatus").property("visible")
+                for language in LANGUAGES:
+                    backend.setLanguage(language)
+                    QTest.qWait(65)
+                    assert title.property("text").startswith(TRANSLATIONS[language]["session_title"])
+                    assert status.property("visible") and status.property("text") == TRANSLATIONS[language]["session_history_interrupted"]
+                assert status.mapToItem(title, 0, 0).y() >= title.height()
+                assert arrow.property("visible") and arrow.mapToItem(title, 0, 0).x() >= title.width()
+                QTest.qWait(300)  # Allow Qt's synthesized mouse suppression after the touch gesture to expire.
+                with patch.object(owner, "_launch") as open_session:
+                    click(window, interrupted)
+                    open_session.assert_called_once_with("timeline", "interrupted")
                 backend.shutdown()
                 delete(window)
                 delete(engine)
