@@ -812,12 +812,9 @@ Item {
             const rows = screen.archiveSearchAvailable ? archiveSearchRows : searchRows
             let selectedIndex = -1
             if (saved && saved.selectedId) {
-                const matches = searchPanel.matches
-                selectedIndex = matches.findIndex(row => searchPanel.matchId(row) === saved.selectedId)
-                if (selectedIndex < 0 && screen.archiveSearchAvailable && saved.selectedIndex >= 0)
-                    selectedIndex = Math.min(saved.selectedIndex, matches.length - 1)
+                selectedIndex = searchPanel.findMatchIndex(saved.selectedId, screen.archiveSearchAvailable ? saved.selectedIndex : -1)
                 if (selectedIndex >= 0)
-                    searchPanel.selectedMatchId = searchPanel.matchId(matches[selectedIndex])
+                    searchPanel.selectedMatchId = searchPanel.matchId(searchPanel.matches[selectedIndex])
             }
             for (var i = 0; saved && i < rows.count; i++) {
                 var card = rows.itemAt(i)
@@ -888,12 +885,14 @@ Item {
         searchPanel.open()
         searchPanel.keyboardVisible = false
         searchInput.text = pending.query
-        searchPanel.pendingArchiveMatchId = pending.sessionId
+        searchPanel.pendingArchiveMatch = pending
         owner.searchArchive(pending.query)
     }
     function openArchiveMatch(sessionId) {
         if (!archiveSearchAvailable || !searchPanel.matchingQuery || owner.busy) return
-        archiveSearchHandoff = {sessionId: sessionId, query: searchPanel.result.query, scope: composerContext}
+        const index = searchPanel.findMatchIndex(sessionId, -1)
+        if (index < 0) return
+        archiveSearchHandoff = {sessionId: sessionId, query: searchPanel.result.query, scope: composerContext, index: index}
         owner.openArchiveSearchResult(sessionId)
     }
     function closeTransient() {
@@ -2970,7 +2969,7 @@ Item {
         property bool keyboardDismissalDrag: false
         property bool restoreControlFocus: false
         property string selectedMatchId: ""
-        property string pendingArchiveMatchId: ""
+        property var pendingArchiveMatch: null
         property string typedArchiveQuery: ""
         readonly property var result: screen.archiveSearchAvailable ? screen.owner.archiveSearchState : screen.state.search
         readonly property var matches: screen.archiveSearchAvailable ? (result.sessions || []) : (result.matches || [])
@@ -2981,21 +2980,25 @@ Item {
         readonly property bool noMatches: matchingQuery && result.complete === true
             && matches.length === 0 && !screen.owner.busy && !searchError
         function matchId(row) { return screen.archiveSearchAvailable ? row.session_id : row.entry_id }
+        function findMatchIndex(id, fallbackIndex) {
+            const index = matches.findIndex(row => matchId(row) === id)
+            return index >= 0 || fallbackIndex < 0 ? index : Math.min(fallbackIndex, matches.length - 1)
+        }
         onMatchesChanged: {
             if (selectedMatchId && selectedMatchIndex < 0)
                 selectedMatchId = ""
-            if (pendingArchiveMatchId) Qt.callLater(restoreArchiveMatch)
             if (screen.searchReturn && screen.archiveSearchAvailable)
                 Qt.callLater(screen.scheduleArchiveSearchPosition)
-            else if (screen.archiveSearchAvailable && !pendingArchiveMatchId && !selectedMatchId
+            else if (screen.archiveSearchAvailable && !pendingArchiveMatch && !selectedMatchId
                     && matches.length && result.query === searchInput.text.trim())
                 selectedMatchId = matchId(matches[0])
         }
-        onMatchingQueryChanged: if (pendingArchiveMatchId) Qt.callLater(restoreArchiveMatch)
+        onResultChanged: if (pendingArchiveMatch) Qt.callLater(restoreArchiveMatch)
+        onMatchingQueryChanged: if (pendingArchiveMatch) Qt.callLater(restoreArchiveMatch)
         function resetSearch() {
             cancelTypedArchiveSearch()
             selectedMatchId = ""
-            pendingArchiveMatchId = ""
+            pendingArchiveMatch = null
             screen.archiveSearchHandoff = null
             screen.owner.clearSearch()
             screen.owner.clearArchiveSearch()
@@ -3034,10 +3037,10 @@ Item {
             return revealMatch(index)
         }
         function restoreArchiveMatch() {
-            if (!pendingArchiveMatchId || !opened || !screen.archiveSearchAvailable || !matchingQuery) return
-            const index = matches.findIndex(row => row.session_id === pendingArchiveMatchId)
-            if (index >= 0 && revealMatch(index)) pendingArchiveMatchId = ""
-            else if (index < 0 && result.complete === true) pendingArchiveMatchId = ""
+            if (!pendingArchiveMatch || !opened || !screen.archiveSearchAvailable || !matchingQuery) return
+            const complete = result.complete === true
+            const index = findMatchIndex(pendingArchiveMatch.sessionId, complete ? pendingArchiveMatch.index : -1)
+            if (index >= 0 ? revealMatch(index) : complete) pendingArchiveMatch = null
         }
         function revealMatch(index) {
             const card = (screen.archiveSearchAvailable ? archiveSearchRows : searchRows).itemAt(index)

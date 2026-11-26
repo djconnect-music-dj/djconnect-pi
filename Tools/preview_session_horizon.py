@@ -530,6 +530,23 @@ def main():
                 QTest.qWait(300)
                 assert archive_panel.property("selectedMatchId") == "second-archive-match"
                 assert archive_panel.property("selectedMatchIndex") == 0
+                with patch.object(owner, "_launch") as verify:
+                    click(window, one(archive_panel.property("contentItem"), "sessionArchiveSearchRow"))
+                    verify.assert_called_once_with("timeline", "second-archive-match")
+                    owner._timeline = {"session": cached_results["sessions"][1], "revision": "archive-search-return", "entries": []}
+                    owner.changed.emit()
+                    QTest.qWait(65)
+                    close_archive_search.evaluate()
+                    QTest.qWait(300)
+                    verify.reset_mock()
+                    click(window, back)
+                    QTest.qWait(200)
+                    verify.assert_called_once_with("archive_search", "fixture")
+                    owner._archive_search = {**cached_results, "sessions": cached_results["sessions"][:1]}
+                    owner.changed.emit()
+                    QTest.qWait(65)
+                    assert archive_panel.property("selectedMatchId") == "hidden-on-current-page"
+                    assert archive_panel.property("selectedMatchIndex") == 0
                 close_archive_search.evaluate()
                 QTest.qWait(300)
                 owner._history_start = "fixture-older-window"
