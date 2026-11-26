@@ -258,6 +258,16 @@ def main():
                                     pull_down(window, forecast_scroll, touch, 230)
                                     refresh.assert_called_once_with("refresh", background=True)
                             click(window, flow)
+                            if language == "nl":
+                                flow_view = window.findChild(QObject, "sessionHistoryScroll")
+                                flow_scroll = flow_view.property("contentItem")
+                                flow_scroll.setProperty("contentY", flow_scroll.property("originY"))
+                                QTest.qWait(65)
+                                with QSignalBlocker(poll_timer), patch.object(owner, "_launch") as refresh:
+                                    pull_down(window, flow_view, touch, 24)
+                                    refresh.assert_not_called()
+                                    pull_down(window, flow_view, touch, 230)
+                                    refresh.assert_called_once_with("refresh", background=True)
 
                     # Ordinary prose and a malformed six-track lookalike stay verbatim.
                     for fallback in (prose, f"{intro} {', '.join([track_names[0]] * 6)}. {note}"):

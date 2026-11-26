@@ -1220,6 +1220,14 @@ Item {
         clip: true; contentWidth: availableWidth
         contentHeight: historyContent.implicitHeight + (screen.historical ? 0 : dockClearance)
         ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+        PullToRefresh {
+            objectName: "sessionFlowPullToRefresh"
+            flickable: historyScroll.contentItem
+            canRefresh: historyScroll.visible && screen.liveViewOpen && screen.backend.paired
+                && !screen.backend.demoMode && !screen.owner.busy && !screen.owner.refreshing
+                && !searchPanel.visible && !screen.searchRefreshPending
+            onRefreshRequested: screen.owner.refresh()
+        }
         ColumnLayout {
             id: historyContent
             width: parent.width; spacing: historyScroll.flowSpacing
