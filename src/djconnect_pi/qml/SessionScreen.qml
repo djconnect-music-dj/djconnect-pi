@@ -3404,6 +3404,16 @@ Item {
                 wrapMode: Text.WordWrap; Layout.fillWidth: true
             }
             GlassButton {
+                objectName: "sessionConnectionAbout"
+                iconName: "info"
+                text: screen.tr("about")
+                Layout.fillWidth: true
+                onClicked: {
+                    connectionInfo.close()
+                    screen.navigate("about")
+                }
+            }
+            GlassButton {
                 visible: screen.idleWelcome && !screen.compact
                 enabled: !screen.owner.busy
                 iconName: "refresh"

@@ -476,7 +476,13 @@ def main():
                     assert connection.property("iconName") == "globe" and connection_type.property("text") == expected_connection
                     owner._error = ""
                     owner.changed.emit()
-                    QQmlExpression(engine.rootContext(), connection_info, "close()").evaluate()
+                    connection_about = one(connection_info.property("contentItem"), "sessionConnectionAbout")
+                    assert connection_about.property("text") == TRANSLATIONS[language]["about"]
+                    click(window, connection_about)
+                    assert window.property("aboutOpen") and window.property("activeScreen") == "history"
+                    assert not connection_info.property("visible")
+                    QQmlExpression(engine.rootContext(), window, 'navigateEdgeBack("about")').evaluate()
+                    assert not window.property("aboutOpen") and window.property("activeScreen") == "history"
                 backend.settingsChanged.emit()
                 find = QKeySequence.keyBindings(QKeySequence.StandardKey.Find)[0][0]
                 QTest.keyClick(window, find.key(), find.keyboardModifiers())

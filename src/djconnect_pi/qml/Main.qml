@@ -5598,7 +5598,10 @@ BrandWindow {
             currentHistory: root.activeScreen === "session-history"
             onExpandTrackArtwork: root.openTrackArtwork()
             onOpenVibeScape: function(pickerTop) { root.openVibeScape(pickerTop) }
-            onNavigate: function(destination) { root.activeScreen = destination }
+            onNavigate: function(destination) {
+                if (destination === "about") root.aboutOpen = true
+                else root.activeScreen = destination
+            }
         }
     }
 
