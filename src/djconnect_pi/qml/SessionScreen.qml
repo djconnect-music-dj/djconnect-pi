@@ -3148,11 +3148,14 @@ Item {
         wideWidth: 360
         padding: screen.compact ? 20 : 16
         readonly property var observation: screen.state.playback_control.outputs || ({})
-        readonly property var choices: observation.choices || []
+        // Starting a transfer revokes the writable lease. Keep the previous rows only for display.
+        readonly property var choices: switchingOutput ? pendingOutput.choices : (observation.choices || [])
         property bool manualRefreshPending: false
         property var refreshAnchor: null
-        property string pendingOutputName: ""
-        readonly property bool switchingOutput: !!pendingOutputName && screen.state.playback_control.status === "sending"
+        property var pendingOutput: null
+        readonly property string pendingOutputName: pendingOutput ? pendingOutput.name : ""
+        readonly property bool switchingOutput: !!pendingOutput && screen.state.playback_control.status === "sending"
+            && screen.state.playback_control.pending_command === "set_output"
         function openForCurrentItem(source) {
             openFromControl(source, () => screen.owner.readPlaybackOutputs(screen.state.session_id, screen.state.playback.item_id))
         }
@@ -3169,20 +3172,26 @@ Item {
                 screen.backend.showToastForContext(screen.tr("session_output_unavailable"), "refresh")
         }
         function chooseOutput(id, name) {
-            if (screen.owner.setPlaybackOutput(screen.state.session_id, screen.state.playback.item_id, observation.lease, id))
-                pendingOutputName = name
+            const displayedChoices = outputsPanel.choices
+            const anchor = outputChoices.rememberPosition()
+            if (screen.owner.setPlaybackOutput(screen.state.session_id, screen.state.playback.item_id, observation.lease, id)) {
+                pendingOutput = {id: id, name: name, choices: displayedChoices}
+                Qt.callLater(function() {
+                    if (outputsPanel.switchingOutput) outputChoices.restorePosition(anchor)
+                })
+            }
         }
         Connections {
             target: screen.owner
             function onChanged() {
                 if (outputsPanel.manualRefreshPending) Qt.callLater(outputsPanel.finishManualRefresh)
-                if (!screen.state.playback_control.running) outputsPanel.pendingOutputName = ""
+                if (!screen.state.playback_control.running) outputsPanel.pendingOutput = null
             }
         }
         onAboutToHide: {
             manualRefreshPending = false
             refreshAnchor = null
-            pendingOutputName = ""
+            pendingOutput = null
             if (screen.owner) screen.owner.cancelPlaybackIntent()
         }
         background: GlassSurface { elevated: true; popover: !screen.compact }
@@ -3273,6 +3282,8 @@ Item {
                     objectName: "sessionOutputChoice-" + modelData.id
                     readonly property bool volumeKnown: typeof modelData.volume_percent === "number"
                     readonly property string volumeLabel: volumeKnown ? modelData.volume_percent + "%" : "–"
+                    readonly property bool switching: outputsPanel.switchingOutput
+                        && outputsPanel.pendingOutput.id === modelData.id
                     width: outputChoices.width
                     text: modelData.name
                     Accessible.name: modelData.name + (modelData.active ? " · " + screen.tr("session_output_current") : "")
@@ -3280,8 +3291,8 @@ Item {
                     Accessible.selected: modelData.active
                     checked: modelData.active
                     cornerRadius: 14
-                    opacity: modelData.active ? 1 : (enabled ? 1 : 0.4)
-                    enabled: !!screen.state.playback_control.enabled && !modelData.active
+                    opacity: modelData.active || switching || enabled ? 1 : 0.4
+                    enabled: !!screen.state.playback_control.enabled && !outputsPanel.switchingOutput && !modelData.active
                     Keys.onUpPressed: function(event) { event.accepted = outputChoices.focusChoiceFrom(index, -1) }
                     Keys.onDownPressed: function(event) { event.accepted = outputChoices.focusChoiceFrom(index, 1) }
                     implicitHeight: Math.max(56, outputChoiceLabels.implicitHeight + 28)
@@ -3315,8 +3326,15 @@ Item {
                         }
                         Text {
                             objectName: "sessionOutputChoiceCheck"
-                            visible: outputChoice.modelData.active
+                            visible: outputChoice.modelData.active && !outputChoice.switching
                             text: "✓"; color: BrandTheme.colors.text; font.pixelSize: 20
+                            Accessible.ignored: true
+                        }
+                        BusyIndicator {
+                            objectName: "sessionOutputSwitchSpinner"
+                            visible: outputChoice.switching
+                            running: visible
+                            Layout.preferredWidth: 24; Layout.preferredHeight: 24
                             Accessible.ignored: true
                         }
                     }
@@ -3326,13 +3344,6 @@ Item {
             RowLayout {
                 Layout.fillWidth: true
                 visible: outputStatus.text.length > 0
-                BusyIndicator {
-                    objectName: "sessionOutputSwitchSpinner"
-                    visible: outputsPanel.switchingOutput
-                    running: visible
-                    Layout.preferredWidth: 24; Layout.preferredHeight: 24
-                    Accessible.ignored: true
-                }
                 Text {
                     id: outputStatus
                     objectName: "sessionOutputStatus"
