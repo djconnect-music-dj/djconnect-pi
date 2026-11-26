@@ -13,6 +13,7 @@ Rectangle {
     required property string creditLabel
     required property string genre
     required property string vibe
+    required property var meters
     property bool animate: false
     property real motionPhase: 0
     readonly property real contentPadding: width * 0.07
@@ -122,6 +123,48 @@ Rectangle {
                 textFormat: Text.PlainText; color: BrandTheme.colors.muted
                 font.pixelSize: Math.max(12, card.width * 0.049)
                 elide: Text.ElideRight; Layout.fillWidth: true
+            }
+        }
+        RowLayout {
+            objectName: "trackInsightShareMeters"
+            visible: card.meters.length > 0
+            Layout.fillWidth: true
+            spacing: card.width * 0.025
+            Repeater {
+                model: card.meters
+                delegate: ColumnLayout {
+                    id: meter
+                    required property var modelData
+                    Layout.fillWidth: true
+                    Layout.preferredWidth: 1
+                    spacing: 2
+                    Text {
+                        Layout.fillWidth: true
+                        text: meter.modelData.label
+                        textFormat: Text.PlainText
+                        color: BrandTheme.colors.muted
+                        font.pixelSize: Math.max(10, card.width * 0.043)
+                        elide: Text.ElideRight
+                    }
+                    Text {
+                        text: Math.round(meter.modelData.fraction * 100) + "%"
+                        color: BrandTheme.colors.text
+                        font.pixelSize: Math.max(10, card.width * 0.043)
+                    }
+                    Rectangle {
+                        id: meterTrack
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: Math.max(2, card.width * 0.014)
+                        radius: height / 2
+                        color: BrandTheme.alpha(BrandTheme.colors.text, "25")
+                        Rectangle {
+                            width: meterTrack.width * meter.modelData.fraction
+                            height: meterTrack.height
+                            radius: meterTrack.radius
+                            color: BrandTheme.colors.cyan
+                        }
+                    }
+                }
             }
         }
         Text {

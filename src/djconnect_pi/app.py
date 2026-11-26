@@ -916,6 +916,10 @@ class DJConnectBackend(QObject):
         return self._track_insight_items
 
     @Property("QVariantList", notify=trackInsightChanged)
+    def trackInsightShareMeters(self) -> list[dict[str, object]]:
+        return [item for item in self._track_insight_items if "shareFraction" in item]
+
+    @Property("QVariantList", notify=trackInsightChanged)
     def trackInsightSections(self) -> list[dict[str, object]]:
         return self._track_insight_sections
 
@@ -5911,6 +5915,9 @@ def _track_insight_items(data: dict[str, object]) -> list[dict[str, object]]:
                         "musicDna": False,
                     }
                 )
+                if (key != "confidence" and not bounded_text(analysis.get("basis"), 128).strip()
+                        and not data.get("verifiedCredit") and type(raw) in (int, float) and 0 <= raw <= 1):
+                    items[-1]["shareFraction"] = float(raw)
     if isinstance(music_dna, dict):
         traits = _string_list(music_dna.get("traits") or music_dna.get("signals"))
         for trait in traits[:4]:

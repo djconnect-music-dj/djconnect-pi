@@ -1259,6 +1259,7 @@ def test_track_insight_uses_explicit_unmeasured_basis_without_inventing_metrics(
     backend._apply_track_insight_data(payload)
     assert backend.trackInsightAudioNotice and backend.trackInsightText == "Interpretation"
     assert not backend.trackInsightItems
+    assert not backend.trackInsightShareMeters
     assert not backend.trackInsightVisualizer
     assert backend.trackInsightShareDescriptors == {"genre": "Synthpop", "vibe": "Dreamy"}
     assert backend.trackInsightVerifiedCredit["context"] == "Synthetic credit"
@@ -1270,6 +1271,9 @@ def test_track_insight_uses_explicit_unmeasured_basis_without_inventing_metrics(
     assert not backend.trackInsightAudioNotice and not backend.trackInsightSections
     assert not backend.trackInsightShareDescriptors
     assert not backend.trackInsightVisualizer
+    payload["analysis"].update(basis="other_basis_v1", measured_audio=True)
+    backend._apply_track_insight_data(payload)
+    assert backend.trackInsightItems and not backend.trackInsightShareMeters
     backend._clear_track_insight()
     assert not backend.trackInsightAudioNotice
 
@@ -1283,7 +1287,8 @@ def test_track_insight_visualizer_decodes_backend_visualisation_payload(tmp_path
     backend._apply_track_insight_data(
         {
             "track": {"title": "Midnight City", "artist": "M83", "album": "Hurry Up", "artwork_url": "https://example.test/m83.jpg"},
-            "analysis": {"summary": "Bright synthwave.", "energy": 0.82, "mood": "dreamy", "genre": "Synthpop"},
+            "analysis": {"summary": "Bright synthwave.", "energy": 0.82, "danceability": 1.2,
+                         "intensity": 0, "confidence": 0.5, "mood": "dreamy", "genre": "Synthpop"},
             "visualisation": {
                 "bars": [0.1, 0.4, 0.9, {"value": 0.6}],
                 "palette": ["#4DA3FF", "#7B61FF", "#D184FF"],
@@ -1292,6 +1297,9 @@ def test_track_insight_visualizer_decodes_backend_visualisation_payload(tmp_path
     )
 
     visualizer = backend.trackInsightVisualizer
+    assert [(item["title"], item["shareFraction"]) for item in backend.trackInsightShareMeters] == [
+        ("Energy", 0.82), ("Intensity", 0.0),
+    ]
     assert backend.client.track_insight.call_count == 0
     assert backend.trackInsightTitle == "Midnight City"
     assert backend.trackInsightArtist == "M83"
