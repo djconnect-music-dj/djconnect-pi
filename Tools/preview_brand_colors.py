@@ -422,6 +422,20 @@ def main():
             assert visual_item(playlist_panel, "mediaItemRow-1").property("starting")
             pending_start.call_args.kwargs["done"]()
             assert not visual_item(playlist_panel, "mediaItemRow-1").property("starting")
+        with (patch.object(backend.client, "command", return_value={"success": False, "error": "fixture_rejected",
+                                                                  "playback": {"title": "Unconfirmed track"}}),
+              patch.object(backend, "_persist_backend_summary"),
+              patch.object(backend, "_load_queue_worker") as load_queue,
+              patch.object(backend, "_refresh_worker") as refresh,
+              patch.object(backend._executor, "submit") as submit):
+            previous_title = backend.title
+            QMetaObject.invokeMethod(visual_item(playlist_panel, "mediaItemRow-0"), "clicked")
+            assert backend.mediaPlaybackBusy
+            submit.call_args.args[0]()
+            assert not backend.mediaPlaybackBusy and backend.title == previous_title
+            assert backend.toastText == backend.t("media_playlist_start_failed")
+            load_queue.assert_not_called()
+            refresh.assert_not_called()
         backend.playback = Playback(title="Confirmed previous track", uri="fixture:previous")
         with (patch.object(backend.client, "command", return_value={"success": True}),
               patch.object(backend, "_persist_backend_summary"),

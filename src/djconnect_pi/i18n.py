@@ -1552,6 +1552,14 @@ _MEDIA_PLAYBACK_TRANSLATIONS = {
         "Playlist is starting", "Afspeellijst wordt gestart", "Playlist wird gestartet",
         "Démarrage de la playlist", "Iniciando la lista de reproducción",
     ),
+    "media_track_start_failed": (
+        "Could not start the track", "Nummer kon niet worden gestart", "Titel konnte nicht gestartet werden",
+        "Impossible de lancer le titre", "No se pudo iniciar la canción",
+    ),
+    "media_playlist_start_failed": (
+        "Could not start the playlist", "Afspeellijst kon niet worden gestart", "Playlist konnte nicht gestartet werden",
+        "Impossible de lancer la playlist", "No se pudo iniciar la lista de reproducción",
+    ),
 }
 for _key, _values in _MEDIA_PLAYBACK_TRANSLATIONS.items():
     for _language, _value in zip(("en", "nl", "de", "fr", "es"), _values):

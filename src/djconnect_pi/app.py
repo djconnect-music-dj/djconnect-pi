@@ -2554,6 +2554,11 @@ class DJConnectBackend(QObject):
         _LOGGER.info("Sending media item command: %s", command)
         data = self.client.command(command, **payload)
         self._persist_backend_summary()
+        if data.get("success") is False:
+            failure_key = "media_playlist_start_failed" if command == "start_playlist" else "media_track_start_failed"
+            self._toastReady.emit(self.tr_key(failure_key), 3500, "connectivity")
+            _LOGGER.warning("Media item command %s was rejected", command)
+            return
         self._suppress_next_playback_navigation = command == "play_context_at"
         has_playback = _contains_playback_payload(data)
         if has_playback:

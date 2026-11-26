@@ -3537,6 +3537,27 @@ def test_media_command_ack_waits_for_playback_status_without_clearing_current_tr
     backend._load_queue_worker.assert_called_once_with()
 
 
+@pytest.mark.parametrize(("command", "notice_key"), [
+    ("play_context_at", "media_track_start_failed"),
+    ("start_playlist", "media_playlist_start_failed"),
+])
+def test_media_command_rejection_preserves_current_track(tmp_path: Path, command: str, notice_key: str) -> None:
+    ensure_app()
+    backend = DJConnectBackend(tmp_path / "config.json")
+    backend.playback = Playback(title="Current track")
+    backend.client.command = Mock(return_value={"success": False, "playback": {"title": "Unconfirmed track"}})
+    backend._persist_backend_summary = Mock()
+    backend._refresh_worker = Mock()
+    backend._load_queue_worker = Mock()
+
+    backend._play_media_item_worker(command, {"value": "fixture:uri"})
+
+    assert backend.title == "Current track"
+    assert backend.toastText == backend.t(notice_key)
+    backend._refresh_worker.assert_not_called()
+    backend._load_queue_worker.assert_not_called()
+
+
 def test_backend_queue_item_play_uses_play_context_at_command(tmp_path: Path) -> None:
     ensure_app()
     backend = DJConnectBackend(tmp_path / "config.json")
