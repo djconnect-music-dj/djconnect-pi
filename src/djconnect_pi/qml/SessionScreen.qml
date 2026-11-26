@@ -3033,6 +3033,7 @@ Item {
                     text: modelData.name
                     Accessible.name: modelData.name + (modelData.active ? " · " + screen.tr("session_output_current") : "")
                     Accessible.description: volumeKnown ? screen.tr("volume") + " " + volumeLabel : ""
+                    Accessible.selected: modelData.active
                     checked: modelData.active
                     cornerRadius: 14
                     opacity: modelData.active ? 1 : (enabled ? 1 : 0.4)

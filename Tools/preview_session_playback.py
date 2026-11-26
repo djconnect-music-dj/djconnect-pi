@@ -632,6 +632,8 @@ def main():
                 tenth_output = visual(window.contentItem(), 'sessionOutputChoice-synthetic-tenth')
                 assert selected_output.y() < alternative_output.y() < tenth_output.y()
                 assert alternative_output.property('enabled') and not alternative_output.property('checked')
+                assert QAccessible.queryAccessibleInterface(selected_output).state().selected
+                assert not QAccessible.queryAccessibleInterface(alternative_output).state().selected
                 for row, name, volume, active in (
                     (selected_output, speaker_name, '11%', True),
                     (alternative_output, 'Speaker 2', '–', False),
