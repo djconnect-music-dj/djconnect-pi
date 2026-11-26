@@ -2730,25 +2730,41 @@ Item {
                 buttonSize: transportControls.buttonSize
             }
         }
-        Text {
-            objectName: "sessionTransportCommandStatus"
+        RowLayout {
+            id: commandFeedback
             readonly property string status: screen.state.playback_control.status || ""
+            readonly property string pendingCommand: screen.state.playback_control.pending_command || ""
             visible: status.length > 0
             Layout.fillWidth: true
-            text: screen.tr(status === "sending" ? "session_playback_command_sending"
-                : status === "accepted" ? "session_playback_sent"
-                : refreshTransport.refreshFailed ? "session_playback_refresh_failed" : "session_uncertain")
-            textFormat: Text.PlainText
-            Accessible.role: Accessible.StatusBar
-            Accessible.name: text
-            onTextChanged: if (status.length) Qt.callLater(announceStatus)
-            function announceStatus() {
-                if (visible && status.length && !refreshTransport.refreshingStatus) Accessible.announce(text)
+            Item { Layout.fillWidth: true }
+            FeatureIcon {
+                objectName: "sessionTransportPendingIcon"
+                visible: commandFeedback.status === "sending"
+                    && ["previous", "play", "pause", "next"].includes(commandFeedback.pendingCommand)
+                iconName: commandFeedback.pendingCommand
+                Layout.preferredWidth: 26
+                Layout.preferredHeight: 26
+                Accessible.ignored: true
             }
-            color: BrandTheme.colors.text
-            font.pixelSize: 18
-            horizontalAlignment: Text.AlignHCenter
-            wrapMode: Text.WordWrap
+            Text {
+                objectName: "sessionTransportCommandStatus"
+                text: screen.tr(commandFeedback.status === "sending" ? "session_playback_command_sending"
+                    : commandFeedback.status === "accepted" ? "session_playback_sent"
+                    : refreshTransport.refreshFailed ? "session_playback_refresh_failed" : "session_uncertain")
+                textFormat: Text.PlainText
+                Accessible.role: Accessible.StatusBar
+                Accessible.name: text
+                onTextChanged: if (commandFeedback.status.length) Qt.callLater(announceStatus)
+                function announceStatus() {
+                    if (visible && commandFeedback.status.length && !refreshTransport.refreshingStatus) Accessible.announce(text)
+                }
+                color: BrandTheme.colors.text
+                font.pixelSize: 18
+                horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.WordWrap
+                Layout.maximumWidth: Math.max(0, commandFeedback.width - 48)
+            }
+            Item { Layout.fillWidth: true }
         }
         GlassButton {
             id: refreshTransport

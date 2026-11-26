@@ -266,6 +266,7 @@ class PlaybackControl(QObject):
             self._clear_volume_display()
         busy = bool(self.running or self.owner._running or self.owner._question_running or self.owner._artwork_prepare.running
                     or getattr(getattr(self.owner, "_archive_delete", None), "running", False))
+        pending_command = self.request["command"] if self.running and self.request else ""
         return {"available": available, "enabled": available and not busy and not self.blocked,
                 "transport_epoch": self._transport_epoch if available else 0,
                 "overlay_commands": self.overlay_commands() if available and current[6] else [],
@@ -277,7 +278,8 @@ class PlaybackControl(QObject):
                 "outputs_status": self.outputs_status,
                 "reading_outputs": bool(self.running and self.request and self.request["command"] == "outputs_read"),
                 "reading_favorite": bool(self.running and self.request and self.request["command"] == "favorite_read"),
-                "toggling_favorite": bool(self.running and self.request and self.request["command"] == "toggle_favorite"),
+                "toggling_favorite": pending_command == "toggle_favorite",
+                "pending_command": pending_command,
                 "volume_supported": self.volume_supported(),
                 "volume": {**self.volume["observation"], "lease": self.volume["serial"]} if self.volume_valid() else {},
                 "display_volume_percent": self._volume_display["percent"] if self._volume_display else None,

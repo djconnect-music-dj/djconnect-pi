@@ -43,11 +43,13 @@ def test_explicit_command_once_then_independent_owner_read_without_optimism(cont
     original = deepcopy(owner._session)
     assert owner.playbackCommand("synthetic-session", ITEM_ID, command)
     assert owner.busy and owner.state["playback_control"]["status"] == "sending"
+    assert owner.state["playback_control"]["pending_command"] == command
     assert not owner.playbackCommand("synthetic-session", ITEM_ID, command)
     backend.jobs.pop()()
     owner.transport.playback_command.assert_called_once_with(owner.transport.binding(), command)
     assert owner._session == original  # No response/optimistic Runtime overwrite.
     assert owner.state["playback_control"]["status"] == "accepted"
+    assert not owner.state["playback_control"]["pending_command"]
     assert len(backend.jobs) == 1 and owner._running_action == "refresh"
 
 
