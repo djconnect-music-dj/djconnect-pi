@@ -273,6 +273,29 @@ def main():
         analysis_text = visual_item(window.contentItem(), "trackInsightAnalysisText")
         assert analysis_text.property("visible") and analysis_text.property("text") == "Geen audioanalyse beschikbaar."
         assert not credit_card.property("visible") and not notice.property("visible")
+        backend._demo_mode = False
+        backend.demoModeChanged.emit()
+        backend.cfg.paired, backend.cfg.device_token = True, "synthetic-not-a-credential"
+        backend.pairedChanged.emit()
+        backend._apply_track_insight_data({"error": "transient"})
+        QTest.qWait(65)
+        retry = visual_item(window.contentItem(), "trackInsightRetry")
+        assert retry.property("visible") and retry.property("enabled")
+        for language in ("en", "nl", "de", "fr", "es"):
+            backend.setLanguage(language)
+            QTest.qWait(35)
+            assert retry.property("text") == backend.t("track_insight_retry_action")
+        with patch.object(backend, "_sync_config_from_disk"), patch.object(backend, "_run") as request:
+            QMetaObject.invokeMethod(retry, "clicked")
+            request.assert_called_once()
+            assert not retry.property("enabled")
+        backend._set_ask_dj_busy(False)
+        backend.cfg.paired, backend.cfg.device_token = False, ""
+        backend._demo_mode = True
+        backend.pairedChanged.emit()
+        backend.demoModeChanged.emit()
+        backend.hideToast()
+        backend.setLanguage("nl")
         window.setProperty("activeScreen", "session")
         for runtime_state in ("opening", "ending"):
             backend.djSession._session["runtime_state"] = runtime_state

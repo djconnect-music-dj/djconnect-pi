@@ -2579,6 +2579,9 @@ BrandWindow {
         readonly property string visualMood: root.trackInsightVisualMood
         readonly property alias artworkTint: trackInsightArtworkFrame.artworkTint
         readonly property bool hasLiveSession: root.trackInsightHasLiveSession
+        readonly property bool canRequestAnalysis: visible && root.active && !root.screenBlanked && !root.splashVisible
+            && !djconnect.versionMismatchVisible && djconnect.paired && !djconnect.demoMode
+            && djconnect.hasTrackTitle && !djconnect.askDjBusy
         readonly property bool canChooseVisualMood: visible && root.active && !root.screenBlanked && !hasLiveSession
         readonly property bool canChooseSessionMood: visible && root.active && !root.screenBlanked
             && !root.splashVisible && !djconnect.logsVisible && !djconnect.versionMismatchVisible
@@ -2649,7 +2652,7 @@ BrandWindow {
                 RefreshIconButton {
                     objectName: "trackInsightRefresh"
                     loading: djconnect.askDjBusy
-                    enabled: djconnect.paired && !djconnect.askDjBusy
+                    enabled: trackInsightPanel.canRequestAnalysis
                     onClicked: djconnect.refreshTrackInsight()
                 }
             }
@@ -2665,8 +2668,7 @@ BrandWindow {
                 PullToRefresh {
                     objectName: "trackInsightPullToRefresh"
                     flickable: trackInsightScroll.contentItem
-                    canRefresh: trackInsightPanel.visible && root.active && !root.screenBlanked
-                        && djconnect.paired && !djconnect.demoMode && !djconnect.askDjBusy && djconnect.hasTrackTitle
+                    canRefresh: trackInsightPanel.canRequestAnalysis
                         && (trackInsightSubject.visible || djconnect.trackInsightText.length > 0
                             || djconnect.trackInsightItems.length > 0 || djconnect.trackInsightSections.length > 0)
                     onRefreshRequested: djconnect.refreshTrackInsight()
@@ -2676,14 +2678,26 @@ BrandWindow {
                     width: Math.max(0, trackInsightScroll.availableWidth)
                     spacing: root.wallProfile ? 18 : 10
 
-                    Text {
+                    GlassCard {
                         visible: djconnect.trackInsightError.length > 0
-                        text: djconnect.trackInsightError
-                        textFormat: Text.PlainText
-                        color: BrandTheme.colors.muted
-                        font.pixelSize: 20
-                        wrapMode: Text.WordWrap
                         Layout.fillWidth: true
+                        Text {
+                            text: djconnect.trackInsightError
+                            textFormat: Text.PlainText
+                            color: BrandTheme.colors.muted
+                            font.pixelSize: 20
+                            wrapMode: Text.WordWrap
+                            Layout.fillWidth: true
+                        }
+                        GlassButton {
+                            objectName: "trackInsightRetry"
+                            visible: djconnect.hasTrackTitle && djconnect.paired && !djconnect.demoMode
+                            enabled: trackInsightPanel.canRequestAnalysis
+                            text: root.tr("track_insight_retry_action")
+                            iconName: "refresh"
+                            Layout.alignment: Qt.AlignLeft
+                            onClicked: djconnect.refreshTrackInsight()
+                        }
                     }
 
                     IntroductionCard {
