@@ -2762,6 +2762,7 @@ Item {
                 Layout.fillWidth: true; spacing: 8
                 readonly property var observation: screen.state.playback_control.volume || ({})
                 readonly property bool known: typeof observation.percent === "number"
+                readonly property string outputName: observation.output_name || screen.state.playback.target_name || ""
                 readonly property var displayPercent: volumePointer.intentLease >= 0 ? volumePointer.draft : observation.percent
                 RowLayout {
                     Layout.fillWidth: true
@@ -2782,7 +2783,7 @@ Item {
                     }
                 }
                 Text {
-                    text: parent.observation.output_name || screen.state.playback.target_name || ""
+                    text: volumeControls.outputName
                     visible: text.length > 0; textFormat: Text.PlainText
                     color: BrandTheme.colors.muted; font.pixelSize: 16; Layout.fillWidth: true; wrapMode: Text.WordWrap
                 }
@@ -2799,6 +2800,7 @@ Item {
                     visible: parent.known && parent.observation.percent <= 60
                     enabled: !!screen.state.playback_control.enabled && parent.known
                     Accessible.name: screen.tr("volume")
+                    Accessible.description: volumeControls.outputName
                     readonly property int observationLease: parent.known ? parent.observation.lease : -1
                     onObservationLeaseChanged: volumePointer.intentLease = -1
                     onMoved: {

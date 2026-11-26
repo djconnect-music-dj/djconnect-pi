@@ -685,6 +685,9 @@ def main():
                 QTest.qWait(80)
                 slider = window.findChild(QObject, 'sessionVolumeSlider')
                 assert slider.property('visible') and slider.property('value') == 11
+                volume_accessible = QAccessible.queryAccessibleInterface(slider)
+                assert volume_accessible.text(QAccessible.Text.Name) == TRANSLATIONS[language]['volume']
+                assert volume_accessible.text(QAccessible.Text.Description) == speaker_name
                 assert volume_shortcut.property('text') == '11%' and volume_shortcut.property('iconName') == 'voice'
                 assert volume_icon.property('visible') and volume_icon.property('iconName') == 'voice'
                 assert abs(volume_shortcut.width() - zero_width) <= 1
