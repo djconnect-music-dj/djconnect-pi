@@ -447,6 +447,11 @@ def main():
                 assert not popup.property('opened') and not output_panel.property('opened') and not intents
                 assert_popup_anchor(progress, transport_panel)
                 assert progress.height() >= 44
+                transport_title = visual(transport_panel.property('contentItem'), 'sessionTransportTrackTitle')
+                transport_artist = visual(transport_panel.property('contentItem'), 'sessionTransportTrackArtist')
+                assert transport_title.property('visible') and transport_title.property('text') == owner.state['playback']['title']
+                assert transport_artist.property('visible') and transport_artist.property('text') == owner.state['playback']['artist']
+                assert transport_artist.y() >= transport_title.y() + transport_title.height()
                 capture('direct-playback-controls')
 
                 original_session = owner._session

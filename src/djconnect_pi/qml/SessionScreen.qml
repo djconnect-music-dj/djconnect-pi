@@ -2553,6 +2553,22 @@ Item {
         property bool overArtwork: false
         spacing: 8
         Item { visible: transportControls.overArtwork; Layout.fillHeight: true }
+        Text {
+            objectName: "sessionTransportTrackTitle"
+            visible: !transportControls.overArtwork && playbackSources.ready && text.length > 0
+            text: screen.state.playback.title || ""; textFormat: Text.PlainText
+            color: BrandTheme.colors.text; font.pixelSize: 24; font.bold: true
+            wrapMode: Text.Wrap; maximumLineCount: 2; elide: Text.ElideRight
+            Layout.fillWidth: true
+        }
+        Text {
+            objectName: "sessionTransportTrackArtist"
+            visible: !transportControls.overArtwork && playbackSources.ready && text.length > 0
+            text: screen.state.playback.artist || ""; textFormat: Text.PlainText
+            color: BrandTheme.colors.muted; font.pixelSize: 18
+            wrapMode: Text.Wrap; maximumLineCount: 2; elide: Text.ElideRight
+            Layout.fillWidth: true
+        }
         GridLayout {
             Layout.alignment: Qt.AlignHCenter
             columns: 3
