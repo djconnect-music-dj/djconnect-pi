@@ -864,6 +864,18 @@ def main():
         assert ask_dj.property("searchKeyboardOpen")
         assert QMetaObject.invokeMethod(ask_history, "dragStarted")
         assert not ask_dj.property("searchKeyboardOpen") and find_input.property("text") == "Earlier"
+        window.setProperty("activeScreen", "more")
+        QTest.qWait(65)
+        window.setProperty("activeScreen", "askdj")
+        QTest.qWait(65)
+        ask_dj = visual_item(window.contentItem(), "askDjPanel")
+        draft = visual_item(ask_dj, "askDjChatInput")
+        assert draft.property("text") == "Draft stays while reading" and not ask_dj.property("chatKeyboardOpen")
+        window.setProperty("activeScreen", "more")
+        backend.profileChanged.emit()
+        window.setProperty("activeScreen", "askdj")
+        QTest.qWait(65)
+        assert visual_item(window.contentItem(), "askDjChatInput").property("text") == ""
         backend._demo_mode = True
         backend.demoModeChanged.emit()
         backend.cfg.paired, backend.cfg.device_token = False, ""

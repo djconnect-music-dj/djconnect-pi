@@ -183,6 +183,15 @@ BrandWindow {
     property bool clearLogsConfirmOpen: false
     property bool askDjClearConfirmOpen: false
     property int askDjClearConfirmationRevision: -1
+    property string askDjDraft: ""
+    readonly property int askDjDraftContextRevision: djconnect.musicDnaContextRevision
+    onAskDjDraftContextRevisionChanged: askDjDraft = ""
+    Connections {
+        target: djconnect
+        function onProfileChanged() { root.askDjDraft = "" }
+        function onPairedChanged() { root.askDjDraft = "" }
+        function onDemoModeChanged() { root.askDjDraft = "" }
+    }
     property bool musicDnaDisableConfirmOpen: false
     property bool musicDnaClearConfirmOpen: false
     property int musicDnaConfirmationRevision: -1
@@ -4385,11 +4394,12 @@ BrandWindow {
         property bool chatKeyboardOpen: false
         property string pendingQuestionText: ""
         readonly property int profileContextRevision: djconnect.musicDnaContextRevision
-        onProfileContextRevisionChanged: clearQuestionUi()
+        onProfileContextRevisionChanged: clearQuestionUi(false)
         readonly property bool historyOffline: !djconnect.demoMode
             && (!djconnect.paired || !djconnect.backendAvailable || djconnect.versionMismatchVisible)
 
         function clearChatDraft() {
+            root.askDjDraft = ""
             chatKeyboardOpen = false
             askDjChatInput.clear()
             askDjChatInput.focus = false
@@ -4404,18 +4414,19 @@ BrandWindow {
             }
         }
 
-        function clearQuestionUi() {
+        function clearQuestionUi(clearDraft) {
             root.askDjClearConfirmOpen = false
             pendingQuestionText = ""
             readingAnchor = null
-            clearChatDraft()
+            if (clearDraft) clearChatDraft()
+            else chatKeyboardOpen = false
         }
 
         Connections {
             target: djconnect
-            function onProfileChanged() { askDjPanel.clearQuestionUi() }
-            function onPairedChanged() { askDjPanel.clearQuestionUi() }
-            function onDemoModeChanged() { askDjPanel.clearQuestionUi() }
+            function onProfileChanged() { askDjPanel.clearQuestionUi(true) }
+            function onPairedChanged() { askDjPanel.clearQuestionUi(true) }
+            function onDemoModeChanged() { askDjPanel.clearQuestionUi(true) }
             function onAskDjChanged() {
                 askDjPanel.updateMessages()
                 if (!djconnect.askDjBusy) askDjPanel.pendingQuestionText = ""
@@ -4454,7 +4465,7 @@ BrandWindow {
             onActivated: askDjPanel.openSearch(false)
         }
 
-        onVisibleChanged: if (!visible) { closeSearch(); clearQuestionUi() }
+        onVisibleChanged: if (!visible) { closeSearch(); clearQuestionUi(false) }
         onMatchesChanged: {
             if (!searchOpen)
                 return
@@ -5518,6 +5529,10 @@ BrandWindow {
                     TextField {
                         id: askDjChatInput
                         objectName: "askDjChatInput"
+                        property bool draftReady: false
+                        text: root.askDjDraft
+                        onTextChanged: if (draftReady && text !== root.askDjDraft) root.askDjDraft = text
+                        Component.onCompleted: draftReady = true
                         Layout.fillWidth: true; Layout.fillHeight: true
                         enabled: (djconnect.paired || djconnect.demoMode) && !djconnect.askDjBusy
                         maximumLength: 4000
