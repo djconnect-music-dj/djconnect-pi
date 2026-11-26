@@ -1688,6 +1688,8 @@ _SESSION_COMPOSER_TRANSLATIONS = {
     "ha_address_inactive": ("Inactive", "Niet actief", "Nicht aktiv", "Inactive", "Inactiva"),
     "ha_address_unconfirmed": ("Address unconfirmed", "Adres niet bevestigd", "Adresse unbestätigt", "Adresse non confirmée", "Dirección sin confirmar"),
     "ha_connection_unconfirmed": ("Unconfirmed", "Niet bevestigd", "Unbestätigt", "Non confirmée", "Sin confirmar"),
+    "ha_connection_status": ("Connection status", "Verbindingsstatus", "Verbindungsstatus", "État de la connexion", "Estado de la conexión"),
+    "ha_connection_unavailable": ("Connection unavailable", "Verbinding niet beschikbaar", "Verbindung nicht verfügbar", "Connexion indisponible", "Conexión no disponible"),
     "ha_transport_http": ("HTTP", "HTTP", "HTTP", "HTTP", "HTTP"),
     "ha_transport_https": ("HTTPS · TLS", "HTTPS · TLS", "HTTPS · TLS", "HTTPS · TLS", "HTTPS · TLS"),
     "session_connection_offline": ("DJ Session is offline", "DJ-sessie is offline", "DJ-Session ist offline", "Session DJ hors ligne", "Sesión DJ sin conexión"),

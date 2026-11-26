@@ -7658,6 +7658,12 @@ BrandWindow {
                 readonly property bool hasActiveAddress: djconnect.aboutConnectionOrigin.length > 0
                 readonly property string connectionFallback: djconnect.demoMode ? "demo_mode"
                     : !liveConnectionEligible ? "ha_address_inactive" : !hasActiveAddress ? "ha_connection_unconfirmed" : ""
+                readonly property string connectionStatus: djconnect.demoMode ? "demo_mode"
+                    : !djconnect.paired ? "not_connected_value"
+                    : !djconnect.haUrl.trim().length ? "session_connection_address_missing"
+                    : djconnect.versionMismatchVisible ? "version_mismatch_title"
+                    : !djconnect.backendAvailable ? "ha_connection_unavailable"
+                    : hasActiveAddress ? "connected" : "ha_connection_unconfirmed"
                 Text {
                     text: root.tr("connection_section")
                     color: BrandTheme.colors.muted
@@ -7674,6 +7680,16 @@ BrandWindow {
 
                     Text { text: root.tr("home_assistant"); color: BrandTheme.colors.muted; font.pixelSize: 20; font.bold: true; horizontalAlignment: Text.AlignRight; Layout.preferredWidth: 190 }
                     Text { text: djconnect.paired ? root.tr("paired") : root.tr("not_paired"); color: BrandTheme.colors.text; font.pixelSize: 20; Layout.fillWidth: true }
+                    Text { text: root.tr("ha_connection_status"); color: BrandTheme.colors.muted; font.pixelSize: 20; font.bold: true; horizontalAlignment: Text.AlignRight; Layout.preferredWidth: 190; wrapMode: Text.WordWrap }
+                    Text {
+                        objectName: "aboutHaConnectionStatus"
+                        readonly property string status: aboutConnectionCard.connectionStatus
+                        text: root.tr(status)
+                        textFormat: Text.PlainText
+                        color: status === "connected" ? BrandTheme.colors.success
+                            : status === "ha_connection_unavailable" ? BrandTheme.colors.danger : BrandTheme.colors.muted
+                        font.pixelSize: 20; Layout.fillWidth: true; wrapMode: Text.Wrap
+                    }
                     Text { text: root.tr("connection_type"); color: BrandTheme.colors.muted; font.pixelSize: 20; font.bold: true; horizontalAlignment: Text.AlignRight; Layout.preferredWidth: 190 }
                     Text {
                         objectName: "aboutHaConnectionType"
