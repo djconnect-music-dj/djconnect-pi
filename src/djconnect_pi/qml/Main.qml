@@ -2947,7 +2947,9 @@ BrandWindow {
                 && djconnect.backendAvailable && djconnect.musicBackendAvailable))
         readonly property string autoInsightKey: djconnect.hasTrackTitle
             ? JSON.stringify([djconnect.activeProfileId, djconnect.demoMode ? "" : djconnect.language,
-                djconnect.trackInsightPlaybackItemId || [djconnect.title, djconnect.artist]]) : ""
+                djconnect.trackInsightPlaybackItemId || [djconnect.title, djconnect.artist],
+                djconnect.demoMode ? null : (djconnect.outputDeviceId
+                    ? ["id", djconnect.outputDeviceId] : ["label", djconnect.outputDevice])]) : ""
         property string requestedInsightKey: ""
         color: "transparent"
         Component.onCompleted: Qt.callLater(requestInsightIfVisible)

@@ -584,6 +584,29 @@ def main():
             QTest.qWait(65)
             assert not backend.trackInsightText and request.call_count == 3
             backend._set_ask_dj_busy(False)
+            first_output = deepcopy(backend.playback)
+            first_output.output_device = "Fixture speaker"
+            first_output.output_device_id = "fixture:speaker-a"
+            backend._apply_playback(first_output)
+            QTest.qWait(65)
+            assert request.call_count == 4
+            backend._set_ask_dj_busy(False)
+            backend._apply_track_insight_data({
+                "track": {"title": first_output.title},
+                "analysis": {"summary": "Analysis from the previous output"}
+            })
+            assert backend.trackInsightText
+            second_output = deepcopy(first_output)
+            second_output.output_device_id = "fixture:speaker-b"
+            backend._apply_playback(second_output)
+            QTest.qWait(65)
+            assert not backend.trackInsightText and request.call_count == 5
+            backend._set_ask_dj_busy(False)
+            second_output_renamed = deepcopy(second_output)
+            second_output_renamed.output_device = "Renamed fixture speaker"
+            backend._apply_playback(second_output_renamed)
+            QTest.qWait(65)
+            assert request.call_count == 5
         backend.cfg.paired, backend.cfg.device_token = False, ""
         backend._demo_mode = True
         backend.pairedChanged.emit()
