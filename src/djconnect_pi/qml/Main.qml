@@ -7720,12 +7720,28 @@ BrandWindow {
                     Text { text: root.tr("client_api_url_label"); color: BrandTheme.colors.muted; font.pixelSize: 20; font.bold: true; horizontalAlignment: Text.AlignRight; Layout.preferredWidth: 190 }
                     Text { text: djconnect.localApiUrl; color: BrandTheme.colors.text; font.pixelSize: 18; Layout.fillWidth: true; elide: Text.ElideMiddle }
                     Text { text: root.tr("active_ha_address"); color: BrandTheme.colors.muted; font.pixelSize: 20; font.bold: true; horizontalAlignment: Text.AlignRight; Layout.preferredWidth: 190; wrapMode: Text.WordWrap }
-                    Text {
-                        objectName: "aboutActiveHaAddress"
-                        text: djconnect.aboutConnectionOrigin || root.tr(aboutConnectionCard.liveConnectionEligible
-                            ? "ha_address_unconfirmed" : "ha_address_inactive")
-                        textFormat: Text.PlainText
-                        color: BrandTheme.colors.text; font.pixelSize: 18; Layout.fillWidth: true; wrapMode: Text.Wrap
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 8
+                        Text {
+                            objectName: "aboutActiveHaAddress"
+                            text: djconnect.aboutConnectionOrigin || root.tr(aboutConnectionCard.liveConnectionEligible
+                                ? "ha_address_unconfirmed" : "ha_address_inactive")
+                            textFormat: Text.PlainText
+                            color: BrandTheme.colors.text; font.pixelSize: 18; Layout.fillWidth: true; wrapMode: Text.Wrap
+                        }
+                        GlassButton {
+                            objectName: "aboutCopyActiveHaAddress"
+                            readonly property string copyLabel: root.tr("copy_active_ha_address")
+                            iconName: "copy"; tertiary: true
+                            Layout.preferredWidth: 48
+                            Layout.preferredHeight: 48
+                            Accessible.name: copyLabel
+                            ToolTip.text: copyLabel
+                            ToolTip.visible: hovered
+                            visible: aboutConnectionCard.hasActiveAddress
+                            onClicked: djconnect.copyActiveHaAddress()
+                        }
                     }
                 }
                 }

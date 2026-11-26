@@ -1685,6 +1685,7 @@ _SESSION_COMPOSER_TRANSLATIONS = {
     "session_saved_refresh_failed": ("Could not refresh the saved session", "Opgeslagen sessie kon niet worden vernieuwd", "Gespeicherte Session konnte nicht aktualisiert werden", "Impossible d’actualiser la session enregistrée", "No se pudo actualizar la sesión guardada"),
     "session_connection_address_missing": ("The Home Assistant address is missing.", "Het Home Assistant-adres ontbreekt.", "Die Home-Assistant-Adresse fehlt.", "L’adresse de Home Assistant est manquante.", "Falta la dirección de Home Assistant."),
     "active_ha_address": ("Active HA address", "Actief HA-adres", "Aktive HA-Adresse", "Adresse HA active", "Dirección activa de HA"),
+    "copy_active_ha_address": ("Copy active HA address", "Kopieer actief HA-adres", "Aktive HA-Adresse kopieren", "Copier l’adresse HA active", "Copiar la dirección activa de HA"),
     "ha_address_inactive": ("Inactive", "Niet actief", "Nicht aktiv", "Inactive", "Inactiva"),
     "ha_address_unconfirmed": ("Address unconfirmed", "Adres niet bevestigd", "Adresse unbestätigt", "Adresse non confirmée", "Dirección sin confirmar"),
     "ha_connection_unconfirmed": ("Unconfirmed", "Niet bevestigd", "Unbestätigt", "Non confirmée", "Sin confirmar"),

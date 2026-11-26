@@ -2928,6 +2928,14 @@ class DJConnectBackend(QObject):
         self.showToastForContext(self.tr_key("copied"), "connectivity")
 
     @Slot()
+    def copyActiveHaAddress(self) -> None:
+        origin = self.aboutConnectionOrigin
+        if not origin:
+            return
+        QGuiApplication.clipboard().setText(origin)
+        self.showToastForContext(self.tr_key("copied"), "connectivity")
+
+    @Slot()
     def clearLogs(self) -> None:
         _LOGGER.info("User cleared logs from touch UI")
         path = Path(self.cfg.log_file)
