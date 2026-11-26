@@ -2315,15 +2315,19 @@ BrandWindow {
             && (djconnect.paired || djconnect.demoMode)
 
         FileDialog {
-            id: askDjExportDialog
-            objectName: "askDjExportDialog"
+            id: profileExportDialog
+            objectName: "profileExportDialog"
             property int profileRevision: 0
-            title: root.tr("ask_dj_export")
+            property bool musicDna: false
+            title: root.tr(musicDna ? "music_dna_export" : "ask_dj_export")
             fileMode: FileDialog.SaveFile
             options: FileDialog.DontUseNativeDialog
             defaultSuffix: "json"
             nameFilters: ["JSON (*.json)"]
-            onAccepted: djconnect.exportAskDjHistory(selectedFile, profileRevision)
+            onAccepted: {
+                if (musicDna) djconnect.exportMusicDna(selectedFile, profileRevision)
+                else djconnect.exportAskDjHistory(selectedFile, profileRevision)
+            }
         }
 
         ProfileReadOnOpen {
@@ -2761,11 +2765,28 @@ BrandWindow {
                 font.pixelSize: 24
                 Layout.fillWidth: true
                 Layout.preferredHeight: 58
-                enabled: djconnect.paired && djconnect.askDjHistoryExportAllowed && djconnect.backendAvailable
+                enabled: djconnect.paired && djconnect.personalProfileExportAllowed && djconnect.backendAvailable
                     && !djconnect.demoMode && !djconnect.versionMismatchVisible && !djconnect.askDjBusy
                 onClicked: {
-                    askDjExportDialog.profileRevision = djconnect.musicDnaContextRevision
-                    askDjExportDialog.open()
+                    profileExportDialog.musicDna = false
+                    profileExportDialog.profileRevision = djconnect.musicDnaContextRevision
+                    profileExportDialog.open()
+                }
+            }
+
+            PurpleButton {
+                objectName: "musicDnaExportButton"
+                text: root.tr("music_dna_export")
+                font.pixelSize: 24
+                Layout.fillWidth: true
+                Layout.preferredHeight: 58
+                enabled: settingsPanel.canChangeMusicDna && djconnect.musicDnaEnabled
+                    && djconnect.paired && djconnect.personalProfileExportAllowed && djconnect.backendAvailable
+                    && !djconnect.demoMode && !djconnect.versionMismatchVisible
+                onClicked: {
+                    profileExportDialog.musicDna = true
+                    profileExportDialog.profileRevision = djconnect.musicDnaContextRevision
+                    profileExportDialog.open()
                 }
             }
 

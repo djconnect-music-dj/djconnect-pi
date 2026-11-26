@@ -499,7 +499,7 @@ class DJConnectBackend(QObject):
         return self.cfg.active_profile_type == "personal"
 
     @Property(bool, notify=profileChanged)
-    def askDjHistoryExportAllowed(self) -> bool:
+    def personalProfileExportAllowed(self) -> bool:
         return bool(self.personalProfileActive and session_profile_id(self.cfg) and not self.cfg.private_session)
 
     @Property(str, notify=statusTextChanged)
@@ -1882,31 +1882,59 @@ class DJConnectBackend(QObject):
 
     @Slot(QUrl, int)
     def exportAskDjHistory(self, destination: QUrl, revision: int) -> None:
+        self._export_profile_file(destination, revision, music_dna=False)
+
+    @Slot(QUrl, int)
+    def exportMusicDna(self, destination: QUrl, revision: int) -> None:
+        self._export_profile_file(destination, revision, music_dna=True)
+
+    def _export_profile_file(self, destination: QUrl, revision: int, *, music_dna: bool) -> None:
         ticket = self._private_read_context()
         self._sync_config_from_disk()
         if (revision != self._music_dna_context_revision or ticket != self._private_read_context()
                 or not destination.isLocalFile() or not destination.toLocalFile()
-                or not self.paired or self._demo_mode or self._ask_dj_busy or not self.askDjHistoryExportAllowed
+                or not self.paired or self._demo_mode or not self.personalProfileExportAllowed
                 or not self._backend_available or self._version_mismatch_visible
                 or not self._application_foreground or self._shutting_down):
             return
+        dna_key = self.cfg.music_dna_key
+        if music_dna:
+            if self._music_dna_busy or not self._music_dna_loaded or not self._music_dna_enabled or not dna_key:
+                return
+            read = self.client.music_dna_export
+            set_busy = self._set_music_dna_busy
+            prefix, context = "music_dna_export", "musicdna"
+        else:
+            if self._ask_dj_busy:
+                return
+            read = self.client.ask_dj_history_export
+            set_busy = self._set_ask_dj_busy
+            prefix, context = "ask_dj_export", "askdj"
 
         def current() -> bool:
             return (self._application_foreground and not self._shutting_down and not self._demo_mode
-                    and ticket == self._private_read_context())
+                    and ticket == self._private_read_context()
+                    and (not music_dna or (self._music_dna_enabled and self.cfg.music_dna_key == dna_key)))
 
         def export() -> None:
             if not current():
                 return
             try:
-                data = self.client.ask_dj_history_export()
+                data = read()
+                if music_dna:
+                    profile = data.get("profile")
+                    if (data.get("success") is not True or data.get("format") != "djconnect.music_dna.export"
+                            or type(data.get("schema_version")) is not int or data["schema_version"] != 1
+                            or not isinstance(profile, dict) or profile.get("enabled") is not True
+                            or profile.get("music_dna_key") != dna_key or not isinstance(profile.get("profile"), dict)):
+                        raise DJConnectError("invalid_music_dna_export")
             except (AuthenticationError, ProtocolVersionMismatch):
                 if current():
                     raise
                 return
             except (DJConnectError, requests.RequestException):
                 if current():
-                    self._toastReady.emit(self.tr_key("ask_dj_export_failed"), 3500, "askdj")
+                    self._toastReady.emit(self.tr_key(prefix + "_failed"), 3500, context)
                 return
             if not current():
                 return
@@ -1920,11 +1948,10 @@ class DJConnectBackend(QObject):
                 else:
                     target.cancelWriting()
             if current():
-                key = "ask_dj_export_saved" if saved else "ask_dj_export_failed"
-                self._toastReady.emit(self.tr_key(key), 3500, "askdj")
+                self._toastReady.emit(self.tr_key(prefix + ("_saved" if saved else "_failed")), 3500, context)
 
-        self._set_ask_dj_busy(True)
-        self._run(self.tr_key("ask_dj_export"), export, done=lambda: self._set_ask_dj_busy(False), interactive=False)
+        set_busy(True)
+        self._run(self.tr_key(prefix), export, done=lambda: set_busy(False), interactive=False)
 
     @Slot()
     @Slot(int)
