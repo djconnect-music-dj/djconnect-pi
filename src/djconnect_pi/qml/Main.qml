@@ -3192,6 +3192,9 @@ BrandWindow {
             property bool storyCard: true
             property bool animatedPreview: false
             property bool renderingCard: false
+            readonly property bool clipRunning: djconnect.trackInsightClipRunning
+            readonly property bool exportClip: animatedPreview && djconnect.trackInsightClipSupported
+            property real clipProgress: 0
             property int exportGeneration: 0
             onAboutToShow: {
                 storyCard = true
@@ -3200,11 +3203,36 @@ BrandWindow {
             onClosed: {
                 exportGeneration += 1
                 renderingCard = false
+                djconnect.cancelTrackInsightClip()
                 if (insightSaveDialog.visible) insightSaveDialog.close()
+            }
+            Connections {
+                target: djconnect
+                function onTrackInsightClipFrameRequested(phase) {
+                    if (!insightSharePopup.opened || !trackInsightPanel.canShareInsight) {
+                        djconnect.cancelTrackInsightClip()
+                        return
+                    }
+                    const popup = insightSharePopup
+                    const generation = popup.exportGeneration
+                    popup.clipProgress = phase
+                    shareCard.motionPhase = phase
+                    if (!shareCard.grabToImage(function(result) {
+                        if (popup && popup.opened && popup.exportGeneration === generation && popup.clipRunning)
+                            djconnect.supplyTrackInsightClipFrame(result.image)
+                    }, Qt.size(1080, popup.storyCard ? 1920 : 1080)))
+                        djconnect.cancelTrackInsightClip()
+                }
             }
 
             function saveCard(destination) {
                 if (!trackInsightPanel.canShareInsight || renderingCard) return
+                if (exportClip) {
+                    exportGeneration += 1
+                    clipProgress = 0
+                    djconnect.startTrackInsightClip(destination, storyCard, djconnect.trackInsightShareText)
+                    return
+                }
                 const key = trackInsightPanel.autoInsightKey
                 const text = djconnect.trackInsightShareText
                 const story = storyCard
@@ -3227,10 +3255,11 @@ BrandWindow {
             FileDialog {
                 id: insightSaveDialog
                 objectName: "trackInsightSaveDialog"
-                title: root.tr("track_insight_save_card")
+                title: root.tr(insightSharePopup.exportClip ? "track_insight_save_clip" : "track_insight_save_card")
                 fileMode: FileDialog.SaveFile
-                defaultSuffix: "png"
-                nameFilters: [root.tr("track_insight_png_files") + " (*.png)"]
+                defaultSuffix: insightSharePopup.exportClip ? "mp4" : "png"
+                nameFilters: insightSharePopup.exportClip ? [root.tr("track_insight_mp4_files") + " (*.mp4)"]
+                    : [root.tr("track_insight_png_files") + " (*.png)"]
                 options: FileDialog.DontUseNativeDialog
                 onAccepted: insightSharePopup.saveCard(selectedFile)
             }
@@ -3249,6 +3278,7 @@ BrandWindow {
                         objectName: "trackInsightShareStory"
                         text: root.tr("track_insight_share_story")
                         checked: insightSharePopup.storyCard
+                        enabled: !insightSharePopup.clipRunning
                         Layout.fillWidth: true; Layout.preferredWidth: 1
                         onClicked: insightSharePopup.storyCard = true
                     }
@@ -3256,6 +3286,7 @@ BrandWindow {
                         objectName: "trackInsightShareSquare"
                         text: root.tr("track_insight_share_square")
                         checked: !insightSharePopup.storyCard
+                        enabled: !insightSharePopup.clipRunning
                         Layout.fillWidth: true; Layout.preferredWidth: 1
                         onClicked: insightSharePopup.storyCard = false
                     }
@@ -3263,7 +3294,7 @@ BrandWindow {
                         objectName: "trackInsightShareAnimate"
                         text: root.tr("track_insight_share_animate")
                         checked: insightSharePopup.animatedPreview
-                        enabled: !GlassStyle.reduceMotion
+                        enabled: !GlassStyle.reduceMotion && !insightSharePopup.clipRunning
                         Layout.fillWidth: true; Layout.preferredWidth: 1
                         onClicked: insightSharePopup.animatedPreview = !insightSharePopup.animatedPreview
                     }
@@ -3284,7 +3315,7 @@ BrandWindow {
                             story: insightSharePopup.storyCard
                             animate: visible && insightSharePopup.animatedPreview && insightSharePopup.opened
                                 && root.active && GlassStyle.awake && !GlassStyle.reduceMotion
-                                && !insightSharePopup.renderingCard && !insightSaveDialog.visible
+                                && !insightSharePopup.renderingCard && !insightSharePopup.clipRunning && !insightSaveDialog.visible
                             Layout.alignment: Qt.AlignHCenter
                             Layout.preferredWidth: Math.min(insightShareContent.width, story ? 190 : 280)
                             Layout.preferredHeight: Layout.preferredWidth * (story ? 16 / 9 : 1)
@@ -3306,6 +3337,11 @@ BrandWindow {
                         }
                     }
                 }
+                ProgressBar {
+                    visible: insightSharePopup.clipRunning
+                    Layout.fillWidth: true
+                    value: insightSharePopup.clipProgress
+                }
                 RowLayout {
                     Layout.fillWidth: true
                     GlassButton {
@@ -3316,9 +3352,10 @@ BrandWindow {
                     }
                     GlassButton {
                         objectName: "trackInsightSaveCard"
-                        text: root.tr("track_insight_save_card"); iconName: "document"
+                        text: root.tr(insightSharePopup.exportClip ? "track_insight_save_clip" : "track_insight_save_card")
+                        iconName: "document"
                         Layout.fillWidth: true
-                        enabled: trackInsightPanel.canShareInsight && !insightSharePopup.renderingCard
+                        enabled: trackInsightPanel.canShareInsight && !insightSharePopup.renderingCard && !insightSharePopup.clipRunning
                         onClicked: insightSaveDialog.open()
                     }
                 }

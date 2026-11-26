@@ -85,6 +85,7 @@ from .session_projection import safe_link, timestamp, volume_observation
 from .session_projection import text as bounded_text
 from .expiry_clock import elapsed_time
 from .session_transport import SessionError, session_profile_id
+from .track_insight_clip import TrackInsightClip, clip_format
 from .shared_settings import SettingsError
 from .system_info import log_raspberry_pi_system_info
 
@@ -205,6 +206,8 @@ class DJConnectBackend(QObject):
     musicDiscoveryItemsChanged = Signal()
     musicDiscoveryPlayed = Signal(str, str)
     trackInsightChanged = Signal()
+    trackInsightClipChanged = Signal()
+    trackInsightClipFrameRequested = Signal(float)
     trackInsightPlaybackItemChanged = Signal()
     trackInsightObservationChanged = Signal()
     demoModeChanged = Signal()
@@ -344,6 +347,7 @@ class DJConnectBackend(QObject):
         self._track_insight_result_scope = None
         self._track_insight_last_proof = None
         self._track_insight_deadline = None
+        self._track_insight_clip = None
         self._track_insight_retryable = False
         self._ask_dj_unavailable_until = 0.0
         self._ask_dj_poll_error_count = 0
@@ -827,6 +831,58 @@ class DJConnectBackend(QObject):
         else:
             target.cancelWriting()
             self.showToastForContext(self.tr_key("track_insight_card_save_failed"), "trackinsight")
+
+    @Property(bool, constant=True)
+    def trackInsightClipSupported(self) -> bool:
+        return clip_format() is not None
+
+    @Property(bool, notify=trackInsightClipChanged)
+    def trackInsightClipRunning(self) -> bool:
+        return self._track_insight_clip is not None
+
+    @Slot(QUrl, bool, str)
+    def startTrackInsightClip(self, destination: QUrl, story: bool, expected_text: str) -> None:
+        scope = self._track_insight_scope()
+        item = self.trackInsightPlaybackItemId
+
+        def current() -> bool:
+            return (self._application_foreground and not self._shutting_down and bool(expected_text)
+                    and expected_text == self.trackInsightShareText and self._track_insight_scope() == scope
+                    and self.trackInsightPlaybackItemId == item)
+
+        if self._track_insight_clip is not None or not current():
+            return
+        path = destination.toLocalFile()
+        fmt = clip_format()
+        if not path or Path(path).suffix.lower() != ".mp4" or fmt is None:
+            self.showToastForContext(self.tr_key("track_insight_clip_save_failed"), "trackinsight")
+            return
+        clip = TrackInsightClip(path, 1920 if story else 1080, fmt, current, self)
+        self._track_insight_clip = clip
+        clip.frameRequested.connect(self.trackInsightClipFrameRequested.emit)
+        clip.finished.connect(lambda outcome: self._finish_track_insight_clip(clip, outcome))
+        self.trackInsightClipChanged.emit()
+        clip.start()
+
+    @Slot(QImage)
+    def supplyTrackInsightClipFrame(self, image: QImage) -> None:
+        if self._track_insight_clip is not None:
+            self._track_insight_clip.supply(image)
+
+    @Slot()
+    def cancelTrackInsightClip(self) -> None:
+        if self._track_insight_clip is not None:
+            self._track_insight_clip.stop()
+
+    def _finish_track_insight_clip(self, clip, outcome: str) -> None:
+        if self._track_insight_clip is not clip:
+            return
+        self._track_insight_clip = None
+        clip.deleteLater()
+        self.trackInsightClipChanged.emit()
+        if outcome != "cancelled":
+            key = "track_insight_clip_saved" if outcome == "saved" else "track_insight_clip_save_failed"
+            self.showToastForContext(self.tr_key(key), "trackinsight")
 
     @Property(bool, notify=trackInsightChanged)
     def trackInsightAudioNotice(self) -> bool:
@@ -4693,6 +4749,7 @@ class DJConnectBackend(QObject):
     @Slot()
     def shutdown(self) -> None:
         self._shutting_down = True
+        self.cancelTrackInsightClip()
         self._game_settings.sync()
         self.closeAskDjHelp()
         self._edge_back_gesture.cancel()
