@@ -8,6 +8,7 @@ Item {
     objectName: "logsView"
     required property var backend
     property bool confirmationOpen: false
+    property bool findShortcutEnabled: true
     signal clearRequested()
 
     readonly property bool compact: width < 900
@@ -47,9 +48,9 @@ Item {
         matchIndex = (matchIndex + step + matches.length) % matches.length
         logRows.positionViewAtIndex(currentMatch.row, ListView.Contain)
     }
-    function showSearch() {
+    function showSearch(showKeyboard) {
         searching = true
-        keyboardOpen = true
+        keyboardOpen = showKeyboard
         searchInput.forceActiveFocus()
     }
     function closeSearch() {
@@ -66,6 +67,12 @@ Item {
         if (currentMatch) logRows.positionViewAtIndex(currentMatch.row, ListView.Contain)
     }
     onVisibleChanged: if (!visible) closeSearch()
+
+    Shortcut {
+        sequences: [StandardKey.Find]
+        enabled: view.visible && view.findShortcutEnabled && !view.confirmationOpen
+        onActivated: view.showSearch(false)
+    }
 
     component LogAction: GlassButton {
         implicitWidth: 48; implicitHeight: 48; padding: 9
@@ -102,7 +109,7 @@ Item {
                         checked: view.searching
                         background: Item {}
                         foregroundColor: checked ? BrandTheme.colors.actionAccent : BrandTheme.colors.text
-                        onClicked: view.searching ? view.closeSearch() : view.showSearch()
+                        onClicked: view.searching ? view.closeSearch() : view.showSearch(true)
                     }
                     LogAction {
                         iconName: "refresh"; Accessible.name: view.tr("refresh")
@@ -151,7 +158,6 @@ Item {
                         font.pixelSize: view.compact ? 18 : 21
                         maximumLength: 120
                         selectByMouse: true
-                        onActiveFocusChanged: if (activeFocus && view.searching) view.keyboardOpen = true
                         TapHandler { onTapped: view.keyboardOpen = true }
                         Keys.onEscapePressed: if (view.keyboardOpen) view.submitSearch(); else view.closeSearch()
                         onAccepted: {

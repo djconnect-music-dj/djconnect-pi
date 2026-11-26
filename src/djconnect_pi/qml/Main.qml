@@ -6192,6 +6192,7 @@ BrandWindow {
             anchors.fill: parent
             backend: djconnect
             confirmationOpen: root.clearLogsConfirmOpen
+            findShortcutEnabled: root.active && !root.screenBlanked && !root.splashVisible
             onClearRequested: root.clearLogsConfirmOpen = true
         }
     }

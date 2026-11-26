@@ -1089,11 +1089,12 @@ def main():
         logs = visual_item(window.contentItem(), "logsView")
         search_toggle = visual_item(logs, "logsSearchOpen")
         search_toggle_accessible = QAccessible.queryAccessibleInterface(search_toggle)
+        log_find = QKeySequence.keyBindings(QKeySequence.StandardKey.Find)[0][0]
         for locale in ("en", "nl", "de", "fr", "es"):
             backend.setLanguage(locale)
             assert search_toggle_accessible.text(QAccessible.Text.Name) == backend.t("logs_search")
             QMetaObject.invokeMethod(search_toggle, "clicked")
-            assert search_toggle.property("checked")
+            assert search_toggle.property("checked") and logs.property("keyboardOpen")
             assert search_toggle_accessible.text(QAccessible.Text.Name) == backend.t("close_search")
             search_close = visual_item(logs, "logsSearchClose")
             assert search_close.property("visible") and search_close.property("iconName") == "close"
@@ -1109,6 +1110,13 @@ def main():
             assert not search_toggle.property("checked") and not logs.property("searching")
             assert not logs.property("keyboardOpen") and search_input.property("text") == ""
             assert search_toggle_accessible.text(QAccessible.Text.Name) == backend.t("logs_search")
+            QTest.keyClick(window, log_find.key(), log_find.keyboardModifiers())
+            assert logs.property("searching") and not logs.property("keyboardOpen") and search_input.property("activeFocus")
+            search_input.setProperty("text", "keep query")
+            QTest.keyClick(window, log_find.key(), log_find.keyboardModifiers())
+            assert search_input.property("text") == "keep query" and not logs.property("keyboardOpen")
+            QTest.keyClick(window, Qt.Key.Key_Escape)
+            assert not logs.property("searching") and search_input.property("text") == ""
         backend.hideLogs()
         backend.cfg.log_level = "OFF"
         backend.setLanguage("nl")
