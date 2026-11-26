@@ -1714,6 +1714,8 @@ _SESSION_COMPOSER_TRANSLATIONS = {
     "ask_dj_feedback_edit_answer": ("Answer to share", "Antwoord om te delen", "Antwort zum Teilen", "Réponse à partager", "Respuesta para compartir"),
     "ask_dj_feedback_restore_answer": ("Restore original answer", "Oorspronkelijk antwoord terugzetten", "Ursprüngliche Antwort wiederherstellen", "Rétablir la réponse d’origine", "Restaurar la respuesta original"),
     "track_insight_share": ("Share Track Insight", "Track Insight delen", "Track Insight teilen", "Partager Track Insight", "Compartir Track Insight"),
+    "track_insight_share_story": ("Story", "Story", "Story", "Story", "Historia"),
+    "track_insight_share_square": ("Square", "Vierkant", "Quadrat", "Carré", "Cuadrado"),
     "track_insight_copy_share_text": ("Copy insight text", "Kopieer inzichttekst", "Insight-Text kopieren", "Copier le texte de l’analyse", "Copiar el texto del análisis"),
     "ask_dj_feedback_note": ("Comment", "Toelichting", "Anmerkung", "Commentaire", "Comentario"),
     "ask_dj_feedback_note_prompt": ("What was wrong or missing?", "Wat klopte er niet of wat miste je?", "Was war falsch oder hat gefehlt?", "Qu’est-ce qui était incorrect ou manquant ?", "¿Qué era incorrecto o faltaba?"),

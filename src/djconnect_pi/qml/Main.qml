@@ -3188,6 +3188,8 @@ BrandWindow {
             width: Math.min(trackInsightPanel.width - 40, 740)
             modal: true
             padding: 20
+            property bool storyCard: true
+            onAboutToShow: storyCard = true
             contentItem: ColumnLayout {
                 spacing: 12
                 Text {
@@ -3196,18 +3198,55 @@ BrandWindow {
                     font.pixelSize: 24; font.bold: true
                     Layout.fillWidth: true
                 }
+                RowLayout {
+                    Layout.fillWidth: true
+                    GlassButton {
+                        objectName: "trackInsightShareStory"
+                        text: root.tr("track_insight_share_story")
+                        checked: insightSharePopup.storyCard
+                        Layout.fillWidth: true; Layout.preferredWidth: 1
+                        onClicked: insightSharePopup.storyCard = true
+                    }
+                    GlassButton {
+                        objectName: "trackInsightShareSquare"
+                        text: root.tr("track_insight_share_square")
+                        checked: !insightSharePopup.storyCard
+                        Layout.fillWidth: true; Layout.preferredWidth: 1
+                        onClicked: insightSharePopup.storyCard = false
+                    }
+                }
                 ScrollView {
                     id: insightShareScroll
                     Layout.fillWidth: true
-                    Layout.preferredHeight: Math.min(insightShareSummary.implicitHeight, 300)
+                    Layout.preferredHeight: Math.min(insightShareContent.implicitHeight, 380)
                     contentWidth: availableWidth; clip: true
-                    Text {
-                        id: insightShareSummary
-                        objectName: "trackInsightShareSummary"
+                    ColumnLayout {
+                        id: insightShareContent
                         width: insightShareScroll.availableWidth
-                        text: trackInsightPanel.canShareInsight ? djconnect.trackInsightShareText : ""
-                        textFormat: Text.PlainText; wrapMode: Text.Wrap
-                        color: BrandTheme.colors.text; font.pixelSize: 20
+                        spacing: 16
+                        TrackInsightShareCard {
+                            objectName: "trackInsightShareCard"
+                            visible: trackInsightPanel.canShareInsight
+                            story: insightSharePopup.storyCard
+                            Layout.alignment: Qt.AlignHCenter
+                            Layout.preferredWidth: Math.min(insightShareContent.width, story ? 190 : 280)
+                            Layout.preferredHeight: Layout.preferredWidth * (story ? 16 / 9 : 1)
+                            trackTitle: visible ? djconnect.trackInsightTitle : ""
+                            artist: visible ? djconnect.trackInsightArtist : ""
+                            summary: visible ? djconnect.trackInsightText : ""
+                            artworkUrl: visible ? djconnect.trackInsightImageUrl : ""
+                            badge: root.tr(djconnect.demoMode ? "demo_mode" : "track_insight")
+                            creditLabel: visible && djconnect.trackInsightVerifiedCredit.url
+                                ? [djconnect.trackInsightVerifiedCredit.provider, djconnect.trackInsightVerifiedCredit.license,
+                                   djconnect.trackInsightVerifiedCredit.url].filter(Boolean).join(" · ") : ""
+                        }
+                        Text {
+                            objectName: "trackInsightShareSummary"
+                            Layout.fillWidth: true
+                            text: trackInsightPanel.canShareInsight ? djconnect.trackInsightShareText : ""
+                            textFormat: Text.PlainText; wrapMode: Text.Wrap
+                            color: BrandTheme.colors.text; font.pixelSize: 20
+                        }
                     }
                 }
                 GlassButton {
