@@ -17,6 +17,7 @@ Item {
     property bool searching: false
     property bool keyboardOpen: false
     property int matchIndex: -1
+    property string matchQuery: ""
     readonly property string query: searchInput.text.trim()
     readonly property var searchMatches: findMatches(lines, query)
     readonly property var matches: searchMatches.ordered
@@ -85,8 +86,11 @@ Item {
     function moveMatch(step) {
         if (!matches.length) return false
         matchIndex = (matchIndex + step + matches.length) % matches.length
-        logRows.positionViewAtIndex(currentMatch.row, ListView.Contain)
+        positionCurrentMatch()
         return true
+    }
+    function positionCurrentMatch() {
+        if (visible && currentMatch) logRows.positionViewAtIndex(currentMatch.row, ListView.Contain)
     }
     function showSearch(showKeyboard) {
         searching = true
@@ -102,11 +106,13 @@ Item {
     }
     function submitSearch() {
         keyboardOpen = false
-        if (currentMatch) logRows.positionViewAtIndex(currentMatch.row, ListView.Contain)
+        positionCurrentMatch()
     }
     onMatchesChanged: {
-        matchIndex = matches.length ? 0 : -1
-        if (currentMatch) logRows.positionViewAtIndex(currentMatch.row, ListView.Contain)
+        const previousIndex = matchQuery === query ? Math.max(0, matchIndex) : 0
+        matchQuery = query
+        matchIndex = Math.min(previousIndex, matches.length - 1)
+        Qt.callLater(positionCurrentMatch)
     }
     onVisibleChanged: if (!visible) closeSearch()
 
@@ -155,6 +161,7 @@ Item {
                         onClicked: view.searching ? view.closeSearch() : view.showSearch(true)
                     }
                     LogAction {
+                        objectName: "logsRefresh"
                         iconName: "refresh"; Accessible.name: view.tr("refresh")
                         background: Item {}
                         onClicked: { view.backend.showLogs(); if (!view.currentMatch) logRows.positionViewAtBeginning() }

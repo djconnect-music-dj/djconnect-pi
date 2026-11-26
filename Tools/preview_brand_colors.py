@@ -1084,12 +1084,14 @@ def main():
         capture("about")
         window.setProperty("aboutOpen", False)
         backend.cfg.log_level = "INFO"
+        log_path = Path(backend.cfg.log_file)
+        log_lines = ["sample first", "<repeat> & repeat", "sample second", "sample third", "♪ café and cafe\u0301 and cafe!"]
+        log_path.write_text("\n".join(reversed(log_lines)), encoding="utf-8")
         backend.showLogs()
-        backend._logs_text = "sample first\n<repeat> & repeat\nsample second\nsample third\n♪ café and cafe\u0301 and cafe!"
-        backend.logsChanged.emit()
         capture("logs")
         logs = visual_item(window.contentItem(), "logsView")
         search_toggle = visual_item(logs, "logsSearchOpen")
+        logs_refresh = visual_item(logs, "logsRefresh")
         search_toggle_accessible = QAccessible.queryAccessibleInterface(search_toggle)
         log_find = QKeySequence.keyBindings(QKeySequence.StandardKey.Find)[0][0]
         for locale in ("en", "nl", "de", "fr", "es"):
@@ -1156,6 +1158,15 @@ def main():
                 highlighted = accent_line.evaluate()[0]
                 assert not accent_line.hasError() and highlighted.startswith("♪ <b>")
                 assert "café</font>" in highlighted and "cafe\u0301</font>" in highlighted and "cafe</font>!" in highlighted
+            search_input.setProperty("text", "sample")
+            QTest.keyClick(window, Qt.Key.Key_Up)
+            assert logs.property("matchIndex") == 2
+            log_path.write_text("\n".join(reversed(log_lines[:3])), encoding="utf-8")
+            QMetaObject.invokeMethod(logs_refresh, "clicked")
+            assert search_count.property("text") == "2/2"
+            log_path.write_text("\n".join(reversed(log_lines)), encoding="utf-8")
+            QMetaObject.invokeMethod(logs_refresh, "clicked")
+            assert search_count.property("text") == "2/3" and search_input.property("text") == "sample"
             search_input.setProperty("text", "   ")
             assert logs.property("matchIndex") == -1 and not search_count.property("visible")
             QTest.keyClick(window, Qt.Key.Key_Escape)
