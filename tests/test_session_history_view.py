@@ -9,6 +9,7 @@ from djconnect_pi.session_history_view import (
     conversation_entries,
     flow_contributions,
     live_presentations,
+    local_highlighted_text,
     opened_entry,
     presented_history,
     search_page,
@@ -144,6 +145,14 @@ def test_server_highlights_keep_literal_markup_emoji_and_linebreaks_without_dupl
     document = QTextDocument()
     document.setHtml(markup)
     assert document.toPlainText() == body
+
+
+def test_local_highlights_match_accented_words_and_preserve_literal_text():
+    body = '<img> 🎧 Café\nCAFE\u0301 & música'
+    assert local_highlighted_text(body, " cafe ") == (
+        '&lt;img&gt; 🎧 <b><u>Café</u></b><br><b><u>CAFE\u0301</u></b> &amp; música'
+    )
+    assert local_highlighted_text(body, "missing") == ""
 
 
 def test_search_rejects_highlight_that_splits_emoji_surrogate_pair():

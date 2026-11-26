@@ -3,6 +3,7 @@ import re
 from copy import deepcopy
 from html import escape
 from importlib.resources import files
+from unicodedata import normalize
 from urllib.parse import urlsplit
 
 from .session_projection import history_page, live_moments, safe_link, text, timestamp
@@ -158,6 +159,23 @@ def _render_highlighted_spans(body, spans):
     fragments.append(escape(body[previous:]))
     # The only generated tags are emphasis and line breaks. User markup stays literal.
     return "".join(fragments).replace("\n", "<br>")
+
+
+def local_highlighted_text(body, query):
+    def fold(value):
+        return re.sub("[\u0300-\u036f]", "", normalize("NFD", value)).lower()
+
+    needle = fold(query.strip())
+    folded = fold(body)
+    if not needle or needle not in folded:
+        return ""
+    offsets = []
+    for cluster in re.finditer(r".[\u0300-\u036f]*", body, re.DOTALL):
+        offsets.extend([cluster.span()] * len(fold(cluster[0])))
+    return _render_highlighted_spans(
+        body, [(offsets[match.start()][0], offsets[match.end() - 1][1])
+               for match in re.finditer(re.escape(needle), folded)]
+    )
 
 
 def demo_search_body(row):

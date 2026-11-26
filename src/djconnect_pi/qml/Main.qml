@@ -5660,6 +5660,7 @@ BrandWindow {
         property string selectedMessageId: ""
         property var displayedMessages: []
         property var readingAnchor: null
+        readonly property string searchQuery: searchOpen ? askDjSearchInput.text.trim() : ""
         property real messageClock: Date.now()
         Timer {
             interval: 60000
@@ -5670,7 +5671,7 @@ BrandWindow {
         }
         Component.onCompleted: updateMessages()
         readonly property var matches: {
-            const query = searchText(askDjSearchInput.text.trim())
+            const query = searchText(searchQuery)
             const messages = displayedMessages
             const results = []
             if (query) {
@@ -6042,8 +6043,11 @@ BrandWindow {
                                 }
 
                                 Text {
-                                    text: modelData.text
-                                    textFormat: Text.PlainText
+                                    objectName: "askDjMessageBody"
+                                    readonly property string highlighted: askDjPanel.searchQuery
+                                        ? djconnect.highlightAskDjMessage(modelData.text || "", askDjPanel.searchQuery) : ""
+                                    text: highlighted || modelData.text
+                                    textFormat: highlighted ? Text.StyledText : Text.PlainText
                                     color: BrandTheme.colors.text
                                     font.pixelSize: bubble.systemBubble ? 19 : 22
                                     font.weight: Font.Normal

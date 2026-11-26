@@ -80,6 +80,7 @@ from .logging_config import clear_log_files, setup_logging
 from .navigation_gesture import EdgeBackGesture
 from .queue_projection import compact_adjacent_tracks, queue_artist_and_album
 from .session_controller import SessionController
+from .session_history_view import local_highlighted_text
 from .session_playback_control import favorite_observation, output_id
 from .session_playback_control import reference as session_playback_reference
 from .session_projection import safe_link, timestamp, volume_observation
@@ -650,6 +651,10 @@ class DJConnectBackend(QObject):
     @Property("QVariantList", notify=askDjChanged)
     def askDjMessages(self) -> list[dict[str, object]]:
         return self._ask_dj_messages
+
+    @Slot(str, str, result=str)
+    def highlightAskDjMessage(self, body: str, query: str) -> str:
+        return local_highlighted_text(body, query)
 
     @Slot(str, float, result=str)
     def formatAskDjTimestamp(self, created_at: str, now_ms: float) -> str:
