@@ -1891,12 +1891,12 @@ BrandWindow {
             GlassButton {
                 objectName: "nowPlaybackOutput"
                 readonly property string reportedOutput: djconnect.outputDevice.trim()
-                visible: reportedOutput.length > 0 || djconnect.outputDeviceChoices.length > 0
+                visible: nowPanel.playbackActionsAvailable || reportedOutput.length > 0 || djconnect.outputDeviceChoices.length > 0
                 Layout.alignment: Qt.AlignHCenter
                 Layout.preferredWidth: Math.min(parent.width, 416)
                 Layout.preferredHeight: 52
                 iconName: "speaker"
-                text: reportedOutput || root.tr("output_device")
+                text: reportedOutput || root.tr("session_output_choose")
                 Accessible.name: reportedOutput ? root.tr("output_device") + ": " + reportedOutput : text
                 onClicked: root.activeScreen = "control"
             }
