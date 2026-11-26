@@ -13,7 +13,7 @@ QtObject {
         target: gesture.flickable
         function onDragStarted() { gesture.armed = false }
         function onVerticalOvershootChanged() {
-            if (target.dragging && target.verticalOvershoot < -64 && gesture.canRefresh) gesture.armed = true
+            if (target.dragging) gesture.armed = gesture.canRefresh && target.verticalOvershoot < -64
         }
         function onDragEnded() {
             const refresh = gesture.armed && gesture.canRefresh

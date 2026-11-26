@@ -66,14 +66,17 @@ def click(window, button):
     QTest.qWait(65)
 
 
-def pull_down(window, scroll, touch, distance):
+def pull_down(window, scroll, touch, distance, *, retract=False):
     start = scroll.mapToScene(QPointF(scroll.width() / 2, 100)).toPoint()
     QTest.touchEvent(window, touch).press(0, start, window).commit()
-    for step in range(1, 6):
-        point = start + QPoint(0, round(step * distance / 5))
+    offsets = [round(step * distance / 5) for step in range(1, 6)]
+    if retract:
+        offsets += [round(step * distance / 5) for step in range(4, -1, -1)]
+    for offset in offsets:
+        point = start + QPoint(0, offset)
         QTest.touchEvent(window, touch).move(0, point, window).commit()
         QTest.qWait(20)
-    QTest.touchEvent(window, touch).release(0, start + QPoint(0, distance), window).commit()
+    QTest.touchEvent(window, touch).release(0, point, window).commit()
     QTest.qWait(380)
 
 
@@ -290,8 +293,18 @@ def main():
                     assert empty.property("visible")
                     assert one(empty, "sessionForecastEmptyIcon").property("iconName") == "forecast_horizon"
                     assert one(empty, "sessionForecastEmptyMessage").property("text") == TRANSLATIONS[language]["session_forecast_empty"]
+                    forecast_view = window.findChild(QObject, "sessionForecastScroll")
+                    forecast_flick = forecast_view.property("contentItem")
+                    if language == "nl":
+                        assert forecast_flick.property("contentHeight") <= forecast_flick.height()
+                        forecast_flick.setProperty("contentY", forecast_flick.property("originY"))
+                        QTest.qWait(65)
+                        with QSignalBlocker(poll_timer), patch.object(owner, "_launch") as refresh:
+                            pull_down(window, forecast_view, touch, 230, retract=True)
+                            refresh.assert_not_called()
+                            pull_down(window, forecast_view, touch, 230)
+                            refresh.assert_called_once_with("refresh", background=True)
                     click(window, flow)
-                    forecast_flick = window.findChild(QObject, "sessionForecastScroll").property("contentItem")
                     sid = session["session_id"]
                     row = {
                         "entry_id": "fixture-withdrawn", "session_id": sid, "order": 1,
