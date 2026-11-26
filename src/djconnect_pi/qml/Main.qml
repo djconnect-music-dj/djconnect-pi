@@ -7651,7 +7651,13 @@ BrandWindow {
                 }
 
                 GlassCard {
+                    id: aboutConnectionCard
                     Layout.fillWidth: true
+                readonly property bool liveConnectionEligible: !djconnect.demoMode && djconnect.paired
+                    && djconnect.backendAvailable && !djconnect.versionMismatchVisible
+                readonly property bool hasActiveAddress: djconnect.aboutConnectionOrigin.length > 0
+                readonly property string connectionFallback: djconnect.demoMode ? "demo_mode"
+                    : !liveConnectionEligible ? "ha_address_inactive" : !hasActiveAddress ? "ha_connection_unconfirmed" : ""
                 Text {
                     text: root.tr("connection_section")
                     color: BrandTheme.colors.muted
@@ -7668,10 +7674,20 @@ BrandWindow {
 
                     Text { text: root.tr("home_assistant"); color: BrandTheme.colors.muted; font.pixelSize: 20; font.bold: true; horizontalAlignment: Text.AlignRight; Layout.preferredWidth: 190 }
                     Text { text: djconnect.paired ? root.tr("paired") : root.tr("not_paired"); color: BrandTheme.colors.text; font.pixelSize: 20; Layout.fillWidth: true }
-                    Text { text: root.tr("transport"); color: BrandTheme.colors.muted; font.pixelSize: 20; font.bold: true; horizontalAlignment: Text.AlignRight; Layout.preferredWidth: 190 }
-                    Text { text: djconnect.transportMode; color: BrandTheme.colors.text; font.pixelSize: 20; Layout.fillWidth: true }
                     Text { text: root.tr("connection_type"); color: BrandTheme.colors.muted; font.pixelSize: 20; font.bold: true; horizontalAlignment: Text.AlignRight; Layout.preferredWidth: 190 }
-                    Text { text: djconnect.connectionType; color: BrandTheme.colors.text; font.pixelSize: 20; Layout.fillWidth: true; elide: Text.ElideRight }
+                    Text {
+                        objectName: "aboutHaConnectionType"
+                        text: root.tr(aboutConnectionCard.connectionFallback || "local_only")
+                        textFormat: Text.PlainText
+                        color: BrandTheme.colors.text; font.pixelSize: 20; Layout.fillWidth: true; wrapMode: Text.Wrap
+                    }
+                    Text { text: root.tr("transport"); color: BrandTheme.colors.muted; font.pixelSize: 20; font.bold: true; horizontalAlignment: Text.AlignRight; Layout.preferredWidth: 190 }
+                    Text {
+                        objectName: "aboutHaConnectionTransport"
+                        text: root.tr(aboutConnectionCard.connectionFallback || djconnect.aboutConnectionTransport)
+                        textFormat: Text.PlainText
+                        color: BrandTheme.colors.text; font.pixelSize: 20; Layout.fillWidth: true; wrapMode: Text.Wrap
+                    }
                     Text { text: root.tr("music_backend"); color: BrandTheme.colors.muted; font.pixelSize: 20; font.bold: true; horizontalAlignment: Text.AlignRight; Layout.preferredWidth: 190 }
                     Text {
                         objectName: "aboutMusicBackendStatus"
@@ -7690,8 +7706,8 @@ BrandWindow {
                     Text { text: root.tr("active_ha_address"); color: BrandTheme.colors.muted; font.pixelSize: 20; font.bold: true; horizontalAlignment: Text.AlignRight; Layout.preferredWidth: 190; wrapMode: Text.WordWrap }
                     Text {
                         objectName: "aboutActiveHaAddress"
-                        text: djconnect.aboutConnectionOrigin || root.tr(djconnect.demoMode || !djconnect.paired
-                            || !djconnect.backendAvailable ? "ha_address_inactive" : "ha_address_unconfirmed")
+                        text: djconnect.aboutConnectionOrigin || root.tr(aboutConnectionCard.liveConnectionEligible
+                            ? "ha_address_unconfirmed" : "ha_address_inactive")
                         textFormat: Text.PlainText
                         color: BrandTheme.colors.text; font.pixelSize: 18; Layout.fillWidth: true; wrapMode: Text.Wrap
                     }

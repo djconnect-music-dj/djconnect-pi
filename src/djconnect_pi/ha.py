@@ -136,9 +136,10 @@ class MusicBackendSummary:
 
 
 class StatusObservation(dict):
-    def __init__(self, data, authenticated_origin: str) -> None:
+    def __init__(self, data, authenticated_origin: str = "", *, via_websocket: bool = False) -> None:
         super().__init__(data)
         self.authenticated_origin = authenticated_origin
+        self.via_websocket = via_websocket
 
 
 class HAClient:
@@ -247,6 +248,8 @@ class HAClient:
                 self.update_backend_summary(data)
                 self.apply_profile_context(data)
                 self._validate_ha_version(data)
+                if command == "status" and data.get("success") is True and self.cfg.paired and self.cfg.device_token:
+                    return StatusObservation(data, via_websocket=True)
                 return data
         url = self._djconnect_url("command")
         _LOGGER.debug(

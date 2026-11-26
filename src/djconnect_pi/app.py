@@ -240,7 +240,7 @@ class DJConnectBackend(QObject):
     _controlOutputsFinished = Signal(object, object, bool)
     _backendAvailableReady = Signal(bool)
     _aboutMusicAvailabilityReady = Signal(object, object, float)
-    _aboutConnectionReady = Signal(object, str, float)
+    _aboutConnectionReady = Signal(object, str, float, bool)
     _toastReady = Signal(str, int, str)
     _updateCheckFinished = Signal(str)
     _askDjReady = Signal(object)
@@ -1010,14 +1010,23 @@ class DJConnectBackend(QObject):
             return ""
         return observation[1]
 
-    @Slot(object, str, float)
-    def _apply_about_connection_origin(self, binding, origin: str, started: float) -> None:
+    @Property(str, notify=aboutConnectionOriginChanged)
+    def aboutConnectionTransport(self) -> str:
+        origin = self.aboutConnectionOrigin
+        if not origin:
+            return ""
+        if self._about_connection_origin[2]:
+            return "local_websocket_fast_path"
+        return "ha_transport_https" if origin.startswith("https:") else "ha_transport_http"
+
+    @Slot(object, str, float, bool)
+    def _apply_about_connection_origin(self, binding, origin: str, started: float, via_websocket: bool = False) -> None:
         if (self._shutting_down or started < self._about_connection_request_time
                 or binding != self._private_read_context() or self._demo_mode
                 or not self.paired or not self._backend_available or self._version_mismatch_visible):
             return
         self._about_connection_request_time = started
-        self._about_connection_origin = (binding, origin) if origin else None
+        self._about_connection_origin = (binding, origin, via_websocket) if origin else None
         self.aboutConnectionOriginChanged.emit()
 
     @Property(str, notify=settingsChanged)
@@ -3109,6 +3118,7 @@ class DJConnectBackend(QObject):
             return
         about_scope = self._about_music_scope()
         active_origin = ""
+        status_via_websocket = isinstance(data, StatusObservation) and data.via_websocket
         music_available = data.get("music_backend_available") if data.get("success") is not False else None
         self._persist_backend_summary()
         playback = self.client.playback_from_status(data)
@@ -3147,7 +3157,7 @@ class DJConnectBackend(QObject):
             return
         self._playbackReady.emit(playback)
         if about_binding is not None and about_binding == about_scope[0]:
-            self._aboutConnectionReady.emit(about_binding, active_origin, about_started)
+            self._aboutConnectionReady.emit(about_binding, active_origin, about_started, status_via_websocket)
             self._aboutMusicAvailabilityReady.emit(about_scope, music_available, about_started)
         _LOGGER.info("Refresh completed in %.0fms", _elapsed_ms(started))
         if expected_output:
