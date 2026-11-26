@@ -5409,6 +5409,24 @@ BrandWindow {
                 }
             }
 
+            GlassButton {
+                parent: askDjScroll
+                objectName: "askDjJumpTop"
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                anchors.margins: 12
+                z: 2
+                width: 52
+                height: width
+                iconName: "arrow_up"
+                visible: askDjMessagesView.count > 0 && !askDjMessagesView.atYBeginning
+                    && !askDjPanel.searchOpen && !askDjPanel.chatKeyboardOpen
+                Accessible.name: root.tr("session_back_top")
+                ToolTip.visible: hovered
+                ToolTip.text: root.tr("session_back_top")
+                onClicked: askDjPanel.scrollToTop()
+            }
+
             GlassSurface {
                 objectName: "askDjOfflineNotice"
                 visible: askDjPanel.historyOffline

@@ -848,6 +848,13 @@ def main():
         QTest.qWait(100)
         assert backend.askDjMessages[0]["id"] == "incoming-answer" and ask_history.property("count") == 32
         assert visible_message.evaluate()[0] == message_before, (width, message_before, visible_message.evaluate()[0])
+        jump_top = visual_item(ask_dj, "askDjJumpTop")
+        assert jump_top.property("visible")
+        assert QAccessible.queryAccessibleInterface(jump_top).text(QAccessible.Text.Name) == backend.t("session_back_top")
+        jump_position = jump_top.mapToScene(QPointF(jump_top.width() / 2, jump_top.height() / 2)).toPoint()
+        QTest.mouseClick(window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, jump_position)
+        QTest.qWait(65)
+        assert ask_history.property("atYBeginning") and not jump_top.property("visible")
         backend._demo_mode = True
         backend.demoModeChanged.emit()
         backend.cfg.paired, backend.cfg.device_token = False, ""
