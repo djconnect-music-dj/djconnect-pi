@@ -3,7 +3,7 @@ from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from hashlib import sha256
 
-from PySide6.QtCore import QCollator, QLocale, QObject, Signal, Slot
+from PySide6.QtCore import QCollator, QLocale, QObject, QTimer, Signal, Slot
 
 from .session_projection import active_session, session_playback, volume_observation
 from .session_transport import SessionError, private_scope_allowed
@@ -126,6 +126,11 @@ class PlaybackControl(QObject):
         self.volume = None
         self.volume_serial = 0
         self.volume_status = ""
+        self._volume_display = None
+        self._volume_display_timer = QTimer(self)
+        self._volume_display_timer.setSingleShot(True)
+        self._volume_display_timer.setInterval(10000)
+        self._volume_display_timer.timeout.connect(self._expire_volume_display)
         self.favorite_state = None
         self.favorite_status = ""
         self.outputs = None
@@ -215,7 +220,15 @@ class PlaybackControl(QObject):
             self.request = None
             self.status = ""
 
-    def hide(self, *, reset=False):
+    def _clear_volume_display(self):
+        self._volume_display = None
+        self._volume_display_timer.stop()
+
+    def _expire_volume_display(self):
+        self._clear_volume_display()
+        self.owner.changed.emit()
+
+    def hide(self, *, reset=False, keep_volume_display=False):
         self._transport_context = None
         self.outputs = None
         self.outputs_status = ""
@@ -223,6 +236,8 @@ class PlaybackControl(QObject):
         self.favorite_status = ""
         self.volume = None
         self.volume_status = ""
+        if not keep_volume_display:
+            self._clear_volume_display()
         self.request = None
         if reset:
             self.blocked = False
@@ -247,6 +262,8 @@ class PlaybackControl(QObject):
             self._transport_context = context
             self._transport_epoch += 1
         available = context is not None
+        if self._volume_display and (self._volume_display["context"] != context or not self.volume_supported()):
+            self._clear_volume_display()
         busy = bool(self.running or self.owner._running or self.owner._question_running or self.owner._artwork_prepare.running
                     or getattr(getattr(self.owner, "_archive_delete", None), "running", False))
         return {"available": available, "enabled": available and not busy and not self.blocked,
@@ -262,6 +279,7 @@ class PlaybackControl(QObject):
                 "reading_favorite": bool(self.running and self.request and self.request["command"] == "favorite_read"),
                 "volume_supported": self.volume_supported(),
                 "volume": {**self.volume["observation"], "lease": self.volume["serial"]} if self.volume_valid() else {},
+                "display_volume_percent": self._volume_display["percent"] if self._volume_display else None,
                 "volume_status": self.volume_status,
                 "reading_volume": bool(self.running and self.request and self.request["command"] == "volume_read"),
                 "status": "sending" if self.running and self.valid() else "uncertain" if self.blocked else self.status}
@@ -335,6 +353,7 @@ class PlaybackControl(QObject):
         self.outputs_status = ""
         self.volume = None
         self.volume_status = ""
+        self._clear_volume_display()
         self.favorite_state = None
         self.favorite_status = ""
         request = deepcopy(self.request)
@@ -497,6 +516,9 @@ class PlaybackControl(QObject):
                 self.volume_serial += 1
                 self.volume = {"binding": self.request["binding"], "reference": self.request["reference"],
                                "serial": self.volume_serial, "observation": result["volume"]}
+                self._volume_display = {"context": (self.request["reference"], self.request["binding"]),
+                                        "percent": result["volume"]["percent"]}
+                self._volume_display_timer.start()
         elif result.get("error"):
             self.blocked = True
             self.status = "uncertain"
@@ -517,6 +539,7 @@ class PlaybackControl(QObject):
             self.request = None
             self.volume = None
             self.volume_status = ""
+            self._clear_volume_display()
             self.favorite_state = None
             self.favorite_status = ""
             self.outputs = None

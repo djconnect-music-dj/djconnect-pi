@@ -423,6 +423,12 @@ class SessionController(QObject):
         self._visibility_notify.start()
 
     @Slot()
+    def dismissPlaybackVolume(self):
+        # The display sample expires independently of the writable volume lease.
+        self._playback_control.hide(keep_volume_display=True)
+        self._visibility_notify.start()
+
+    @Slot()
     def refreshPlayback(self):
         self._playback_control.refresh()
 

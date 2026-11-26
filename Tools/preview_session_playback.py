@@ -581,6 +581,8 @@ def main():
                 zero_width = volume_shortcut.width()
                 click('sessionVolumeClose')
                 QTest.qWait(120)
+                assert volume_shortcut.property('text') == '0%'
+                assert not owner.state['playback_control']['volume']
                 observed['playback']['volume_percent'] = 11
                 click('sessionCurrentVolume')
                 assert popup.property('opened') and not output_panel.property('opened') and len(intents) == 1

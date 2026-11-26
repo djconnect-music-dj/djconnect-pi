@@ -1493,11 +1493,13 @@ Item {
                             id: volumeShortcut
                             objectName: "sessionCurrentVolume"
                             readonly property var observation: screen.state.playback_control.volume || ({})
-                            readonly property bool known: typeof observation.percent === "number"
+                            readonly property var percent: typeof observation.percent === "number"
+                                ? observation.percent : screen.state.playback_control.display_volume_percent
+                            readonly property bool known: typeof percent === "number"
                             visible: !!screen.state.playback_control.available && !!screen.state.playback_control.volume_supported
                             enabled: !!screen.state.playback_control.enabled
-                            iconName: observation.percent === 0 ? "voice_muted" : "voice"
-                            text: known ? observation.percent + "%" : screen.tr("volume")
+                            iconName: percent === 0 ? "voice_muted" : "voice"
+                            text: known ? percent + "%" : screen.tr("volume")
                             font.features: ({ "tnum": 1 })
                             textAlignment: Text.AlignRight
                             Layout.preferredWidth: known ? Math.ceil(volumeLabelWidth.advanceWidth) + 44 : implicitWidth
@@ -2224,7 +2226,7 @@ Item {
             captureSource(source)
             if (screen.owner.readPlaybackVolume(screen.state.session_id, screen.state.playback.item_id)) open()
         }
-        onAboutToHide: if (screen.owner) screen.owner.cancelPlaybackIntent()
+        onAboutToHide: if (screen.owner) screen.owner.dismissPlaybackVolume()
         background: GlassSurface { elevated: true; popover: !screen.compact }
         contentItem: ColumnLayout {
             spacing: 12
