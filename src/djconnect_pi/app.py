@@ -260,6 +260,7 @@ class DJConnectBackend(QObject):
         self._music_discovery_empty_text = ""
         self._music_discovery_error = ""
         self._music_discovery_dna_disabled = False
+        self._music_discovery_loaded = False
         self._music_discovery_busy = False
         self._music_discovery_playing_id = ""
         self._music_discovery_feedback_supported = False
@@ -560,6 +561,10 @@ class DJConnectBackend(QObject):
     @Property(bool, notify=musicDiscoveryChanged)
     def musicDiscoveryDnaDisabled(self) -> bool:
         return self._music_discovery_dna_disabled
+
+    @Property(bool, notify=musicDiscoveryChanged)
+    def musicDiscoveryLoaded(self) -> bool:
+        return self._music_discovery_loaded
 
     @Property(str, notify=musicDiscoveryChanged)
     def musicDiscoveryPlayingId(self) -> str:
@@ -2973,6 +2978,7 @@ class DJConnectBackend(QObject):
         self._music_discovery_empty_text = ""
         self._music_discovery_error = ""
         self._music_discovery_dna_disabled = False
+        self._music_discovery_loaded = False
         self._music_discovery_playing_id = ""
         self._music_discovery_feedback_supported = False
         self._music_discovery_consent_rejected = False
@@ -3068,12 +3074,14 @@ class DJConnectBackend(QObject):
             self._music_discovery_feedback_supported = False
             self._music_discovery_empty_text = ""
             self._music_discovery_dna_disabled = False
+            self._music_discovery_loaded = False
             key = "session_profile_missing" if error in PROFILE_ERROR_CODES | {"music_dna_context_changed"} else "backend_unavailable"
             self._music_discovery_error = self.tr_key(key)
             self.musicDiscoveryChanged.emit()
             return
         self._apply_profile_context(data)
         self._music_discovery_consent_rejected = False
+        self._music_discovery_loaded = True
         self._music_discovery_dna_disabled = data.get("enabled") is False or error == "music_dna_disabled"
         if self._music_discovery_dna_disabled:
             self._set_music_discovery_items([])

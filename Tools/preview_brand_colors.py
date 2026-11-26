@@ -494,9 +494,24 @@ def main():
         assert backend.musicDiscoveryItems[0]["title"] == "Cached recommendation"
         backend._apply_music_discovery_data({"success": True, "sections": []})
         assert empty_feed.property("text") == backend.t("music_discovery_empty")
+        with patch.object(backend, "_sync_config_from_disk"), patch.object(backend, "_run") as request:
+            QTest.qWait(65)
+            request.assert_called_once()
+            backend.cfg.active_profile_id = "discovery-next-profile"
+            backend._clear_profile_scoped_caches(preserve_session=True)
+            backend.profileChanged.emit()
+            QTest.qWait(65)
+            request.assert_called_once()
+            backend._set_music_discovery_busy(False)
+            QTest.qWait(65)
+            assert request.call_count == 2 and backend.musicDiscoveryBusy
+            backend._apply_music_discovery_data({"success": True, "sections": []})
+            backend._set_music_discovery_busy(False)
+            QTest.qWait(65)
+            assert request.call_count == 2 and backend.musicDiscoveryLoaded
         backend._demo_mode = True
         backend.demoModeChanged.emit()
-        backend.cfg.paired, backend.cfg.device_token = False, ""
+        backend.cfg.paired, backend.cfg.device_token, backend.cfg.active_profile_id = False, "", ""
         backend.pairedChanged.emit()
         backend._set_demo_music_dna(True)
         backend.setLanguage("nl")

@@ -352,8 +352,6 @@ BrandWindow {
         root.restartIdleTimer()
         if (root.activeScreen === "askdj") {
             root.scrollAskDjToTop()
-        } else if (root.activeScreen === "discover") {
-            djconnect.loadMusicDiscovery()
         }
     }
 
@@ -1999,7 +1997,12 @@ BrandWindow {
         readonly property bool canChangeMusicDna: djconnect.musicDnaLoaded && !djconnect.musicDnaBusy
             && (djconnect.paired || djconnect.demoMode)
 
-        MusicDnaProfileRead { surfaceVisible: settingsPanel.visible }
+        ProfileReadOnOpen {
+            surfaceVisible: settingsPanel.visible
+            busy: djconnect.musicDnaBusy
+            loaded: djconnect.musicDnaLoaded
+            onRequested: djconnect.loadMusicDna()
+        }
 
         onVisibleChanged: {
             if (visible && settingsScroll.contentItem) {
@@ -3314,6 +3317,15 @@ BrandWindow {
         readonly property bool requiresMusicDna: djconnect.musicDnaLoaded ? !djconnect.musicDnaEnabled
             : djconnect.musicDiscoveryDnaDisabled
         readonly property bool showEmptyFeed: sections.length === 0 && !djconnect.musicDiscoveryBusy
+        readonly property int profileRevision: djconnect.musicDnaContextRevision
+        onProfileRevisionChanged: closeDetail()
+
+        ProfileReadOnOpen {
+            surfaceVisible: musicDiscoveryPanel.visible
+            busy: djconnect.musicDiscoveryBusy
+            loaded: djconnect.musicDiscoveryLoaded
+            onRequested: djconnect.loadMusicDiscovery()
+        }
 
         readonly property var sections: {
             const groups = []
@@ -3860,11 +3872,15 @@ BrandWindow {
         }
     }
 
-    component MusicDnaProfileRead: QtObject {
+    component ProfileReadOnOpen: QtObject {
         required property bool surfaceVisible
+        required property bool busy
+        required property bool loaded
+        signal requested()
+
         readonly property bool profileViewActive: surfaceVisible && root.active && !root.screenBlanked
             && !root.splashVisible && djconnect.paired && !djconnect.demoMode && !djconnect.versionMismatchVisible
-        readonly property bool canLoadProfile: profileViewActive && !djconnect.musicDnaBusy
+        readonly property bool canLoadProfile: profileViewActive && !busy
         readonly property int profileRevision: djconnect.musicDnaContextRevision
         property int requestedProfileRevision: -1
         onProfileViewActiveChanged: if (!profileViewActive) requestedProfileRevision = -1
@@ -3874,9 +3890,9 @@ BrandWindow {
 
         function loadProfileIfCurrent() {
             if (!canLoadProfile || requestedProfileRevision === profileRevision) return
-            const alreadyLoaded = requestedProfileRevision >= 0 && djconnect.musicDnaLoaded
+            const alreadyLoaded = requestedProfileRevision >= 0 && loaded
             requestedProfileRevision = profileRevision
-            if (!alreadyLoaded) djconnect.loadMusicDna()
+            if (!alreadyLoaded) requested()
         }
     }
 
@@ -3885,7 +3901,12 @@ BrandWindow {
         objectName: "musicDnaPanel"
         color: "transparent"
 
-        MusicDnaProfileRead { surfaceVisible: musicDnaPanel.visible }
+        ProfileReadOnOpen {
+            surfaceVisible: musicDnaPanel.visible
+            busy: djconnect.musicDnaBusy
+            loaded: djconnect.musicDnaLoaded
+            onRequested: djconnect.loadMusicDna()
+        }
 
         ModalBlocker {}
 
