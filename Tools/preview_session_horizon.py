@@ -18,7 +18,7 @@ from PySide6.QtCore import (
     QTimer,
     qInstallMessageHandler,
 )
-from PySide6.QtGui import QColor, QGuiApplication
+from PySide6.QtGui import QColor, QGuiApplication, QKeySequence
 from PySide6.QtQml import QQmlApplicationEngine, QQmlEngine, QQmlExpression
 from PySide6.QtQuickControls2 import QQuickStyle
 from PySide6.QtTest import QTest
@@ -383,9 +383,13 @@ def main():
                 owner.changed.emit()
                 archive_search = one(screen, "sessionToolbarSearch")
                 assert archive_search.property("visible")
-                click(window, archive_search)
+                find = QKeySequence.keyBindings(QKeySequence.StandardKey.Find)[0][0]
+                QTest.keyClick(window, find.key(), find.keyboardModifiers())
                 archive_panel = window.findChild(QObject, "sessionSearchPanel")
                 archive_field = window.findChild(QObject, "sessionSearchInput")
+                QTest.qWait(65)
+                assert archive_panel.property("visible") and archive_field.property("activeFocus")
+                assert not archive_panel.property("keyboardVisible")
                 assert archive_field.property("placeholderText") == TRANSLATIONS[language]["session_archive_search"]
                 archive_field.setProperty("text", "fixture")
                 submit = QQmlExpression(engine.rootContext(), archive_panel, "submitSearch()")

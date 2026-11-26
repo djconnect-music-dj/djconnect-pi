@@ -802,7 +802,23 @@ Item {
         if (archiveSearchAvailable) owner.searchArchive(searchInput.text)
         else owner.search(searchTarget, searchInput.text)
     }
-    function showSearch() { searchPanel.open(); searchInput.forceActiveFocus() }
+    function showSearch() {
+        searchPanel.openTouchKeyboard = true
+        searchPanel.keyboardVisible = !searchInput.text.length
+        searchPanel.open()
+        searchInput.forceActiveFocus()
+    }
+    Shortcut {
+        sequences: [StandardKey.Find]
+        enabled: screen.historyViewOpen && screen.searchAvailable
+            && (!screen.historyNavigationBlocked || searchPanel.visible)
+        onActivated: {
+            searchPanel.openTouchKeyboard = false
+            searchPanel.keyboardVisible = false
+            searchPanel.open()
+            searchInput.forceActiveFocus()
+        }
+    }
     property var archiveSearchHandoff: null
     property var archiveSearchOrigin: null
     property var pendingArchiveSearchReturn: null
@@ -815,6 +831,7 @@ Item {
         }
         if (owner.busy || searchPanel.visible) return
         pendingArchiveSearchReturn = null
+        searchPanel.openTouchKeyboard = false
         searchPanel.open()
         searchPanel.keyboardVisible = false
         searchInput.text = pending.query
@@ -2842,6 +2859,7 @@ Item {
         id: searchPanel
         objectName: "sessionSearchPanel"
         property bool keyboardVisible: false
+        property bool openTouchKeyboard: true
         property string selectedMatchId: ""
         readonly property var result: screen.archiveSearchAvailable ? screen.owner.archiveSearchState : screen.state.search
         readonly property var matches: screen.archiveSearchAvailable ? (result.sessions || []) : (result.matches || [])
@@ -2883,7 +2901,7 @@ Item {
             keyboardVisible = false
             screen.searchNow()
         }
-        onOpened: keyboardVisible = !searchInput.text.length
+        onOpened: keyboardVisible = openTouchKeyboard && !searchInput.text.length
         onClosed: {
             keyboardVisible = false
             screen.cancelSearchRead()
@@ -2907,7 +2925,6 @@ Item {
                 TextField {
                     id: searchInput
                     objectName: "sessionSearchInput"
-                    onActiveFocusChanged: if (activeFocus) searchPanel.keyboardVisible = true
                     placeholderText: screen.searchLabel
                     maximumLength: 200; font.pixelSize: 21
                     Layout.fillWidth: true; Layout.minimumHeight: 52
