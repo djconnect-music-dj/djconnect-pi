@@ -1633,6 +1633,7 @@ _SESSION_COMPOSER_TRANSLATIONS = {
     "session_runtime_refresh_failed": ("Could not refresh the DJ Session", "DJ-sessie kon niet worden vernieuwd", "DJ-Session konnte nicht aktualisiert werden", "Impossible d’actualiser la session DJ", "No se pudo actualizar la sesión DJ"),
     "session_saved_updated": ("Saved session updated", "Opgeslagen sessie vernieuwd", "Gespeicherte Session aktualisiert", "Session enregistrée actualisée", "Sesión guardada actualizada"),
     "session_saved_refresh_failed": ("Could not refresh the saved session", "Opgeslagen sessie kon niet worden vernieuwd", "Gespeicherte Session konnte nicht aktualisiert werden", "Impossible d’actualiser la session enregistrée", "No se pudo actualizar la sesión guardada"),
+    "session_connection_offline": ("DJ Session is offline", "DJ-sessie is offline", "DJ-Session ist offline", "Session DJ hors ligne", "Sesión DJ sin conexión"),
     "session_archive_refresh_search": ("Refresh search results", "Zoekresultaten verversen", "Suchergebnisse aktualisieren", "Actualiser les résultats de recherche", "Actualizar los resultados de búsqueda"),
     "music_discovery_load_failed": (
         "Could not load recommendations.",

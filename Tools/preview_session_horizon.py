@@ -459,7 +459,19 @@ def main():
                     assert connection_info.property("opened")
                     expected_connection = TRANSLATIONS[language]["local_websocket_fast_path"]
                     assert connection_accessible.text(QAccessible.Text.Description) == expected_connection
-                    assert one(connection_info.property("contentItem"), "sessionConnectionType").property("text") == expected_connection
+                    connection_type = one(connection_info.property("contentItem"), "sessionConnectionType")
+                    assert connection_type.property("text") == expected_connection
+                    owner._error = "offline"
+                    owner.changed.emit()
+                    assert connection.property("iconName") == "info"
+                    expected_offline = TRANSLATIONS[language]["session_connection_offline"]
+                    assert connection_accessible.text(QAccessible.Text.Description) == expected_offline
+                    assert connection_type.property("text") == expected_offline
+                    owner._error = "unavailable"
+                    owner.changed.emit()
+                    assert connection.property("iconName") == "globe" and connection_type.property("text") == expected_connection
+                    owner._error = ""
+                    owner.changed.emit()
                     QQmlExpression(engine.rootContext(), connection_info, "close()").evaluate()
                 backend.settingsChanged.emit()
                 find = QKeySequence.keyBindings(QKeySequence.StandardKey.Find)[0][0]

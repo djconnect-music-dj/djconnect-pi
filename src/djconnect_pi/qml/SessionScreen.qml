@@ -42,6 +42,8 @@ Item {
     readonly property bool sessionControlsVisible: !historical && state.session_id.length > 0 && !state.owner_read_only
     property var owner: backend.djSession
     property var state: owner.screenState
+    readonly property bool connectionOffline: state.error === "offline"
+    readonly property string connectionStatusText: connectionOffline ? tr("session_connection_offline") : backend.connectionType
     readonly property var archiveSessions: visible && historical && !currentHistory && !state.timeline.session
         ? owner.archiveRows : []
     readonly property bool archiveEmpty: historical && !currentHistory && !owner.busy && !state.error
@@ -1289,9 +1291,11 @@ Item {
                 anchors.centerIn: parent; spacing: 2
                 GlassButton {
                     objectName: "sessionToolbarConnection"
-                    iconName: "globe"; foregroundColor: screen.idleWelcome ? BrandTheme.colors.cyan : BrandTheme.colors.text
+                    iconName: screen.connectionOffline ? "info" : "globe"
+                    foregroundColor: screen.connectionOffline ? BrandTheme.colors.danger
+                        : screen.idleWelcome ? BrandTheme.colors.cyan : BrandTheme.colors.text
                     Accessible.name: screen.tr("connection_type")
-                    Accessible.description: screen.backend.connectionType
+                    Accessible.description: screen.connectionStatusText
                     implicitWidth: 52; background: Item {}
                     onClicked: connectionInfo.open()
                 }
@@ -3393,7 +3397,12 @@ Item {
         background: GlassSurface { elevated: true }
         contentItem: ColumnLayout {
             Text { text: screen.tr("connection_type"); font.bold: true; font.pixelSize: 24; color: BrandTheme.colors.text }
-            Text { objectName: "sessionConnectionType"; text: screen.backend.connectionType; textFormat: Text.PlainText; font.pixelSize: 22; color: BrandTheme.colors.muted; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+            Text {
+                objectName: "sessionConnectionType"
+                text: screen.connectionStatusText; textFormat: Text.PlainText
+                font.pixelSize: 22; color: screen.connectionOffline ? BrandTheme.colors.danger : BrandTheme.colors.muted
+                wrapMode: Text.WordWrap; Layout.fillWidth: true
+            }
             GlassButton {
                 visible: screen.idleWelcome && !screen.compact
                 enabled: !screen.owner.busy
