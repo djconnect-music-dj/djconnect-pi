@@ -463,6 +463,13 @@ def main():
                 output_shortcut = window.findChild(QObject, 'sessionCurrentOutput')
                 assert_popup_anchor(output_shortcut, output_panel)
                 assert output_shortcut.property('iconName') == 'speaker'
+                output_content = output_shortcut.property('contentItem')
+                output_icon = next(item for item in output_content.childItems() if item.property('iconName') == 'speaker')
+                output_label = next(item for item in output_content.childItems() if item.property('text') == output_shortcut.property('text'))
+                left_aligned = QQmlExpression(engine.rootContext(), output_label,
+                    f'Number(horizontalAlignment) === {Qt.AlignmentFlag.AlignLeft.value}')
+                assert left_aligned.evaluate()[0] is True, left_aligned.error().toString()
+                assert abs(output_label.x() - output_icon.x() - output_icon.width() - 10) <= 1
                 selected_output = visual(window.contentItem(), 'sessionOutputChoice-synthetic-output')
                 assert selected_output.property('checked') and not selected_output.property('enabled')
                 speaker_icon = visual(selected_output, 'sessionOutputChoiceSpeaker')

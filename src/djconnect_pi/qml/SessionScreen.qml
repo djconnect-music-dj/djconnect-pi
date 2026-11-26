@@ -1418,6 +1418,7 @@ Item {
                             enabled: !!screen.state.playback_control.enabled && !!screen.state.playback_control.outputs_supported
                             iconName: "speaker"
                             text: screen.state.playback.target_name || ""
+                            textAlignment: Text.AlignLeft
                             Accessible.name: screen.tr("output_device") + ": " + text
                             Layout.fillWidth: true
                             Layout.minimumWidth: 0

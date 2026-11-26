@@ -6,6 +6,7 @@ import "BrandTheme.js" as BrandTheme
 Button {
     id: control
     property string iconName: ""
+    property int textAlignment: Text.AlignHCenter
     property real cornerRadius: height / 2
     property bool primary: false
     property color tint: BrandTheme.colors.actionAccent
@@ -53,7 +54,7 @@ Button {
             font: control.font
             color: control.foregroundColor
             textFormat: Text.PlainText
-            horizontalAlignment: Text.AlignHCenter
+            horizontalAlignment: control.textAlignment
             verticalAlignment: Text.AlignVCenter
             elide: Text.ElideRight
             Layout.leftMargin: control.iconName.length > 0 ? 10 : 0
