@@ -1861,6 +1861,7 @@ _PLAYBACK_CONTROL_TRANSLATIONS = {
     "session_refresh_seconds": ("%1 s", "%1 s", "%1 s", "%1 s", "%1 s"),
     "track_artwork": ("Track artwork", "Trackhoes", "Titelcover", "Pochette du titre", "Portada de la pista"),
     "session_playback_controls": ("Playback controls", "Afspeelbediening", "Wiedergabesteuerung", "Commandes de lecture", "Controles de reproducción"),
+    "session_refresh_playback_status": ("Refresh playback status", "Afspeelstatus verversen", "Wiedergabestatus aktualisieren", "Actualiser l’état de lecture", "Actualizar el estado de reproducción"),
     "session_playback_sent": (
         "Command sent. Playback updates from the server.",
         "Opdracht verstuurd. De server werkt de afspeelstatus bij.",

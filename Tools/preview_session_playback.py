@@ -388,6 +388,21 @@ def main():
                 QTest.qWait(60)
                 QTest.keyClick(window, Qt.Key.Key_Space)
                 assert window.property('trackArtworkControlsOpen')
+                owner._playback_control.blocked = True
+                owner._playback_control.status = 'uncertain'
+                owner.changed.emit()
+                capture('fullscreen-track-art-refresh-playback-status')
+                refresh_status = visual(overlay, 'trackArtworkPlaybackRefresh')
+                refresh_accessible = QAccessible.queryAccessibleInterface(refresh_status)
+                refresh_label = backend.t('session_refresh_playback_status')
+                assert refresh_status.property('visible') and refresh_status.property('enabled')
+                assert refresh_status.property('iconName') == 'refresh' and refresh_status.property('text') == refresh_label
+                assert refresh_accessible.text(QAccessible.Text.Name) == refresh_label
+                controls = visual(overlay, 'trackArtworkTransportControls')
+                assert refresh_status.mapToItem(controls, refresh_status.width(), 0).x() <= controls.width() + 1
+                owner._playback_control.blocked = False
+                owner._playback_control.status = ''
+                owner.changed.emit()
                 focused_transport = visual(overlay, 'sessionPlaybackPrevious')
                 focused_transport.forceActiveFocus()
                 assert focused_transport.property('activeFocus')

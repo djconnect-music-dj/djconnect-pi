@@ -2716,7 +2716,9 @@ Item {
             objectName: "trackArtworkPlaybackRefresh"
             visible: screen.state.playback_control.status === "uncertain"
             Layout.alignment: Qt.AlignHCenter
-            text: screen.tr("refresh")
+            Layout.maximumWidth: transportControls.width
+            iconName: "refresh"
+            text: screen.tr("session_refresh_playback_status")
             enabled: !screen.owner.busy
             onClicked: screen.owner.refreshPlayback()
         }
