@@ -706,6 +706,7 @@ def main():
                 owner.changed.emit()
                 owner._timeline = {"session": saved, "revision": "fixture-saved", "entries": []}
                 owner.changed.emit()
+                screen.findChild(QObject, "sessionHistoryRevalidationTimer").stop()
                 show_search = QQmlExpression(engine.rootContext(), screen, "showSearch()")
                 show_search.evaluate()
                 assert not show_search.hasError()
