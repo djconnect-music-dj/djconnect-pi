@@ -16,7 +16,7 @@ from PySide6.QtQuickControls2 import QQuickStyle
 from PySide6.QtTest import QTest
 from shiboken6 import delete
 
-from djconnect_pi.app import DJConnectBackend, parse_playlist_items, parse_queue_items
+from djconnect_pi.app import DJConnectBackend, parse_ask_dj_messages, parse_playlist_items, parse_queue_items
 from djconnect_pi.brand_theme import apply_palette
 from djconnect_pi.config import Config, save_config
 from djconnect_pi.expiry_clock import ExpiryClock
@@ -697,6 +697,22 @@ def main():
         backend.cfg.paired, backend.cfg.device_token, backend.cfg.active_profile_id = False, "", ""
         backend.pairedChanged.emit()
         backend._set_demo_music_dna(True)
+        backend._ask_dj_messages = parse_ask_dj_messages({"messages": [
+            {"id": "ask-fixture", "role": "user", "text": "Previous question"},
+        ]})
+        backend.askDjChanged.emit()
+        window.setProperty("activeScreen", "askdj")
+        QTest.qWait(65)
+        ask_dj = visual_item(window.contentItem(), "askDjPanel")
+        draft = visual_item(ask_dj, "askDjChatInput")
+        draft.setProperty("text", "Unsent draft")
+        draft.forceActiveFocus()
+        QTest.keyClick(window, find.key(), find.keyboardModifiers())
+        find_input = visual_item(ask_dj, "askDjSearchInput")
+        assert ask_dj.property("searchOpen") and not ask_dj.property("searchKeyboardOpen")
+        assert find_input.property("activeFocus") and draft.property("text") == "Unsent draft"
+        QTest.keyClick(window, Qt.Key.Key_Escape)
+        assert not ask_dj.property("searchOpen") and draft.property("text") == "Unsent draft"
         backend.setLanguage("nl")
         window.setProperty("activeScreen", "session")
         for runtime_state in ("opening", "ending"):

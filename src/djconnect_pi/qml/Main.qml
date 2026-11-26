@@ -948,6 +948,13 @@ BrandWindow {
         }
     }
 
+    component PageFindShortcut: Shortcut {
+        required property bool pageReady
+        sequences: [StandardKey.Find]
+        enabled: pageReady && root.active && !root.screenBlanked && !root.splashVisible
+            && !root.trackArtworkOpen && !djconnect.logsVisible
+    }
+
     component MediaListPanel: Rectangle {
         id: panel
         property string heading: ""
@@ -1059,10 +1066,8 @@ BrandWindow {
             function onActiveChanged() { if (!root.active) panel.closeSearch(true) }
             function onScreenBlankedChanged() { if (root.screenBlanked) panel.closeSearch(true) }
         }
-        Shortcut {
-            sequences: [StandardKey.Find]
-            enabled: panel.visible && root.active && !root.screenBlanked && !root.splashVisible
-                && !root.trackArtworkOpen && !djconnect.logsVisible && searchToggle.enabled
+        PageFindShortcut {
+            pageReady: panel.visible && searchToggle.enabled
             onActivated: panel.openSearch(false)
         }
 
@@ -4418,6 +4423,11 @@ BrandWindow {
         }
         readonly property int selectedRow: matches[selectedMatch] ? matches[selectedMatch].row : -1
 
+        PageFindShortcut {
+            pageReady: askDjPanel.visible && askDjSearchToggle.enabled && !root.askDjClearConfirmOpen
+            onActivated: askDjPanel.openSearch(false)
+        }
+
         onVisibleChanged: if (!visible) { closeSearch(); clearChatDraft() }
         onMatchesChanged: {
             if (!searchOpen)
@@ -4436,10 +4446,10 @@ BrandWindow {
             return String(value).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
         }
 
-        function openSearch() {
+        function openSearch(showKeyboard) {
             chatKeyboardOpen = false
             searchOpen = true
-            searchKeyboardOpen = true
+            searchKeyboardOpen = showKeyboard
             askDjSearchInput.forceActiveFocus()
         }
 
@@ -4495,6 +4505,7 @@ BrandWindow {
                 Layout.fillWidth: true
 
                 GlassButton {
+                    id: askDjSearchToggle
                     objectName: "askDjSearchToggle"
                     iconName: "search"
                     tertiary: true
@@ -4502,7 +4513,7 @@ BrandWindow {
                     checked: askDjPanel.searchOpen
                     enabled: askDjPanel.searchOpen || djconnect.askDjMessages.length > 0
                     Accessible.name: root.tr("ask_dj_search_history")
-                    onClicked: askDjPanel.searchOpen ? askDjPanel.closeSearch() : askDjPanel.openSearch()
+                    onClicked: askDjPanel.searchOpen ? askDjPanel.closeSearch() : askDjPanel.openSearch(true)
                 }
 
                 RefreshIconButton {
