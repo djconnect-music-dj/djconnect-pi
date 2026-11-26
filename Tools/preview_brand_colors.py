@@ -823,6 +823,18 @@ def main():
             dispatch.call_args.args[0]()
         assert ask_history.property("count") == 1
         assert backend.toastText == backend.t("ask_dj_history_updated")
+        backend._apply_ask_dj_data({"success": True, "clear_revision": 2, "history_revision": 12, "messages": [
+            {"id": f"chat-row-{index}", "role": "assistant", "text": f"Earlier message {index}"}
+            for index in range(30)
+        ]})
+        QTest.qWait(65)
+        ask_history.setProperty("contentY", ask_history.property("originY") + 440)
+        QTest.qWait(65)
+        reading_offset = ask_history.property("contentY") - ask_history.property("originY")
+        backend.askDjChanged.emit()
+        QTest.qWait(65)
+        assert reading_offset > 400
+        assert abs(ask_history.property("contentY") - ask_history.property("originY") - reading_offset) < 10
         backend._demo_mode = True
         backend.demoModeChanged.emit()
         backend.cfg.paired, backend.cfg.device_token = False, ""

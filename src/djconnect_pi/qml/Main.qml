@@ -1414,8 +1414,6 @@ BrandWindow {
             const panel = askDjLoader.item
             if (panel && djconnect.askDjMessages.length === 0 && panel.searchOpen)
                 panel.closeSearch()
-            if (root.activeScreen === "askdj" && panel && !panel.searchOpen)
-                root.scrollAskDjToTop()
             if (root.askDjClearConfirmOpen && djconnect.askDjMessages.length === 0) {
                 root.askDjClearConfirmOpen = false
             }
