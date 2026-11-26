@@ -2603,18 +2603,27 @@ BrandWindow {
                                 backend: djconnect; imageItem: trackInsightArtworkImage
                                 active: !root.screenBlanked
                                 leaseKey: djconnect.activeProfileId + "|" + djconnect.trackInsightTitle + "|" + djconnect.trackInsightArtist
-                                visible: djconnect.trackInsightImageUrl.length > 0
                                 Layout.alignment: Qt.AlignHCenter
                                 Layout.preferredWidth: root.wallProfile ? 228 : 76
                                 Layout.preferredHeight: Layout.preferredWidth
                                 radius: root.wallProfile ? 32 : 16
+                                FeatureIcon {
+                                    objectName: "trackInsightArtworkPlaceholder"
+                                    anchors.centerIn: parent
+                                    width: Math.min(parent.width, parent.height) * 0.56
+                                    height: width
+                                    iconName: "trackInsight"
+                                    iconColor: BrandTheme.colors.text
+                                    visible: trackInsightArtworkImage.status !== Image.Ready
+                                    Accessible.ignored: true
+                                }
                                 Image {
                                     id: trackInsightArtworkImage
                                     objectName: "trackInsightArtworkImage"
                                     sourceSize: root.lowMemoryProfile ? Qt.size(192, 192) : Qt.size(0, 0)
                                     asynchronous: root.lowMemoryProfile
                                     source: djconnect.trackInsightImageUrl
-                                    visible: source.toString().length > 0
+                                    visible: status === Image.Ready
                                     anchors.fill: parent
                                     fillMode: Image.PreserveAspectCrop
                                     smooth: true
