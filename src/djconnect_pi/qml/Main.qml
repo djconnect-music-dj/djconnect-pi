@@ -4840,7 +4840,10 @@ BrandWindow {
                             }
                             Repeater {
                                 model: dnaCard.modelData.rows || []
-                                MusicDnaRow { entry: modelData }
+                                MusicDnaRow {
+                                    required property var modelData
+                                    entry: modelData
+                                }
                             }
                             Repeater {
                                 model: dnaCard.modelData.groups || []
@@ -4890,7 +4893,10 @@ BrandWindow {
                                     }
                                     Repeater {
                                         model: dnaGroup.modelData.shelf ? [] : dnaGroup.modelData.rows
-                                        MusicDnaRow { entry: modelData }
+                                        MusicDnaRow {
+                                            required property var modelData
+                                            entry: modelData
+                                        }
                                     }
                                 }
                             }

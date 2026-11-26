@@ -1349,6 +1349,7 @@ _MUSIC_DNA_CARD_TRANSLATIONS = {
     "music_dna_card_sunday": ('Sunday', 'Zondag', 'Sonntag', 'Dimanche', 'Domingo'),
     "music_dna_card_average": ('Average %1/100', 'Gemiddeld %1/100', 'Durchschnitt %1/100', 'Moyenne %1/100', 'Media %1/100'),
     "music_dna_card_signals": ('%1 signals', '%1 signalen', '%1 Signale', '%1 signaux', '%1 señales'),
+    "music_dna_card_basis": ('Signals', 'Signalen', 'Signale', 'Signaux', 'Señales'),
     "music_dna_card_plays": ('%1 plays', '%1 keer', '%1 Wiedergaben', '%1 écoutes', '%1 reproducciones'),
 }
 

@@ -817,7 +817,11 @@ def main():
         backend._demo_mode = False
         backend._apply_music_dna_data({
             "success": True, "enabled": True,
-            "profile": {"summary": "Fixture profile", "updated_at": "2026-10-19T14:10:00Z"},
+            "profile": {
+                "summary": "Fixture profile", "updated_at": "2026-10-19T14:10:00Z",
+                "energy_profile": {"recent_signals": [{"title": "Fixture source track", "artist": "Fixture source artist"}]},
+                "playtime": {"top_artists": [{"name": "Fixture playtime artist", "formatted": "10m"}]},
+            },
         })
         backend._demo_mode = True
         QTest.qWait(65)
@@ -825,6 +829,14 @@ def main():
         assert footer.property("visible")
         assert footer.property("text") == backend.t("music_dna_updated_at").replace(
             "%1", backend.djSession.formatTimestamp("2026-10-19T14:10:00Z", True))
+
+        def has_visible_text(item, value):
+            return item.property("visible") and (item.property("text") == value or any(
+                has_visible_text(child, value) for child in item.childItems()))
+
+        music_dna = visual_item(window.contentItem(), "musicDnaPanel")
+        for label in ("Fixture source track", "Fixture source artist", "Fixture playtime artist", "10m"):
+            assert has_visible_text(music_dna, label), (width, label)
         with patch.object(backend, "_sync_config_from_disk"), patch.object(backend, "_run") as request:
             backend._demo_mode = False
             backend.demoModeChanged.emit()

@@ -80,6 +80,7 @@ from .session_controller import SessionController
 from .session_playback_control import output_id
 from .session_playback_control import reference as session_playback_reference
 from .session_projection import safe_link, timestamp, volume_observation
+from .session_projection import text as bounded_text
 from .expiry_clock import elapsed_time
 from .session_transport import SessionError, session_profile_id
 from .shared_settings import SettingsError
@@ -5868,6 +5869,28 @@ def _music_dna_cards(profile: dict[str, object], ha_url: str) -> list[dict[str, 
     def grouped(title, entries, *, shelf=False):
         return [{"key": "music_dna_card_" + title, "rows": entries, "shelf": shelf}] if entries else []
 
+    def signal_rows(items):
+        if not isinstance(items, list):
+            return []
+        result = []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            titles = (bounded_text(item.get(key), 256).strip() for key in ("title", "name", "value"))
+            primary = next(filter(None, titles), "")
+            artist = bounded_text(item.get("artist"), 256).strip() or bounded_text(item.get("artist_name"), 256).strip()
+            album = bounded_text(item.get("album"), 256).strip()
+            genres = item.get("genres")
+            styles = ""
+            if isinstance(genres, list):
+                styles = ", ".join(filter(None, (bounded_text(genre, 128).strip() for genre in genres[:2])))
+            labels = [label for label in (primary, artist, album, styles) if label]
+            if labels:
+                result.append({"title": labels[0], "subtitle": " · ".join(labels[1:])})
+                if len(result) == 4:
+                    break
+        return result
+
     def percentages(items, field, labels):
         return [{"labelKey": labels.get(str(item[field]).lower(), ""), "title": str(item[field]),
                  "percent": item["percent"]}
@@ -5938,6 +5961,8 @@ def _music_dna_cards(profile: dict[str, object], ha_url: str) -> list[dict[str, 
     feedback = block("discovery_feedback")
     card("feedback", "sparkles", groups=grouped("accepted", rows(feedback.get("accepted_items") or feedback.get("accepted")))
          + grouped("feedback_hidden", rows(feedback.get("blocked_artists")) + rows(feedback.get("blocked_items"))))
+    card("basis", "waveform", entries=signal_rows(profile.get("based_on"))
+         or signal_rows(energy.get("recent_signals")) or signal_rows(profile.get("recommendation_signals")))
     return cards
 
 

@@ -632,6 +632,23 @@ def test_music_dna_parser_hides_ineligible_blocks() -> None:
     assert parsed["sections"] == []
 
 
+@pytest.mark.parametrize(("based_on", "energy_signals", "title"), [
+    ([{"name": "Taste anchor", "genres": ["synthpop"]}], [{"title": "Energy track"}], "Taste anchor"),
+    ([], [{"title": "Energy track", "artist": "Artist", "album": "Album"}], "Energy track"),
+    ([], [], "Accepted suggestion"),
+])
+def test_music_dna_shows_signals_from_the_first_available_source(based_on, energy_signals, title):
+    profile = {
+        "based_on": based_on, "energy_profile": {"recent_signals": energy_signals},
+        "recommendation_signals": [{"title": "Accepted suggestion", "prompt_hint": "Private hint"}],
+    }
+    sections = parse_music_dna_profile({"enabled": True, "profile": profile})["sections"]
+    signals = next(card for card in sections if card["key"] == "music_dna_card_basis")
+    assert [row["title"] for row in signals["rows"]] == [title]
+    assert "Private hint" not in repr(signals)
+    assert parse_music_dna_profile({"enabled": False, "profile": profile})["sections"] == []
+
+
 def test_music_discovery_feed_renders_backend_sections_in_order_without_assumed_ids() -> None:
     parsed = parse_music_discovery_feed(
         {
