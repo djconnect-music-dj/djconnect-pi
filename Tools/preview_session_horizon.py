@@ -759,13 +759,37 @@ def main():
                 owner.searchUpdated.emit()
                 QTest.qWait(65)
                 assert panel.property("selectedMatchId") == "fixture-search-match-2"
+                owner._search["matches"] = [
+                    {"session_id": saved["session_id"], "entry_id": f"fixture-search-match-{index}", "summary": "Fixture match"}
+                    for index in range(1, 29)
+                ]
+                owner.changed.emit()
+                QTest.qWait(65)
+                search_flick = search_scroll.property("contentItem")
+                search_flick.setProperty("contentY", search_flick.property("originY"))
+                with patch.object(owner, "_launch") as verify:
+                    drag_scroll(window, search_scroll, touch, -65)
+                    verify.assert_not_called()
+                    panel.setProperty("keyboardVisible", True)
+                    QTest.qWait(65)
+                    keyboard_extent = search_flick.property("contentHeight") - search_flick.height()
+                    search_flick.setProperty("contentY", search_flick.property("originY") + keyboard_extent - 110)
+                    drag_scroll(window, search_scroll, touch, -230)
+                    assert not panel.property("keyboardVisible")
+                    verify.assert_not_called()
+                    remaining = search_flick.property("contentHeight") - search_flick.height()
+                    assert remaining > 110
+                    search_flick.setProperty("contentY", search_flick.property("originY") + remaining - 110)
+                    QTest.qWait(65)
+                    drag_scroll(window, search_scroll, touch, -230)
+                    QTest.qWait(350)
+                    verify.assert_called_once_with("search_more", {"session_id": saved["session_id"], "query": "fixture", "pages": 2})
                 owner._search = completed_search
                 owner.changed.emit()
                 search_field.setProperty("text", "different query")
                 assert not search_empty.property("visible")
                 search_field.setProperty("text", "fixture")
                 QTest.qWait(65)
-                search_flick = search_scroll.property("contentItem")
                 search_flick.setProperty("contentY", search_flick.property("originY"))
                 with patch.object(owner, "_launch") as verify:
                     drag_scroll(window, search_scroll, touch, 230)

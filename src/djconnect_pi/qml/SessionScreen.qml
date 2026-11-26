@@ -831,14 +831,30 @@ Item {
         }
     }
     Connections {
+        id: searchScrollGestures
         target: searchScroll.contentItem
+        property var pageDrag: null
         function onDragStarted() {
+            const flick = searchScroll.contentItem
+            pageDrag = !searchPanel.keyboardVisible && searchPanel.canLoadMoreMatches ? {
+                sessionId: screen.searchTarget, query: searchPanel.result.query,
+                cursor: searchPanel.result.next_cursor, startY: flick.contentY
+            } : null
             searchPosition.stop()
             screen.searchReturn = null
             searchPanel.keyboardDismissalDrag = searchPanel.keyboardVisible
             searchPanel.keyboardVisible = false
         }
         function onDragEnded() { Qt.callLater(searchPanel.finishKeyboardDismissalDrag) }
+        function onMovementEnded() {
+            const drag = pageDrag
+            pageDrag = null
+            const flick = searchScroll.contentItem
+            if (drag && searchPanel.opened && !searchPanel.keyboardVisible && drag.sessionId === screen.searchTarget
+                    && drag.query === searchPanel.result.query && drag.cursor === searchPanel.result.next_cursor
+                    && flick.contentY > drag.startY && flick.contentY + flick.height >= flick.originY + flick.contentHeight - 24)
+                searchPanel.loadMoreMatches()
+        }
     }
     function searchNow() {
         searchPanel.cancelTypedSearch()
@@ -3090,6 +3106,7 @@ Item {
         onClosed: {
             keyboardVisible = false
             keyboardDismissalDrag = false
+            searchScrollGestures.pageDrag = null
             screen.cancelSearchRead()
             searchInput.clear()
             resetSearch()
