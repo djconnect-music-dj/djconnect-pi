@@ -5122,19 +5122,34 @@ BrandWindow {
             modal: true
             padding: 20
             property Item keyboardTarget: null
-            onAboutToShow: answerText.text = askDjPanel.feedbackAnswer ? askDjPanel.feedbackAnswer.text : ""
+            property string originalAnswer: ""
+            onAboutToShow: {
+                originalAnswer = askDjPanel.feedbackAnswer ? askDjPanel.feedbackAnswer.text : ""
+                answerText.text = originalAnswer
+            }
             onClosed: {
                 askDjPanel.feedbackMessageId = ""
                 keyboardTarget = null
+                originalAnswer = ""
                 feedbackNote.clear()
                 answerText.clear()
             }
             contentItem: ColumnLayout {
                 spacing: 12
-                Text {
-                    text: root.tr("ask_dj_feedback_title"); textFormat: Text.PlainText
-                    color: BrandTheme.colors.text; font.pixelSize: 24; font.bold: true
-                    wrapMode: Text.Wrap; Layout.fillWidth: true
+                RowLayout {
+                    Layout.fillWidth: true
+                    Text {
+                        text: root.tr("ask_dj_feedback_title"); textFormat: Text.PlainText
+                        color: BrandTheme.colors.text; font.pixelSize: 24; font.bold: true
+                        wrapMode: Text.Wrap; Layout.fillWidth: true
+                    }
+                    RefreshIconButton {
+                        objectName: "askDjFeedbackRestoreAnswer"
+                        text: root.tr("ask_dj_feedback_restore_answer")
+                        visible: !askDjFeedbackPopup.keyboardTarget
+                        enabled: !!askDjPanel.feedbackAnswer && answerText.text !== askDjFeedbackPopup.originalAnswer
+                        onClicked: answerText.text = askDjFeedbackPopup.originalAnswer
+                    }
                 }
                 ScrollView {
                     id: answerScroll

@@ -1712,6 +1712,7 @@ _SESSION_COMPOSER_TRANSLATIONS = {
     "ask_dj_feedback_title": ("Ask DJ answer feedback", "Feedback op Ask DJ-antwoord", "Feedback zur Ask-DJ-Antwort", "Avis sur la réponse Ask DJ", "Comentarios sobre la respuesta de Ask DJ"),
     "ask_dj_feedback_copy": ("Copy answer", "Antwoord kopiëren", "Antwort kopieren", "Copier la réponse", "Copiar respuesta"),
     "ask_dj_feedback_edit_answer": ("Answer to share", "Antwoord om te delen", "Antwort zum Teilen", "Réponse à partager", "Respuesta para compartir"),
+    "ask_dj_feedback_restore_answer": ("Restore original answer", "Oorspronkelijk antwoord terugzetten", "Ursprüngliche Antwort wiederherstellen", "Rétablir la réponse d’origine", "Restaurar la respuesta original"),
     "ask_dj_feedback_note": ("Comment", "Toelichting", "Anmerkung", "Commentaire", "Comentario"),
     "ask_dj_feedback_note_prompt": ("What was wrong or missing?", "Wat klopte er niet of wat miste je?", "Was war falsch oder hat gefehlt?", "Qu’est-ce qui était incorrect ou manquant ?", "¿Qué era incorrecto o faltaba?"),
     "ask_dj_feedback_copy_with_note": ("Copy feedback", "Feedback kopiëren", "Feedback kopieren", "Copier l’avis", "Copiar comentarios"),
