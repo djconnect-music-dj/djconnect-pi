@@ -317,6 +317,30 @@ def main():
                     scroll.setProperty("contentY", scroll.property("contentY") + card.mapToItem(scroll, 0, 0).y())
                     QTest.qWait(60)
                     capture(window, output, captures, f"withdrawn-{language}")
+                    if language == "nl":
+                        owner._session = {**session, "broadcast": {
+                            **session["broadcast"], "native_delivery": {}, "dj_moments": [],
+                        }}
+                        older = [{**row, "entry_id": f"older-{index}", "order": index}
+                                 for index in range(1, 16)]
+                        history = history_page({
+                            "success": True, "schema_version": 2, "history_contract_version": 2,
+                            "session": {"session_id": sid}, "revision": "older", "entries": older,
+                        }, session_id=sid, now=stamp)
+                        owner._retained_flow = presented_history(history)["entries"]
+                        owner.changed.emit()
+                        QTest.qWait(80)
+                        attribution = one(screen, "sessionPlaybackAttribution")
+                        jump = one(screen, "sessionJumpCurrent")
+                        assert attribution.property("visible")
+                        attribution_y = attribution.y()
+                        scroll.setProperty("contentY", attribution_y + attribution.height() / 2)
+                        assert not jump.property("visible")
+                        scroll.setProperty("contentY", attribution_y + attribution.height() + 1)
+                        assert jump.property("visible")
+                        click(window, jump)
+                        assert abs(scroll.property("contentY") - scroll.property("originY")) <= 1
+                        assert not jump.property("visible")
                     forecast_flick.setProperty("contentY", forecast_flick.property("originY") + 85)
                     owner.invalidate()
                     QTest.qWait(65)

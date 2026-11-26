@@ -2006,6 +2006,7 @@ Item {
                     return card.y + card.height
             }
             if (waitingCard.visible) return waitingCard.y + waitingCard.height
+            if (playbackSources.visible) return playbackSources.y + playbackSources.height
             if (playbackMetadata.visible && playbackSources.ready)
                 return playbackMetadata.y + playbackMetadata.height
             return 0
