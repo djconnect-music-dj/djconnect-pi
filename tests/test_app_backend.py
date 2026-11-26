@@ -1465,6 +1465,26 @@ def test_ask_dj_clear_and_trim_revisions_are_server_authoritative(tmp_path: Path
     assert backend._ask_dj_history_revision == 12
 
 
+def test_ask_dj_ignores_history_from_before_a_confirmed_clear(tmp_path):
+    ensure_app()
+    backend = DJConnectBackend(tmp_path / "config.json")
+    backend._apply_ask_dj_clear_result({
+        "success": True, "cleared": True, "clear_revision": 2, "history_revision": 12, "messages": [],
+    })
+    stale = {"id": "stale", "role": "assistant", "text": "Old answer"}
+    for clear_revision, history_revision in ((1, 12), (2, 11)):
+        backend._apply_ask_dj_data({
+            "success": True, "clear_revision": clear_revision, "history_revision": history_revision, "messages": [stale],
+        })
+    assert backend.askDjMessages == []
+
+    fresh = {"id": "fresh", "role": "assistant", "text": "New answer"}
+    revision = {"success": True, "clear_revision": 2, "history_revision": 13}
+    backend._apply_ask_dj_data({**revision, "messages": [fresh]})
+    backend._apply_ask_dj_data({**revision, "messages": []})
+    assert [message["id"] for message in backend.askDjMessages] == ["fresh"]
+
+
 @pytest.mark.parametrize("transition", ["revision", "config", "queued"])
 def test_ask_dj_clear_does_not_cross_conversation_scope(tmp_path, transition):
     ensure_app()

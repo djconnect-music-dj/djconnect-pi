@@ -2410,8 +2410,7 @@ class DJConnectBackend(QObject):
         if data.get("success") is not True or not (cleared is True or legacy_receipt):
             self._show_toast(self.tr_key("ask_dj_clear_unconfirmed"), 5000, "askdj")
             return
-        self._apply_ask_dj_data(data)
-        if self._profile_result_current(data):
+        if self._apply_ask_dj_data(data) and self._profile_result_current(data):
             self._show_toast(self.tr_key("ask_dj_cleared"), 2500, "askdj")
 
     def _track_insight_worker(self, playback: Playback, scope: tuple) -> None:
@@ -2966,33 +2965,27 @@ class DJConnectBackend(QObject):
         if current is original:
             self._apply_media_list(kind, cached)
 
-    @Slot(object)
-    def _apply_ask_dj_data(self, data: object) -> None:
+    @Slot(object, result=bool)
+    def _apply_ask_dj_data(self, data: object) -> bool:
         if self._demo_mode:
-            return
+            return False
         if not self._profile_result_current(data):
-            return
-        if not isinstance(data, dict):
-            return
+            return False
+        if not isinstance(data, dict) or data.get("success") is False:
+            return False
         self._apply_profile_context(data)
         clear_revision = _int_value(data.get("clear_revision"), self._ask_dj_clear_revision)
-        messages_value = data.get("messages")
-        clear_ack = (
-            data.get("cleared") is True
-            or (
-                data.get("success") is True
-                and "clear_revision" in data
-                and isinstance(messages_value, list)
-                and not messages_value
-            )
-        )
+        history_revision = _int_value(data.get("history_revision"), self._ask_dj_history_revision)
+        if clear_revision < self._ask_dj_clear_revision or history_revision < self._ask_dj_history_revision:
+            return False
+        clear_ack = data.get("cleared") is True
         if clear_revision > self._ask_dj_clear_revision or clear_ack:
             self._clear_ask_dj_cache(reset_revisions=False)
             self._ask_dj_clear_revision = max(self._ask_dj_clear_revision, clear_revision)
-            self._ask_dj_history_revision = max(self._ask_dj_history_revision, _int_value(data.get("history_revision"), self._ask_dj_history_revision))
+            self._ask_dj_history_revision = max(self._ask_dj_history_revision, history_revision)
             self._set_backend_available(True)
             if clear_ack:
-                return
+                return True
         trimmed_before = str(data.get("history_trimmed_before") or "").strip()
         if trimmed_before:
             self._ask_dj_messages = [m for m in self._ask_dj_messages if str(m.get("created_at") or m.get("server_time") or "") >= trimmed_before]
@@ -3004,8 +2997,9 @@ class DJConnectBackend(QObject):
             self._merge_ask_dj_messages(messages, limit=_int_value(data.get("history_limit"), 100))
         else:
             self.askDjChanged.emit()
-        self._ask_dj_history_revision = max(self._ask_dj_history_revision, _int_value(data.get("history_revision"), self._ask_dj_history_revision))
+        self._ask_dj_history_revision = max(self._ask_dj_history_revision, history_revision)
         self._set_backend_available(True)
+        return True
 
     def _merge_ask_dj_messages(self, messages: list[dict[str, object]], limit: int = 100) -> None:
         merged = list(self._ask_dj_messages)

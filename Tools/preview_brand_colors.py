@@ -804,6 +804,13 @@ def main():
         backend.musicDnaChanged.emit()
         assert not window.property("askDjClearConfirmOpen")
         assert visual_item(ask_dj, "askDjMessagesView").property("count") == 4
+        backend._apply_ask_dj_clear_result({"success": True, "cleared": True, "clear_revision": 2, "history_revision": 10})
+        ask_history = visual_item(ask_dj, "askDjMessagesView")
+        assert ask_history.property("count") == 0
+        backend._apply_ask_dj_data({"success": True, "clear_revision": 1, "history_revision": 9, "messages": [
+            {"id": "late-old-answer", "role": "assistant", "text": "Deleted answer"},
+        ]})
+        assert ask_history.property("count") == 0
         backend._demo_mode = True
         backend.demoModeChanged.emit()
         backend.cfg.paired, backend.cfg.device_token = False, ""
