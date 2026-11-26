@@ -377,6 +377,10 @@ def main():
                 artwork_controls = visual(overlay, 'trackArtworkControlsToggle')
                 assert owner.state['playback_control']['status'] == 'sending' and len(intents) == 1
                 assert not focused_transport.property('enabled') and artwork_controls.property('activeFocus')
+                command_status = visual(overlay, 'sessionTransportCommandStatus')
+                accessible_status = QAccessible.queryAccessibleInterface(command_status)
+                assert command_status.property('visible') and accessible_status.role() == QAccessible.Role.StatusBar
+                assert accessible_status.text(QAccessible.Text.Name) == backend.t('session_question_sending')
                 QTest.keyClick(window, Qt.Key.Key_Escape)
                 assert not window.property('trackArtworkControlsOpen') and artwork_controls.property('activeFocus')
                 intents.pop()()

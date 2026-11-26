@@ -2693,12 +2693,19 @@ Item {
             }
         }
         Text {
+            objectName: "sessionTransportCommandStatus"
             readonly property string status: screen.state.playback_control.status || ""
             visible: status.length > 0
             Layout.fillWidth: true
             text: screen.tr(status === "sending" ? "session_question_sending"
                 : status === "accepted" ? "session_playback_sent" : "session_uncertain")
             textFormat: Text.PlainText
+            Accessible.role: Accessible.StatusBar
+            Accessible.name: text
+            onStatusChanged: if (status.length) Qt.callLater(announceStatus)
+            function announceStatus() {
+                if (visible && status.length) Accessible.announce(text)
+            }
             color: BrandTheme.colors.text
             font.pixelSize: 18
             horizontalAlignment: Text.AlignHCenter
