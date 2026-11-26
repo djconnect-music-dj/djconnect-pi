@@ -2698,7 +2698,7 @@ Item {
             readonly property string status: screen.state.playback_control.status || ""
             visible: status.length > 0
             Layout.fillWidth: true
-            text: screen.tr(status === "sending" ? "session_question_sending"
+            text: screen.tr(status === "sending" ? "session_playback_command_sending"
                 : status === "accepted" ? "session_playback_sent"
                 : refreshTransport.refreshFailed ? "session_playback_refresh_failed" : "session_uncertain")
             textFormat: Text.PlainText
