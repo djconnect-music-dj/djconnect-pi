@@ -437,7 +437,7 @@ Item {
     readonly property bool archiveSearchAvailable: historical && !currentHistory && !state.timeline.session
         && (backend.demoMode || (state.search_available && backend.paired))
     readonly property bool searchAvailable: !flowSearchBlocked
-        && (archiveSearchAvailable || (state.search_available && searchTarget.length > 0))
+        && (archiveSearchAvailable || ((backend.demoMode || state.search_available) && searchTarget.length > 0))
     readonly property string searchLabel: tr(archiveSearchAvailable ? "session_archive_search" : "session_search")
     property real readingOffset: 0
     function readingAnchor() {
@@ -3493,7 +3493,7 @@ Item {
             screen.searchNow()
         }
         function activateSearchButton() {
-            if (!screen.archiveSearchAvailable && hasSearchResults) {
+            if (!screen.backend.demoMode && !screen.archiveSearchAvailable && hasSearchResults) {
                 keyboardVisible = false
                 screen.refreshSearchResults()
             } else submitSearch()
@@ -3723,6 +3723,7 @@ Item {
                             }
                             SessionAttribution { id: searchSources; sources: modelData.display_sources || []; requiresSpotify: modelData.requires_spotify_attribution || false; spotifyURL: modelData.spotify_source_url || ""; Layout.fillWidth: true }
                             GlassButton {
+                                objectName: "sessionSearchOpenEntry"
                                 text: screen.tr("session_open_entry"); enabled: !screen.owner.busy
                                 onClicked: screen.owner.openEntry(modelData.session_id, modelData.entry_id)
                             }
@@ -3783,6 +3784,7 @@ Item {
         contentItem: ColumnLayout {
             spacing: 10
             GlassButton {
+                objectName: "sessionMoreSearch"
                 visible: screen.searchAvailable
                 text: screen.tr("session_search"); iconName: "search"
                 Layout.fillWidth: true

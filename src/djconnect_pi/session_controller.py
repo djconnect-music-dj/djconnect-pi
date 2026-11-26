@@ -34,6 +34,7 @@ from .session_history_view import (
     accepted_question,
     confirmed_question_entry,
     conversation_entries,
+    demo_search_matches,
     flow_contributions,
     live_presentations,
     opened_entry,
@@ -863,13 +864,36 @@ class SessionController(QObject):
                 self._archive_search = {}
             self._session = {}
             self._demo_flow = []
+            self._search = {}
         elif action in {"history", "history_more", "history_refresh"}:
             self._sessions = [record["session"] for record in reversed(self._demo_archives.values())]
             self._history_loaded = True
         elif action == "timeline" and value in self._demo_archives:
             self._timeline = deepcopy(self._demo_archives[value])
+        elif action == "search":
+            sid, query = value["session_id"], value["query"]
+            timeline = self._visible_demo_timeline(sid)
+            matches = demo_search_matches(timeline.get("entries", []), query)
+            self._search = {"session_id": sid, "query": query, "matches": matches,
+                            "complete": True, "returned_count": len(matches), "total_count": len(matches)}
+        elif action == "open_entry":
+            sid, eid = value["session_id"], value["entry_id"]
+            timeline = self._visible_demo_timeline(sid)
+            if not any(row["entry_id"] == eid for row in timeline.get("entries", [])):
+                return
+            self._timeline = {**deepcopy(timeline), "selected_entry_id": eid}
+            self.changed.emit()
+            self.entryOpened.emit()
+            return
         self._loaded = True
         self.changed.emit()
+
+    def _visible_demo_timeline(self, session_id):
+        if self._timeline.get("session", {}).get("session_id") == session_id:
+            return self._timeline
+        if self._session.get("session_id") == session_id:
+            return {"session": self._session, "entries": self._demo_flow}
+        return {}
 
     def _append_demo_entry(self, kind, text):
         entry_id = uuid4().hex

@@ -1,4 +1,5 @@
 """Read-only search/navigation and attribution presentation over Core history2."""
+import re
 from copy import deepcopy
 from html import escape
 from importlib.resources import files
@@ -132,15 +133,19 @@ def flow_contributions(entries, admitted_moments, session_id):
 
 
 def _highlighted_text(body, marks):
-    # Called only after server UTF-16 ranges passed exact character-boundary validation.
+    # The caller supplies validated or locally computed UTF-16 ranges.
     indices = {0: 0}
     offset = 0
     for index, char in enumerate(body):
         offset += len(char.encode("utf-16-le")) // 2
         indices[offset] = index + 1
-    spans = sorted((indices[mark["start_utf16"]], indices[mark["start_utf16"] + mark["length_utf16"]]) for mark in marks)
+    spans = ((indices[mark["start_utf16"]], indices[mark["start_utf16"] + mark["length_utf16"]]) for mark in marks)
+    return _render_highlighted_spans(body, spans)
+
+
+def _render_highlighted_spans(body, spans):
     merged = []
-    for start, end in spans:
+    for start, end in sorted(spans):
         if merged and start <= merged[-1][1]:
             merged[-1] = (merged[-1][0], max(end, merged[-1][1]))
         else:
@@ -153,6 +158,17 @@ def _highlighted_text(body, marks):
     fragments.append(escape(body[previous:]))
     # The only generated tags are emphasis and line breaks. User markup stays literal.
     return "".join(fragments).replace("\n", "<br>")
+
+
+def demo_search_matches(entries, query):
+    pattern = re.compile(re.escape(query), re.IGNORECASE)
+    matches = []
+    for row in entries:
+        body = row["text"]
+        spans = [match.span() for match in pattern.finditer(body)]
+        if spans:
+            matches.append({**row, "highlighted_text": _render_highlighted_spans(body, spans)})
+    return matches
 
 
 def search_page(response, session_id, query, *, now=None):

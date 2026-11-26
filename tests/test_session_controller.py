@@ -351,6 +351,9 @@ def test_demo_session_never_uses_server_or_survives_demo_exit(controller):
     assert [row["contribution"]["kind"] for row in owner.state["flow_rows"]] == [
         "conversation_dj", "conversation_user", "dj_moment",
     ]
+    owner.search("demo-session", "LISTEN")
+    live_match, = owner.state["search"]["matches"]
+    assert "<b><u>listen</u></b>" in live_match["highlighted_text"]
     owner.end("demo-session")
     assert not owner.state["flow_rows"] and not owner.sendQuestion("No session")
     assert not owner.state["started_at"]
@@ -365,6 +368,11 @@ def test_demo_session_never_uses_server_or_survives_demo_exit(controller):
     owner.openArchiveSearchResult(found[0]["session_id"])
     assert owner.state["timeline"]["session"] == found[0]
     assert any(row["text"] == "What should I listen to next?" for row in owner.state["timeline"]["entries"])
+    owner.search(found[0]["session_id"], "LISTEN")
+    saved_match, = owner.state["search"]["matches"]
+    assert saved_match["entry_id"] == live_match["entry_id"]
+    owner.openEntry(found[0]["session_id"], saved_match["entry_id"])
+    assert owner.state["timeline"]["selected_entry_id"] == saved_match["entry_id"]
     owner.closeSaved()
     owner.start("party")
     assert owner.state["mood"] == "party"
