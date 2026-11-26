@@ -2668,6 +2668,7 @@ Item {
                 KeyNavigation.backtab: transportControls.overArtwork ? null : shuffleTransport
                 commandName: "toggle_favorite"
                 iconName: "heart"
+                waiting: !!screen.state.playback_control.toggling_favorite
                 buttonSize: transportControls.buttonSize
             }
             SessionTransportButton {
@@ -2802,6 +2803,7 @@ Item {
         required property real buttonSize
         property string accessibleLabelKey: commandName
         property int pressedEpoch: 0
+        property bool waiting: false
         readonly property bool basicTransport: ["previous", "play", "pause", "next"].includes(commandName)
         iconName: commandName
         Accessible.name: screen.tr(accessibleLabelKey)
@@ -2810,12 +2812,23 @@ Item {
         padding: 0
         contentItem: Item {
             FeatureIcon {
+                visible: !transportButton.waiting
                 anchors.centerIn: parent
                 width: Math.min(78 * screen.ipadScale, transportButton.buttonSize * 0.65)
                 height: width
                 iconName: transportButton.iconName
                 iconColor: transportButton.foregroundColor
                 strokeWidth: width * 0.065
+            }
+            Loader {
+                anchors.centerIn: parent
+                width: 28
+                height: width
+                active: transportButton.waiting
+                sourceComponent: BusyIndicator {
+                    objectName: "sessionPlaybackFavoriteSpinner"
+                    running: true
+                }
             }
         }
         enabled: visible && screen.liveViewOpen && !!screen.state.playback_control.enabled

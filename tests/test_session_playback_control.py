@@ -76,7 +76,9 @@ def test_overlay_intent_rechecks_output_and_sends_only_one_explicit_adjustment(
     owner.transport.playback_favorite = Mock()
     epoch = owner.state["playback_control"]["transport_epoch"]
     assert owner.playbackCommand("synthetic-session", ITEM_ID, command, epoch)
+    assert owner.state["playback_control"]["toggling_favorite"] == (command == "toggle_favorite")
     backend.jobs.pop()()
+    assert not owner.state["playback_control"]["toggling_favorite"]
     owner.transport.playback_command.assert_not_called()
     if changed_output:
         owner.transport.playback_adjustment.assert_not_called()

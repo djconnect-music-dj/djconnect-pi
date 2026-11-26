@@ -277,6 +277,7 @@ class PlaybackControl(QObject):
                 "outputs_status": self.outputs_status,
                 "reading_outputs": bool(self.running and self.request and self.request["command"] == "outputs_read"),
                 "reading_favorite": bool(self.running and self.request and self.request["command"] == "favorite_read"),
+                "toggling_favorite": bool(self.running and self.request and self.request["command"] == "toggle_favorite"),
                 "volume_supported": self.volume_supported(),
                 "volume": {**self.volume["observation"], "lease": self.volume["serial"]} if self.volume_valid() else {},
                 "display_volume_percent": self._volume_display["percent"] if self._volume_display else None,
