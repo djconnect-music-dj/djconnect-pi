@@ -5103,10 +5103,70 @@ BrandWindow {
         property bool helpOpen: false
         property int draftEditRevision: 0
         property string pendingQuestionText: ""
+        property string feedbackMessageId: ""
+        readonly property var feedbackAnswer: feedbackMessageId && !historyOffline ? djconnect.askDjMessages.find(message =>
+            message.id === feedbackMessageId && message.role === "assistant" && message.text) : null
+        onFeedbackAnswerChanged: if (!feedbackAnswer) Qt.callLater(function() {
+            if (!askDjPanel.feedbackAnswer && askDjFeedbackPopup.opened) askDjFeedbackPopup.close()
+        })
         readonly property int profileContextRevision: djconnect.musicDnaContextRevision
         onProfileContextRevisionChanged: clearQuestionUi(false)
         readonly property bool historyOffline: !djconnect.demoMode
             && (!djconnect.paired || !djconnect.backendAvailable || djconnect.versionMismatchVisible)
+
+        GlassPopup {
+            id: askDjFeedbackPopup
+            objectName: "askDjFeedbackPopup"
+            anchors.centerIn: Overlay.overlay
+            width: Math.min(askDjPanel.width - 40, 620)
+            modal: true
+            padding: 20
+            onClosed: askDjPanel.feedbackMessageId = ""
+            contentItem: ColumnLayout {
+                spacing: 12
+                Text {
+                    text: root.tr("ask_dj_feedback_title"); textFormat: Text.PlainText
+                    color: BrandTheme.colors.text; font.pixelSize: 24; font.bold: true
+                    wrapMode: Text.Wrap; Layout.fillWidth: true
+                }
+                ScrollView {
+                    Layout.fillWidth: true; Layout.preferredHeight: Math.min(answerText.implicitHeight, 180)
+                    contentWidth: availableWidth; clip: true
+                    Text {
+                        id: answerText
+                        objectName: "askDjFeedbackAnswer"
+                        width: parent.width
+                        text: askDjPanel.feedbackAnswer ? askDjPanel.feedbackAnswer.text : ""
+                        textFormat: Text.PlainText; wrapMode: Text.Wrap
+                        color: BrandTheme.colors.text; font.pixelSize: 20
+                    }
+                }
+                Text {
+                    text: root.tr("ask_dj_feedback_review"); textFormat: Text.PlainText
+                    color: BrandTheme.colors.muted; font.pixelSize: 18
+                    wrapMode: Text.Wrap; Layout.fillWidth: true
+                }
+                GlassButton {
+                    objectName: "askDjFeedbackCopy"
+                    iconName: "copy"; text: root.tr("ask_dj_feedback_copy")
+                    Layout.fillWidth: true; enabled: !!askDjPanel.feedbackAnswer
+                    onClicked: djconnect.copyAskDjFeedbackAnswer(askDjPanel.feedbackMessageId)
+                }
+                GlassButton {
+                    objectName: "askDjFeedbackOpenIssue"
+                    iconName: "globe"; text: root.tr("feedback_open")
+                    Layout.fillWidth: true; enabled: !!askDjPanel.feedbackAnswer
+                    onClicked: {
+                        if (!djconnect.openFeedbackIssue("ask_dj"))
+                            djconnect.showToastForContext(root.tr("feedback_unavailable"), "connectivity")
+                    }
+                }
+                GlassButton {
+                    text: root.tr("close"); tertiary: true; Layout.fillWidth: true
+                    onClicked: askDjFeedbackPopup.close()
+                }
+            }
+        }
 
         function clearChatDraft() {
             root.askDjDraft = ""
@@ -5126,6 +5186,7 @@ BrandWindow {
 
         function clearQuestionUi(clearDraft) {
             root.askDjClearConfirmOpen = false
+            feedbackMessageId = ""
             pendingQuestionText = ""
             readingAnchor = null
             closeHelp()
@@ -5176,11 +5237,13 @@ BrandWindow {
             function onActiveChanged() {
                 if (root.active) return
                 askDjPanel.pendingQuestionText = ""
+                askDjPanel.feedbackMessageId = ""
                 askDjPanel.closeHelp()
             }
             function onScreenBlankedChanged() {
                 if (!root.screenBlanked) return
                 askDjPanel.pendingQuestionText = ""
+                askDjPanel.feedbackMessageId = ""
                 askDjPanel.closeHelp()
             }
         }
@@ -5568,6 +5631,22 @@ BrandWindow {
                                     font.weight: Font.Normal
                                     wrapMode: Text.Wrap
                                     Layout.fillWidth: true
+                                }
+
+                                GlassButton {
+                                    objectName: "askDjAnswerFeedback"
+                                    visible: !askDjPanel.historyOffline && modelData.role === "assistant" && !bubble.systemBubble
+                                        && !!modelData.id && !!modelData.text
+                                    iconName: "chat"; tertiary: true
+                                    Accessible.name: root.tr("ask_dj_feedback_title")
+                                    ToolTip.text: Accessible.name
+                                    ToolTip.visible: hovered
+                                    Layout.alignment: Qt.AlignRight
+                                    onClicked: {
+                                        askDjPanel.chatKeyboardOpen = false
+                                        askDjPanel.feedbackMessageId = modelData.id
+                                        if (askDjPanel.feedbackAnswer) askDjFeedbackPopup.open()
+                                    }
                                 }
 
                                 Flow {

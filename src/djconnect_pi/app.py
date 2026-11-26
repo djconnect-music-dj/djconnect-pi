@@ -1234,11 +1234,25 @@ class DJConnectBackend(QObject):
         return self._logs_visible
 
     @Slot(result=bool)
-    def openFeedbackIssue(self) -> bool:
+    @Slot(str, result=bool)
+    def openFeedbackIssue(self, surface: str = "") -> bool:
         # User click opens a draft only; no private app state or automatic submit.
-        query = urlencode({"title": translate(self.cfg.language, "feedback_issue_title"),
+        title_key = "ask_dj_feedback_title" if surface == "ask_dj" else "feedback_issue_title"
+        query = urlencode({"title": translate(self.cfg.language, title_key),
                            "body": translate(self.cfg.language, "feedback_issue_template")})
         return QDesktopServices.openUrl(QUrl("https://github.com/djconnect-music-dj/djconnect-pi/issues/new?" + query))
+
+    @Slot(str)
+    def copyAskDjFeedbackAnswer(self, message_id: str) -> None:
+        if (not message_id or not self._application_foreground
+                or (not self._demo_mode and (not self.paired or not self.backendAvailable or self.versionMismatchVisible))):
+            return
+        for message in self._ask_dj_messages:
+            if (message.get("id") == message_id and message.get("role") == "assistant"
+                    and message.get("messageKind") not in {"system", "status"} and message.get("text")):
+                QGuiApplication.clipboard().setText(message["text"])
+                self.showToastForContext(self.tr_key("copied"), "connectivity")
+                return
 
     @Slot()
     def openPrivacyStatement(self) -> None:
