@@ -7462,7 +7462,27 @@ BrandWindow {
                     Text { text: root.tr("web_address"); color: BrandTheme.colors.muted; font.pixelSize: 20; font.bold: true; horizontalAlignment: Text.AlignRight; Layout.preferredWidth: 190 }
                     Text { text: djconnect.webPortalUrl; color: BrandTheme.colors.text; font.pixelSize: 18; Layout.fillWidth: true; elide: Text.ElideMiddle }
                     Text { text: root.tr("device_id"); color: BrandTheme.colors.muted; font.pixelSize: 20; font.bold: true; horizontalAlignment: Text.AlignRight; Layout.preferredWidth: 190 }
-                    Text { text: djconnect.deviceId; color: BrandTheme.colors.text; font.pixelSize: 18; Layout.fillWidth: true; elide: Text.ElideMiddle }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 8
+                        Text {
+                            text: djconnect.deviceId
+                            textFormat: Text.PlainText
+                            color: BrandTheme.colors.text
+                            font.pixelSize: 18
+                            Layout.fillWidth: true
+                            elide: Text.ElideMiddle
+                        }
+                        GlassButton {
+                            objectName: "aboutCopyDeviceId"
+                            iconName: "copy"; tertiary: true
+                            Accessible.name: root.tr("copy_device_id")
+                            ToolTip.text: root.tr("copy_device_id")
+                            ToolTip.visible: hovered
+                            enabled: djconnect.deviceId.length > 0
+                            onClicked: djconnect.copyDeviceId()
+                        }
+                    }
                 }
                 }
 

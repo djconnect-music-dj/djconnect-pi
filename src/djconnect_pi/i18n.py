@@ -1689,6 +1689,8 @@ _SESSION_COMPOSER_TRANSLATIONS = {
     "music_backend_unavailable_state": ("Unavailable", "Niet beschikbaar", "Nicht verfügbar", "Indisponible", "No disponible"),
     "music_backend_unconfirmed_state": ("Availability unconfirmed", "Beschikbaarheid niet bevestigd", "Verfügbarkeit unbestätigt", "Disponibilité non confirmée", "Disponibilidad sin confirmar"),
     "about_source_repository": ("Source on GitHub", "Broncode op GitHub", "Quellcode auf GitHub", "Code source sur GitHub", "Código en GitHub"),
+    "copy_device_id": ("Copy device ID", "Kopieer apparaat-ID", "Geräte-ID kopieren", "Copier l’identifiant de l’appareil", "Copiar el ID del dispositivo"),
+    "device_id_copied": ("Device ID copied", "Apparaat-ID gekopieerd", "Geräte-ID kopiert", "Identifiant de l’appareil copié", "ID del dispositivo copiado"),
     "music_backend_retry_notice": ("DJConnect checks again automatically.", "DJConnect controleert dit automatisch opnieuw.", "DJConnect prüft dies automatisch erneut.", "DJConnect vérifie à nouveau automatiquement.", "DJConnect vuelve a comprobarlo automáticamente."),
     "session_archive_refresh_search": ("Refresh search results", "Zoekresultaten verversen", "Suchergebnisse aktualisieren", "Actualiser les résultats de recherche", "Actualizar los resultados de búsqueda"),
     "music_discovery_load_failed": (
