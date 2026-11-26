@@ -1351,6 +1351,10 @@ Item {
                         implicitHeight: 44
                         Accessible.name: screen.tr("session_playback_controls")
                         Accessible.description: screen.state.playback.time_label || ""
+                        Accessible.onPressAction: {
+                            if (progressButton.visible && progressButton.enabled && progressButton.transportEpoch > 0)
+                                progressButton.currentTrackClicked()
+                        }
                         background: Rectangle {
                             radius: 8
                             color: progressButton.down ? BrandTheme.colors.surfaceRaised : "transparent"
@@ -1401,7 +1405,7 @@ Item {
                                 id: playbackProgress
                                 objectName: "sessionPlaybackBar"
                                 value: screen.state.playback.progress || 0; Layout.fillWidth: true
-                                Accessible.name: screen.tr("now_playing")
+                                Accessible.ignored: true
                                 background: Rectangle { implicitHeight: 6; radius: 3; color: BrandTheme.colors.text; opacity: 0.18 }
                                 contentItem: Item {
                                     implicitHeight: 6
@@ -1418,6 +1422,7 @@ Item {
                                 color: BrandTheme.colors.muted
                                 horizontalAlignment: Text.AlignRight
                                 Layout.preferredWidth: Math.max(implicitWidth, playbackTimeWidth.advanceWidth)
+                                Accessible.ignored: true
 
                                 TextMetrics {
                                     id: playbackTimeWidth

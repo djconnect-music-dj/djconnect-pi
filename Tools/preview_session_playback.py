@@ -19,7 +19,12 @@ from PySide6.QtCore import (
     QTimer,
     qInstallMessageHandler,
 )
-from PySide6.QtGui import QGuiApplication, QImage
+from PySide6.QtGui import (
+    QAccessible,
+    QAccessibleActionInterface,
+    QGuiApplication,
+    QImage,
+)
 from PySide6.QtQml import QQmlApplicationEngine, QQmlExpression
 from PySide6.QtQuickControls2 import QQuickStyle
 from PySide6.QtTest import QTest
@@ -451,6 +456,18 @@ def main():
                 owner._session = original_session
                 owner.changed.emit()
                 QTest.qWait(120)
+
+                accessible_progress = QAccessible.queryAccessibleInterface(progress)
+                assert accessible_progress.role() == QAccessible.Role.Button
+                assert accessible_progress.text(QAccessible.Text.Name) == TRANSLATIONS[language]['session_playback_controls']
+                assert accessible_progress.text(QAccessible.Text.Description) == playback_time.property('text')
+                assert accessible_progress.childCount() == 0
+                accessible_progress.actionInterface().doAction(QAccessibleActionInterface.pressAction())
+                QTest.qWait(60)
+                assert transport_panel.property('opened') and not intents
+                QTest.keyClick(window, Qt.Key.Key_Escape)
+                QTest.qWait(120)
+                assert not transport_panel.property('opened') and not intents
 
                 initial_caps = backend.cfg.music_backend_capabilities
                 backend.cfg.music_backend_capabilities = {
