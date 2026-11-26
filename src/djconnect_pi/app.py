@@ -6457,10 +6457,10 @@ def _music_dna_cards(profile: dict[str, object], ha_url: str) -> list[dict[str, 
             result.append(row)
         return result
 
-    def card(key, icon, *, entries=None, groups=None, value="", metric=None, average=None, count=None):
+    def card(key, icon, *, entries=None, groups=None, value="", value_key="", metric=None, average=None, count=None):
         if entries or groups or value or metric is not None or average is not None:
             cards.append({"key": "music_dna_card_" + key, "icon": icon, "rows": entries or [],
-                          "groups": groups or [], "value": value, "metric": metric,
+                          "groups": groups or [], "value": value, "valueKey": value_key, "metric": metric,
                           "average": average, "count": count})
 
     def grouped(title, entries, *, shelf=False):
@@ -6576,7 +6576,10 @@ def _music_dna_cards(profile: dict[str, object], ha_url: str) -> list[dict[str, 
          groups=grouped("weekdays", percentages(rhythm.get("weekdays"), "weekday", weekdays)))
     mix = block("mood_mix")
     average = mix.get("average")
-    card("mood_mix", "mood_chill", entries=percentages(mix.get("zones"), "zone", zones),
+    top_zone = bounded_text(mix.get("top_zone"), 64).strip()
+    top_zone_key = zones.get(top_zone.casefold(), "")
+    card("mood_mix", top_zone_key or "sparkles", value=top_zone, value_key=top_zone_key,
+         entries=percentages(mix.get("zones"), "zone", zones),
          average=average if type(average) in (int, float) and 0 <= average <= 100 else None)
     card("playtime", "history", value=duration,
          groups=grouped("artists_by_time", playtime_ranking(playtime.get("top_artists")))

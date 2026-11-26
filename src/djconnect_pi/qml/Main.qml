@@ -5250,7 +5250,8 @@ BrandWindow {
                             }
                             Text {
                                 visible: text.length > 0
-                                text: dnaCard.modelData.value || ""
+                                text: dnaCard.modelData.valueKey ? root.tr(dnaCard.modelData.valueKey)
+                                    : dnaCard.modelData.value || ""
                                 textFormat: Text.PlainText
                                 color: BrandTheme.colors.text
                                 font.pixelSize: 23; font.bold: true
