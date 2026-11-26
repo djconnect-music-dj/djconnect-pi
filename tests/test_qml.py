@@ -249,7 +249,7 @@ def test_qml_has_touch_readable_glass_controls_and_scrollable_settings() -> None
     assert "component RefreshIconButton" in main_qml
     assert main_qml.count("RefreshIconButton {") >= 7
     logs_qml = qml_root.joinpath("LogsView.qml").read_text(encoding="utf-8")
-    assert 'iconName: "refresh"' in logs_qml and "view.backend.showLogs()" in logs_qml
+    assert 'iconName: "refresh"' in logs_qml and "view.backend.refreshLogs()" in logs_qml
     assert main_qml.count('text: root.tr("refresh")') == 1
     assert main_qml.count("Layout.preferredHeight: 48") >= 2
     assert "anchors.topMargin: 16" in main_qml

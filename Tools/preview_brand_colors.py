@@ -1087,7 +1087,9 @@ def main():
         log_path = Path(backend.cfg.log_file)
         log_lines = ["sample first", "<repeat> & repeat", "sample second", "sample third", "♪ café and cafe\u0301 and cafe!"]
         log_path.write_text("\n".join(reversed(log_lines)), encoding="utf-8")
+        backend.hideToast()
         backend.showLogs()
+        assert not backend.toastVisible
         capture("logs")
         logs = visual_item(window.contentItem(), "logsView")
         search_toggle = visual_item(logs, "logsSearchOpen")
@@ -1097,6 +1099,7 @@ def main():
         for locale in ("en", "nl", "de", "fr", "es"):
             backend.setLanguage(locale)
             assert search_toggle_accessible.text(QAccessible.Text.Name) == backend.t("logs_search")
+            assert QAccessible.queryAccessibleInterface(logs_refresh).text(QAccessible.Text.Name) == backend.t("refresh_logs")
             QMetaObject.invokeMethod(search_toggle, "clicked")
             assert search_toggle.property("checked") and logs.property("keyboardOpen")
             assert search_toggle_accessible.text(QAccessible.Text.Name) == backend.t("close_search")
@@ -1164,6 +1167,7 @@ def main():
             log_path.write_text("\n".join(reversed(log_lines[:3])), encoding="utf-8")
             QMetaObject.invokeMethod(logs_refresh, "clicked")
             assert search_count.property("text") == "2/2"
+            assert backend.toastVisible and backend.toastText == backend.t("logs_refreshed")
             log_path.write_text("\n".join(reversed(log_lines)), encoding="utf-8")
             QMetaObject.invokeMethod(logs_refresh, "clicked")
             assert search_count.property("text") == "2/3" and search_input.property("text") == "sample"
@@ -1202,12 +1206,14 @@ def main():
             log_path.unlink()
             QMetaObject.invokeMethod(logs_refresh, "clicked")
             assert not log_path.exists() and not backend.logsText
+            assert not backend.toastVisible
             assert empty_logs.property("visible") and empty_logs.property("text") == backend.t("logs_empty")
             assert not search_toggle.property("enabled") and not visual_item(logs, "logsCopy").property("enabled")
             capture("logs-missing-" + locale)
             log_path.mkdir()
             QMetaObject.invokeMethod(logs_refresh, "clicked")
             assert not backend.logsText and backend.logsReadError
+            assert not backend.toastVisible
             assert empty_logs.property("visible") and empty_logs.property("text") == backend.t("logs_read_unavailable")
             error_detail = visual_item(logs, "logsReadErrorDetail")
             assert error_detail.property("visible") and str(log_path) in error_detail.property("text")

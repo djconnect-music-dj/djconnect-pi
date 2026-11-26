@@ -164,9 +164,9 @@ Item {
                     }
                     LogAction {
                         objectName: "logsRefresh"
-                        iconName: "refresh"; Accessible.name: view.tr("refresh")
+                        iconName: "refresh"; Accessible.name: view.tr("refresh_logs")
                         background: Item {}
-                        onClicked: { view.backend.showLogs(); if (!view.currentMatch) logRows.positionViewAtBeginning() }
+                        onClicked: { view.backend.refreshLogs(); if (!view.currentMatch) logRows.positionViewAtBeginning() }
                     }
                     LogAction {
                         objectName: "logsCopy"

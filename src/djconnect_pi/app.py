@@ -2018,19 +2018,33 @@ class DJConnectBackend(QObject):
         if self.cfg.log_level == DEFAULT_LOG_LEVEL:
             return
         _LOGGER.info("User opened logs view")
-        self.showToastForContext(self.tr_key("logs"), "diagnostics")
+        self._logs_visible = True
+        self._read_logs()
+
+    @Slot()
+    def refreshLogs(self) -> None:
+        if not self._logs_visible:
+            return
+        if self._read_logs():
+            self.showToastForContext(self.tr_key("logs_refreshed"), "diagnostics")
+        elif self._toast_icon == _toast_icon_for_context("diagnostics"):
+            self.hideToast()
+
+    def _read_logs(self) -> bool:
         path = Path(self.cfg.log_file)
         self._logs_read_error = ""
+        read = False
         try:
             data = _read_tail_text(path, LOG_DISPLAY_MAX_BYTES)
             self._logs_text = _format_logs_for_display(data)
+            read = True
         except FileNotFoundError:
             self._logs_text = ""
         except Exception as exc:  # noqa: BLE001 - log rendering must remain available when local diagnostics are unreadable
             self._logs_text = ""
             self._logs_read_error = str(exc)
-        self._logs_visible = True
         self.logsChanged.emit()
+        return read
 
     @Slot()
     def copyLogs(self) -> None:
