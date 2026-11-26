@@ -683,6 +683,20 @@ def test_music_dna_energy_uses_available_secondary_metrics(danceability, intensi
         {"labelKey": "music_dna_card_" + metric, "percent": percent} for metric, percent in expected]
 
 
+def test_music_dna_keeps_each_playtime_ranking_in_producer_order():
+    profile = {"playtime": {
+        "top_artists": [{"name": "Snapshot leader", "formatted": "4h 2m"},
+                        {"name": "Second", "formatted": "3h 1m"},
+                        {"name": "Third", "formatted": ["invalid"]}, {"name": "Out of the top three"}],
+        "top_albums": [{"name": "Album", "formatted": "1h 54m"}],
+    }}
+    playtime, = parse_music_dna_profile({"enabled": True, "profile": profile})["sections"]
+    artists, albums = playtime["groups"]
+    assert [(row["rank"], row["title"], row["value"]) for row in artists["rows"]] == [
+        (1, "Snapshot leader", "4h 2m"), (2, "Second", "3h 1m"), (3, "Third", "–")]
+    assert [(row["rank"], row["title"], row["value"]) for row in albums["rows"]] == [(1, "Album", "1h 54m")]
+
+
 def test_music_discovery_feed_renders_backend_sections_in_order_without_assumed_ids() -> None:
     parsed = parse_music_discovery_feed(
         {

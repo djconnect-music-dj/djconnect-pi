@@ -5869,6 +5869,13 @@ def _music_dna_cards(profile: dict[str, object], ha_url: str) -> list[dict[str, 
     def grouped(title, entries, *, shelf=False):
         return [{"key": "music_dna_card_" + title, "rows": entries, "shelf": shelf}] if entries else []
 
+    def playtime_ranking(items):
+        entries = rows(items, limit=3)
+        for rank, entry in enumerate(entries, 1):
+            entry["rank"] = rank
+            entry["value"] = bounded_text(entry.get("value"), 64).strip() or "–"
+        return entries
+
     def signal_rows(items):
         if not isinstance(items, list):
             return []
@@ -5957,8 +5964,8 @@ def _music_dna_cards(profile: dict[str, object], ha_url: str) -> list[dict[str, 
     card("mood_mix", "mood_chill", entries=percentages(mix.get("zones"), "zone", zones),
          average=average if type(average) in (int, float) and 0 <= average <= 100 else None)
     card("playtime", "history", value=duration,
-         groups=grouped("artists_by_time", rows(playtime.get("top_artists"), limit=3))
-         + grouped("albums_by_time", rows(playtime.get("top_albums"), limit=3)))
+         groups=grouped("artists_by_time", playtime_ranking(playtime.get("top_artists")))
+         + grouped("albums_by_time", playtime_ranking(playtime.get("top_albums"))))
     card("repeat", "repeat", entries=rows(block("repeat_magnets").get("items")))
     positives = block("explicit_positives")
     card("positives", "heart", groups=grouped("recent_favorites", rows(positives.get("favorite_tracks")))

@@ -4499,6 +4499,14 @@ BrandWindow {
         readonly property bool percentage: typeof entry.percent === "number"
         Layout.fillWidth: true
         spacing: 10
+        Text {
+            visible: typeof dnaRow.entry.rank === "number"
+            text: visible ? dnaRow.entry.rank + "." : ""
+            color: BrandTheme.colors.actionAccent
+            font.pixelSize: 16; font.bold: true
+            Layout.preferredWidth: 20
+            Layout.alignment: Qt.AlignTop
+        }
         DiscoveryArtwork {
             visible: !!dnaRow.entry.imageUrl
             recommendation: dnaRow.entry
