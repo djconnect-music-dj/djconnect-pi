@@ -650,7 +650,7 @@ Item {
     }
     function refreshHistory(manual) {
         if (!historical) return
-        if (state.timeline.session) owner.refreshSaved(readingAnchor())
+        if (state.timeline.session) owner.refreshSaved(readingAnchor(), !!manual && !currentHistory)
         else if (currentHistory) openCurrentHistory()
         else if (state.history_loaded) refreshArchiveList(manual)
         else openArchive(manual)
@@ -1136,6 +1136,10 @@ Item {
         function onRuntimeRefreshFinished(succeeded) {
             if (screen.liveViewOpen)
                 screen.backend.showToastForContext(screen.tr(succeeded ? "session_runtime_updated" : "session_runtime_refresh_failed"), "refresh")
+        }
+        function onSavedRefreshFinished(succeeded) {
+            if (screen.historyViewOpen && !screen.currentHistory)
+                screen.backend.showToastForContext(screen.tr(succeeded ? "session_saved_updated" : "session_saved_refresh_failed"), "refresh")
         }
         function onArchiveInvalidated() {
             screen.cancelArchiveRead(); screen.archiveReturn = null; screen.archiveDetailReturn = null

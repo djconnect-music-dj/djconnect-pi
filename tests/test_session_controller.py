@@ -474,9 +474,13 @@ def test_retry_saved_refresh_repeats_the_same_read(controller, window):
         owner._timeline["_prefix_pages"] = 1
     timeline_updated = Mock()
     owner.timelineUpdated.connect(timeline_updated)
+    refreshed = []
+    owner.savedRefreshFinished.connect(refreshed.append)
     owner.transport.timeline = Mock(side_effect=[SessionError("offline"), tail])
-    owner.refreshSaved(anchor)
+    owner.refreshSaved(anchor, True)
+    assert refreshed == []
     backend.jobs.pop()()
+    assert refreshed == [False]
     assert not owner.state["timeline"]
     assert owner.state["saved_open_retry"]
 
@@ -490,6 +494,11 @@ def test_retry_saved_refresh_repeats_the_same_read(controller, window):
     assert owner.state["timeline"]["session"]["session_id"] == session_id
     assert not owner.state["saved_open_retry"]
     timeline_updated.assert_called_once_with(anchor)
+    assert refreshed == [False]
+    owner.transport.timeline = Mock(return_value=tail)
+    owner.refreshSaved(anchor, True)
+    backend.jobs.pop()()
+    assert refreshed == [False, True]
 
 
 def test_timeline_pages_replace_window_and_reject_changed_revision(controller):

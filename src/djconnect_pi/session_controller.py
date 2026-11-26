@@ -95,6 +95,7 @@ class SessionController(QObject):
     historyUpdated = Signal()
     archiveRefreshFinished = Signal(bool)
     runtimeRefreshFinished = Signal(bool)
+    savedRefreshFinished = Signal(bool)
     archiveInvalidated = Signal()
     archivePositioned = Signal(str, float)
     timelineUpdated = Signal(str)
@@ -1273,14 +1274,23 @@ class SessionController(QObject):
             self._launch(retry["action"], retry["value"])
 
     @Slot(str)
-    def refreshSaved(self, anchor_entry_id=""):
+    @Slot(str, bool)
+    def refreshSaved(self, anchor_entry_id="", manual=False):
         sid = self._timeline.get("session", {}).get("session_id")
-        if sid and self._timeline.get("_prefix_pages"):
-            self._launch("timeline_extend", {"session_id": sid, "pages": self._timeline["_prefix_pages"],
-                "reading_anchor": anchor_entry_id, "revalidation": True})
-        elif sid:
-            self._launch("timeline_refresh", {"session_id": sid, "entry_id": anchor_entry_id,
-                "page_cursor": self._timeline.get("_page_cursor")})
+        if not sid:
+            return
+        if self._timeline.get("_prefix_pages"):
+            action = "timeline_extend"
+            request = {"session_id": sid, "pages": self._timeline["_prefix_pages"],
+                "reading_anchor": anchor_entry_id, "revalidation": True}
+        else:
+            action = "timeline_refresh"
+            request = {"session_id": sid, "entry_id": anchor_entry_id,
+                "page_cursor": self._timeline.get("_page_cursor")}
+        if manual:
+            self._launch(action, request, manual_refresh=True)
+        else:
+            self._launch(action, request)
 
     @Slot(str, float)
     def extendEntries(self, anchor_entry_id="", offset=0):
@@ -1660,6 +1670,8 @@ class SessionController(QObject):
             result = {"serial": serial, "binding": binding, "action": action, "view_epoch": view_epoch, "question_epoch": question_epoch, "raw_binding": raw_binding}
             if action == "refresh" and manual_refresh:
                 result["manual_runtime_refresh"] = True
+            if manual_refresh and (action == "timeline_refresh" or (action == "timeline_extend" and value.get("revalidation"))):
+                result["manual_saved_refresh"] = True
             if action in {"history", "history_refresh"} and value.get("manual_refresh"):
                 result["manual_archive_refresh"] = True
             def read_active(*, isolated=False):
@@ -2044,6 +2056,8 @@ class SessionController(QObject):
             self.changed.emit()
             if result.get("manual_archive_refresh"):
                 self.archiveRefreshFinished.emit(False)
+            if result.get("manual_saved_refresh"):
+                self.savedRefreshFinished.emit(False)
             return
         if (result["action"] == "refresh"
                 and (result.get("error") in {"offline", "unavailable"} or result.get("invalid_active_read"))
@@ -2227,6 +2241,8 @@ class SessionController(QObject):
         if "search" in result and "error" not in result:
             self.searchUpdated.emit()
         if "timeline" in result and "error" not in result:
+            if result.get("manual_saved_refresh"):
+                self.savedRefreshFinished.emit(True)
             reading = result.get("reading_restore", {})
             if reading and any(row["entry_id"] == reading["entry_id"] for row in self._timeline.get("entries", [])):
                 self.timelinePositioned.emit(reading["entry_id"], reading["offset"])

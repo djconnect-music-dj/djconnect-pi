@@ -623,7 +623,7 @@ def main():
                 expected_window = owner._archive_request()
                 expected_manual_refresh = {**expected_window, "manual_refresh": True}
                 pull_spinner = one(screen, "sessionPullRefreshSpinner")
-                def start_history_read(action, _):
+                def start_history_read(action, _, *, manual_refresh=False):
                     owner._set_running(1, action)
                     owner.changed.emit()
                 with patch.object(owner, "_launch", side_effect=start_history_read) as archive_read:
@@ -748,11 +748,16 @@ def main():
                     saved_read.assert_called_once_with("timeline_refresh", {
                         "session_id": saved["session_id"], "entry_id": entry["entry_id"],
                         "page_cursor": "fixture-detail-page",
-                    })
+                    }, manual_refresh=True)
                     assert pull_spinner.property("visible")
+                owner.savedRefreshFinished.emit(True)
+                assert backend.toastText == TRANSLATIONS[language]["session_saved_updated"]
                 owner._timeline = {}
                 owner.changed.emit()
                 assert not pull_spinner.property("visible")
+                owner.savedRefreshFinished.emit(False)
+                assert backend.toastText == TRANSLATIONS[language]["session_saved_refresh_failed"]
+                backend.hideToast()
                 owner._set_running()
                 owner.changed.emit()
                 owner._timeline = {"session": saved, "revision": "fixture-saved", "entries": []}
