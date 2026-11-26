@@ -6947,8 +6947,12 @@ BrandWindow {
                 else forceActiveFocus()
             }
             Keys.onEscapePressed: {
-                if (root.trackArtworkControlsOpen) root.trackArtworkControlsOpen = false
-                else root.trackArtworkOpen = false
+                if (root.trackArtworkControlsOpen) {
+                    root.toggleTrackArtworkControls()
+                    artworkControlsToggle.forceActiveFocus(Qt.PopupFocusReason)
+                } else {
+                    root.trackArtworkOpen = false
+                }
             }
 
             Rectangle {

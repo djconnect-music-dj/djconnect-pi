@@ -307,9 +307,13 @@ def main():
                 assert image.pixelColor(round(center.x() * scale), round(center.y() * scale)).name() == '#00ffff'
                 click('expandedTrackArtwork')
                 assert shade.property('visible')
+                focused_transport = visual(overlay, 'sessionPlaybackPrevious')
+                assert focused_transport.property('enabled')
+                focused_transport.forceActiveFocus()
+                assert focused_transport.property('activeFocus')
                 QTest.keyClick(window, Qt.Key.Key_Escape)
                 QTest.qWait(60)
-                assert not shade.property('visible') and window.property('trackArtworkOpen')
+                assert not shade.property('visible') and window.property('trackArtworkOpen') and artwork_controls.property('activeFocus')
                 QTest.keyClick(window, Qt.Key.Key_Escape)
                 QTest.qWait(60)
                 assert not window.property('trackArtworkOpen') and window.property('activeScreen') == 'session'
