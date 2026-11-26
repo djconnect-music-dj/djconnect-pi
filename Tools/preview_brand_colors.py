@@ -1420,6 +1420,9 @@ def main():
         capture("history-search")
         displayed = visual_item(window.contentItem(), "sessionSearchHighlightedBody")
         assert displayed is not None and "<b><u>synthetic</u></b>" in displayed.property("text")
+        result_time = visual_item(window.contentItem(), "sessionSearchResultTime")
+        expected_time = owner.formatTimestamp(owner._search["matches"][0]["occurred_at"])
+        assert expected_time and result_time.property("visible") and result_time.property("text") == expected_time
         search_result = deepcopy(owner._search)
         for locale in ("en", "nl", "de", "fr", "es"):
             backend.setLanguage(locale)
