@@ -669,6 +669,19 @@ def main():
             QMetaObject.invokeMethod(reload_button, "clicked")
             request.assert_called_once()
             assert loading.property("visible") and not reload_button.property("enabled")
+            with (patch.object(backend.client, "music_dna_profile", side_effect=[
+                      {"success": True, "enabled": False, "profile": {}},
+                      requests.ReadTimeout,
+                  ]), patch.object(backend, "_persist_backend_summary")):
+                request.call_args.args[1]()
+                request.call_args.kwargs["done"]()
+                assert backend.toastText == backend.t("music_dna_updated") and backend.toastIcon == "heart"
+                refresh = visual_item(window.contentItem(), "musicDnaRefreshButton")
+                QMetaObject.invokeMethod(refresh, "clicked")
+                assert request.call_count == 2
+                request.call_args.args[1]()
+                request.call_args.kwargs["done"]()
+                assert backend.toastText == backend.t("music_dna_profile_unavailable") and unavailable.property("visible")
         backend.cfg.paired, backend.cfg.device_token = False, ""
         backend.pairedChanged.emit()
         backend._apply_music_dna_data({"success": True, "enabled": False, "profile": {}})

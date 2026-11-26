@@ -125,6 +125,10 @@ class _ProfileReadResult(dict):
         self.owner_context = context
 
 
+class _MusicDnaRefreshResult(_ProfileReadResult):
+    """Result of an explicit refresh that needs a user-visible outcome."""
+
+
 class _TrackInsightResult(dict):
     """Track Insight delivery scope captured before dispatch, outside the wire payload."""
 
@@ -2005,7 +2009,7 @@ class DJConnectBackend(QObject):
                 self._music_dna_clear_worker(ticket=ticket)
         else:
             def worker() -> None:
-                self._music_dna_profile_worker(ticket=ticket)
+                self._music_dna_profile_worker(ticket=ticket, manual=show_toast)
         _LOGGER.info("User requested Music DNA %s", action)
         self._run(self.tr_key("music_dna"), worker, done=lambda: self._set_music_dna_busy(False))
 
@@ -2737,7 +2741,7 @@ class DJConnectBackend(QObject):
             data = {"success": False, "error": "transient"}
         self._trackInsightReady.emit(_TrackInsightResult(data, scope))
 
-    def _music_dna_profile_worker(self, *, ticket=None) -> None:
+    def _music_dna_profile_worker(self, *, ticket=None, manual: bool = False) -> None:
         current = self._private_read_context()
         if ticket is not None and ticket != current:
             return
@@ -2752,12 +2756,11 @@ class DJConnectBackend(QObject):
         except (AuthenticationError, ProtocolVersionMismatch):
             raise
         except ProfileContextError as exc:
-            self._musicDnaReady.emit(self._profile_read_result({"success": False, "error": exc.code}, ticket))
-            return
+            data = {"success": False, "error": exc.code}
         except (DJConnectError, requests.RequestException):
-            self._musicDnaReady.emit(self._profile_read_result({"success": False, "error": "music_dna_unavailable"}, ticket))
-            return
-        self._musicDnaReady.emit(self._profile_read_result(data, ticket))
+            data = {"success": False, "error": "music_dna_unavailable"}
+        result = _MusicDnaRefreshResult(data, ticket) if manual else self._profile_read_result(data, ticket)
+        self._musicDnaReady.emit(result)
 
     def _music_dna_settings_worker(self, *, ticket=None, **settings: object) -> None:
         current = self._private_read_context()
@@ -3487,6 +3490,9 @@ class DJConnectBackend(QObject):
             self._music_dna_sections = []
             self._music_dna_updated_at = ""
             self.musicDnaChanged.emit()
+            if isinstance(data, _MusicDnaRefreshResult):
+                notice_key = key if key == "session_profile_missing" else "music_dna_profile_unavailable"
+                self._show_toast(self.tr_key(notice_key), 2200, "musicdna")
             return
         self._music_dna_error = ""
         self._apply_profile_context(data)
@@ -3503,6 +3509,9 @@ class DJConnectBackend(QObject):
         self._music_dna_sections = list(parsed["sections"])
         self._set_backend_available(True)
         self.musicDnaChanged.emit()
+        if isinstance(data, _MusicDnaRefreshResult):
+            notice_key = "music_dna_updated" if self._music_dna_loaded else "music_dna_profile_unavailable"
+            self._show_toast(self.tr_key(notice_key), 2200, "musicdna")
 
     @Slot(object)
     def _apply_music_discovery_data(self, data: object) -> None:

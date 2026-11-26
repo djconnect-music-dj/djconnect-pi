@@ -1272,6 +1272,10 @@ _SHARED_SETTINGS_TRANSLATIONS = {
 }
 _MUSIC_DNA_CARD_TRANSLATIONS = {
     "music_dna_card_summary": ('Summary', 'Samenvatting', 'Zusammenfassung', 'Résumé', 'Resumen'),
+    "music_dna_updated": (
+        "Music DNA updated", "Music DNA bijgewerkt", "Music DNA aktualisiert",
+        "Music DNA mis à jour", "Music DNA actualizado",
+    ),
     "music_dna_updated_at": (
         "Updated %1", "Bijgewerkt %1", "Aktualisiert %1", "Mis à jour %1", "Actualizado %1",
     ),
