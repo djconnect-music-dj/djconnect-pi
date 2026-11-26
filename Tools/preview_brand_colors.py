@@ -485,9 +485,15 @@ def main():
         assert gate.property("visible") and not empty_feed.property("visible")
         backend._apply_music_dna_data({"success": True, "enabled": True})
         assert not gate.property("visible") and empty_feed.property("text") == backend.t("music_discovery_empty")
+        backend._apply_music_discovery_data({"success": True, "sections": [
+            {"title": "Missing shelf ID", "items": [{"id": "hidden-id", "title": "Hidden"}]},
+            {"id": "untitled-shelf", "items": [{"id": "hidden-title", "title": "Hidden"}]},
+            {"id": "invalid-shelf", "title": "Missing recommendation ID", "items": [{"title": "Hidden"}]},
+        ]})
+        assert empty_feed.property("visible")
         long_title = "Cached recommendation with a long title on this Discovery card"
         backend._apply_music_discovery_data({"success": True, "sections": [
-            {"id": "fixture-shelf", "items": [{
+            {"id": "fixture-shelf", "title": "Recommendations", "items": [{
                 "id": "fixture-track", "kind": "track", "title": long_title, "subtitle": "Artist Name",
                 "reason": "A multi-line reason describes why this recommendation fits the listener's current profile.",
                 "reason_sources": ["djconnect_music_dna", "spotify_catalog", "fixture_unknown"],
@@ -495,9 +501,12 @@ def main():
                     "spotify_recommendation", "fresh_candidate", "favorite_artist_match", "top_artist_match",
                     "has_artwork", "variant_title_penalty", "fixture_unknown", "{fixture_unknown}",
                 ],
-            }]},
+            }, {"id": "new-kind", "kind": "other", "title": "Future recommendation"}]},
         ]})
         assert not empty_feed.property("visible")
+        discovery_page = window.findChild(QObject, "musicDiscoveryPanel")
+        shelves = discovery_page.property("sections").toVariant()
+        assert [item["discoveryItemId"] for item in shelves[0]["items"]] == ["fixture-track", "new-kind"]
         detail = window.findChild(QObject, "discoveryDetail")
         detail.setProperty("selected", backend.musicDiscoveryItems[0])
         QMetaObject.invokeMethod(detail, "open")
@@ -576,7 +585,7 @@ def main():
             QTest.qWait(65)
             assert request.call_count == 2 and backend.musicDiscoveryLoaded
             backend._apply_music_discovery_data({"success": True, "sections": [
-                {"id": "fixture-shelf", "items": [
+                {"id": "fixture-shelf", "title": "Recommendations", "items": [
                     {"id": f"expiring-{index}", "title": f"Expiring cover {index}"} for index in range(2)
                 ]},
             ]})

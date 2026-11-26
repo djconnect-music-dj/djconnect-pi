@@ -4923,10 +4923,10 @@ def parse_music_discovery_feed(data: dict[str, object], *, ha_url: str = "") -> 
     items: list[dict[str, object]] = []
     sections_source = data.get("sections")
     if isinstance(sections_source, list):
-        for section_index, section in enumerate(sections_source):
+        for section in sections_source:
             if not isinstance(section, dict):
                 continue
-            section_id = str(section.get("id") or section.get("section_id") or f"section-{section_index + 1}").strip()
+            section_id = str(section.get("id") or section.get("section_id") or "").strip()
             section_title = str(section.get("title") or section.get("name") or "").strip()
             raw_items = section.get("items")
             if not isinstance(raw_items, list):

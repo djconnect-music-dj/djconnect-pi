@@ -3355,9 +3355,12 @@ BrandWindow {
             && !djconnect.versionMismatchVisible && !djconnect.musicDiscoveryBusy
             && !requiresMusicDna
         property real renewedArtworkThrough: 0
+        readonly property var visibleRecommendations: djconnect.musicDiscoveryItems.filter(function(item) {
+            return item.sectionId && item.sectionTitle && item.discoveryItemId && item.title
+        })
         readonly property real nextArtworkExpiry: {
             let deadline = 0
-            for (const item of djconnect.musicDiscoveryItems) {
+            for (const item of visibleRecommendations) {
                 if (item.imageUrl && item.imageExpiresAt > renewedArtworkThrough
                         && (deadline === 0 || item.imageExpiresAt < deadline))
                     deadline = item.imageExpiresAt
@@ -3399,7 +3402,7 @@ BrandWindow {
 
         readonly property var sections: {
             const groups = []
-            for (const item of djconnect.musicDiscoveryItems) {
+            for (const item of visibleRecommendations) {
                 const last = groups[groups.length - 1]
                 if (last && last.id === item.sectionId)
                     last.items.push(item)
@@ -3680,7 +3683,7 @@ BrandWindow {
             id: discoveryDetail
             objectName: "discoveryDetail"
             property var selected: null
-            readonly property var item: selected ? djconnect.musicDiscoveryItems.find(function(candidate) {
+            readonly property var item: selected ? musicDiscoveryPanel.visibleRecommendations.find(function(candidate) {
                 return candidate.payload === selected.payload && candidate.title === selected.title
             }) : null
             readonly property bool actionBusy: djconnect.musicDiscoveryBusy || djconnect.musicDiscoveryPlayingId.length > 0
