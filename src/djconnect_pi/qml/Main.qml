@@ -3684,7 +3684,7 @@ BrandWindow {
             objectName: "discoveryDetail"
             property var selected: null
             readonly property var item: selected ? musicDiscoveryPanel.visibleRecommendations.find(function(candidate) {
-                return candidate.payload === selected.payload && candidate.title === selected.title
+                return candidate.sectionId === selected.sectionId && candidate.discoveryItemId === selected.discoveryItemId
             }) : null
             readonly property bool actionBusy: djconnect.musicDiscoveryBusy || djconnect.musicDiscoveryPlayingId.length > 0
             readonly property var qualityChips: {
@@ -3719,7 +3719,7 @@ BrandWindow {
             onClosed: selected = null
 
             function showRecommendation(recommendation) {
-                selected = recommendation
+                selected = {sectionId: recommendation.sectionId, discoveryItemId: recommendation.discoveryItemId}
                 if (item) open()
             }
 
@@ -3756,6 +3756,7 @@ BrandWindow {
                         ColumnLayout {
                             Layout.fillWidth: true
                             Text {
+                                objectName: "discoveryDetailTitle"
                                 text: discoveryDetail.item ? discoveryDetail.item.title : ""
                                 textFormat: Text.PlainText
                                 color: BrandTheme.colors.text

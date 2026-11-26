@@ -508,7 +508,7 @@ def main():
         shelves = discovery_page.property("sections").toVariant()
         assert [item["discoveryItemId"] for item in shelves[0]["items"]] == ["fixture-track", "new-kind"]
         detail = window.findChild(QObject, "discoveryDetail")
-        detail.setProperty("selected", backend.musicDiscoveryItems[0])
+        detail.setProperty("selected", {"sectionId": "fixture-shelf", "discoveryItemId": "fixture-track"})
         QMetaObject.invokeMethod(detail, "open")
         backend._set_music_discovery_busy(True)
         QTest.qWait(240)
@@ -548,11 +548,16 @@ def main():
         assert card_spinner.property("visible") and not spinner.property("visible")
         backend._clear_music_discovery_playing()
         assert not card_spinner.property("visible")
-        assert artwork.setProperty("recommendation", {
+        current_item, *other_items = backend.musicDiscoveryItems
+        refreshed_title = "Updated recommendation title"
+        backend._set_music_discovery_items([{
+            **current_item, "title": refreshed_title,
             "imageUrl": (ROOT / "src/djconnect_pi/qml/brand-mark-128.png").as_uri(),
-        })
+        }, *other_items])
         QTest.qWait(120)
         assert cover.property("visible") and not fallback.property("visible") and not spinner.property("visible")
+        assert detail.property("opened")
+        assert window.findChild(QObject, "discoveryDetailTitle").property("text") == refreshed_title
         backend._set_music_discovery_busy(False)
         assert detail.property("opened")
         backend._apply_music_discovery_data({"success": False, "error": "music_discovery_play_failed"})
@@ -566,7 +571,7 @@ def main():
         assert not detail.property("opened")
         backend._apply_music_discovery_data({"success": False, "error": "music_discovery_unavailable"})
         assert empty_feed.property("visible") and empty_feed.property("text") == backend.t("music_discovery_load_failed")
-        assert backend.musicDiscoveryItems[0]["title"] == long_title
+        assert backend.musicDiscoveryItems[0]["title"] == refreshed_title
         backend._apply_music_discovery_data({"success": True, "sections": []})
         assert empty_feed.property("text") == backend.t("music_discovery_empty")
         with patch.object(backend, "_sync_config_from_disk"), patch.object(backend, "_run") as request:
