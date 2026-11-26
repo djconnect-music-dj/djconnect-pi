@@ -43,7 +43,7 @@ from PySide6.QtQuickControls2 import QQuickStyle
 
 from . import __version__
 from .artwork_palette import displayed_artwork_tint
-from .ask_dj_help import compatible_catalogue, help_sections
+from .ask_dj_help import compatible_catalogue, project_help, select_suggestions
 from .brand_theme import apply_palette
 from .config import (
     CLIENT_TYPE,
@@ -236,6 +236,7 @@ class DJConnectBackend(QObject):
     _askDjClearReady = Signal(object)
     askDjHelpChanged = Signal()
     askDjHelpSelected = Signal(str, str, int)
+    askDjSuggestionSelected = Signal(str, int)
     _askDjHelpReady = Signal(object, object, object)
     _musicDnaReady = Signal(object)
     _musicDnaImportPrepared = Signal(object, object, object)
@@ -291,6 +292,7 @@ class DJConnectBackend(QObject):
         self._ask_dj_help_request = None
         self._ask_dj_help_busy = False
         self._ask_dj_help_sections = []
+        self._ask_dj_suggestions = []
         self._music_dna_enabled = False
         self._music_dna_loaded = False
         self._music_dna_context_revision = 0
@@ -605,6 +607,12 @@ class DJConnectBackend(QObject):
     @Property(bool, notify=askDjHelpChanged)
     def askDjHelpBusy(self) -> bool:
         return self._ask_dj_help_busy
+
+    @Property("QVariantList", notify=askDjHelpChanged)
+    def askDjSuggestions(self) -> list:
+        if self._ask_dj_help_is_current(self._ask_dj_help_request):
+            return self._ask_dj_suggestions
+        return []
 
     @Property(bool, notify=musicDnaChanged)
     def musicDnaEnabled(self) -> bool:
@@ -1979,8 +1987,21 @@ class DJConnectBackend(QObject):
             for entry in section["examples"]:
                 if entry["id"] == entry_id:
                     context, _, surface = self._ask_dj_help_request
-                    self._read_ask_dj_help(surface, (edit_revision, entry), context)
+                    self._read_ask_dj_help(surface, (edit_revision, entry, ()), context)
                     return
+
+    @Slot(str, int)
+    def selectAskDjSuggestion(self, entry_id, edit_revision):
+        if self._ask_dj_help_busy or self._ask_dj_busy:
+            return
+        original = tuple(self.askDjSuggestions)
+        if len(original) != 3:
+            return
+        for entry in original:
+            if entry["id"] == entry_id:
+                context, _, surface = self._ask_dj_help_request
+                self._read_ask_dj_help(surface, (edit_revision, entry, original), context)
+                return
 
     def _read_ask_dj_help(self, surface, selection=None, expected_context=None):
         self.closeAskDjHelp()
@@ -2004,7 +2025,7 @@ class DJConnectBackend(QObject):
         session_id, _, track, session_features = subject or (None, None, (), frozenset())
 
         def read():
-            sections = []
+            projection = ([], [])
             try:
                 if self._ask_dj_help_is_current(request):
                     capabilities = transport.capabilities(binding, isolated=True)
@@ -2013,25 +2034,31 @@ class DJConnectBackend(QObject):
                         if observation.available and (observation.track_id is None or (track and track[0] == observation.track_id)):
                             features = session_features if observation.track_id is not None else (
                                 session_features - {"current_track", "current_album", "forecast_ready"})
-                            sections = help_sections(binding.language, surface, observation.eligible_ids,
-                                                     music_backend, supported_features, features,
-                                                     capabilities["contract_versions"])
+                            artist = track[3] if observation.track_id is not None else ""
+                            projection = project_help(binding.language, surface, observation.eligible_ids,
+                                                      music_backend, supported_features, features,
+                                                      capabilities["contract_versions"], artist)
             except (SessionError, OSError, ValueError):
                 pass
-            self._askDjHelpReady.emit(request, sections, selection)
+            self._askDjHelpReady.emit(request, projection, selection)
 
         self._executor.submit(read)
 
     @Slot(object, object, object)
-    def _apply_ask_dj_help(self, request, sections, selection):
+    def _apply_ask_dj_help(self, request, projection, selection):
         if not self._ask_dj_help_is_current(request):
             return
+        sections, candidates = projection
         self._ask_dj_help_busy = False
         self._ask_dj_help_sections = sections
+        if selection is None:
+            self._ask_dj_suggestions = select_suggestions(candidates, uuid4().hex)
         self.askDjHelpChanged.emit()
         if selection is not None and not self._ask_dj_busy and self._ask_dj_help_is_current(request):
-            edit_revision, entry = selection
-            if any(entry in section["examples"] for section in sections):
+            edit_revision, entry, original = selection
+            if original and all(suggestion in candidates for suggestion in original):
+                self.askDjSuggestionSelected.emit(entry["text"], edit_revision)
+            elif not original and any(entry in section["examples"] for section in sections):
                 self.askDjHelpSelected.emit(entry["text"], entry["placeholder"], edit_revision)
 
     @Slot()
@@ -2041,6 +2068,7 @@ class DJConnectBackend(QObject):
             self._ask_dj_help_request = None
             self._ask_dj_help_busy = False
             self._ask_dj_help_sections = []
+            self._ask_dj_suggestions = []
             self.askDjHelpChanged.emit()
 
     @Slot(QUrl, int)

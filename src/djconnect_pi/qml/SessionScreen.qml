@@ -3291,6 +3291,15 @@ Item {
                 composeInput.forceActiveFocus()
                 composeInput.select(start, start + placeholder.length)
             }
+            function onAskDjSuggestionSelected(text, revision) {
+                if (!composerPanel.examplesOpen || !screen.liveViewOpen || !screen.state.composer_available
+                        || screen.owner.busy || screen.owner.questionBusy || screen.state.selection.kind
+                        || revision !== screen.draftEditRevision || composeInput.text !== "") return
+                composerPanel.closeExamples()
+                composeInput.text = text
+                composeInput.forceActiveFocus()
+                composeInput.cursorPosition = text.length
+            }
         }
         background: GlassSurface { elevated: true }
         contentItem: ColumnLayout {
@@ -3331,6 +3340,7 @@ Item {
                 onRefreshRequested: screen.backend.openSessionAskDjHelp()
                 onCloseRequested: composerPanel.closeExamples()
                 onExampleChosen: entryId => screen.backend.selectAskDjHelp(entryId, screen.draftEditRevision)
+                onSuggestionChosen: entryId => screen.backend.selectAskDjSuggestion(entryId, screen.draftEditRevision)
             }
             RowLayout {
                 visible: !!screen.state.selection.kind

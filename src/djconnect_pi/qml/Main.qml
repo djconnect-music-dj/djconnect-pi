@@ -4997,6 +4997,14 @@ BrandWindow {
                 askDjChatInput.forceActiveFocus()
                 askDjChatInput.select(start, start + placeholder.length)
             }
+            function onAskDjSuggestionSelected(text, revision) {
+                if (!askDjPanel.helpOpen || revision !== askDjPanel.draftEditRevision
+                        || askDjChatInput.text !== "" || !askDjChatInput.enabled) return
+                askDjPanel.closeHelp()
+                askDjChatInput.text = text
+                askDjChatInput.forceActiveFocus()
+                askDjChatInput.cursorPosition = text.length
+            }
         }
         Connections {
             target: root
@@ -6112,6 +6120,7 @@ BrandWindow {
                 onRefreshRequested: djconnect.openAskDjHelp()
                 onCloseRequested: askDjPanel.closeHelp()
                 onExampleChosen: entryId => djconnect.selectAskDjHelp(entryId, askDjPanel.draftEditRevision)
+                onSuggestionChosen: entryId => djconnect.selectAskDjSuggestion(entryId, askDjPanel.draftEditRevision)
             }
 
             GlassSurface {

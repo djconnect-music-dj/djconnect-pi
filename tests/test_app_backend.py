@@ -35,7 +35,9 @@ from djconnect_pi.app import (
     parse_queue_items,
     prepare_media_artwork,
 )
-from djconnect_pi.ask_dj_help import CATALOGUE_ID, CATALOGUE_REVISION, CATALOGUE_SHA256, HelpObservation
+from djconnect_pi.ask_dj_help import (
+    CATALOGUE_ID, CATALOGUE_REVISION, CATALOGUE_SHA256, HelpObservation, project_help, select_suggestions,
+)
 from djconnect_pi.config import Config, load_config, save_config
 from djconnect_pi.ha import (
     AuthenticationError,
@@ -488,6 +490,22 @@ def test_ask_dj_help_selects_only_a_freshly_confirmed_example(tmp_path, availabl
         selected.assert_called_once_with("Play [artist]", "[artist]", 7)
     else:
         selected.assert_not_called()
+
+
+@pytest.mark.parametrize("artist", ["An artist", "[artist]", ""])
+def test_ask_dj_suggestions_require_three_distinct_qualified_prompts_with_filled_slots(artist):
+    sections, candidates = project_help(
+        "en", "active_session", ("play.artist", "discover.artist_tracks", "listen.current"),
+        "spotify_direct", {"supports_search"}, {"active_session", "current_track"}, {}, artist,
+    )
+    assert sections[0]["examples"][0]["text"] == "Play [artist]"
+    suggestions = select_suggestions(candidates, "fixture-visit")
+    if artist == "An artist":
+        assert len({item["intent"] for item in suggestions}) == 3
+        assert suggestions[0]["id"] == "listen.current"
+        assert all("[" not in item["text"] for item in suggestions)
+    else:
+        assert suggestions == []
 
 
 def test_log_display_uses_compact_touch_prefix() -> None:

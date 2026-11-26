@@ -56,20 +56,25 @@ def compatible_catalogue(data):
             and descriptor.get("sha256") == CATALOGUE_SHA256 and descriptor.get("qualified") is True)
 
 
-def help_sections(language, surface, eligible_ids, music_backend, supported_features, session_features, contracts):
-    catalogue = _catalogue()
+def _eligible_entries(language, surface, eligible_ids, music_backend, supported_features, session_features, contracts):
     flags = {"paired", "online", "backend_available"}
     flags.update(key for key in supported_features if key.startswith("supports_"))
     flags.update(session_features)
     if music_backend == "spotify_direct":
         flags.add("spotify")
-    prompts = {}
-    for entry in sorted(catalogue["entries"], key=lambda entry: (entry["help_rank"], entry["id"])):
+    for entry in _catalogue()["entries"]:
         if (entry["id"] not in eligible_ids or surface not in entry["surfaces"]
                 or any(not _exact_int(contracts.get(key), value) for key, value in entry["contracts"].items())
                 or entry["publication"] != "qualified_v1" or not (set(entry["requires"]) - {"agent_available"}) <= flags
                 or entry["qualification"][language]["state"] != "qualified_owner_route"):
             continue
+        yield entry
+
+
+def _help_sections(language, entries):
+    catalogue = _catalogue()
+    prompts = {}
+    for entry in sorted(entries, key=lambda entry: (entry["help_rank"], entry["id"])):
         text = entry["templates"][language]
         placeholder = ""
         for slot in entry["slots"]:
@@ -80,6 +85,45 @@ def help_sections(language, surface, eligible_ids, music_backend, supported_feat
         prompts.setdefault(entry["group"], []).append({"id": entry["id"], "text": text, "placeholder": placeholder})
     return [{"title": group["labels"][language], "examples": prompts[group["id"]]}
             for group in catalogue["groups"] if group["id"] in prompts]
+
+
+def _safe_artist(artist):
+    return (0 < len(artist) <= 160 and artist == artist.strip()
+            and not any(category(char) in {"Cc", "Cf"} or char in "{}[]" for char in artist))
+
+
+def _suggestion_candidates(language, entries, artist):
+    candidates = []
+    for entry in entries:
+        text = entry["templates"][language]
+        if entry["slots"]:
+            if entry["slots"] != ["artist"] or not _safe_artist(artist):
+                continue
+            text = text.replace("{artist}", artist)
+        if any(char in text for char in "{}[]"):
+            continue
+        candidates.append({"id": entry["id"], "intent": entry["intent"], "group": entry["group"],
+                           "contextual": entry["contextual"], "text": text})
+    return candidates
+
+
+def project_help(language, surface, eligible_ids, music_backend, supported_features, session_features, contracts, artist):
+    entries = list(_eligible_entries(language, surface, eligible_ids, music_backend, supported_features, session_features, contracts))
+    return _help_sections(language, entries), _suggestion_candidates(language, entries, artist)
+
+
+def select_suggestions(candidates, epoch):
+    ordered = sorted(candidates, key=lambda item: sha256(f'{epoch}:{item["id"]}'.encode()).digest())
+    contextual = next((item for item in ordered if item["contextual"]), None)
+    chosen = [contextual] if contextual else []
+    while len(chosen) < 3:
+        intents = {item["intent"] for item in chosen}
+        groups = {item["group"] for item in chosen}
+        remaining = [item for item in ordered if item["intent"] not in intents]
+        if not remaining:
+            return []
+        chosen.append(min(remaining, key=lambda item: item["group"] in groups))
+    return chosen
 
 
 @dataclass(frozen=True)

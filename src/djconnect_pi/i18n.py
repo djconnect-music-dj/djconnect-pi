@@ -1512,6 +1512,7 @@ for _key, _values in _LOG_SEARCH_TRANSLATIONS.items():
 _KEYBOARD_TRANSLATIONS = {
     "ask_dj_search_history": ("Search Ask DJ history", "Zoek in Ask DJ", "Ask-DJ-Verlauf durchsuchen", "Rechercher dans Ask DJ", "Buscar en Ask DJ"),
     "ask_dj_example_questions": ("Example questions", "Voorbeeldvragen", "Beispielfragen", "Exemples de questions", "Preguntas de ejemplo"),
+    "ask_dj_suggestions": ("Suggested questions", "Vraagsuggesties", "Vorgeschlagene Fragen", "Questions suggérées", "Preguntas sugeridas"),
     "ask_dj_examples_unavailable": (
         "No example questions are currently available.",
         "Er zijn momenteel geen voorbeeldvragen beschikbaar.",
