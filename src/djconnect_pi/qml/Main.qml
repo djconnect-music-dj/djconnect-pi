@@ -339,8 +339,6 @@ BrandWindow {
         root.restartIdleTimer()
         if (root.activeScreen === "askdj") {
             root.scrollAskDjToTop()
-        } else if (root.activeScreen === "musicdna") {
-            djconnect.loadMusicDna()
         } else if (root.activeScreen === "discover") {
             djconnect.loadMusicDiscovery()
         }
@@ -3827,6 +3825,22 @@ BrandWindow {
         id: musicDnaPanel
         objectName: "musicDnaPanel"
         color: "transparent"
+        readonly property bool profileViewActive: visible && root.active && !root.screenBlanked
+            && !root.splashVisible && djconnect.paired && !djconnect.demoMode && !djconnect.versionMismatchVisible
+        readonly property bool canLoadProfile: profileViewActive && !djconnect.musicDnaBusy
+        readonly property int profileRevision: djconnect.musicDnaContextRevision
+        property int requestedProfileRevision: -1
+        onProfileViewActiveChanged: if (!profileViewActive) requestedProfileRevision = -1
+        onCanLoadProfileChanged: if (canLoadProfile) Qt.callLater(loadProfileIfCurrent)
+        onProfileRevisionChanged: Qt.callLater(loadProfileIfCurrent)
+        Component.onCompleted: Qt.callLater(loadProfileIfCurrent)
+
+        function loadProfileIfCurrent() {
+            if (!canLoadProfile || requestedProfileRevision === profileRevision) return
+            const alreadyLoaded = requestedProfileRevision >= 0 && djconnect.musicDnaLoaded
+            requestedProfileRevision = profileRevision
+            if (!alreadyLoaded) djconnect.loadMusicDna()
+        }
 
         ModalBlocker {}
 

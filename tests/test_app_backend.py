@@ -3601,6 +3601,26 @@ def test_worker_drops_changed_owner_before_profile_metadata_adoption(tmp_path):
     assert backend.cfg.active_profile_id != "stale-private"
 
 
+@pytest.mark.parametrize("action,method", [
+    ("loadMusicDna", "music_dna_profile"), ("setMusicDnaEnabled", "music_dna_settings"),
+    ("clearMusicDna", "music_dna_clear"),
+])
+def test_queued_music_dna_action_does_not_cross_profile_switch(tmp_path, action, method):
+    ensure_app()
+    backend = DJConnectBackend(tmp_path / "config.json")
+    backend.cfg.paired = True
+    backend.cfg.device_token = "fixture"
+    backend.cfg.active_profile_id = "profile-a"
+    backend._sync_config_from_disk = Mock()
+    backend._run = Mock()
+    with patch.object(backend.client, method) as send:
+        getattr(backend, action)(*((True,) if action == "setMusicDnaEnabled" else ()))
+        worker = backend._run.call_args.args[1]
+        backend.cfg.active_profile_id = "profile-b"
+        worker()
+        send.assert_not_called()
+
+
 @pytest.mark.parametrize("transition", ["none", "speaker", "profile", "item", "foreground", "fresh_speaker"])
 def test_control_volume_rechecks_original_context_before_sending(tmp_path: Path, transition: str) -> None:
     ensure_app()

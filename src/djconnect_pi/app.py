@@ -250,6 +250,7 @@ class DJConnectBackend(QObject):
         self._ask_dj_busy = False
         self._music_dna_enabled = False
         self._music_dna_loaded = False
+        self._music_dna_context_revision = 0
         self._music_dna_updated_at = ""
         self._music_dna_summary = ""
         self._music_dna_error = ""
@@ -514,6 +515,10 @@ class DJConnectBackend(QObject):
     @Property(bool, notify=musicDnaChanged)
     def musicDnaLoaded(self) -> bool:
         return self._music_dna_loaded
+
+    @Property(int, notify=musicDnaChanged)
+    def musicDnaContextRevision(self) -> int:
+        return self._music_dna_context_revision
 
     @Property(str, notify=musicDnaChanged)
     def musicDnaUpdatedAt(self) -> str:
@@ -1694,13 +1699,16 @@ class DJConnectBackend(QObject):
         self._set_music_dna_busy(True)
         if show_toast:
             self.showToastForContext(self.tr_key("refreshing"), "musicdna")
+        ticket = self._private_read_context()
         if action == "settings":
             def worker() -> None:
-                self._music_dna_settings_worker(**payload)
+                self._music_dna_settings_worker(ticket=ticket, **payload)
         elif action == "clear":
-            worker = self._music_dna_clear_worker
+            def worker() -> None:
+                self._music_dna_clear_worker(ticket=ticket)
         else:
-            worker = self._music_dna_profile_worker
+            def worker() -> None:
+                self._music_dna_profile_worker(ticket=ticket)
         _LOGGER.info("User requested Music DNA %s", action)
         self._run(self.tr_key("music_dna"), worker, done=lambda: self._set_music_dna_busy(False))
 
@@ -2297,8 +2305,11 @@ class DJConnectBackend(QObject):
             data = {"success": False, "error": "transient"}
         self._trackInsightReady.emit(_TrackInsightResult(data, scope))
 
-    def _music_dna_profile_worker(self) -> None:
-        ticket = self._private_read_context()
+    def _music_dna_profile_worker(self, *, ticket=None) -> None:
+        current = self._private_read_context()
+        if ticket is not None and ticket != current:
+            return
+        ticket = current
         try:
             data = self.client.music_dna_profile()
             if ticket != self._private_read_context():
@@ -2316,8 +2327,11 @@ class DJConnectBackend(QObject):
             return
         self._musicDnaReady.emit(self._profile_read_result(data, ticket))
 
-    def _music_dna_settings_worker(self, **settings: object) -> None:
-        ticket = self._private_read_context()
+    def _music_dna_settings_worker(self, *, ticket=None, **settings: object) -> None:
+        current = self._private_read_context()
+        if ticket is not None and ticket != current:
+            return
+        ticket = current
         try:
             data = self.client.music_dna_settings(**settings)
             if ticket != self._private_read_context():
@@ -2335,8 +2349,11 @@ class DJConnectBackend(QObject):
             return
         self._musicDnaReady.emit(self._profile_read_result(data, ticket))
 
-    def _music_dna_clear_worker(self) -> None:
-        ticket = self._private_read_context()
+    def _music_dna_clear_worker(self, *, ticket=None) -> None:
+        current = self._private_read_context()
+        if ticket is not None and ticket != current:
+            return
+        ticket = current
         try:
             data = self.client.music_dna_clear()
             if ticket != self._private_read_context():
@@ -2919,6 +2936,7 @@ class DJConnectBackend(QObject):
         self._clear_ask_dj_cache()
         self._music_dna_enabled = False
         self._music_dna_loaded = False
+        self._music_dna_context_revision += 1
         self._music_dna_updated_at = ""
         self._music_dna_summary = ""
         self._music_dna_error = ""

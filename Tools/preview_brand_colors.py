@@ -388,6 +388,28 @@ def main():
         assert footer.property("visible")
         assert footer.property("text") == backend.t("music_dna_updated_at").replace(
             "%1", backend.djSession.formatTimestamp("2026-10-19T14:10:00Z", True))
+        with patch.object(backend, "_sync_config_from_disk"), patch.object(backend, "_run") as request:
+            backend._demo_mode = False
+            backend.demoModeChanged.emit()
+            backend.cfg.paired, backend.cfg.device_token = True, "synthetic-not-a-credential"
+            backend.cfg.active_profile_id = "profile-first"
+            backend.pairedChanged.emit()
+            QTest.qWait(65)
+            request.assert_called_once()
+            backend.cfg.active_profile_id = "profile-next"
+            backend._clear_profile_scoped_caches(preserve_session=True)
+            backend.profileChanged.emit()
+            QTest.qWait(65)
+            assert not footer.property("visible") and backend.musicDnaSummary == ""
+            request.assert_called_once()
+            backend._set_music_dna_busy(False)
+            QTest.qWait(65)
+            assert request.call_count == 2 and backend.musicDnaBusy
+            backend.cfg.paired, backend.cfg.device_token, backend.cfg.active_profile_id = False, "", ""
+            backend.pairedChanged.emit()
+            backend._set_music_dna_busy(False)
+            backend._demo_mode = True
+            backend.demoModeChanged.emit()
         backend._set_demo_music_dna(True)
         assert not footer.property("visible")
         backend.setLanguage("nl")
