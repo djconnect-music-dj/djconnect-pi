@@ -113,6 +113,22 @@ def main():
         assert not long_title.property("scrolling") and long_title.property("shift") == 0
         assert label.property("lineCount") > 1 and not label.property("truncated")
         queue_panel = visual_item(window.contentItem(), "queuePanel")
+        with patch.object(backend, "_run"):
+            backend._demo_mode = False
+            QMetaObject.invokeMethod(repeated_row, "clicked")
+            backend._demo_mode = True
+        assert repeated_row.property("starting")
+        assert not visual_item(media_rows, "mediaItemRow-0").property("starting")
+        queue_panel.setProperty("searching", True)
+        search_input = visual_item(queue_panel, "mediaSearchInput")
+        search_input.setProperty("text", "Repeated")
+        QTest.qWait(80)
+        assert media_rows.property("count") == 2
+        assert visual_item(media_rows, "mediaItemRow-1").property("starting")
+        assert not visual_item(media_rows, "mediaItemRow-0").property("starting")
+        backend._finish_media_playback()
+        assert not visual_item(media_rows, "mediaItemRow-1").property("starting")
+        search_input.setProperty("text", "")
         records = [{"title": f"Fixture {index:02d}", "uri": f"spotify:track:fixture-{index}", "index": index}
                    for index in range(30)]
         backend._queue_items = parse_queue_items({"queue": records})

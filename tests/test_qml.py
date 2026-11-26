@@ -121,7 +121,7 @@ def test_qml_has_touch_readable_glass_controls_and_scrollable_settings() -> None
     media_list_component = main_qml[main_qml.index("component MediaListPanel") : main_qml.index("Timer {\n        id: idleTimer")]
     assert "onVisibleChanged:" in media_list_component
     assert "if (visible) mediaRows.positionViewAtBeginning()" in media_list_component
-    assert "else closeSearch()" in media_list_component
+    assert "else closeSearch(true)" in media_list_component
     assert "GlassButton {" in games_qml
     assert 'import "MoodTheme.js" as MoodTheme' in main_qml
     assert 'import "MoodTheme.js" as MoodTheme' in games_qml

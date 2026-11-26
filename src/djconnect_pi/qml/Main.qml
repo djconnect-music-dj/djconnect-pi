@@ -960,7 +960,7 @@ BrandWindow {
         property var items: []
         property bool searching: false
         property bool keyboardOpen: false
-        property int pendingMediaIndex: -1
+        property var pendingMediaItem: null
         property int selectedMatchIndex: 0
         readonly property bool compact: width < 900
         readonly property bool playbackAvailable: djconnect.demoMode || (djconnect.paired && djconnect.backendAvailable
@@ -990,11 +990,18 @@ BrandWindow {
             if (!visible || !query || !matches.length) return
             mediaRows.positionViewAtIndex(selectedMatchIndex, ListView.Center)
         }
-        function closeSearch() {
-            pendingMediaIndex = -1
+        function closeSearch(resetPending) {
+            if (resetPending) pendingMediaItem = null
             keyboardOpen = false
             searching = false
             searchInput.clear()
+        }
+
+        function isPendingMediaItem(item) {
+            const pending = pendingMediaItem
+            return pending !== null && (pending === item || (playCommand === "play_context_at"
+                && Number.isInteger(pending.index) && pending.index === item.index
+                && pending.uri === item.uri && pending.contextUri === item.contextUri))
         }
 
         function itemPayload(item) {
@@ -1018,10 +1025,9 @@ BrandWindow {
         z: 16
         onVisibleChanged: {
             if (visible) mediaRows.positionViewAtBeginning()
-            else closeSearch()
+            else closeSearch(true)
         }
         onMatchesChanged: {
-            pendingMediaIndex = -1
             selectedMatchIndex = Math.max(0, Math.min(selectedMatchIndex, matches.length - 1))
             if (query) Qt.callLater(centerMatch)
             else mediaRows.positionViewAtBeginning()
@@ -1032,16 +1038,16 @@ BrandWindow {
         }
         Connections {
             target: djconnect
-            function onProfileChanged() { panel.closeSearch() }
-            function onPairedChanged() { panel.closeSearch() }
+            function onProfileChanged() { panel.closeSearch(true) }
+            function onPairedChanged() { panel.closeSearch(true) }
             function onMediaActivityChanged() {
-                if (!djconnect.mediaPlaybackBusy) panel.pendingMediaIndex = -1
+                if (!djconnect.mediaPlaybackBusy) panel.pendingMediaItem = null
             }
         }
         Connections {
             target: root
-            function onActiveChanged() { if (!root.active) panel.closeSearch() }
-            function onScreenBlankedChanged() { if (root.screenBlanked) panel.closeSearch() }
+            function onActiveChanged() { if (!root.active) panel.closeSearch(true) }
+            function onScreenBlankedChanged() { if (root.screenBlanked) panel.closeSearch(true) }
         }
 
         ModalBlocker {}
@@ -1167,7 +1173,7 @@ BrandWindow {
                         required property var modelData
                         required property int index
                         objectName: "mediaItemRow-" + index
-                        readonly property bool starting: djconnect.mediaPlaybackBusy && panel.pendingMediaIndex === index
+                        readonly property bool starting: djconnect.mediaPlaybackBusy && panel.isPendingMediaItem(modelData)
                         readonly property bool hasPlayableUri: String(modelData.uri || "").trim().length > 0
                         width: mediaRows.width
                         implicitHeight: Math.max(panel.compact ? 86 : 100, contentItem.implicitHeight + 2 * verticalPadding)
@@ -1181,9 +1187,9 @@ BrandWindow {
                         enabled: hasPlayableUri && panel.playbackAvailable && !panel.loading && !djconnect.mediaPlaybackBusy
                         opacity: enabled || starting ? 1 : 0.58
                         onClicked: {
-                            panel.pendingMediaIndex = index
+                            panel.pendingMediaItem = modelData
                             djconnect.playMediaItem(panel.playCommand, panel.itemPayload(modelData))
-                            if (!djconnect.mediaPlaybackBusy) panel.pendingMediaIndex = -1
+                            if (!djconnect.mediaPlaybackBusy) panel.pendingMediaItem = null
                         }
                         background: GlassSurface {
                             introduction: true
