@@ -3332,7 +3332,49 @@ BrandWindow {
             : djconnect.musicDiscoveryDnaDisabled
         readonly property bool showEmptyFeed: sections.length === 0 && !djconnect.musicDiscoveryBusy
         readonly property int profileRevision: djconnect.musicDnaContextRevision
-        onProfileRevisionChanged: closeDetail()
+        onProfileRevisionChanged: {
+            closeDetail()
+            renewedArtworkThrough = 0
+        }
+        readonly property bool canRenewArtwork: visible && root.active && !root.screenBlanked
+            && !root.splashVisible && djconnect.paired && !djconnect.demoMode
+            && !djconnect.versionMismatchVisible && !djconnect.musicDiscoveryBusy
+            && !requiresMusicDna
+        property real renewedArtworkThrough: 0
+        readonly property real nextArtworkExpiry: {
+            let deadline = 0
+            for (const item of djconnect.musicDiscoveryItems) {
+                if (item.imageUrl && item.imageExpiresAt > renewedArtworkThrough
+                        && (deadline === 0 || item.imageExpiresAt < deadline))
+                    deadline = item.imageExpiresAt
+            }
+            return deadline
+        }
+        onCanRenewArtworkChanged: Qt.callLater(scheduleArtworkRenewal)
+        onNextArtworkExpiryChanged: Qt.callLater(scheduleArtworkRenewal)
+        Component.onCompleted: Qt.callLater(scheduleArtworkRenewal)
+
+        function scheduleArtworkRenewal() {
+            artworkRenewalTimer.stop()
+            if (!canRenewArtwork || nextArtworkExpiry === 0) return
+            artworkRenewalTimer.interval = Math.max(1000, Math.ceil(nextArtworkExpiry - Date.now() + 200))
+            artworkRenewalTimer.start()
+        }
+
+        Timer {
+            id: artworkRenewalTimer
+            onTriggered: {
+                if (!musicDiscoveryPanel.canRenewArtwork || musicDiscoveryPanel.nextArtworkExpiry === 0) return
+                const now = Date.now()
+                if (now < musicDiscoveryPanel.nextArtworkExpiry) {
+                    musicDiscoveryPanel.scheduleArtworkRenewal()
+                    return
+                }
+                // A failed read can leave the same leases in the feed.
+                musicDiscoveryPanel.renewedArtworkThrough = now
+                djconnect.loadMusicDiscovery()
+            }
+        }
 
         ProfileReadOnOpen {
             surfaceVisible: musicDiscoveryPanel.visible

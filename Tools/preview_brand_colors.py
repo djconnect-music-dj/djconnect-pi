@@ -542,6 +542,21 @@ def main():
             backend._set_music_discovery_busy(False)
             QTest.qWait(65)
             assert request.call_count == 2 and backend.musicDiscoveryLoaded
+            backend._apply_music_discovery_data({"success": True, "sections": [
+                {"id": "fixture-shelf", "items": [
+                    {"id": f"expiring-{index}", "title": f"Expiring cover {index}"} for index in range(2)
+                ]},
+            ]})
+            cover_url = (ROOT / "src/djconnect_pi/qml/brand-mark-128.png").as_uri()
+            expires_at = int(datetime.now(UTC).timestamp() * 1000) + 500
+            backend._set_music_discovery_items([
+                {**item, "imageUrl": cover_url, "imageExpiresAt": expires_at} for item in backend.musicDiscoveryItems
+            ])
+            QTest.qWait(1250)
+            assert request.call_count == 3 and backend.musicDiscoveryBusy
+            backend._set_music_discovery_busy(False)
+            QTest.qWait(1150)
+            assert request.call_count == 3
         backend._demo_mode = True
         backend.demoModeChanged.emit()
         backend.cfg.paired, backend.cfg.device_token, backend.cfg.active_profile_id = False, "", ""
