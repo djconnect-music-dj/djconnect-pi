@@ -174,6 +174,19 @@ def main():
         backend.pairedChanged.emit()
         backend.demoModeChanged.emit()
         backend.settingsChanged.emit()
+        toast_text = visual_item(window.contentItem(), "appToastText")
+        for language in ("en", "nl", "de", "fr", "es"):
+            backend.setLanguage(language)
+            for command, uri, key in (
+                ("play_context_at", "demo:track:2", "media_track_starting"),
+                ("start_playlist", "demo:playlist:night", "media_playlist_starting"),
+            ):
+                backend.playMediaItem(command, uri)
+                QTest.qWait(35)
+                assert toast_text.property("text") == backend.t(key)
+                assert not toast_text.property("truncated") and backend.toastIcon == "play"
+        backend.hideToast()
+        backend.setLanguage("nl")
         window.setProperty("activeScreen", "session")
         for runtime_state in ("opening", "ending"):
             backend.djSession._session["runtime_state"] = runtime_state

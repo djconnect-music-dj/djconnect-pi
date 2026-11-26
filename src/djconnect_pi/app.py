@@ -94,6 +94,7 @@ UI_WORKER_COUNT = 1
 TOAST_ICON_FALLBACK = "music"
 TOAST_CONTEXT_ICONS = {
     "playback": "music",
+    "media_start": "play",
     "now": "music",
     "queue": "queue",
     "playlists": "playlists",
@@ -1883,12 +1884,13 @@ class DJConnectBackend(QObject):
         if command not in {"play_context_at", "start_playlist"}:
             _LOGGER.warning("Ignoring unsupported media item command from touch UI: %s", command)
             return
+        starting_key = "media_playlist_starting" if command == "start_playlist" else "media_track_starting"
+        self.showToastForContext(self.tr_key(starting_key), "media_start")
         if self._demo_mode:
             uri = payload["uri"] if command == "start_playlist" else payload["value"]["uri"]
             self._play_demo_uri(uri)
             return
         _LOGGER.info("User requested %s from touch UI", command)
-        self.showToastForContext(self.tr_key("play"), "playback")
         self._media_playback_busy = True
         self.mediaActivityChanged.emit()
         self._run(command, lambda: self._play_media_item_worker(command, payload), done=self._mediaPlaybackFinished.emit)

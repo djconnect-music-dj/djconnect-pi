@@ -1959,6 +1959,7 @@ def test_backend_demo_mode_is_local_only(tmp_path: Path) -> None:
     backend.openTrackInsight()
     assert backend.trackInsightTitle == "Sweet Disposition" and backend.trackInsightText
     backend.playMediaItem("play_context_at", backend.queueItems[2]["uri"])
+    assert backend.toastText == backend.t("media_track_starting") and backend.toastIcon == "play"
     assert backend.title == backend.trackInsightTitle == "Electric Feel"
     assert backend.trackInsightText
     assert backend.askDjMessages and backend.musicDiscoveryItems
@@ -1967,6 +1968,7 @@ def test_backend_demo_mode_is_local_only(tmp_path: Path) -> None:
     assert [item["title"] for item in backend.queueItems] == ["Midnight City", "Sweet Disposition", "Electric Feel"]
     assert [item["title"] for item in backend.playlistItems] == ["Friday Night", "Dinner Vibes", "DJConnect"]
     backend.playMediaItem("start_playlist", backend.playlistItems[1]["uri"])
+    assert backend.toastText == backend.t("media_playlist_starting") and backend.toastIcon == "play"
     assert backend.title == "Sweet Disposition"
     backend.playMusicDiscoveryItem(backend.musicDiscoveryItems[2]["payload"])
     assert backend.title == "Electric Feel"

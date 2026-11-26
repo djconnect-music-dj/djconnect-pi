@@ -5488,6 +5488,7 @@ BrandWindow {
 
             Text {
                 id: toastText
+                objectName: "appToastText"
                 width: Math.min(root.width - 188, implicitWidth)
                 anchors.verticalCenter: parent.verticalCenter
                 text: djconnect.toastText

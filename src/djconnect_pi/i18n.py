@@ -1463,6 +1463,21 @@ for _key, _values in _KEYBOARD_TRANSLATIONS.items():
         TRANSLATIONS[_language][_key] = _value
 
 
+_MEDIA_PLAYBACK_TRANSLATIONS = {
+    "media_track_starting": (
+        "Track is starting", "Nummer wordt gestart", "Titel wird gestartet",
+        "Démarrage du titre", "Iniciando la canción",
+    ),
+    "media_playlist_starting": (
+        "Playlist is starting", "Afspeellijst wordt gestart", "Playlist wird gestartet",
+        "Démarrage de la playlist", "Iniciando la lista de reproducción",
+    ),
+}
+for _key, _values in _MEDIA_PLAYBACK_TRANSLATIONS.items():
+    for _language, _value in zip(("en", "nl", "de", "fr", "es"), _values):
+        TRANSLATIONS[_language][_key] = _value
+
+
 _SESSION_LIFECYCLE_TRANSLATIONS = {
     "session_back_top": (
         "Back to top",
