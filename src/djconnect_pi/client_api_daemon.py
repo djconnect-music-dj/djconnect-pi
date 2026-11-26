@@ -29,7 +29,7 @@ from .ha import (
 )
 from .i18n import translate
 from .logging_config import setup_logging
-from .queue_projection import compact_adjacent_tracks
+from .queue_projection import compact_adjacent_tracks, queue_artist_and_album
 from .system_info import log_raspberry_pi_system_info
 
 _LOGGER = logging.getLogger(__name__)
@@ -410,8 +410,7 @@ def _media_item_value(item: dict[str, object], *keys: str) -> str:
 
 def _queue_item(item: dict[str, object], queue_context_uri: str = "") -> dict[str, object] | None:
     title = str(item.get("title") or item.get("name") or item.get("display_title") or item.get("track_name") or "")
-    artist = str(item.get("artist") or item.get("artist_name") or item.get("subtitle") or "")
-    album = str(item.get("album") or item.get("album_name") or "")
+    artist, album = queue_artist_and_album(item)
     uri = str(item.get("uri") or item.get("id") or item.get("track_uri") or "")
     context_uri = str(item.get("context_uri") or item.get("contextUri") or item.get("queue_context") or item.get("queueContext") or queue_context_uri)
     index = item.get("index")

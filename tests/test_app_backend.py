@@ -2091,6 +2091,16 @@ def test_queue_parser_renders_artist_album_identity_and_artwork_aliases() -> Non
     ]
 
 
+def test_queue_parser_keeps_provider_artist_lists_and_album_aliases() -> None:
+    queue = parse_queue_items({"queue": [
+        {"title": "Duet", "artists": [" Lúcia ", "Sam"], "mediaAlbum": "The Sessions"},
+        {"title": "Solo", "artistName": "Mila", "albumName": "First Session"},
+    ]})
+    assert [(item["artist"], item["album"]) for item in queue] == [
+        ("Lúcia, Sam", "The Sessions"), ("Mila", "First Session"),
+    ]
+
+
 def test_queue_parser_accepts_nested_items_and_preserves_container_context() -> None:
     queue = parse_queue_items(
         {

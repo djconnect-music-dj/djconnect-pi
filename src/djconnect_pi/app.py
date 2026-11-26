@@ -78,7 +78,7 @@ from .ha import (
 from .i18n import LANGUAGES, normalize_language, translate
 from .logging_config import clear_log_files, setup_logging
 from .navigation_gesture import EdgeBackGesture
-from .queue_projection import compact_adjacent_tracks
+from .queue_projection import compact_adjacent_tracks, queue_artist_and_album
 from .session_controller import SessionController
 from .session_playback_control import output_id
 from .session_playback_control import reference as session_playback_reference
@@ -5118,8 +5118,7 @@ def _playlist_item(item: dict[str, object]) -> dict[str, object] | None:
 
 def _queue_item(item: dict[str, object], queue_context_uri: str = "") -> dict[str, object] | None:
     title = str(item.get("title") or item.get("name") or item.get("display_title") or item.get("track_name") or "")
-    artist = str(item.get("artist") or item.get("artist_name") or item.get("subtitle") or "")
-    album = str(item.get("album") or item.get("album_name") or "")
+    artist, album = queue_artist_and_album(item)
     uri = str(item.get("uri") or item.get("id") or item.get("track_uri") or "")
     context_uri = str(item.get("context_uri") or item.get("contextUri") or item.get("queue_context") or item.get("queueContext") or queue_context_uri)
     index = item.get("index")
