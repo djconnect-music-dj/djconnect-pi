@@ -43,7 +43,7 @@ from PySide6.QtQuickControls2 import QQuickStyle
 
 from . import __version__
 from .artwork_palette import displayed_artwork_tint
-from .ask_dj_help import compatible_catalogue, global_help_sections
+from .ask_dj_help import compatible_catalogue, help_sections
 from .brand_theme import apply_palette
 from .config import (
     CLIENT_TYPE,
@@ -409,6 +409,7 @@ class DJConnectBackend(QObject):
         self._track_insight_expiry_timer.timeout.connect(self._expire_track_insight)
         self._track_insight_style = self._current_track_insight_style()
         self._session_controller.changed.connect(self._observe_track_insight_style)
+        self._session_controller.changed.connect(self._invalidate_ask_dj_help_if_changed)
         self.sharedSettingsChanged.connect(self._observe_track_insight_style)
         self._sharedSettingsReady.connect(self._apply_shared_settings)
         self._shared_settings_timer = QTimer(self)
@@ -1941,18 +1942,22 @@ class DJConnectBackend(QObject):
     def refreshAskDjHistory(self) -> None:
         self._load_ask_dj_history(show_toast=True, action="refreshed")
 
-    def _ask_dj_help_context(self):
+    def _ask_dj_help_context(self, surface):
         cfg = self.cfg
         if (not self._application_foreground or self._shutting_down or self._demo_mode or not self.paired
                 or cfg.private_session or not self._backend_available or self._version_mismatch_visible
                 or cfg.music_backend_available is not True):
             return None
+        subject = self._session_controller.ask_dj_help_subject() if surface == "active_session" else None
+        if surface == "active_session" and subject is None:
+            return None
         return (self._private_read_context(), cfg.music_backend,
-                frozenset(key for key, value in (cfg.music_backend_capabilities or {}).items() if value is True))
+                frozenset(key for key, value in (cfg.music_backend_capabilities or {}).items() if value is True),
+                subject)
 
     def _ask_dj_help_is_current(self, request):
         return (request is not None and self._ask_dj_help_request is request
-                and elapsed_time() < request[1] and request[0] == self._ask_dj_help_context())
+                and elapsed_time() < request[1] and request[0] == self._ask_dj_help_context(request[2]))
 
     def _invalidate_ask_dj_help_if_changed(self):
         if self._ask_dj_help_request is not None and not self._ask_dj_help_is_current(self._ask_dj_help_request):
@@ -1960,7 +1965,11 @@ class DJConnectBackend(QObject):
 
     @Slot()
     def openAskDjHelp(self) -> None:
-        self._read_ask_dj_help()
+        self._read_ask_dj_help("ask_dj")
+
+    @Slot()
+    def openSessionAskDjHelp(self) -> None:
+        self._read_ask_dj_help("active_session")
 
     @Slot(str, int)
     def selectAskDjHelp(self, entry_id, edit_revision):
@@ -1969,13 +1978,14 @@ class DJConnectBackend(QObject):
         for section in self.askDjHelpSections:
             for entry in section["examples"]:
                 if entry["id"] == entry_id:
-                    self._read_ask_dj_help((edit_revision, entry), self._ask_dj_help_request[0])
+                    context, _, surface = self._ask_dj_help_request
+                    self._read_ask_dj_help(surface, (edit_revision, entry), context)
                     return
 
-    def _read_ask_dj_help(self, selection=None, expected_context=None):
+    def _read_ask_dj_help(self, surface, selection=None, expected_context=None):
         self.closeAskDjHelp()
         self._sync_config_from_disk()
-        context = self._ask_dj_help_context()
+        context = self._ask_dj_help_context(surface)
         if context is None or (expected_context is not None and context != expected_context):
             return
         transport = self._session_controller.transport
@@ -1985,22 +1995,27 @@ class DJConnectBackend(QObject):
             return
         if not binding.resolved_profile_id:
             return
-        request = (context, elapsed_time() + 15)
+        request = (context, elapsed_time() + 15, surface)
         self._ask_dj_help_request = request
         self._ask_dj_help_busy = True
         self._ask_dj_help_timer.start(15_000)
         self.askDjHelpChanged.emit()
-        _, music_backend, supported_features = context
+        _, music_backend, supported_features, subject = context
+        session_id, _, track, session_features = subject or (None, None, (), frozenset())
 
         def read():
             sections = []
             try:
-                if self._ask_dj_help_is_current(request) and compatible_catalogue(transport.capabilities(binding, isolated=True)):
-                    if self._ask_dj_help_is_current(request):
-                        observation = transport.ask_dj_help(binding, "ask_dj")
-                        if observation.available:
-                            sections = global_help_sections(binding.language, observation.eligible_ids,
-                                                            music_backend, supported_features)
+                if self._ask_dj_help_is_current(request):
+                    capabilities = transport.capabilities(binding, isolated=True)
+                    if compatible_catalogue(capabilities) and self._ask_dj_help_is_current(request):
+                        observation = transport.ask_dj_help(binding, surface, session_id)
+                        if observation.available and (observation.track_id is None or (track and track[0] == observation.track_id)):
+                            features = session_features if observation.track_id is not None else (
+                                session_features - {"current_track", "current_album", "forecast_ready"})
+                            sections = help_sections(binding.language, surface, observation.eligible_ids,
+                                                     music_backend, supported_features, features,
+                                                     capabilities["contract_versions"])
             except (SessionError, OSError, ValueError):
                 pass
             self._askDjHelpReady.emit(request, sections, selection)

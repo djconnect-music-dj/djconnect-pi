@@ -1101,6 +1101,30 @@ class SessionController(QObject):
             "dj_persona", "persona_revision", "selected_presence", "presence_revision",
         ))
 
+    def ask_dj_help_subject(self):
+        header, session, revoked = self._runtime_header()
+        if (revoked or not header["session_id"] or header["owner_read_only"]
+                or not self._foreground or self._connection_offline or not self._composer_supported()):
+            return None
+        playback = session_playback(session)
+        now = self._clock.now()
+        track = ()
+        features = {"active_session"}
+        if playback:
+            updated = timestamp(session["broadcast"]["playback"].get("updated_at"))
+            if updated is not None and 0 <= now - updated < 30 and playback["title"] and playback["artist"]:
+                track = tuple(playback[key] for key in ("item_id", "state", "title", "artist", "album", "source_url"))
+                features.add("current_track")
+                if playback["album"]:
+                    features.add("current_album")
+                forecast = session["broadcast"].get("session_forecast")
+                anchor = forecast.get("current_anchor") if isinstance(forecast, dict) else None
+                if (isinstance(anchor, dict) and anchor.get("item_id") == track[0]
+                        and self._forecast.session_id == header["session_id"] and self._forecast.deadline > now
+                        and self._forecast.value.get("state") in {"ready", "limited"}):
+                    features.add("forecast_ready")
+        return (header["session_id"], self.track_insight_session_style(), track, frozenset(features))
+
     def _history_supported(self):
         if self._bootstrap_binding is not None and not private_scope_allowed(self):
             return False

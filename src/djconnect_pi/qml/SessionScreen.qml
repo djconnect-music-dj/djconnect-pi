@@ -14,7 +14,10 @@ Item {
     onTrackInsightMoodSurfaceChanged: if (!trackInsightMoodSurface && choices && choices.fromTrackInsight) choices.close()
     readonly property bool liveViewOpen: visible && !historical && pollingAllowed
     readonly property bool historyViewOpen: visible && historical && pollingAllowed
-    onLiveViewOpenChanged: syncSessionVisibility()
+    onLiveViewOpenChanged: {
+        syncSessionVisibility()
+        if (!liveViewOpen && composerPanel) composerPanel.closeExamples()
+    }
     property Item revealedFlowAction: null
     readonly property bool trackArtworkAvailable: playbackMetadata.visible && playbackSources.ready
     readonly property url trackArtworkSource: trackCover.source
@@ -329,6 +332,7 @@ Item {
         return ""
     }
     property string draft: ""
+    property int draftEditRevision: 0
     property bool followQuestionReply: false
     property string pendingReplyId: ""
     readonly property string composerContext: state.session_id + "|" + scopeProfileId + "|" + (state.owner_epoch || 0)
@@ -3252,6 +3256,12 @@ Item {
         id: composerPanel
         objectName: "sessionComposerPanel"
         property bool keyboardVisible: true
+        property bool examplesOpen: false
+        function closeExamples() {
+            if (!examplesOpen) return
+            examplesOpen = false
+            screen.backend.closeAskDjHelp()
+        }
         x: screen.compact ? 8 : 16
         y: screen.height - height - 8
         width: screen.width - 2 * x
@@ -3263,10 +3273,65 @@ Item {
             composeInput.text = screen.draft
             composeInput.forceActiveFocus()
         }
+        onClosed: closeExamples()
+        Connections {
+            target: screen.backend
+            function onAskDjHelpSelected(text, placeholder, revision) {
+                if (!composerPanel.examplesOpen || !screen.liveViewOpen || !screen.state.composer_available
+                        || screen.owner.busy || screen.owner.questionBusy || screen.state.selection.kind
+                        || revision !== screen.draftEditRevision || composeInput.text !== "") return
+                composerPanel.closeExamples()
+                composeInput.text = text
+                if (!placeholder) {
+                    screen.submitQuestion()
+                    return
+                }
+                const start = text.indexOf(placeholder)
+                composerPanel.keyboardVisible = true
+                composeInput.forceActiveFocus()
+                composeInput.select(start, start + placeholder.length)
+            }
+        }
         background: GlassSurface { elevated: true }
         contentItem: ColumnLayout {
             spacing: 12
-            Text { text: screen.tr("session_question_title"); color: BrandTheme.colors.text; font.bold: true; font.pixelSize: 25; textFormat: Text.PlainText; Layout.fillWidth: true }
+            RowLayout {
+                Layout.fillWidth: true
+                Text {
+                    text: screen.tr("session_question_title")
+                    color: BrandTheme.colors.text
+                    font.bold: true; font.pixelSize: 25
+                    textFormat: Text.PlainText; Layout.fillWidth: true
+                }
+                GlassButton {
+                    objectName: "sessionAskDjHelpToggle"
+                    iconName: "info"; tertiary: true
+                    Accessible.name: screen.tr("ask_dj_example_questions")
+                    enabled: screen.liveViewOpen && screen.state.composer_available
+                        && !screen.backend.demoMode && !screen.state.selection.kind
+                    onClicked: {
+                        if (composerPanel.examplesOpen) {
+                            composerPanel.closeExamples()
+                        } else {
+                            composerPanel.keyboardVisible = false
+                            composerPanel.examplesOpen = true
+                            screen.backend.openSessionAskDjHelp()
+                        }
+                    }
+                }
+            }
+            AskDjExamples {
+                objectName: "sessionAskDjHelpPanel"
+                visible: composerPanel.examplesOpen
+                Layout.fillWidth: true
+                Layout.preferredHeight: Math.min(340, screen.height * 0.36)
+                backend: screen.backend
+                canChoose: !screen.owner.busy && !screen.owner.questionBusy
+                    && !screen.state.selection.kind && composeInput.text === ""
+                onRefreshRequested: screen.backend.openSessionAskDjHelp()
+                onCloseRequested: composerPanel.closeExamples()
+                onExampleChosen: entryId => screen.backend.selectAskDjHelp(entryId, screen.draftEditRevision)
+            }
             RowLayout {
                 visible: !!screen.state.selection.kind
                 Layout.fillWidth: true
@@ -3280,13 +3345,16 @@ Item {
                 placeholderText: screen.tr("session_question_placeholder")
                 Accessible.name: screen.tr("session_question_placeholder")
                 maximumLength: 4000; selectByMouse: true; font.pixelSize: screen.compact ? 22 : 30
-                onTextChanged: screen.draft = text
+                onTextChanged: {
+                    screen.draft = text
+                    screen.draftEditRevision += 1
+                }
                 onAccepted: screen.submitQuestion()
                 TapHandler { onTapped: composerPanel.keyboardVisible = true }
             }
             TouchKeyboard {
                 objectName: "sessionComposerKeyboard"
-                visible: composerPanel.keyboardVisible
+                visible: composerPanel.keyboardVisible && !composerPanel.examplesOpen
                 docked: true
                 keyHeight: screen.compact ? 44 : Math.max(44, Math.min(88, Math.floor(screen.height / 10)))
                 keyFontSize: screen.compact ? 19 : 30

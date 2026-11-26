@@ -6102,89 +6102,16 @@ BrandWindow {
                 }
             }
 
-            GlassSurface {
+            AskDjExamples {
                 objectName: "askDjHelpPanel"
                 visible: askDjPanel.helpOpen
                 Layout.fillWidth: true
                 Layout.preferredHeight: Math.min(340, askDjPanel.height * 0.36)
-                radius: 22; elevated: true
-
-                ColumnLayout {
-                    anchors.fill: parent
-                    anchors.margins: 10
-                    RowLayout {
-                        Layout.fillWidth: true
-                        Text {
-                            text: root.tr("ask_dj_example_questions")
-                            color: BrandTheme.colors.text
-                            font.bold: true
-                            font.pixelSize: 19
-                            Layout.fillWidth: true
-                        }
-                        GlassButton {
-                            iconName: "refresh"; tertiary: true
-                            Accessible.name: root.tr("refresh")
-                            enabled: !djconnect.askDjHelpBusy
-                            onClicked: djconnect.openAskDjHelp()
-                        }
-                        GlassButton {
-                            iconName: "close"; tertiary: true
-                            Accessible.name: root.tr("close")
-                            onClicked: askDjPanel.closeHelp()
-                        }
-                    }
-                    Text {
-                        objectName: "askDjHelpStatus"
-                        visible: djconnect.askDjHelpBusy || djconnect.askDjHelpSections.length === 0
-                        text: root.tr(djconnect.askDjHelpBusy ? "loading" : "ask_dj_examples_unavailable")
-                        color: BrandTheme.colors.muted
-                        wrapMode: Text.WordWrap
-                        Layout.fillWidth: true
-                    }
-                    ScrollView {
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        clip: true
-                        contentWidth: availableWidth
-                        ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
-                        ColumnLayout {
-                            width: parent.width
-                            Repeater {
-                                model: djconnect.askDjHelpSections
-                                delegate: ColumnLayout {
-                                    required property var modelData
-                                    Layout.fillWidth: true
-                                    Text {
-                                        text: modelData.title
-                                        color: BrandTheme.colors.text
-                                        font.bold: true
-                                        font.pixelSize: 17
-                                        Layout.fillWidth: true
-                                    }
-                                    Repeater {
-                                        model: modelData.examples
-                                        delegate: GlassButton {
-                                            required property var modelData
-                                            objectName: "askDjHelpExample"
-                                            text: modelData.text
-                                            iconName: modelData.placeholder ? "" : "send"
-                                            tertiary: true
-                                            wrapText: true
-                                            textAlignment: Text.AlignLeft
-                                            font.bold: false
-                                            font.pixelSize: 16
-                                            cornerRadius: 14
-                                            Layout.fillWidth: true
-                                            enabled: !djconnect.askDjHelpBusy && askDjChatInput.enabled
-                                                && askDjChatInput.text === ""
-                                            onClicked: djconnect.selectAskDjHelp(modelData.id, askDjPanel.draftEditRevision)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+                backend: djconnect
+                canChoose: askDjChatInput.enabled && askDjChatInput.text === ""
+                onRefreshRequested: djconnect.openAskDjHelp()
+                onCloseRequested: askDjPanel.closeHelp()
+                onExampleChosen: entryId => djconnect.selectAskDjHelp(entryId, askDjPanel.draftEditRevision)
             }
 
             GlassSurface {

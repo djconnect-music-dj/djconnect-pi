@@ -56,15 +56,17 @@ def compatible_catalogue(data):
             and descriptor.get("sha256") == CATALOGUE_SHA256 and descriptor.get("qualified") is True)
 
 
-def global_help_sections(language, eligible_ids, music_backend, supported_features):
+def help_sections(language, surface, eligible_ids, music_backend, supported_features, session_features, contracts):
     catalogue = _catalogue()
     flags = {"paired", "online", "backend_available"}
     flags.update(key for key in supported_features if key.startswith("supports_"))
+    flags.update(session_features)
     if music_backend == "spotify_direct":
         flags.add("spotify")
     prompts = {}
     for entry in sorted(catalogue["entries"], key=lambda entry: (entry["help_rank"], entry["id"])):
-        if (entry["id"] not in eligible_ids or "ask_dj" not in entry["surfaces"] or entry["contracts"]
+        if (entry["id"] not in eligible_ids or surface not in entry["surfaces"]
+                or any(not _exact_int(contracts.get(key), value) for key, value in entry["contracts"].items())
                 or entry["publication"] != "qualified_v1" or not (set(entry["requires"]) - {"agent_available"}) <= flags
                 or entry["qualification"][language]["state"] != "qualified_owner_route"):
             continue
