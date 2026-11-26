@@ -1186,6 +1186,12 @@ def main():
             QTest.keyClick(window, log_find.key(), log_find.keyboardModifiers())
             assert not logs.property("searching")
             capture("logs-empty-" + locale)
+            log_path.unlink()
+            QMetaObject.invokeMethod(logs_refresh, "clicked")
+            assert not log_path.exists() and not backend.logsText
+            assert empty_logs.property("visible") and empty_logs.property("text") == backend.t("logs_empty")
+            assert not search_toggle.property("enabled") and not visual_item(logs, "logsCopy").property("enabled")
+            capture("logs-missing-" + locale)
             log_path.write_text("\n".join(reversed(log_lines)), encoding="utf-8")
             QMetaObject.invokeMethod(logs_refresh, "clicked")
             assert not empty_logs.property("visible") and search_toggle.property("enabled")

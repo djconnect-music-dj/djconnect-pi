@@ -2016,11 +2016,10 @@ class DJConnectBackend(QObject):
         self.showToastForContext(self.tr_key("logs"), "diagnostics")
         path = Path(self.cfg.log_file)
         try:
-            if path.exists():
-                data = _read_tail_text(path, LOG_DISPLAY_MAX_BYTES)
-                self._logs_text = _format_logs_for_display(data)
-            else:
-                self._logs_text = self.tr_key("logs_missing")
+            data = _read_tail_text(path, LOG_DISPLAY_MAX_BYTES)
+            self._logs_text = _format_logs_for_display(data)
+        except FileNotFoundError:
+            self._logs_text = ""
         except Exception as exc:  # noqa: BLE001 - log rendering must remain available when local diagnostics are unreadable
             self._logs_text = self.tr_key("logs_failed", error=exc)
         self._logs_visible = True
