@@ -4341,6 +4341,12 @@ BrandWindow {
                 Math.min(card.x + anchor.offset, view.originX + Math.max(0, view.contentWidth - view.width)))
         }
 
+        function recommendationStarting(recommendation) {
+            return !!recommendation && djconnect.musicDiscoveryPlayingId.length > 0
+                && djconnect.musicDiscoveryPlayingId === recommendation.discoveryItemId
+                && djconnect.musicDiscoveryPlayingSectionId === recommendation.sectionId
+        }
+
         function kindLabel(kind) {
             switch (kind) {
             case "track": return root.tr("music_discovery_kind_track")
@@ -4574,9 +4580,7 @@ BrandWindow {
                                                     recommendation: recommendationCard.modelData
                                                     Layout.fillWidth: true
                                                     Layout.preferredHeight: shelfItems.tileWidth
-                                                    playbackPending: djconnect.musicDiscoveryPlayingId.length > 0
-                                                        && djconnect.musicDiscoveryPlayingId === recommendationCard.modelData.discoveryItemId
-                                                        && djconnect.musicDiscoveryPlayingSectionId === recommendationCard.modelData.sectionId
+                                                    playbackPending: musicDiscoveryPanel.recommendationStarting(recommendationCard.modelData)
                                                 }
                                                 Text {
                                                     text: recommendationCard.modelData.title
@@ -4723,6 +4727,7 @@ BrandWindow {
                         DiscoveryArtwork {
                             objectName: "discoveryDetailArtwork"
                             recommendation: discoveryDetail.item || ({})
+                            playbackPending: musicDiscoveryPanel.recommendationStarting(discoveryDetail.item)
                             Layout.preferredWidth: 96
                             Layout.preferredHeight: 96
                         }

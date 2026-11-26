@@ -1006,9 +1006,9 @@ def main():
         backend._music_discovery_playing = playing
         backend.musicDiscoveryChanged.emit()
         assert card_spinner.property("visible") and not other_spinner.property("visible")
-        assert not spinner.property("visible")
+        assert spinner.property("visible")
         backend._clear_music_discovery_playing(playing)
-        assert not card_spinner.property("visible")
+        assert not card_spinner.property("visible") and not spinner.property("visible")
         current_item, *other_items = backend.musicDiscoveryItems
         refreshed_title = "Updated recommendation title"
         backend._set_music_discovery_items([{
