@@ -289,6 +289,15 @@ def main():
             QMetaObject.invokeMethod(retry, "clicked")
             request.assert_called_once()
             assert not retry.property("enabled")
+            subject = visual_item(window.contentItem(), "trackInsightSubjectHero")
+            subject_title = visual_item(subject, "trackInsightSubjectTitle")
+            assert subject.property("visible") and subject_title.property("text") == backend.title
+            with patch("djconnect_pi.app.subprocess.run"):
+                backend._apply_playback(Playback(title="Fixture next track", artist="Fixture artist", uri="fixture:next-track"))
+            QTest.qWait(65)
+            assert subject_title.property("text") == "Fixture next track"
+            assert visual_item(subject, "trackInsightSubjectMetadata").property("text") == "Fixture artist"
+            assert not analysis_text.property("visible")
         backend._set_ask_dj_busy(False)
         backend.cfg.paired, backend.cfg.device_token = False, ""
         backend._demo_mode = True

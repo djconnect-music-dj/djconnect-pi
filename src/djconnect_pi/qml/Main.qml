@@ -2714,9 +2714,16 @@ BrandWindow {
                     GlassCard {
                         id: trackInsightSubject
                         objectName: "trackInsightSubjectHero"
+                        readonly property bool hasInsightSubject: djconnect.trackInsightTitle.length > 0
+                            || djconnect.trackInsightArtist.length > 0 || djconnect.trackInsightImageUrl.length > 0
+                        readonly property bool hasPlaybackSubject: djconnect.hasTrackTitle && (djconnect.paired || djconnect.demoMode)
+                        readonly property string subjectTitle: hasInsightSubject ? djconnect.trackInsightTitle : djconnect.title
+                        readonly property string subjectArtist: hasInsightSubject ? djconnect.trackInsightArtist : djconnect.artist
+                        readonly property string subjectAlbum: hasInsightSubject ? djconnect.trackInsightAlbum : ""
+                        readonly property string artworkUrl: hasInsightSubject ? djconnect.trackInsightImageUrl : djconnect.imageUrl
                         hero: true
                         artworkTint: trackInsightArtworkFrame.artworkTint
-                        visible: djconnect.trackInsightTitle.length > 0 || djconnect.trackInsightArtist.length > 0 || djconnect.trackInsightImageUrl.length > 0
+                        visible: hasInsightSubject || hasPlaybackSubject
                         Layout.fillWidth: true
                         padding: root.wallProfile ? 32 : 12
                         background: GlassSurface {
@@ -2737,7 +2744,8 @@ BrandWindow {
                                 objectName: "trackInsightArtworkFrame"
                                 backend: djconnect; imageItem: trackInsightArtworkImage
                                 active: !root.screenBlanked
-                                leaseKey: djconnect.activeProfileId + "|" + djconnect.trackInsightTitle + "|" + djconnect.trackInsightArtist
+                                leaseKey: [djconnect.activeProfileId, djconnect.trackInsightPlaybackItemId,
+                                    trackInsightSubject.subjectTitle, trackInsightSubject.subjectArtist].join("|")
                                 Layout.alignment: Qt.AlignHCenter
                                 Layout.preferredWidth: root.wallProfile ? 228 : 76
                                 Layout.preferredHeight: Layout.preferredWidth
@@ -2757,7 +2765,7 @@ BrandWindow {
                                     objectName: "trackInsightArtworkImage"
                                     sourceSize: root.lowMemoryProfile ? Qt.size(192, 192) : Qt.size(0, 0)
                                     asynchronous: root.lowMemoryProfile
-                                    source: djconnect.trackInsightImageUrl
+                                    source: trackInsightSubject.visible ? trackInsightSubject.artworkUrl : ""
                                     visible: status === Image.Ready
                                     anchors.fill: parent
                                     fillMode: Image.PreserveAspectCrop
@@ -2771,7 +2779,8 @@ BrandWindow {
                                 spacing: 4
 
                                 Text {
-                                    text: djconnect.trackInsightTitle
+                                    objectName: "trackInsightSubjectTitle"
+                                    text: trackInsightSubject.subjectTitle
                                     textFormat: Text.PlainText
                                     color: BrandTheme.colors.text
                                     font.pixelSize: root.wallProfile ? 32 : 22
@@ -2782,7 +2791,9 @@ BrandWindow {
                                 }
 
                                 Text {
-                                    text: [djconnect.trackInsightArtist, djconnect.trackInsightAlbum].filter(function(v) { return v && v.length > 0 }).join(" · ")
+                                    objectName: "trackInsightSubjectMetadata"
+                                    text: [trackInsightSubject.subjectArtist, trackInsightSubject.subjectAlbum]
+                                        .filter(function(v) { return v && v.length > 0 }).join(" · ")
                                     color: BrandTheme.colors.muted
                                     font.pixelSize: root.wallProfile ? 21 : 17
                                     textFormat: Text.PlainText
