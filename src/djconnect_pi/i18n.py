@@ -1537,6 +1537,7 @@ _KEYBOARD_TRANSLATIONS = {
     "refresh_discovery": ("Refresh Discover", "Ontdekken vernieuwen", "Entdecken aktualisieren", "Actualiser Découvrir", "Actualizar Descubrir"),
     "refresh_music_dna": ("Refresh Music DNA", "Music DNA vernieuwen", "Music DNA aktualisieren", "Actualiser Music DNA", "Actualizar Music DNA"),
     "refresh_track_insight": ("Refresh Track Insight", "Track Insight vernieuwen", "Track Insight aktualisieren", "Actualiser Track Insight", "Actualizar Track Insight"),
+    "track_insight_updated": ("Track Insight updated", "Track Insight vernieuwd", "Track Insight aktualisiert", "Track Insight actualisé", "Track Insight actualizado"),
     "refresh_ask_dj": ("Refresh Ask DJ", "Ask DJ vernieuwen", "Ask DJ aktualisieren", "Actualiser Ask DJ", "Actualizar Ask DJ"),
     "ask_dj_export": ("Export Ask DJ history", "Ask DJ-geschiedenis exporteren", "Ask-DJ-Verlauf exportieren", "Exporter l’historique Ask DJ", "Exportar el historial de Ask DJ"),
     "ask_dj_export_saved": ("Ask DJ history saved", "Ask DJ-geschiedenis opgeslagen", "Ask-DJ-Verlauf gespeichert", "Historique Ask DJ enregistré", "Historial de Ask DJ guardado"),

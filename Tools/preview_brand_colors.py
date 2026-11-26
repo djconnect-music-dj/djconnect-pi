@@ -722,6 +722,17 @@ def main():
                     QTest.qWait(65)
                     assert request.call_count == 11
                     request.call_args.kwargs["done"]()
+                    refresh_insight = visual_item(window.contentItem(), "trackInsightRefresh")
+                    QMetaObject.invokeMethod(refresh_insight, "clicked")
+                    request.call_args.args[1]()
+                    request.call_args.kwargs["done"]()
+                    assert current.call_args.kwargs["force_refresh"] is True
+                    assert backend.toastText == backend.t("track_insight_updated") and backend.toastIcon == "trackInsight"
+                    current.side_effect = requests.ReadTimeout
+                    QMetaObject.invokeMethod(refresh_insight, "clicked")
+                    request.call_args.args[1]()
+                    request.call_args.kwargs["done"]()
+                    assert backend.toastText == backend.t("track_insight_retry")
                     backend._shared_settings_state = shared_state
             owner._caps = previous_caps
             backend.cfg.ha_url = previous_ha_url

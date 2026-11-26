@@ -149,10 +149,11 @@ class _DiscoveryRefreshResult(_ProfileReadResult):
 class _TrackInsightResult(dict):
     """Track Insight delivery scope captured before dispatch, outside the wire payload."""
 
-    def __init__(self, data, scope, proof=None):
+    def __init__(self, data, scope, proof=None, *, manual: bool = False):
         super().__init__(data)
         self.scope = scope
         self.proof = proof
+        self.manual = manual
 
 
 class DJConnectBackend(QObject):
@@ -2989,7 +2990,7 @@ class DJConnectBackend(QObject):
         except (DJConnectError, SessionError, requests.RequestException) as exc:
             _LOGGER.warning("Track Insight unavailable; showing retry state: %s", exc.__class__.__name__)
             data = {"success": False, "error": "transient"}
-        self._trackInsightReady.emit(_TrackInsightResult(data, scope, proof))
+        self._trackInsightReady.emit(_TrackInsightResult(data, scope, proof, manual=force_refresh))
 
     def _music_dna_profile_worker(self, *, ticket=None, manual: bool = False) -> None:
         current = self._private_read_context()
@@ -3863,17 +3864,18 @@ class DJConnectBackend(QObject):
             return
         if not isinstance(data, dict):
             return
+        manual = isinstance(data, _TrackInsightResult) and data.manual
         error = str(data.get("error") or "").strip()
         if error in ("no_track_playing", "current_track_unavailable"):
             self._clear_track_insight(error=self.tr_key("track_insight_no_track"),
-                                      retryable=error == "current_track_unavailable")
+                                      retryable=error == "current_track_unavailable", notify=manual)
             return
         if error == "rate_limited":
-            self._clear_track_insight(error=self.tr_key("track_insight_rate_limited"), retryable=True)
+            self._clear_track_insight(error=self.tr_key("track_insight_rate_limited"), retryable=True, notify=manual)
             return
         if error:
             self._clear_track_insight(error=self.tr_key("track_insight_retry"),
-                                      retryable=error in {"transient", "track_insight_context_changed"})
+                                      retryable=error in {"transient", "track_insight_context_changed"}, notify=manual)
             return
         proof = data.proof if isinstance(data, _TrackInsightResult) else None
         deadline = None
@@ -3889,7 +3891,7 @@ class DJConnectBackend(QObject):
         messages = parse_ask_dj_messages(data)
         message = next((item for item in messages if item.get("trackInsight")), None)
         if not isinstance(message, dict):
-            self._clear_track_insight(error=self.tr_key("track_insight_empty"))
+            self._clear_track_insight(error=self.tr_key("track_insight_empty"), notify=manual)
             return
         track = message.get("trackInsightData")
         track_data = track.get("track") if isinstance(track, dict) and isinstance(track.get("track"), dict) else {}
@@ -3914,6 +3916,8 @@ class DJConnectBackend(QObject):
         self._schedule_track_insight_expiry()
         self._set_backend_available(True)
         self.trackInsightChanged.emit()
+        if manual:
+            self._show_toast(self.tr_key("track_insight_updated"), 2200, "trackinsight")
 
     @staticmethod
     def _playback_track_changed(previous: Playback, current: Playback) -> bool:
@@ -4000,7 +4004,7 @@ class DJConnectBackend(QObject):
         else:
             self._clear_track_insight()
 
-    def _clear_track_insight(self, *, error: str = "", retryable: bool = False) -> None:
+    def _clear_track_insight(self, *, error: str = "", retryable: bool = False, notify: bool = False) -> None:
         changed = any(
             (
                 self._track_insight_title,
@@ -4034,6 +4038,8 @@ class DJConnectBackend(QObject):
         self._track_insight_expiry_timer.stop()
         if changed or error:
             self.trackInsightChanged.emit()
+        if notify:
+            self._show_toast(error, 2200, "trackinsight")
 
     @Slot(str, str)
     def _apply_output_device_rejection(self, previous: str, attempted: str) -> None:
