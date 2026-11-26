@@ -2161,10 +2161,14 @@ class DJConnectBackend(QObject):
         save_config(self.config_path, self.cfg)
         self._pairingReady.emit(True, self.tr_key("paired"))
 
-    def _refresh_worker(self) -> None:
+    def _refresh_worker(self, *, ticket=None) -> None:
+        if ticket is not None and ticket != self._private_read_context():
+            return
         started = time.monotonic()
         _LOGGER.debug("Refreshing playback status")
         data = self.client.command("status") if self.paired else self.client.status()
+        if ticket is not None and ticket != self._private_read_context():
+            return
         self._persist_backend_summary()
         playback = self.client.playback_from_status(data)
         if self._pending_output_device and time.monotonic() < self._pending_output_until:
@@ -2190,10 +2194,14 @@ class DJConnectBackend(QObject):
             except DJConnectError as exc:
                 _LOGGER.warning("Output devices refresh failed: %s", exc)
         if self.paired:
+            if ticket is not None and ticket != self._private_read_context():
+                return
             self.client.status(playback, queue_items=self._queue_items)
             self._persist_backend_summary()
         if playback.image_url:
             playback.image_url = cached_image_url(playback.image_url, timeout_seconds=3)
+        if ticket is not None and ticket != self._private_read_context():
+            return
         self._playbackReady.emit(playback)
         _LOGGER.info("Refresh completed in %.0fms", _elapsed_ms(started))
 
@@ -2263,12 +2271,16 @@ class DJConnectBackend(QObject):
                 self._toastReady.emit(self.tr_key("spotify_cached_output_unavailable"), 7000, "playback")
             raise
 
-    def _load_queue_worker(self) -> None:
+    def _load_queue_worker(self, *, ticket=None) -> None:
         started = time.monotonic()
         _LOGGER.info("Loading queue from Home Assistant")
         # An earlier manual read must publish before the post-selection queue.
         with self._queue_read_lock:
+            if ticket is not None and ticket != self._private_read_context():
+                return
             data = self.client.command("queue", limit=100)
+            if ticket is not None and ticket != self._private_read_context():
+                return
             self._persist_backend_summary()
             items = parse_queue_items(data)
             _LOGGER.info("Loaded %s queue items from Home Assistant", len(items))
@@ -2486,12 +2498,23 @@ class DJConnectBackend(QObject):
         self._apply_profile_context(data)
         ticket = self._private_read_context()
         self._persist_backend_summary()
-        if _contains_playback_payload(data):
+        has_playback = _contains_playback_payload(data)
+        if has_playback:
             self._playbackReady.emit(self.client.playback_from_status(data))
         self.musicDiscoveryPlayed.emit(
             str(item.get("section_id") or ""), str(item.get("discovery_item_id") or item.get("id") or "").strip(),
         )
         self._toastReady.emit(self.tr_key("play"), 1800, "playback")
+        readbacks = (self._load_queue_worker,) if has_playback else (self._load_queue_worker, self._refresh_worker)
+        for read in readbacks:
+            try:
+                read(ticket=ticket)
+            except (AuthenticationError, ProtocolVersionMismatch):
+                if ticket == self._private_read_context():
+                    raise
+                return
+            except (DJConnectError, requests.RequestException) as exc:
+                _LOGGER.debug("Discovery playback readback failed: %s", type(exc).__name__)
         self._music_discovery_feed_worker(ticket=ticket)
 
     def _music_discovery_feedback_worker(self, item: dict[str, object], feedback: str, *, ticket) -> None:

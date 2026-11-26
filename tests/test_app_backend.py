@@ -290,7 +290,10 @@ def test_music_discovery_play_ignores_items_without_backend_id(tmp_path: Path) -
     backend.client.music_discovery_play.assert_not_called()
 
 
-@pytest.mark.parametrize("response", [{"success": True}, {"success": False}, {}, {"success": "true"}])
+@pytest.mark.parametrize("response", [
+    {"success": True}, {"success": True, "playback": {"title": "Confirmed track"}},
+    {"success": False}, {}, {"success": "true"},
+])
 def test_discovery_play_closes_only_on_acknowledged_playback(tmp_path: Path, response: dict) -> None:
     ensure_app()
     config_path = tmp_path / "config.json"
@@ -298,6 +301,8 @@ def test_discovery_play_closes_only_on_acknowledged_playback(tmp_path: Path, res
     backend = DJConnectBackend(config_path)
     backend.client.music_discovery_play = Mock(return_value=response)
     backend.client.music_discovery_feed = Mock(side_effect=BackendUnavailable("fixture read error"))
+    backend._load_queue_worker = Mock()
+    backend._refresh_worker = Mock()
     backend._executor.submit = Mock()
     completions = []
     backend.musicDiscoveryPlayed.connect(lambda section, item: completions.append((section, item)))
@@ -314,6 +319,10 @@ def test_discovery_play_closes_only_on_acknowledged_playback(tmp_path: Path, res
         assert backend.musicDiscoveryError == backend.t("music_discovery_play_failed")
     assert backend.musicDiscoveryPlayingId == ""
     assert backend.client.music_discovery_feed.call_count == int(accepted)
+    assert backend._load_queue_worker.call_count == int(accepted)
+    assert backend._refresh_worker.call_count == int(accepted and "playback" not in response)
+    if "playback" in response:
+        assert backend.playback.title == "Confirmed track"
 
 
 @pytest.mark.parametrize("success", [True, False, None])
