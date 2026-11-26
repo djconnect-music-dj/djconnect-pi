@@ -2888,8 +2888,52 @@ BrandWindow {
                     }
 
                     GlassCard {
+                        id: verifiedCreditsCard
+                        objectName: "trackInsightVerifiedCredits"
+                        readonly property var credit: djconnect.trackInsightVerifiedCredit
+                        visible: !!credit.context
+                        Layout.fillWidth: true
+                        Text {
+                            text: root.tr("track_insight_verified_credits")
+                            textFormat: Text.PlainText
+                            color: BrandTheme.colors.text
+                            font.bold: true
+                            font.pixelSize: 21
+                            Layout.fillWidth: true
+                            Accessible.role: Accessible.Heading
+                        }
+                        Text {
+                            objectName: "trackInsightVerifiedContext"
+                            text: verifiedCreditsCard.credit.context || ""
+                            textFormat: Text.PlainText
+                            color: BrandTheme.colors.text
+                            font.pixelSize: 21
+                            wrapMode: Text.WordWrap
+                            Layout.fillWidth: true
+                        }
+                        SessionAttribution {
+                            sources: verifiedCreditsCard.credit.url ? [{
+                                provider: verifiedCreditsCard.credit.provider,
+                                links: [verifiedCreditsCard.credit.url],
+                                license: verifiedCreditsCard.credit.license
+                            }] : []
+                            Layout.fillWidth: true
+                        }
+                        Text {
+                            visible: djconnect.trackInsightAudioNotice
+                                && djconnect.trackInsightText === djconnect.trackInsightVerifiedCredit.context
+                            text: root.tr("track_insight_unmeasured_audio")
+                            textFormat: Text.PlainText
+                            color: BrandTheme.colors.muted
+                            font.pixelSize: 17
+                            wrapMode: Text.WordWrap
+                            Layout.fillWidth: true
+                        }
+                    }
+                    GlassCard {
                         objectName: "trackInsightAnalysisCard"
                         visible: djconnect.trackInsightText.length > 0
+                            && djconnect.trackInsightText !== djconnect.trackInsightVerifiedCredit.context
                         Layout.fillWidth: true
 
                         RowLayout {

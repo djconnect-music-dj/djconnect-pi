@@ -872,10 +872,17 @@ def test_track_insight_uses_explicit_unmeasured_basis_without_inventing_metrics(
     payload = {"track": {"title": "Fixture"}, "analysis": {
         "basis": "qualified_credit_and_interpretation_v1", "measured_audio": False,
         "summary": "Interpretation", "full_text": "Interpretation", "energy": 0.4, "danceability": 0.2,
+        "verified_context": "Synthetic credit",
+        "source_attribution": {"provider": "MusicBrainz", "license": "CC0-1.0",
+                               "url": "https://musicbrainz.org/recording/fixture"},
     }}
     backend._apply_track_insight_data(payload)
     assert backend.trackInsightAudioNotice and backend.trackInsightText == "Interpretation"
     assert not backend.trackInsightItems
+    assert backend.trackInsightVerifiedCredit["context"] == "Synthetic credit"
+    payload["analysis"]["source_attribution"]["url"] = "https://user@musicbrainz.org/recording/fixture"
+    backend._apply_track_insight_data(payload)
+    assert not backend.trackInsightVerifiedCredit
     payload["analysis"]["basis"] = "unmeasured_metadata_only_v1"
     backend._apply_track_insight_data(payload)
     assert not backend.trackInsightAudioNotice and not backend.trackInsightSections

@@ -237,7 +237,17 @@ def main():
             QTest.qWait(35)
             assert notice.property("visible") and notice.property("text") == backend.t("track_insight_unmeasured_audio")
         backend._track_insight_audio_notice = False
+        backend._track_insight_verified_credit = {
+            "context": "Fixture verified credit", "provider": "Fixture catalogue",
+            "url": "https://example.test/fixture-credit", "license": "CC0-1.0",
+        }
         backend.trackInsightChanged.emit()
+        QTest.qWait(65)
+        credit_card = visual_item(window.contentItem(), "trackInsightVerifiedCredits")
+        assert credit_card.property("visible")
+        assert visual_item(credit_card, "trackInsightVerifiedContext").property("text") == "Fixture verified credit"
+        link = visual_item(credit_card, "sessionAttributionSourceLink")
+        assert link.property("targetUrl") == "https://example.test/fixture-credit"
         assert not notice.property("visible")
         backend.setLanguage("nl")
         window.setProperty("activeScreen", "session")

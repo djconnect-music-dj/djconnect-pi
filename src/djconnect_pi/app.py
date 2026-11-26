@@ -75,7 +75,7 @@ from .queue_projection import compact_adjacent_tracks
 from .session_controller import SessionController
 from .session_playback_control import output_id
 from .session_playback_control import reference as session_playback_reference
-from .session_projection import volume_observation
+from .session_projection import safe_link, volume_observation
 from .session_transport import SessionError, session_profile_id
 from .shared_settings import SettingsError
 from .system_info import log_raspberry_pi_system_info
@@ -262,6 +262,7 @@ class DJConnectBackend(QObject):
         self._music_discovery_consent_rejected = False
         self._track_insight_title = ""
         self._track_insight_audio_notice = False
+        self._track_insight_verified_credit: dict[str, str] = {}
         self._track_insight_artist = ""
         self._track_insight_album = ""
         self._track_insight_image_url = ""
@@ -587,6 +588,10 @@ class DJConnectBackend(QObject):
     @Property(bool, notify=trackInsightChanged)
     def trackInsightAudioNotice(self) -> bool:
         return self._track_insight_audio_notice
+
+    @Property("QVariantMap", notify=trackInsightChanged)
+    def trackInsightVerifiedCredit(self) -> dict[str, str]:
+        return self._track_insight_verified_credit
 
     @Property(str, notify=trackInsightChanged)
     def trackInsightError(self) -> str:
@@ -3047,6 +3052,7 @@ class DJConnectBackend(QObject):
         raw_analysis = track.get("analysis", {}) if isinstance(track, dict) else {}
         self._track_insight_audio_notice = (_track_insight_unmeasured(raw_analysis)
                                             and raw_analysis.get("basis") != "unmeasured_metadata_only_v1")
+        self._track_insight_verified_credit = track.get("verifiedCredit", {}) if isinstance(track, dict) else {}
         self._track_insight_visualizer = _track_insight_visualizer(track, self._track_insight_items, self._track_insight_sections) if isinstance(track, dict) else {}
         self._track_insight_result_scope = scope
         self._set_backend_available(True)
@@ -3096,6 +3102,7 @@ class DJConnectBackend(QObject):
                 self._track_insight_text,
                 self._track_insight_error,
                 self._track_insight_audio_notice,
+                self._track_insight_verified_credit,
                 self._track_insight_items,
                 self._track_insight_sections,
                 self._track_insight_visualizer,
@@ -3109,6 +3116,7 @@ class DJConnectBackend(QObject):
         self._track_insight_text = ""
         self._track_insight_error = error
         self._track_insight_audio_notice = False
+        self._track_insight_verified_credit = {}
         self._track_insight_items = []
         self._track_insight_sections = []
         self._track_insight_visualizer = {}
@@ -3854,6 +3862,7 @@ def _track_insight_data(item: dict[str, object]) -> dict[str, object]:
     return {
         "track": payload.get("track") if isinstance(payload.get("track"), dict) else {},
         "analysis": _track_insight_allowed_analysis(analysis),
+        "verifiedCredit": _track_insight_verified_credit(analysis),
         "music_dna": payload.get("music_dna") if isinstance(payload.get("music_dna"), dict) else {},
         "visual_profile": payload.get("visual_profile") if isinstance(payload.get("visual_profile"), dict) else {},
         "visualizer": visualizer,
@@ -3900,6 +3909,22 @@ def _track_insight_unmeasured(analysis: dict[str, object]) -> bool:
         "unmeasured_metadata_only_v1", "qualified_credit_and_interpretation_v1",
     ))
 
+
+def _track_insight_verified_credit(analysis: dict[str, object]) -> dict[str, str]:
+    if analysis.get("basis") != "qualified_credit_and_interpretation_v1" or analysis.get("measured_audio") is not False:
+        return {}
+    context = analysis.get("verified_context")
+    source = analysis.get("source_attribution")
+    if not isinstance(context, str) or not isinstance(source, dict) or source.get("license") != "CC0-1.0":
+        return {}
+    context = context.strip()
+    if not 1 <= len(context) <= 16_384 or (context[0], context[-1]) in {("{", "}"), ("[", "]")}:
+        return {}
+    provider = source.get("provider")
+    url = safe_link(source.get("url"))
+    if not isinstance(provider, str) or not 1 <= len(provider.strip()) <= 128 or not url:
+        return {}
+    return {"context": context, "provider": provider.strip(), "url": url, "license": "CC0-1.0"}
 
 def _track_insight_music_dna_match(data: dict[str, object]) -> str:
     music_dna = data.get("music_dna")
