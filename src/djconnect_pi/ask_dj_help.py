@@ -112,6 +112,26 @@ def project_help(language, surface, eligible_ids, music_backend, supported_featu
     return _help_sections(language, entries), _suggestion_candidates(language, entries, artist)
 
 
+def demo_help(language, surface):
+    """Fixed local examples; these never represent producer eligibility."""
+    catalogue = _catalogue()
+    session = surface == "active_session"
+    reference_ids = ("play.artist", "play.cooking", "discover.artist_tracks", "discover.artist_albums")
+    reference_ids += ("listen.current", "listen.artist") if session else ("listen.queue", "listen.outputs")
+    suggestion_ids = ("play.artist", "discover.artist_tracks", "listen.artist" if session else "listen.queue")
+    entries = [entry for entry in catalogue["entries"] if surface in entry["surfaces"] and entry["id"] in reference_ids]
+    examples = {item["id"]: item for item in _suggestion_candidates(language, entries, "M83")}
+    grouped = {}
+    for entry_id in reference_ids:
+        if entry_id in examples:
+            item = examples[entry_id]
+            grouped.setdefault(item["group"], []).append({"id": entry_id, "text": item["text"], "placeholder": ""})
+    sections = [{"title": group["labels"][language], "examples": grouped[group["id"]]}
+                for group in catalogue["groups"] if group["id"] in grouped]
+    suggestions = [examples[entry_id] for entry_id in suggestion_ids if entry_id in examples]
+    return sections, suggestions if len(suggestions) == 3 else []
+
+
 def select_suggestions(candidates, epoch):
     ordered = sorted(candidates, key=lambda item: sha256(f'{epoch}:{item["id"]}'.encode()).digest())
     contextual = next((item for item in ordered if item["contextual"]), None)

@@ -43,7 +43,7 @@ from PySide6.QtQuickControls2 import QQuickStyle
 
 from . import __version__
 from .artwork_palette import displayed_artwork_tint
-from .ask_dj_help import compatible_catalogue, project_help, select_suggestions
+from .ask_dj_help import compatible_catalogue, demo_help, project_help, select_suggestions
 from .brand_theme import apply_palette
 from .config import (
     CLIENT_TYPE,
@@ -1952,16 +1952,25 @@ class DJConnectBackend(QObject):
 
     def _ask_dj_help_context(self, surface):
         cfg = self.cfg
-        if (not self._application_foreground or self._shutting_down or self._demo_mode or not self.paired
-                or cfg.private_session or not self._backend_available or self._version_mismatch_visible
-                or cfg.music_backend_available is not True):
+        if not self._application_foreground or self._shutting_down:
+            return None
+        if self._demo_mode:
+            session_id = ""
+            if surface == "active_session":
+                header = self._session_controller.runtimeHeader
+                if header["runtime_state"] != "active" or not header["session_id"]:
+                    return None
+                session_id = header["session_id"]
+            return (self._private_read_context(), "", frozenset(), session_id, True)
+        if (not self.paired or cfg.private_session or not self._backend_available
+                or self._version_mismatch_visible or cfg.music_backend_available is not True):
             return None
         subject = self._session_controller.ask_dj_help_subject() if surface == "active_session" else None
         if surface == "active_session" and subject is None:
             return None
         return (self._private_read_context(), cfg.music_backend,
                 frozenset(key for key, value in (cfg.music_backend_capabilities or {}).items() if value is True),
-                subject)
+                subject, False)
 
     def _ask_dj_help_is_current(self, request):
         return (request is not None and self._ask_dj_help_request is request
@@ -2005,9 +2014,20 @@ class DJConnectBackend(QObject):
 
     def _read_ask_dj_help(self, surface, selection=None, expected_context=None):
         self.closeAskDjHelp()
-        self._sync_config_from_disk()
+        if not self._demo_mode:
+            self._sync_config_from_disk()
         context = self._ask_dj_help_context(surface)
         if context is None or (expected_context is not None and context != expected_context):
+            return
+        _, music_backend, supported_features, subject, demo = context
+        if demo:
+            request = (context, float("inf"), surface)
+            self._ask_dj_help_request = request
+            try:
+                projection = demo_help(self.cfg.language, surface)
+            except (OSError, ValueError):
+                projection = ([], [])
+            self._apply_ask_dj_help(request, projection, selection)
             return
         transport = self._session_controller.transport
         try:
@@ -2021,7 +2041,6 @@ class DJConnectBackend(QObject):
         self._ask_dj_help_busy = True
         self._ask_dj_help_timer.start(15_000)
         self.askDjHelpChanged.emit()
-        _, music_backend, supported_features, subject = context
         session_id, _, track, session_features = subject or (None, None, (), frozenset())
 
         def read():
@@ -2052,7 +2071,7 @@ class DJConnectBackend(QObject):
         self._ask_dj_help_busy = False
         self._ask_dj_help_sections = sections
         if selection is None:
-            self._ask_dj_suggestions = select_suggestions(candidates, uuid4().hex)
+            self._ask_dj_suggestions = candidates if request[0][-1] else select_suggestions(candidates, uuid4().hex)
         self.askDjHelpChanged.emit()
         if selection is not None and not self._ask_dj_busy and self._ask_dj_help_is_current(request):
             edit_revision, entry, original = selection

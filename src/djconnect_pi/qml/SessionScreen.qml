@@ -3316,8 +3316,7 @@ Item {
                     objectName: "sessionAskDjHelpToggle"
                     iconName: "info"; tertiary: true
                     Accessible.name: screen.tr("ask_dj_example_questions")
-                    enabled: screen.liveViewOpen && screen.state.composer_available
-                        && !screen.backend.demoMode && !screen.state.selection.kind
+                    enabled: screen.liveViewOpen && screen.state.composer_available && !screen.state.selection.kind
                     onClicked: {
                         if (composerPanel.examplesOpen) {
                             composerPanel.closeExamples()

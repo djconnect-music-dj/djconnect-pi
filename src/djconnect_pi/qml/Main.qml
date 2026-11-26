@@ -6160,7 +6160,7 @@ BrandWindow {
                         iconName: "info"; tertiary: true
                         Accessible.name: root.tr("ask_dj_example_questions")
                         Layout.preferredWidth: 48; Layout.fillHeight: true
-                        enabled: djconnect.paired && !djconnect.demoMode
+                        enabled: djconnect.paired || djconnect.demoMode
                         onClicked: {
                             if (askDjPanel.helpOpen) {
                                 askDjPanel.closeHelp()

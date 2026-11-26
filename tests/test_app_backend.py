@@ -36,7 +36,7 @@ from djconnect_pi.app import (
     prepare_media_artwork,
 )
 from djconnect_pi.ask_dj_help import (
-    CATALOGUE_ID, CATALOGUE_REVISION, CATALOGUE_SHA256, HelpObservation, project_help, select_suggestions,
+    CATALOGUE_ID, CATALOGUE_REVISION, CATALOGUE_SHA256, HelpObservation, demo_help, project_help, select_suggestions,
 )
 from djconnect_pi.config import Config, load_config, save_config
 from djconnect_pi.ha import (
@@ -506,6 +506,18 @@ def test_ask_dj_suggestions_require_three_distinct_qualified_prompts_with_filled
         assert all("[" not in item["text"] for item in suggestions)
     else:
         assert suggestions == []
+
+
+@pytest.mark.parametrize("language", ["en", "nl", "de", "fr", "es"])
+@pytest.mark.parametrize(("surface", "listening_id"), [
+    ("ask_dj", "listen.queue"), ("active_session", "listen.artist"),
+])
+def test_demo_ask_dj_examples_are_complete_in_each_supported_language(language, surface, listening_id):
+    sections, suggestions = demo_help(language, surface)
+    assert [item["id"] for item in suggestions] == ["play.artist", "discover.artist_tracks", listening_id]
+    assert len(sections) == 3 and sum(len(section["examples"]) for section in sections) == 6
+    assert all("M83" in item["text"] for item in suggestions[:2])
+    assert all(not example["placeholder"] for section in sections for example in section["examples"])
 
 
 def test_log_display_uses_compact_touch_prefix() -> None:
