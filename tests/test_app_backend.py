@@ -2885,7 +2885,7 @@ def test_backend_music_dna_refresh_shows_toast(tmp_path: Path) -> None:
     assert calls[0][0] == backend.t("music_dna")
 
 
-def test_backend_track_insight_refresh_shows_toast(tmp_path: Path) -> None:
+def test_backend_track_insight_refresh_requests_fresh_analysis_and_shows_toast(tmp_path: Path) -> None:
     ensure_app()
     backend = DJConnectBackend(tmp_path / "config.json")
     backend.cfg.paired = True
@@ -2897,6 +2897,8 @@ def test_backend_track_insight_refresh_shows_toast(tmp_path: Path) -> None:
 
     backend._run = fake_run  # type: ignore[method-assign]
     backend._sync_config_from_disk = lambda: None  # type: ignore[method-assign]
+    backend._persist_backend_summary = Mock()
+    backend.client.track_insight = Mock(return_value={"error": "transient"})
 
     backend.refreshTrackInsight()
 
@@ -2904,6 +2906,9 @@ def test_backend_track_insight_refresh_shows_toast(tmp_path: Path) -> None:
     assert backend.toastIcon == "trackInsight"
     assert calls
     assert calls[0][0] == backend.t("track_insight")
+    worker = calls[0][1]
+    worker()
+    backend.client.track_insight.assert_called_once_with(backend.playback, force_refresh=True)
 
 
 def test_backend_track_insight_auto_open_requires_playing_track(tmp_path: Path) -> None:
@@ -2980,6 +2985,7 @@ def test_track_insight_applies_queued_answer_only_in_original_scope(tmp_path: Pa
     backend._trackInsightReady.disconnect(backend._apply_track_insight_data)
     backend._trackInsightReady.connect(queued.append)
     worker()
+    backend.client.track_insight.assert_called_once_with(track_a, force_refresh=False)
     assert len(queued) == 1
 
     if change in {"track", "track_return"}:

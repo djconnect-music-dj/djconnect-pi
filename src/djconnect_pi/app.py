@@ -1399,13 +1399,13 @@ class DJConnectBackend(QObject):
     def openTrackInsight(self) -> None:
         if not self._demo_mode and not self.playback.is_playing:
             return
-        self._request_track_insight(show_toast=False)
+        self._request_track_insight(manual=False)
 
     @Slot()
     def refreshTrackInsight(self) -> None:
-        self._request_track_insight(show_toast=True)
+        self._request_track_insight(manual=True)
 
-    def _request_track_insight(self, *, show_toast: bool) -> None:
+    def _request_track_insight(self, *, manual: bool) -> None:
         if self._demo_mode:
             self._show_demo_track_insight()
             return
@@ -1414,15 +1414,15 @@ class DJConnectBackend(QObject):
             return
         _LOGGER.info("User requested Track Insight for current track")
         scope = self._track_insight_scope()
-        if self._track_insight_result_scope == scope and not show_toast:
+        if self._track_insight_result_scope == scope and not manual:
             return
         if self._track_insight_result_scope is not None and self._track_insight_result_scope != scope:
             self._clear_track_insight()
         playback = deepcopy(self.playback)
-        if show_toast:
+        if manual:
             self.showToastForContext(self.tr_key("refreshing"), "trackinsight")
         self._set_ask_dj_busy(True)
-        self._run(self.tr_key("track_insight"), lambda: self._track_insight_worker(playback, scope),
+        self._run(self.tr_key("track_insight"), lambda: self._track_insight_worker(playback, scope, force_refresh=manual),
                   done=lambda: self._set_ask_dj_busy(False))
 
     def _playback_seek_context(self, playback: Playback) -> tuple | None:
@@ -2709,11 +2709,11 @@ class DJConnectBackend(QObject):
         if self._apply_ask_dj_data(data) and self._profile_result_current(data):
             self._show_toast(self.tr_key("ask_dj_cleared"), 2500, "askdj")
 
-    def _track_insight_worker(self, playback: Playback, scope: tuple) -> None:
+    def _track_insight_worker(self, playback: Playback, scope: tuple, *, force_refresh: bool) -> None:
         if not self._application_foreground or scope != self._track_insight_scope():
             return
         try:
-            data = self.client.track_insight(playback)
+            data = self.client.track_insight(playback, force_refresh=force_refresh)
             if scope != self._track_insight_scope():
                 return
             self._apply_profile_context(data)
