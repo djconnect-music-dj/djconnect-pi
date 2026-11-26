@@ -3,7 +3,7 @@ from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from hashlib import sha256
 
-from PySide6.QtCore import QObject, Signal, Slot
+from PySide6.QtCore import QCollator, QLocale, QObject, Signal, Slot
 
 from .session_projection import active_session, session_playback, volume_observation
 from .session_transport import SessionError, private_scope_allowed
@@ -478,8 +478,11 @@ class PlaybackControl(QObject):
             self.outputs_status = "unavailable" if result.get("error") else ""
             if not result.get("error"):
                 self.outputs_serial += 1
+                collator = QCollator(QLocale(self.owner.backend.cfg.language))
+                collator.setNumericMode(True)
+                choices = sorted(result["choices"], key=lambda row: (collator.sortKey(row["name"]), row["id"]))
                 self.outputs = {"binding": self.request["binding"], "reference": self.request["reference"],
-                                "serial": self.outputs_serial, "origin": result["origin"], "choices": result["choices"]}
+                                "serial": self.outputs_serial, "origin": result["origin"], "choices": choices}
         elif command == "favorite_read":
             self.status = ""
             self.favorite_status = "unavailable" if result.get("error") else ""

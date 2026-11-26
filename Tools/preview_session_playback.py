@@ -453,9 +453,10 @@ def main():
                 })
                 owner.transport.playback_status.return_value = observed
                 owner.transport.playback_outputs = Mock(return_value={**observed, 'devices': [
+                    {'id': 'synthetic-tenth', 'name': 'Speaker 10', 'active': False, 'cached': False, 'is_restricted': False},
                     {'id': 'synthetic-output', 'name': speaker_name, 'active': True, 'cached': False, 'is_restricted': False,
                      'supports_volume': True, 'volume_percent': 11},
-                    {'id': 'synthetic-alternative', 'name': 'Synthetic second speaker', 'active': False, 'cached': False, 'is_restricted': False},
+                    {'id': 'synthetic-alternative', 'name': 'Speaker 2', 'active': False, 'cached': False, 'is_restricted': False},
                 ]})
                 owner.changed.emit()
                 QTest.qWait(80)
@@ -479,10 +480,12 @@ def main():
                 selected_output = visual(window.contentItem(), 'sessionOutputChoice-synthetic-output')
                 assert selected_output.property('checked') and not selected_output.property('enabled')
                 alternative_output = visual(window.contentItem(), 'sessionOutputChoice-synthetic-alternative')
+                tenth_output = visual(window.contentItem(), 'sessionOutputChoice-synthetic-tenth')
+                assert selected_output.y() < alternative_output.y() < tenth_output.y()
                 assert alternative_output.property('enabled') and not alternative_output.property('checked')
                 for row, name, volume, active in (
                     (selected_output, speaker_name, '11%', True),
-                    (alternative_output, 'Synthetic second speaker', '–', False),
+                    (alternative_output, 'Speaker 2', '–', False),
                 ):
                     speaker_icon = visual(row, 'sessionOutputChoiceSpeaker')
                     row_name = visual(row, 'sessionOutputChoiceName')
