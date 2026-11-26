@@ -1193,7 +1193,7 @@ BrandWindow {
                     }
                     GlassButton {
                         objectName: "mediaSearchClose"
-                        iconName: "end"; tertiary: true; Accessible.name: root.tr("close_search")
+                        iconName: "close"; tertiary: true; Accessible.name: root.tr("close_search")
                         onClicked: panel.closeSearch()
                     }
                 }
@@ -4714,7 +4714,7 @@ BrandWindow {
                     }
                     GlassButton {
                         objectName: "askDjSearchClose"
-                        iconName: "end"; tertiary: true; Accessible.name: root.tr("close_search")
+                        iconName: "close"; tertiary: true; Accessible.name: root.tr("close_search")
                         onClicked: askDjPanel.closeSearch(true)
                     }
                 }

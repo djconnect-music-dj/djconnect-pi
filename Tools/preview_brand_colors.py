@@ -123,7 +123,9 @@ def main():
         QMetaObject.invokeMethod(search_toggle, "clicked")
         assert search_accessible.text(QAccessible.Text.Name) == backend.t("close_search")
         assert visual_item(queue_panel, "mediaSearchInput").property("activeFocus")
-        QMetaObject.invokeMethod(visual_item(queue_panel, "mediaSearchClose"), "clicked")
+        queue_search_close = visual_item(queue_panel, "mediaSearchClose")
+        assert queue_search_close.property("iconName") == "close"
+        QMetaObject.invokeMethod(queue_search_close, "clicked")
         assert search_accessible.text(QAccessible.Text.Name) == backend.t("media_search_queue")
         assert search_toggle.property("activeFocus") and not queue_panel.property("searching")
         find = QKeySequence.keyBindings(QKeySequence.StandardKey.Find)[0][0]
@@ -205,6 +207,7 @@ def main():
         assert not visual_item(playlist_row, "mediaTrackSubtitle").property("visible")
         assert visual_item(playlist_row, "mediaPlayIndicator").property("visible")
         playlist_panel.setProperty("searching", True)
+        assert visual_item(playlist_panel, "mediaSearchClose").property("iconName") == "close"
         search_input = visual_item(playlist_panel, "mediaSearchInput")
         for term in ("curator", "fixture-only"):
             search_input.setProperty("text", term)
@@ -739,6 +742,7 @@ def main():
         assert draft.property("activeFocus")
         QMetaObject.invokeMethod(ask_toggle, "clicked")
         ask_close = visual_item(ask_dj, "askDjSearchClose")
+        assert ask_close.property("iconName") == "close"
         assert QAccessible.queryAccessibleInterface(ask_close).text(QAccessible.Text.Name) == backend.t("close_search")
         QMetaObject.invokeMethod(ask_close, "clicked")
         assert ask_toggle.property("activeFocus") and not ask_dj.property("searchOpen")
