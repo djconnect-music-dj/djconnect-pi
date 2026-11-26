@@ -7379,6 +7379,7 @@ BrandWindow {
 
         ScrollView {
             id: aboutScroll
+            objectName: "aboutScroll"
             anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
             anchors.top: aboutToolbar.bottom
             anchors.margins: 24
@@ -7525,6 +7526,23 @@ BrandWindow {
 
                     Text { text: root.tr("copyright"); color: BrandTheme.colors.muted; font.pixelSize: 20; font.bold: true; horizontalAlignment: Text.AlignRight; Layout.preferredWidth: 190 }
                     Text { text: "2026 Peter van Tol"; color: BrandTheme.colors.text; font.pixelSize: 20; Layout.fillWidth: true }
+                    Text {
+                        text: root.tr("about_source_repository")
+                        color: BrandTheme.colors.muted
+                        font.pixelSize: 20; font.bold: true
+                        horizontalAlignment: Text.AlignRight
+                        Layout.preferredWidth: 190
+                    }
+                    GlassButton {
+                        objectName: "aboutSourceRepository"
+                        text: "djconnect-music-dj/djconnect"
+                        iconName: "globe"
+                        wrapText: true
+                        textAlignment: Text.AlignLeft
+                        Layout.fillWidth: true
+                        Layout.maximumWidth: 390
+                        onClicked: Qt.openUrlExternally("https://github.com/djconnect-music-dj/djconnect")
+                    }
                 }
                 }
             }

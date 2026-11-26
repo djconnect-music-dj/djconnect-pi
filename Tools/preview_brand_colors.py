@@ -1653,6 +1653,17 @@ def main():
             )
         assert backend.toastText == backend.t("update_check_started")
         backend.hideToast()
+        about_flick = visual_item(window.contentItem(), "aboutScroll").property("contentItem")
+        about_flick.setProperty("contentY", max(0, about_flick.property("contentHeight") - about_flick.property("height")))
+        QTest.qWait(65)
+        source_link = visual_item(window.contentItem(), "aboutSourceRepository")
+        QDesktopServices.setUrlHandler("https", recorded, "record")
+        try:
+            position = source_link.mapToScene(source_link.boundingRect().center()).toPoint()
+            QTest.mouseClick(window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, position)
+            assert recorded.urls[-1] == "https://github.com/djconnect-music-dj/djconnect", (width, position, recorded.urls)
+        finally:
+            QDesktopServices.unsetUrlHandler("https")
         window.setProperty("aboutOpen", False)
         backend.cfg.log_level = "INFO"
         log_path = Path(backend.cfg.log_file)
