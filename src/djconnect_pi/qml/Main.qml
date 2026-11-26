@@ -2985,6 +2985,9 @@ BrandWindow {
                         model: djconnect.trackInsightSections
 
                         GlassSurface {
+                            required property var modelData
+                            required property int index
+                            objectName: "trackInsightSection-" + index
                             border.color: root.moodColor("focus")
                             Layout.fillWidth: true
                             Layout.preferredHeight: trackSectionContent.implicitHeight + 18
@@ -2998,6 +3001,7 @@ BrandWindow {
 
                                 Text {
                                     text: root.trackInsightLabel(modelData.title || modelData.kind || modelData.id || "")
+                                    textFormat: Text.PlainText
                                     color: BrandTheme.colors.muted
                                     font.pixelSize: 18
                                     font.bold: true
@@ -3008,6 +3012,7 @@ BrandWindow {
                                 Text {
                                     visible: modelData.body && modelData.body.length > 0
                                     text: modelData.body || ""
+                                    textFormat: Text.PlainText
                                     color: BrandTheme.colors.text
                                     font.pixelSize: 17
                                     wrapMode: Text.WordWrap
@@ -3018,11 +3023,23 @@ BrandWindow {
                                     model: modelData.details || []
                                     Text {
                                         text: "- " + modelData
+                                        textFormat: Text.PlainText
                                         color: BrandTheme.colors.muted
                                         font.pixelSize: 16
                                         wrapMode: Text.WordWrap
                                         Layout.fillWidth: true
                                     }
+                                }
+                                Text {
+                                    objectName: "trackInsightSectionSource"
+                                    readonly property string sourceLabel: modelData.source || ""
+                                    visible: sourceLabel.length > 0
+                                    text: root.tr("sources") + " · " + sourceLabel
+                                    textFormat: Text.PlainText
+                                    color: BrandTheme.colors.muted
+                                    font.pixelSize: 15
+                                    wrapMode: Text.WordWrap
+                                    Layout.fillWidth: true
                                 }
                             }
                         }

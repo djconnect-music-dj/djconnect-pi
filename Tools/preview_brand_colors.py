@@ -215,6 +215,20 @@ def main():
                 assert not toast_text.property("truncated") and backend.toastIcon == "play"
         backend.hideToast()
         backend.setLanguage("nl")
+        window.setProperty("activeScreen", "trackinsight")
+        backend._track_insight_sections = [
+            {"title": "Production", "body": "Fixture analysis", "source": "Fixture <source>"},
+            {"title": "Genre", "body": "Fixture description"},
+        ]
+        backend.trackInsightChanged.emit()
+        QTest.qWait(120)
+        sourced = visual_item(window.contentItem(), "trackInsightSection-0")
+        unsourced = visual_item(window.contentItem(), "trackInsightSection-1")
+        label = visual_item(sourced, "trackInsightSectionSource")
+        assert label.property("visible") and label.property("text") == "Bronnen · Fixture <source>"
+        assert not visual_item(unsourced, "trackInsightSectionSource").property("visible")
+        plain = QQmlExpression(engine.rootContext(), label, "textFormat === 0")
+        assert plain.evaluate()[0] and not plain.hasError()
         window.setProperty("activeScreen", "session")
         for runtime_state in ("opening", "ending"):
             backend.djSession._session["runtime_state"] = runtime_state
