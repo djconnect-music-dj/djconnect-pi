@@ -490,6 +490,7 @@ def main():
             {"id": "fixture-shelf", "items": [{
                 "id": "fixture-track", "kind": "track", "title": long_title, "subtitle": "Artist Name",
                 "reason": "A multi-line reason describes why this recommendation fits the listener's current profile.",
+                "reason_sources": ["djconnect_music_dna", "spotify_catalog", "fixture_unknown"],
                 "quality_score": 74, "quality_factors": [
                     "spotify_recommendation", "fresh_candidate", "favorite_artist_match", "top_artist_match",
                     "has_artwork", "variant_title_penalty", "fixture_unknown", "{fixture_unknown}",
@@ -521,6 +522,11 @@ def main():
         assert strip_values[0] == "74/100" and len(strip_values) == 7
         assert strip_values[-2] == backend.t("music_discovery_quality_has_artwork")
         assert strip_values[-1] == backend.t("music_discovery_quality_variant_title_penalty")
+        source_strip = window.findChild(QObject, "discoverySourceStrip")
+        assert source_strip.property("visible")
+        assert source_strip.property("values").toVariant() == [
+            backend.t("music_discovery_source_djconnect_music_dna"), backend.t("music_discovery_source_spotify_catalog"),
+        ]
         flick = QQmlExpression(engine.rootContext(), quality_strip, "flick(-1200, 0)")
         flick.evaluate()
         assert not flick.hasError(), flick.error().toString()

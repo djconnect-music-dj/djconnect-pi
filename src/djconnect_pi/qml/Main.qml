@@ -3313,7 +3313,7 @@ BrandWindow {
                     Text {
                         id: chipText
                         anchors.centerIn: parent
-                        text: parent.modelData.replace(/_/g, " ")
+                        text: parent.modelData
                         textFormat: Text.PlainText
                         color: BrandTheme.colors.muted
                         font.pixelSize: 15
@@ -3690,13 +3690,19 @@ BrandWindow {
                 const score = item.qualityScore
                 if (typeof score === "number" && Number.isInteger(score) && score >= 0 && score <= 100)
                     chips.push(score + "/100")
-                for (const factor of Array.from(item.qualityFactors || [])) {
-                    if (typeof factor !== "string" || !/^[a-z_]+$/.test(factor)) continue
-                    const key = "music_discovery_quality_" + factor
+                return chips.concat(labelsForCodes(item.qualityFactors, "music_discovery_quality_"))
+            }
+            readonly property var sourceChips: item ? labelsForCodes(item.reasonSources, "music_discovery_source_") : []
+
+            function labelsForCodes(codes, prefix) {
+                const labels = []
+                for (const code of Array.from(codes || [])) {
+                    if (typeof code !== "string" || !/^[a-z_]+$/.test(code)) continue
+                    const key = prefix + code
                     const label = root.tr(key)
-                    if (label !== key) chips.push(label)
+                    if (label !== key) labels.push(label)
                 }
-                return chips
+                return labels
             }
             anchors.centerIn: Overlay.overlay
             width: Math.min(root.width - 40, 520)
@@ -3797,7 +3803,8 @@ BrandWindow {
                     }
 
                     DiscoveryChipStrip {
-                        values: discoveryDetail.item ? discoveryDetail.item.reasonSources || [] : []
+                        objectName: "discoverySourceStrip"
+                        values: discoveryDetail.sourceChips
                         Layout.fillWidth: true
                     }
 

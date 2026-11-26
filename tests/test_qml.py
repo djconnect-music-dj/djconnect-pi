@@ -569,7 +569,7 @@ def test_qml_music_discovery_nav_and_panel() -> None:
     assert "discoveryDetail.item.playable" in detail
     assert "djconnect.musicDiscoveryFeedbackSupported" in detail
     assert "djconnect.sendMusicDiscoveryFeedback(item.payload, value)" in detail
-    assert "discoveryDetail.item.reasonSources" in detail
+    assert 'labelsForCodes(item.reasonSources, "music_discovery_source_")' in detail
     assert "item.qualityScore" in detail
     assert "modelData.relevance" not in discover_block
 
