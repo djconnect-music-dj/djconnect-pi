@@ -399,6 +399,14 @@ def main():
                 ]}
                 owner.changed.emit()
                 QTest.qWait(65)
+                search_scroll = window.findChild(QObject, "sessionSearchScroll")
+                cached_results = owner.archiveSearchState
+                with patch.object(owner, "_launch") as verify:
+                    pull_down(window, search_scroll, touch, 230)
+                    verify.assert_called_once_with("archive_search", "fixture")
+                owner._archive_search = cached_results
+                owner.changed.emit()
+                QTest.qWait(300)
                 search_result = one(archive_panel.property("contentItem"), "sessionArchiveSearchRow")
                 with patch.object(owner, "_launch") as verify:
                     click(window, search_result)
@@ -552,6 +560,11 @@ def main():
                 search_field.setProperty("text", "different query")
                 assert not search_empty.property("visible")
                 search_field.setProperty("text", "fixture")
+                with patch.object(owner, "_launch") as verify:
+                    pull_down(window, search_scroll, touch, 230)
+                    verify.assert_called_once_with("search_refresh", {
+                        "session_id": saved["session_id"], "query": "fixture", "pages": 1,
+                    })
                 owner._set_running(1, "search_refresh")
                 owner.changed.emit()
                 search_progress = window.findChild(QObject, "sessionSearchProgress")

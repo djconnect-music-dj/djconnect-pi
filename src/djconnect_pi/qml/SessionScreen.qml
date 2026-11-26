@@ -2972,44 +2972,55 @@ Item {
                 color: BrandTheme.colors.muted; font.pixelSize: 18
                 wrapMode: Text.WordWrap; Layout.fillWidth: true
             }
-            Item {
-                objectName: "sessionSearchEmpty"
-                Layout.leftMargin: searchPanel.bodyMargin; Layout.rightMargin: searchPanel.bodyMargin
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                visible: searchPanel.noMatches
-                ColumnLayout {
-                    anchors.centerIn: parent
-                    width: parent.width
-                    spacing: 12
-                    FeatureIcon {
-                        iconName: "search"
-                        iconColor: BrandTheme.colors.muted
-                        Accessible.ignored: true
-                        Layout.alignment: Qt.AlignHCenter
-                        Layout.preferredWidth: screen.compact ? 40 : 54
-                        Layout.preferredHeight: Layout.preferredWidth
-                    }
-                    Text {
-                        objectName: "sessionSearchEmptyMessage"
-                        text: screen.tr(screen.archiveSearchAvailable ? "session_archive_search_empty" : "session_search_empty")
-                        textFormat: Text.PlainText
-                        horizontalAlignment: Text.AlignHCenter
-                        color: BrandTheme.colors.muted
-                        font.pixelSize: 20
-                        wrapMode: Text.WordWrap
-                        Layout.fillWidth: true
-                    }
-                }
-            }
             ScrollView {
                 id: searchScroll
                 objectName: "sessionSearchScroll"
-                visible: !searchPanel.noMatches
                 Layout.fillWidth: true; Layout.fillHeight: true; Layout.minimumHeight: 0
                 Layout.leftMargin: searchPanel.bodyMargin; Layout.rightMargin: searchPanel.bodyMargin
                 contentWidth: availableWidth; clip: true
                 ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+                background: Item {
+                    objectName: "sessionSearchEmpty"
+                    visible: searchPanel.noMatches
+                    ColumnLayout {
+                        anchors.centerIn: parent
+                        width: parent.width
+                        spacing: 12
+                        FeatureIcon {
+                            iconName: "search"
+                            iconColor: BrandTheme.colors.muted
+                            Accessible.ignored: true
+                            Layout.alignment: Qt.AlignHCenter
+                            Layout.preferredWidth: screen.compact ? 40 : 54
+                            Layout.preferredHeight: Layout.preferredWidth
+                        }
+                        Text {
+                            objectName: "sessionSearchEmptyMessage"
+                            text: screen.tr(screen.archiveSearchAvailable ? "session_archive_search_empty" : "session_search_empty")
+                            textFormat: Text.PlainText
+                            horizontalAlignment: Text.AlignHCenter
+                            color: BrandTheme.colors.muted
+                            font.pixelSize: 20
+                            wrapMode: Text.WordWrap
+                            Layout.fillWidth: true
+                        }
+                    }
+                }
+                Binding {
+                    target: searchScroll.contentItem
+                    property: "flickableDirection"
+                    value: Flickable.VerticalFlick
+                }
+                PullToRefresh {
+                    flickable: searchScroll.contentItem
+                    canRefresh: searchPanel.opened && !searchPanel.keyboardVisible && screen.backend.paired
+                        && !screen.backend.demoMode && searchPanel.matchingQuery && !screen.owner.busy
+                        && !screen.searchRefreshPending && (screen.liveViewOpen || screen.historyViewOpen)
+                    onRefreshRequested: {
+                        if (screen.archiveSearchAvailable) screen.owner.searchArchive(searchPanel.result.query)
+                        else screen.refreshSearchResults()
+                    }
+                }
                 ColumnLayout {
                     width: searchScroll.availableWidth; spacing: 14
                     Repeater {
