@@ -200,6 +200,8 @@ BrandWindow {
     property bool suppressNextNowPanelTap: false
     property bool trackArtworkOpen: false
     property bool trackArtworkControlsOpen: false
+    property Item trackArtworkOpeningControl: null
+    property string trackArtworkOpeningScope: ""
     readonly property bool trackArtworkCanControl: trackArtworkOpen && sessionTrackArtwork
         && trackArtworkViewOpen && !!sharedSessionScreen.state.playback_control.available
     onTrackArtworkCanControlChanged: if (!trackArtworkCanControl) trackArtworkControlsOpen = false
@@ -212,7 +214,19 @@ BrandWindow {
     onTrackArtworkViewOpenChanged: if (!trackArtworkViewOpen) trackArtworkOpen = false
     readonly property bool overlayTrackAvailable: sessionTrackArtwork ? sharedSessionScreen.trackArtworkAvailable : djconnect.hasTrackTitle
     onOverlayTrackAvailableChanged: if (!overlayTrackAvailable) trackArtworkOpen = false
-    onTrackArtworkOpenChanged: if (!trackArtworkOpen) trackArtworkDismissTimer.stop()
+    onTrackArtworkOpenChanged: {
+        if (trackArtworkOpen) return
+        trackArtworkDismissTimer.stop()
+        const source = trackArtworkOpeningControl
+        const scope = trackArtworkOpeningScope
+        trackArtworkOpeningControl = null
+        trackArtworkOpeningScope = ""
+        if (source) Qt.callLater(function() {
+            if (source && !root.trackArtworkOpen && root.trackArtworkViewOpen
+                    && scope === sharedSessionScreen.playbackMenuScope && source.visible && source.enabled)
+                source.forceActiveFocus(Qt.PopupFocusReason)
+        })
+    }
     onScreenBlankedChanged: if (screenBlanked) trackArtworkOpen = false
     function showTrackArtwork(fromSession, automatic) {
         if (!trackArtworkViewOpen || (automatic && trackArtworkOpen && !trackArtworkDismissTimer.running))
@@ -229,9 +243,11 @@ BrandWindow {
         trackArtworkDismissTimer.stop()
         trackArtworkControlsOpen = !trackArtworkControlsOpen
     }
-    function openTrackArtwork() {
-        if (sharedSessionScreen.trackArtworkAvailable)
-            showTrackArtwork(true)
+    function openTrackArtwork(source) {
+        if (!trackArtworkViewOpen || !sharedSessionScreen.trackArtworkAvailable) return
+        trackArtworkOpeningControl = source
+        trackArtworkOpeningScope = sharedSessionScreen.playbackMenuScope
+        showTrackArtwork(true)
     }
     property double lastWakeDisplayAt: 0
     property int wakeDisplayDebounceMs: 800
@@ -5596,7 +5612,7 @@ BrandWindow {
             vibeScapeActive: vibeScapeLoader.active
             historical: root.activeScreen === "history" || root.activeScreen === "session-history"
             currentHistory: root.activeScreen === "session-history"
-            onExpandTrackArtwork: root.openTrackArtwork()
+            onExpandTrackArtwork: function(source) { root.openTrackArtwork(source) }
             onOpenVibeScape: function(pickerTop) { root.openVibeScape(pickerTop) }
             onNavigate: function(destination) {
                 if (destination === "about") root.aboutOpen = true

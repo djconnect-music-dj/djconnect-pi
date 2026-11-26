@@ -18,7 +18,7 @@ Item {
     property Item revealedFlowAction: null
     readonly property bool trackArtworkAvailable: playbackMetadata.visible && playbackSources.ready
     readonly property url trackArtworkSource: trackCover.source
-    signal expandTrackArtwork()
+    signal expandTrackArtwork(Item source)
     Item {
         anchors.fill: parent
         z: 10
@@ -1644,10 +1644,11 @@ Item {
                         Layout.alignment: Qt.AlignTop
 
                         AbstractButton {
+                            id: artworkTrigger
                             objectName: "sessionExpandTrackArtwork"
                             anchors.fill: parent
                             Accessible.name: screen.tr("track_artwork")
-                            onClicked: screen.expandTrackArtwork()
+                            onClicked: screen.expandTrackArtwork(artworkTrigger)
                             background: Item {
                                 VinylPlaceholder {
                                     anchors.fill: parent
@@ -1699,7 +1700,7 @@ Item {
                             objectName: "sessionExpandTrackMetadata"
                             TapHandler {
                                 enabled: screen.trackArtworkAvailable
-                                onTapped: screen.expandTrackArtwork()
+                                onTapped: screen.expandTrackArtwork(artworkTrigger)
                             }
                             Text {
                                 objectName: "sessionPlaybackTitle"

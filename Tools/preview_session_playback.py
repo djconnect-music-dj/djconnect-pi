@@ -301,6 +301,7 @@ def main():
                 QTest.keyClick(window, Qt.Key.Key_Escape)
                 QTest.qWait(60)
                 assert not window.property('trackArtworkOpen') and window.property('activeScreen') == 'session'
+                assert artwork_button.property('activeFocus')
                 for x, y in ((8, 8), (artwork_button.width() - 8, artwork_button.height() - 8)):
                     origin = artwork_button.mapToScene(QPointF(x, y))
                     QTest.mouseClick(window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier,
