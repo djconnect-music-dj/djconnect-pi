@@ -3078,7 +3078,9 @@ BrandWindow {
                         readonly property bool hasPlaybackSubject: djconnect.hasTrackTitle && (djconnect.paired || djconnect.demoMode)
                         readonly property string subjectTitle: hasInsightSubject ? djconnect.trackInsightTitle : djconnect.title
                         readonly property string subjectArtist: hasInsightSubject ? djconnect.trackInsightArtist : djconnect.artist
-                        readonly property string subjectAlbum: hasInsightSubject ? djconnect.trackInsightAlbum : ""
+                        readonly property string subjectAlbum: hasInsightSubject && djconnect.trackInsightAlbum.length > 0
+                            ? djconnect.trackInsightAlbum
+                            : (hasPlaybackSubject && (!hasInsightSubject || djconnect.trackInsightMatchesPlayback) ? djconnect.album : "")
                         readonly property string artworkUrl: hasInsightSubject ? djconnect.trackInsightImageUrl : djconnect.imageUrl
                         hero: true
                         artworkTint: trackInsightArtworkFrame.artworkTint

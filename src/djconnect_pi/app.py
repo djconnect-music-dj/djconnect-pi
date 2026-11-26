@@ -138,6 +138,7 @@ class DJConnectBackend(QObject):
     backendAvailableChanged = Signal()
     titleChanged = Signal()
     artistChanged = Signal()
+    albumChanged = Signal()
     imageUrlChanged = Signal()
     playbackTrackChanged = Signal()
     playingChanged = Signal()
@@ -497,6 +498,10 @@ class DJConnectBackend(QObject):
     @Property(str, notify=artistChanged)
     def artist(self) -> str:
         return self.playback.artist
+
+    @Property(str, notify=albumChanged)
+    def album(self) -> str:
+        return self.playback.album
 
     @Property(str, notify=imageUrlChanged)
     def imageUrl(self) -> str:
@@ -1800,6 +1805,7 @@ class DJConnectBackend(QObject):
         self.playback = Playback()
         self.titleChanged.emit()
         self.artistChanged.emit()
+        self.albumChanged.emit()
         self.imageUrlChanged.emit()
         self.playingChanged.emit()
         self.volumeChanged.emit()
@@ -3054,6 +3060,7 @@ class DJConnectBackend(QObject):
         previous_uri = self.playback.uri
         self.playback.title = str(track["title"])
         self.playback.artist = str(track["subtitle"])
+        self.playback.album = str(track.get("album") or "")
         self.playback.uri = str(track["uri"])
         self.playback.position_seconds = 0
         self.playback.duration_seconds = int(track["duration"])
@@ -3064,6 +3071,7 @@ class DJConnectBackend(QObject):
             self._show_demo_track_insight()
         self.titleChanged.emit()
         self.artistChanged.emit()
+        self.albumChanged.emit()
         self.imageUrlChanged.emit()
         self.playingChanged.emit()
         self.progressChanged.emit()
@@ -3206,6 +3214,8 @@ class DJConnectBackend(QObject):
             self.titleChanged.emit()
         if old.artist != playback.artist:
             self.artistChanged.emit()
+        if old.album != playback.album:
+            self.albumChanged.emit()
         if old.uri != playback.uri:
             self.trackInsightPlaybackItemChanged.emit()
         if old.image_url != playback.image_url:

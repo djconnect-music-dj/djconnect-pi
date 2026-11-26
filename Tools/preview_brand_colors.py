@@ -543,11 +543,16 @@ def main():
             subject_title = visual_item(subject, "trackInsightSubjectTitle")
             assert subject.property("visible") and subject_title.property("text") == backend.title
             with patch("djconnect_pi.app.subprocess.run"):
-                backend._apply_playback(Playback(title="Fixture next track", artist="Fixture artist", uri="fixture:next-track",
+                backend._apply_playback(Playback(title="Fixture next track", artist="Fixture artist", album="Fixture album", uri="fixture:next-track",
                                                  position_seconds=75, duration_seconds=240))
             QTest.qWait(65)
             assert subject_title.property("text") == "Fixture next track"
-            assert visual_item(subject, "trackInsightSubjectMetadata").property("text") == "Fixture artist"
+            metadata = visual_item(subject, "trackInsightSubjectMetadata")
+            assert metadata.property("text") == "Fixture artist · Fixture album"
+            corrected = deepcopy(backend.playback)
+            corrected.album = "Corrected fixture album"
+            backend._apply_playback(corrected)
+            assert metadata.property("text") == "Fixture artist · Corrected fixture album"
             time_chip = visual_item(subject, "trackInsightPlaybackTime")
             time_label = visual_item(time_chip, "trackInsightPlaybackTimeLabel")
             assert time_chip.property("visible") and time_label.property("text") == "1:15 / 4:00"
