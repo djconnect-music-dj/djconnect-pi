@@ -462,6 +462,8 @@ def main():
                     connection_type = one(connection_info.property("contentItem"), "sessionConnectionType")
                     assert connection_type.property("text") == expected_connection
                     connection_transport = one(connection_info.property("contentItem"), "sessionConnectionTransport")
+                    music_retry = one(connection_info.property("contentItem"), "sessionConnectionMusicRetry")
+                    assert not music_retry.property("visible")
                     original_backend = (backend.cfg.music_backend, backend.cfg.music_backend_available, backend.backendAvailable)
                     backend.cfg.music_backend = "spotify_direct"
                     backend.cfg.music_backend_available = False
@@ -471,6 +473,7 @@ def main():
                     assert connection_type.property("text") == TRANSLATIONS[language]["backend_unavailable"]
                     assert connection_accessible.text(QAccessible.Text.Description) == connection_type.property("text")
                     assert connection_transport.property("visible") and connection_transport.property("text") == expected_connection
+                    assert music_retry.property("visible") and music_retry.property("text") == TRANSLATIONS[language]["music_backend_retry_notice"]
                     owner._error = "offline"
                     owner.changed.emit()
                     assert connection.property("iconName") == "info"
@@ -478,6 +481,7 @@ def main():
                     assert connection_accessible.text(QAccessible.Text.Description) == expected_offline
                     assert connection_type.property("text") == expected_offline
                     assert not connection_transport.property("visible")
+                    assert not music_retry.property("visible")
                     owner._set_running(1, "history_refresh")
                     expected_retry = TRANSLATIONS[language]["session_connection_retrying"]
                     assert connection.property("iconName") == "refresh" and connection_type.property("text") == expected_retry

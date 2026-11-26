@@ -3419,6 +3419,13 @@ Item {
                 font.pixelSize: 18; color: BrandTheme.colors.muted
                 wrapMode: Text.WordWrap; Layout.fillWidth: true
             }
+            Text {
+                objectName: "sessionConnectionMusicRetry"
+                visible: screen.connectionMusicUnavailable
+                text: screen.tr("music_backend_retry_notice"); textFormat: Text.PlainText
+                font.pixelSize: 18; color: BrandTheme.colors.muted
+                wrapMode: Text.WordWrap; Layout.fillWidth: true
+            }
             GlassButton {
                 objectName: "sessionConnectionAbout"
                 iconName: "info"
