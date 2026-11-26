@@ -403,11 +403,22 @@ def main():
                 with patch.object(owner, "_launch") as verify:
                     click(window, search_result)
                     verify.assert_called_once_with("timeline", "hidden-on-current-page")
+                    verify.reset_mock()
+                    opened = owner.archiveSearchState["sessions"][0]
+                    owner._timeline = {"session": opened, "revision": "archive-search-open", "entries": []}
+                    owner.changed.emit()
+                    QTest.qWait(65)
+                    verify.assert_called_once_with("search", {
+                        "session_id": opened["session_id"], "query": "fixture", "cursor": "",
+                    })
+                    assert archive_panel.property("opened") and archive_field.property("text") == "fixture"
                 close_archive_search = QQmlExpression(engine.rootContext(), archive_panel, "close()")
                 close_archive_search.evaluate()
                 assert not close_archive_search.hasError()
                 QTest.qWait(300)
                 assert not owner.archiveSearchState
+                owner._timeline = {}
+                owner.changed.emit()
                 owner._history_start = "fixture-older-window"
                 owner.changed.emit()
                 assert not archive_empty.property("visible") and archive_window_empty.property("visible")

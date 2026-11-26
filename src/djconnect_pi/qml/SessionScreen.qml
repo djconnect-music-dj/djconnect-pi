@@ -796,6 +796,12 @@ Item {
         else owner.search(searchTarget, searchInput.text)
     }
     function showSearch() { searchPanel.open(); searchInput.forceActiveFocus() }
+    property var archiveSearchHandoff: null
+    function openArchiveMatch(sessionId) {
+        if (!archiveSearchAvailable || !searchPanel.matchingQuery || owner.busy) return
+        archiveSearchHandoff = {sessionId: sessionId, query: searchPanel.result.query, scope: composerContext}
+        owner.openArchiveSearchResult(sessionId)
+    }
     function closeTransient() {
         archiveDetailReturn = null
         cancelSearchRead()
@@ -814,7 +820,25 @@ Item {
     }
     onVisibleChanged: { syncMediaVisibility(); if (!visible) { cancelArchiveRead(); if (owner) owner.clearArchive(); clearFlowReturn(); historyRead.stop(); historyReadProfile = ""; historyReadSession = ""; historyReadPending = false; readingRestore.stop(); pendingReadingAnchor = ""; closeTransient() } }
     onHistoricalChanged: { if (historical) closePlaybackPanels(); syncMediaVisibility(); if (!historical) { archiveDetailReturn = null; cancelArchiveRead(); if (owner) owner.clearArchive() } readingRestore.stop(); pendingReadingAnchor = ""; readingOffset = 0; if (!historical && flowReturn) { historyScroll.contentItem.cancelFlick(); flowReturnRestore.restart() } }
-    onSearchTargetChanged: { if (searchPanel) searchPanel.close(); if (searchInput) searchInput.clear(); if (owner) owner.clearSearch() }
+    onSearchTargetChanged: {
+        const handoff = archiveSearchHandoff
+        archiveSearchHandoff = null
+        if (handoff && searchPanel.opened && historical && handoff.scope === composerContext
+                && handoff.sessionId === searchTarget && handoff.query === searchInput.text.trim()) {
+            searchPanel.keyboardVisible = false
+            Qt.callLater(function() {
+                if (screen.historyViewOpen && searchPanel.opened && handoff.scope === screen.composerContext
+                        && handoff.sessionId === screen.searchTarget && handoff.query === searchInput.text.trim()) {
+                    screen.owner.clearArchiveSearch()
+                    screen.owner.search(handoff.sessionId, handoff.query)
+                }
+            })
+            return
+        }
+        if (searchPanel) searchPanel.close()
+        if (searchInput) searchInput.clear()
+        if (owner) owner.clearSearch()
+    }
     signal openVibeScape(real pickerTop)
     signal navigate(string destination)
     function tr(key) { backend.translationVersion; return backend.t(key) }
@@ -2798,6 +2822,7 @@ Item {
         }
         function resetSearch() {
             selectedMatchId = ""
+            screen.archiveSearchHandoff = null
             screen.owner.clearSearch()
             screen.owner.clearArchiveSearch()
         }
@@ -2953,7 +2978,7 @@ Item {
                             selectionFill: selected ? BrandTheme.colors.actionAccent : "transparent"
                             readonly property bool selected: searchPanel.selectedMatchId === modelData.session_id
                             Accessible.selected: selected
-                            onSessionRequested: sessionId => screen.owner.openArchiveSearchResult(sessionId)
+                            onSessionRequested: sessionId => screen.openArchiveMatch(sessionId)
                         }
                     }
                     Repeater {
