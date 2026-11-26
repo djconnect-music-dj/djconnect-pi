@@ -492,6 +492,11 @@ def test_ask_dj_distinguishes_missing_answer_from_unconfirmed_delivery(tmp_path,
     assert transport.standalone_history.call_count == int(accepted)
     key = "session_question_accepted_unavailable" if accepted else "session_question_uncertain"
     assert backend.toastText == backend.t(key)
+    assert backend.askDjDeliveryKey == key
+    backend._apply_ask_dj_refresh_result({"success": False})
+    assert backend.askDjDeliveryKey == key
+    backend._apply_ask_dj_refresh_result({"success": True, "messages": []})
+    assert not backend.askDjDeliveryKey
     assert not backend.askDjBusy and backend.askDjMessages == []
     unsent.assert_not_called()
 

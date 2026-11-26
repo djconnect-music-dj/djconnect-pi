@@ -6751,6 +6751,31 @@ BrandWindow {
                 }
             }
 
+            GlassCard {
+                objectName: "askDjDeliveryNotice"
+                visible: djconnect.askDjDeliveryKey.length > 0 && !askDjPanel.searchOpen && !askDjPanel.chatKeyboardOpen
+                Layout.fillWidth: true
+                padding: 12
+                spacing: 8
+                Text {
+                    objectName: "askDjDeliveryStatus"
+                    text: visible && djconnect.askDjDeliveryKey ? root.tr(djconnect.askDjDeliveryKey) : ""
+                    textFormat: Text.PlainText
+                    color: BrandTheme.colors.muted
+                    font.pixelSize: 17
+                    wrapMode: Text.WordWrap
+                    Layout.fillWidth: true
+                }
+                GlassButton {
+                    objectName: "askDjDeliveryRefresh"
+                    iconName: "refresh"
+                    text: root.tr("refresh_ask_dj")
+                    enabled: askDjPanel.canRefreshHistory && !djconnect.askDjBusy
+                    Layout.fillWidth: true
+                    onClicked: askDjPanel.refreshHistory()
+                }
+            }
+
             AskDjExamples {
                 objectName: "askDjHelpPanel"
                 visible: askDjPanel.helpOpen
