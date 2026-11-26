@@ -4407,6 +4407,7 @@ BrandWindow {
 
         property bool searchOpen: false
         property bool searchKeyboardOpen: false
+        property bool returnFocusToChat: false
         property int selectedMatch: -1
         property string selectedMessageId: ""
         readonly property var matches: {
@@ -4447,18 +4448,24 @@ BrandWindow {
         }
 
         function openSearch(showKeyboard) {
+            if (!searchOpen) returnFocusToChat = !showKeyboard && askDjChatInput.activeFocus
             chatKeyboardOpen = false
             searchOpen = true
             searchKeyboardOpen = showKeyboard
             askDjSearchInput.forceActiveFocus()
         }
 
-        function closeSearch() {
+        function closeSearch(restoreFocus) {
             searchOpen = false
             searchKeyboardOpen = false
             selectedMatch = -1
             selectedMessageId = ""
             askDjSearchInput.clear()
+            if (restoreFocus) {
+                if (returnFocusToChat && askDjChatInput.enabled) askDjChatInput.forceActiveFocus()
+                else if (askDjSearchToggle.enabled) askDjSearchToggle.forceActiveFocus()
+            }
+            returnFocusToChat = false
         }
 
         function selectMatch(position) {
@@ -4508,13 +4515,16 @@ BrandWindow {
                 GlassButton {
                     id: askDjSearchToggle
                     objectName: "askDjSearchToggle"
+                    readonly property string actionLabel: askDjPanel.searchOpen ? root.tr("close_search") : root.tr("ask_dj_search_history")
                     iconName: "search"
                     tertiary: true
                     checkable: true
                     checked: askDjPanel.searchOpen
                     enabled: askDjPanel.searchOpen || djconnect.askDjMessages.length > 0
-                    Accessible.name: root.tr("ask_dj_search_history")
-                    onClicked: askDjPanel.searchOpen ? askDjPanel.closeSearch() : askDjPanel.openSearch(true)
+                    Accessible.name: actionLabel
+                    ToolTip.visible: hovered
+                    ToolTip.text: actionLabel
+                    onClicked: askDjPanel.searchOpen ? askDjPanel.closeSearch(true) : askDjPanel.openSearch(true)
                 }
 
                 RefreshIconButton {
@@ -4589,7 +4599,7 @@ BrandWindow {
                             if (askDjPanel.searchKeyboardOpen)
                                 askDjPanel.dismissSearchKeyboard()
                             else
-                                askDjPanel.closeSearch()
+                                askDjPanel.closeSearch(true)
                         }
                     }
                     Text {
@@ -4615,8 +4625,8 @@ BrandWindow {
                     }
                     GlassButton {
                         objectName: "askDjSearchClose"
-                        iconName: "end"; tertiary: true; Accessible.name: root.tr("close")
-                        onClicked: askDjPanel.closeSearch()
+                        iconName: "end"; tertiary: true; Accessible.name: root.tr("close_search")
+                        onClicked: askDjPanel.closeSearch(true)
                     }
                 }
             }

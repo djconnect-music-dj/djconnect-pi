@@ -708,11 +708,15 @@ def main():
         QTest.qWait(65)
         ask_dj = visual_item(window.contentItem(), "askDjPanel")
         draft = visual_item(ask_dj, "askDjChatInput")
+        ask_toggle = visual_item(ask_dj, "askDjSearchToggle")
+        ask_toggle_accessible = QAccessible.queryAccessibleInterface(ask_toggle)
+        assert ask_toggle_accessible.text(QAccessible.Text.Name) == backend.t("ask_dj_search_history")
         draft.setProperty("text", "Unsent draft")
         draft.forceActiveFocus()
         QTest.keyClick(window, find.key(), find.keyboardModifiers())
         find_input = visual_item(ask_dj, "askDjSearchInput")
         assert ask_dj.property("searchOpen") and not ask_dj.property("searchKeyboardOpen")
+        assert ask_toggle_accessible.text(QAccessible.Text.Name) == backend.t("close_search")
         assert find_input.property("activeFocus") and draft.property("text") == "Unsent draft"
         find_input.setProperty("text", "question")
         ask_count = visual_item(ask_dj, "askDjSearchCount")
@@ -725,6 +729,12 @@ def main():
         assert ask_count.property("text") == "2/3" and ask_dj.property("selectedMessageId") == "ask-second"
         QTest.keyClick(window, Qt.Key.Key_Escape)
         assert not ask_dj.property("searchOpen") and draft.property("text") == "Unsent draft"
+        assert draft.property("activeFocus")
+        QMetaObject.invokeMethod(ask_toggle, "clicked")
+        ask_close = visual_item(ask_dj, "askDjSearchClose")
+        assert QAccessible.queryAccessibleInterface(ask_close).text(QAccessible.Text.Name) == backend.t("close_search")
+        QMetaObject.invokeMethod(ask_close, "clicked")
+        assert ask_toggle.property("activeFocus") and not ask_dj.property("searchOpen")
         backend.setLanguage("nl")
         window.setProperty("activeScreen", "session")
         for runtime_state in ("opening", "ending"):
