@@ -190,6 +190,15 @@ Canvas {
                 circle(16, 16, 11, false); line(16, 9, 16, 16); line(16, 16, 21, 19)
             } else if (iconName === "forecast_target") {
                 circle(16, 16, 11, false); circle(16, 16, 6, false); circle(16, 16, 2, true)
+            } else if (iconName === "forecast_horizon") {
+                ctx.beginPath()
+                ctx.arc(px(16), py(20), 7 * s / 32, Math.PI, Math.PI * 2)
+                ctx.stroke()
+                line(4, 20, 28, 20)
+                line(9, 25, 23, 25)
+                line(16, 6, 16, 9)
+                line(6, 10, 8, 12)
+                line(26, 10, 24, 12)
             } else if (iconName === "history") {
                 ctx.beginPath(); ctx.arc(px(16), py(16), 10, -Math.PI * 0.8, Math.PI * 0.8); ctx.stroke()
                 line(8, 5, 7, 12); line(7, 12, 13, 11)

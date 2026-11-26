@@ -20,6 +20,7 @@ from djconnect_pi.app import DJConnectBackend
 from djconnect_pi.brand_theme import apply_palette
 from djconnect_pi.config import Config, save_config
 from djconnect_pi.expiry_clock import ExpiryClock
+from djconnect_pi.i18n import TRANSLATIONS
 from djconnect_pi.session_history_view import presented_history
 from djconnect_pi.session_projection import history_page, timestamp
 
@@ -161,6 +162,7 @@ def main():
                             ", ".join(selected_tracks[:-1]) + f" {conjunction} " + selected_tracks[-1]
                         )
                         section = show(owner, session, caps, stamp, guidance, f"{intro} {joined}. {note}", mood, window, screen, horizon, flow)
+                        assert not one(screen, "sessionForecastEmpty").property("visible")
                         banner = one(screen, "sessionHorizonBanner")
                         assert banner.property("source").fileName() == f"horizon-hero-{mood}.png"
                         assert QQmlExpression(engine.rootContext(), banner, "status === 1").evaluate()[0]  # Image.Ready
@@ -225,6 +227,10 @@ def main():
                     owner.changed.emit()
                     QTest.qWait(65)
                     assert not list(visual_items(screen, "sessionForecastQueueTrack"))
+                    empty = one(screen, "sessionForecastEmpty")
+                    assert empty.property("visible")
+                    assert one(empty, "sessionForecastEmptyIcon").property("iconName") == "forecast_horizon"
+                    assert one(empty, "sessionForecastEmptyMessage").property("text") == TRANSLATIONS[language]["session_forecast_empty"]
                     click(window, flow)
                     sid = session["session_id"]
                     row = {

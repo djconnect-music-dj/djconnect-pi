@@ -1149,7 +1149,37 @@ Item {
                     }
                 }
             }
-            Text { visible: screen.state.forecast.sections.length === 0; text: screen.tr("session_forecast_empty"); textFormat: Text.PlainText; color: BrandTheme.colors.muted; font.pixelSize: 23; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+            Item {
+                objectName: "sessionForecastEmpty"
+                visible: screen.state.forecast.sections.length === 0
+                Layout.fillWidth: true
+                implicitHeight: Math.max(screen.compact ? 160 : 360, forecastEmptyContent.implicitHeight + 24)
+                ColumnLayout {
+                    id: forecastEmptyContent
+                    anchors.centerIn: parent
+                    width: parent.width
+                    spacing: 12
+                    FeatureIcon {
+                        objectName: "sessionForecastEmptyIcon"
+                        iconName: "forecast_horizon"
+                        iconColor: BrandTheme.colors.muted
+                        Layout.alignment: Qt.AlignHCenter
+                        Layout.preferredWidth: 40
+                        Layout.preferredHeight: 40
+                        Accessible.ignored: true
+                    }
+                    Text {
+                        objectName: "sessionForecastEmptyMessage"
+                        text: screen.tr("session_forecast_empty")
+                        textFormat: Text.PlainText
+                        color: BrandTheme.colors.muted
+                        font.pixelSize: 23
+                        wrapMode: Text.WordWrap
+                        horizontalAlignment: Text.AlignHCenter
+                        Layout.fillWidth: true
+                    }
+                }
+            }
         }
     }
     ScrollView {
