@@ -4905,6 +4905,7 @@ BrandWindow {
     component MusicDnaRow: RowLayout {
         id: dnaRow
         required property var entry
+        property bool trackArtwork: false
         readonly property string title: entry.labelKey ? root.tr(entry.labelKey) : entry.title || ""
         readonly property string value: entry.valueKey ? root.tr(entry.valueKey)
             : entry.value || (typeof entry.count === "number"
@@ -4921,7 +4922,8 @@ BrandWindow {
             Layout.alignment: Qt.AlignTop
         }
         DiscoveryArtwork {
-            visible: !!dnaRow.entry.imageUrl
+            objectName: "musicDnaTrackArtwork"
+            visible: dnaRow.trackArtwork || !!dnaRow.entry.imageUrl
             recommendation: dnaRow.entry
             displayIcon: "music"
             padding: 0; radius: 12
@@ -5206,6 +5208,9 @@ BrandWindow {
                         GlassCard {
                             id: dnaCard
                             required property var modelData
+                            readonly property bool showsTrackArtwork: [
+                                "music_dna_card_recent_tracks", "music_dna_card_recent_favorites", "music_dna_card_top_tracks"
+                            ].includes(modelData.key)
                             objectName: modelData.key
                             Layout.fillWidth: true
                             Layout.preferredWidth: 1
@@ -5301,6 +5306,7 @@ BrandWindow {
                                 MusicDnaRow {
                                     required property var modelData
                                     entry: modelData
+                                    trackArtwork: dnaCard.showsTrackArtwork
                                 }
                             }
                             Repeater {
@@ -5364,6 +5370,7 @@ BrandWindow {
                                         MusicDnaRow {
                                             required property var modelData
                                             entry: modelData
+                                            trackArtwork: dnaCard.showsTrackArtwork
                                         }
                                     }
                                 }
