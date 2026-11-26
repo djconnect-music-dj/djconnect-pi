@@ -1339,6 +1339,18 @@ def main():
         assert ask_dj.property("searchKeyboardOpen")
         assert QMetaObject.invokeMethod(ask_history, "dragStarted")
         assert not ask_dj.property("searchKeyboardOpen") and find_input.property("text") == "Earlier"
+        ask_dj.setProperty("searchKeyboardOpen", True)
+        QTest.qWait(65)
+        ask_history.setProperty("contentY", ask_history.property("originY") + 440)
+        QTest.qWait(65)
+        selected_message = ask_dj.property("selectedMessageId")
+        assert selected_message and jump_top.property("visible")
+        jump_position = jump_top.mapToScene(QPointF(jump_top.width() / 2, jump_top.height() / 2)).toPoint()
+        QTest.mouseClick(window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, jump_position)
+        QTest.qWait(65)
+        assert ask_history.property("atYBeginning") and not jump_top.property("visible")
+        assert ask_dj.property("searchOpen") and not ask_dj.property("searchKeyboardOpen")
+        assert find_input.property("text") == "Earlier" and ask_dj.property("selectedMessageId") == selected_message
         window.setProperty("activeScreen", "more")
         QTest.qWait(65)
         window.setProperty("activeScreen", "askdj")

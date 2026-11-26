@@ -5020,6 +5020,7 @@ BrandWindow {
 
         function scrollToTop() {
             readingAnchor = null
+            searchKeyboardOpen = false
             askDjMessagesView.positionViewAtBeginning()
         }
 
@@ -5988,7 +5989,7 @@ BrandWindow {
                 height: width
                 iconName: "arrow_up"
                 visible: askDjMessagesView.count > 0 && !askDjMessagesView.atYBeginning
-                    && !askDjPanel.searchOpen && !askDjPanel.chatKeyboardOpen
+                    && !askDjPanel.chatKeyboardOpen
                 Accessible.name: root.tr("session_back_top")
                 ToolTip.visible: hovered
                 ToolTip.text: root.tr("session_back_top")
