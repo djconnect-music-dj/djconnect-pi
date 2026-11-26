@@ -1174,8 +1174,11 @@ def main():
             assert search_toggle.property("activeFocus")
             QTest.keyClick(window, log_find.key(), log_find.keyboardModifiers())
             search_input.setProperty("text", "sample")
-            log_path.write_text("", encoding="utf-8")
-            QMetaObject.invokeMethod(logs_refresh, "clicked")
+            QMetaObject.invokeMethod(visual_item(logs, "logsClear"), "clicked")
+            assert window.property("clearLogsConfirmOpen") and log_path.stat().st_size > 0
+            QMetaObject.invokeMethod(visual_item(window.contentItem(), "confirmClearLogs"), "clicked")
+            assert not window.property("clearLogsConfirmOpen") and log_path.stat().st_size == 0
+            assert backend.toastVisible and backend.toastText == backend.t("logs_cleared")
             empty_logs = visual_item(logs, "logsEmptyMessage")
             assert empty_logs.property("visible") and empty_logs.property("text") == backend.t("logs_empty")
             assert not logs.property("searching") and search_input.property("text") == ""

@@ -156,7 +156,6 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "logs": "Logs",
         "clear_logs": "Logs wissen",
         "clear_logs_confirm_title": "Logs wissen?",
-        "logs_cleared": "Logs gewist",
         "about": "Over",
         "about_title": "Over DJConnect",
         "tagline": "Jouw muziek. Jouw DJ.",
@@ -452,7 +451,6 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "logs": "Logs",
         "clear_logs": "Clear logs",
         "clear_logs_confirm_title": "Clear logs?",
-        "logs_cleared": "Logs cleared",
         "about": "About",
         "about_title": "About DJConnect",
         "tagline": "Your music. Your DJ.",
@@ -1479,6 +1477,7 @@ for _key, _values in _INTRODUCTION_TRANSLATIONS.items():
 _LOG_SEARCH_TRANSLATIONS = {
     "copy_logs": ("Copy logs", "Logs kopiëren", "Protokolle kopieren", "Copier les journaux", "Copiar registros"),
     "logs_copied": ("Logs copied", "Logs gekopieerd", "Protokolle kopiert", "Journaux copiés", "Registros copiados"),
+    "logs_cleared": ("Logs cleared", "Logs gewist", "Protokolle gelöscht", "Journaux effacés", "Registros borrados"),
     "logs_search": ("Search logs", "Zoek in logs", "Protokolle durchsuchen", "Rechercher dans les journaux", "Buscar en registros"),
     "logs_previous_match": ("Previous match", "Vorig resultaat", "Vorheriger Treffer", "Résultat précédent", "Coincidencia anterior"),
     "logs_next_match": ("Next match", "Volgend resultaat", "Nächster Treffer", "Résultat suivant", "Coincidencia siguiente"),

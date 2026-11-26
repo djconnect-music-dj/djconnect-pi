@@ -2039,7 +2039,7 @@ class DJConnectBackend(QObject):
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text("", encoding="utf-8")
-            self._logs_text = self.tr_key("logs_cleared")
+            self._logs_text = ""
             self.showToastForContext(self.tr_key("logs_cleared"), "diagnostics")
         except Exception as exc:  # noqa: BLE001 - log clearing must report all local filesystem failures to the UI
             self._logs_text = self.tr_key("logs_failed", error=exc)

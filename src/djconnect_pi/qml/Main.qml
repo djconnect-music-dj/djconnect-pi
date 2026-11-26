@@ -6330,6 +6330,7 @@ BrandWindow {
                 }
 
                 DangerButton {
+                    objectName: "confirmClearLogs"
                     text: root.tr("clear_logs")
                     Layout.fillWidth: true
                     Layout.preferredHeight: 56
