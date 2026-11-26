@@ -10,7 +10,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 import requests
-from PySide6.QtCore import Q_ARG, Q_RETURN_ARG, QMetaObject, QObject, QPointF, Qt, QTimer, QUrl, Slot, qInstallMessageHandler
+from PySide6.QtCore import Q_ARG, Q_RETURN_ARG, QMetaObject, QObject, QPoint, QPointF, Qt, QTimer, QUrl, Slot, qInstallMessageHandler
 from PySide6.QtGui import QAccessible, QDesktopServices, QGuiApplication, QKeySequence
 from PySide6.QtQml import QQmlApplicationEngine, QQmlExpression
 from PySide6.QtQuickControls2 import QQuickStyle
@@ -1351,6 +1351,24 @@ def main():
         assert ask_history.property("atYBeginning") and not jump_top.property("visible")
         assert ask_dj.property("searchOpen") and not ask_dj.property("searchKeyboardOpen")
         assert find_input.property("text") == "Earlier" and ask_dj.property("selectedMessageId") == selected_message
+        touch = QTest.createTouchDevice()
+        stroke = QTest.touchEvent(window, touch, False)
+        start = ask_history.mapToScene(QPointF(ask_history.width() / 2, 24)).toPoint()
+        with (patch.object(backend, "_sync_config_from_disk"),
+              patch.object(backend.client, "ask_dj_history", return_value={
+                  "success": True, "clear_revision": 2, "history_revision": 13, "messages": [],
+              }),
+              patch.object(backend._executor, "submit") as dispatch):
+            stroke.press(0, start, window).commit()
+            for distance in (48, 96, 144, 192, 240):
+                stroke.move(0, start + QPoint(0, distance), window).commit()
+                QTest.qWait(20)
+            stroke.release(0, start + QPoint(0, 240), window).commit()
+            QTest.qWait(80)
+            dispatch.assert_called_once()
+            dispatch.call_args.args[0]()
+        assert ask_dj.property("searchOpen") and find_input.property("text") == "Earlier"
+        assert ask_dj.property("selectedMessageId") == selected_message
         window.setProperty("activeScreen", "more")
         QTest.qWait(65)
         window.setProperty("activeScreen", "askdj")

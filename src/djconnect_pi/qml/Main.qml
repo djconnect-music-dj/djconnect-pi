@@ -5283,7 +5283,7 @@ BrandWindow {
                         flickable: askDjMessagesView
                         canRefresh: askDjPanel.visible && root.active && !root.screenBlanked
                             && askDjPanel.canRefreshHistory
-                            && djconnect.askDjMessages.length > 0 && !askDjPanel.searchOpen && !askDjPanel.chatKeyboardOpen
+                            && djconnect.askDjMessages.length > 0
                         onRefreshRequested: askDjPanel.refreshHistory()
                     }
 
