@@ -3962,9 +3962,16 @@ BrandWindow {
                         Menu {
                             id: discoveryFeedbackMenu
                             objectName: "discoveryFeedbackMenu"
-                            y: parent.height
+                            margins: 8
+                            onAboutToShow: {
+                                const button = feedbackRecommendationButton
+                                const bottom = button.mapToItem(root.contentItem, 0, button.height).y
+                                y = bottom + implicitHeight + margins <= root.contentItem.height
+                                    ? button.height : -implicitHeight
+                            }
                             onOpened: currentIndex = 0
                             MenuItem {
+                                objectName: "discoveryFeedbackFirstOption"
                                 text: root.tr("music_discovery_not_for_me")
                                 onTriggered: discoveryDetail.sendFeedback("not_for_me")
                             }
@@ -3973,6 +3980,7 @@ BrandWindow {
                                 onTriggered: discoveryDetail.sendFeedback("less_like_this")
                             }
                             MenuItem {
+                                objectName: "discoveryFeedbackLastOption"
                                 text: root.tr("music_discovery_hide_artist")
                                 onTriggered: discoveryDetail.sendFeedback("hide_artist")
                             }

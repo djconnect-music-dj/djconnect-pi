@@ -747,6 +747,13 @@ def main():
                 QTest.keyClick(window, Qt.Key.Key_Space)
                 QTest.qWait(180)
                 assert feedback_menu.property("opened") and feedback_menu.property("currentIndex") == 0
+                first_option = visual_item(window.contentItem(), "discoveryFeedbackFirstOption")
+                last_option = visual_item(window.contentItem(), "discoveryFeedbackLastOption")
+                button_top = feedback.mapToScene(QPointF()).y()
+                menu_top_left = first_option.mapToScene(QPointF())
+                menu_end = last_option.mapToScene(QPointF(last_option.width(), last_option.height()))
+                assert 0 <= menu_top_left.y() < menu_end.y() <= button_top + 1
+                assert 0 <= menu_top_left.x() < menu_end.x() <= width
                 QTest.keyClick(window, Qt.Key.Key_Down)
                 assert feedback_menu.property("currentIndex") == 1
                 QTest.keyClick(window, Qt.Key.Key_Escape)
