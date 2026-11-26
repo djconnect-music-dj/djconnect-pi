@@ -243,8 +243,8 @@ def test_qml_has_touch_readable_glass_controls_and_scrollable_settings() -> None
     assert "visible: panel.matches.length === 0" in main_qml
     assert "djconnect.loadQueue()" in main_qml
     assert "djconnect.loadPlaylists()" in main_qml
-    assert "onRefreshRequested: djconnect.loadQueue()" in main_qml
-    assert "onRefreshRequested: djconnect.loadPlaylists()" in main_qml
+    assert "onRefreshRequested: djconnect.loadQueue(true)" in main_qml
+    assert "onRefreshRequested: djconnect.loadPlaylists(true)" in main_qml
     assert "djconnect.manualRefresh()" in main_qml
     assert "component RefreshIconButton" in main_qml
     assert main_qml.count("RefreshIconButton {") >= 7

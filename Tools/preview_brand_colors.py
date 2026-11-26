@@ -204,6 +204,15 @@ def main():
         assert media_refresh.property("loading") and not media_refresh.property("enabled")
         assert not media_pull_refresh.property("canRefresh")
         backend._finish_media_list_load("playlists")
+        playlist_response = {"success": True, "playlists": [
+            {"name": "Refreshed playlist", "uri": "spotify:playlist:fixture-only"},
+        ]}
+        with (patch.object(backend, "_sync_config_from_disk"),
+              patch.object(backend.client, "command", return_value=playlist_response),
+              patch.object(backend._executor, "submit") as submit):
+            QMetaObject.invokeMethod(media_refresh, "clicked")
+            submit.call_args.args[0]()
+        assert backend.toastText == backend.t("playlists_updated") and backend.toastIcon == "playlists"
         backend.playback = Playback(title="Confirmed previous track", uri="fixture:previous")
         with (patch.object(backend.client, "command", return_value={"success": True}),
               patch.object(backend, "_persist_backend_summary"),

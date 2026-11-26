@@ -2480,7 +2480,7 @@ BrandWindow {
             playCommand: "play_context_at"
             items: djconnect.queueItems
             loading: djconnect.queueLoading
-            onRefreshRequested: djconnect.loadQueue()
+            onRefreshRequested: djconnect.loadQueue(true)
         }
     }
 
@@ -2498,7 +2498,7 @@ BrandWindow {
             playCommand: "start_playlist"
             items: djconnect.playlistItems
             loading: djconnect.playlistsLoading
-            onRefreshRequested: djconnect.loadPlaylists()
+            onRefreshRequested: djconnect.loadPlaylists(true)
         }
     }
 

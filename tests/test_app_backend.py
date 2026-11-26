@@ -3238,6 +3238,27 @@ def test_media_list_demo_and_unpaired_never_dispatch(tmp_path: Path, screen, slo
     backend.client.command.assert_not_called()
 
 
+@pytest.mark.parametrize("kind", ["queue", "playlists"])
+@pytest.mark.parametrize("failure", [False, True])
+def test_manual_media_list_refresh_reports_outcome(tmp_path, kind, failure):
+    ensure_app()
+    config_path = tmp_path / "config.json"
+    save_config(config_path, Config(paired=True, device_token="fixture", ha_url="http://fixture.invalid"))
+    backend = DJConnectBackend(config_path)
+    backend._executor.submit = Mock()
+    setattr(backend, f"_{'queue' if kind == 'queue' else 'playlist'}_items", [{"title": "Previous list"}])
+    backend.client.command = Mock(return_value={"success": not failure, kind: []})
+    refresh = backend.loadQueue if kind == "queue" else backend.loadPlaylists
+
+    refresh(True)
+    backend._executor.submit.call_args.args[0]()
+
+    items = backend.queueItems if kind == "queue" else backend.playlistItems
+    assert items == ([{"title": "Previous list"}] if failure else [])
+    assert backend.toastText == backend.t(f"{kind}_{'update_failed' if failure else 'updated'}")
+    assert backend.toastIcon == kind
+
+
 def test_media_list_requests_coalesce_per_list_and_release_after_failure(tmp_path: Path) -> None:
     ensure_app()
     path = tmp_path / "config.json"
