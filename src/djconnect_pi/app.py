@@ -72,6 +72,7 @@ from .logging_config import clear_log_files, setup_logging
 from .navigation_gesture import EdgeBackGesture
 from .session_controller import SessionController
 from .session_playback_control import output_id
+from .session_playback_control import reference as session_playback_reference
 from .session_projection import volume_observation
 from .session_transport import SessionError, session_profile_id
 from .shared_settings import SettingsError
@@ -165,6 +166,7 @@ class DJConnectBackend(QObject):
     musicDiscoveryItemsChanged = Signal()
     musicDiscoveryPlayed = Signal(str, str)
     trackInsightChanged = Signal()
+    trackInsightPlaybackItemChanged = Signal()
     demoModeChanged = Signal()
     glassChanged = Signal()
     screenTimeoutChanged = Signal()
@@ -546,6 +548,18 @@ class DJConnectBackend(QObject):
     @Property(str, notify=trackInsightChanged)
     def trackInsightTitle(self) -> str:
         return self._track_insight_title
+
+    @Property(str, notify=trackInsightPlaybackItemChanged)
+    def trackInsightPlaybackItemId(self) -> str:
+        uri = self.playback.uri.strip()
+        return hashlib.sha256(uri.encode()).hexdigest()[:24] if uri else ""
+
+    @Slot(str, str, result=bool)
+    def canOpenSessionTrackInsight(self, session_id: str, item_id: str) -> bool:
+        current = session_playback_reference(self._session_controller)
+        return bool(self.paired and self.hasTrackTitle and not self.askDjBusy and item_id
+                    and current and current[:2] == (session_id, item_id)
+                    and item_id == self.trackInsightPlaybackItemId)
 
     @Property(str, notify=trackInsightChanged)
     def trackInsightArtist(self) -> str:
@@ -2685,6 +2699,8 @@ class DJConnectBackend(QObject):
             self.titleChanged.emit()
         if old.artist != playback.artist:
             self.artistChanged.emit()
+        if old.uri != playback.uri:
+            self.trackInsightPlaybackItemChanged.emit()
         if old.image_url != playback.image_url:
             self.imageUrlChanged.emit()
         if old.is_playing != playback.is_playing:

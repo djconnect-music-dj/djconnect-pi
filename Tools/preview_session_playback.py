@@ -383,7 +383,8 @@ def main():
                 progress = window.findChild(QObject, 'sessionPlaybackProgress')
                 assert progress.height() > 0
                 artwork_right = artwork_button.mapToItem(metadata, artwork_button.width(), 0).x()
-                progress_origin = progress.mapToItem(metadata, 0, 0)
+                progress_row = window.findChild(QObject, 'sessionPlaybackProgressRow')
+                progress_origin = progress_row.mapToItem(metadata, 0, 0)
                 if width == 720:
                     assert abs(progress_origin.x() - artwork_button.mapToItem(metadata, 0, 0).x()) < 1
                     assert progress_origin.y() >= artwork_button.mapToItem(metadata, 0, artwork_button.height()).y()
@@ -468,6 +469,28 @@ def main():
                 QTest.keyClick(window, Qt.Key.Key_Escape)
                 QTest.qWait(120)
                 assert not transport_panel.property('opened') and not intents
+
+                insight = window.findChild(QObject, 'sessionPlaybackInsight')
+                original_playback = backend.playback
+                original_request = backend._request_track_insight
+                backend._request_track_insight = Mock()
+                backend.playback = Playback(title='Another track', uri='spotify:track:mismatch', is_playing=True)
+                backend.titleChanged.emit()
+                backend.trackInsightPlaybackItemChanged.emit()
+                assert not insight.property('enabled')
+                backend.playback.uri = 'spotify:track:' + session['broadcast']['playback']['source_url'].rsplit('/', 1)[-1]
+                backend.trackInsightPlaybackItemChanged.emit()
+                assert insight.property('enabled') and insight.width() >= 44
+                click('sessionPlaybackInsight')
+                assert window.property('activeScreen') == 'trackinsight'
+                backend._request_track_insight.assert_called_once_with(show_toast=False)
+                assert not transport_panel.property('opened') and not intents
+                window.setProperty('activeScreen', 'session')
+                backend.playback = original_playback
+                backend._request_track_insight = original_request
+                backend.titleChanged.emit()
+                backend.trackInsightPlaybackItemChanged.emit()
+                drain()
 
                 initial_caps = backend.cfg.music_backend_capabilities
                 backend.cfg.music_backend_capabilities = {

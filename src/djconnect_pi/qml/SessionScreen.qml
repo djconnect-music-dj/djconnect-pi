@@ -1337,99 +1337,129 @@ Item {
                             }
                         }
                     }
-                    SessionPlaybackShortcut {
-                        id: progressButton
-                        objectName: "sessionPlaybackProgress"
+                    RowLayout {
+                        objectName: "sessionPlaybackProgressRow"
                         visible: playbackSources.ready && screen.state.playback.time_label !== undefined
                         Layout.row: 1
                         Layout.column: screen.compact ? 0 : 1
                         Layout.columnSpan: screen.compact ? 2 : 1
                         Layout.fillWidth: true
-                        enabled: !!screen.state.playback_control.available
-                        opacity: 1
-                        padding: 0
-                        implicitHeight: 44
-                        Accessible.name: screen.tr("session_playback_controls")
-                        Accessible.description: screen.state.playback.time_label || ""
-                        Accessible.onPressAction: {
-                            if (progressButton.visible && progressButton.enabled && progressButton.transportEpoch > 0)
-                                progressButton.currentTrackClicked()
-                        }
-                        background: Rectangle {
-                            radius: 8
-                            color: progressButton.down ? BrandTheme.colors.surfaceRaised : "transparent"
-                            border.color: progressButton.activeFocus ? BrandTheme.colors.actionAccent : "transparent"
-                        }
-                        onVisibleChanged: if (!visible && transportPanel) transportPanel.close()
-                        onEnabledChanged: if (!enabled && transportPanel) transportPanel.close()
-                        onCurrentTrackClicked: {
-                            transportPanel.captureSource(progressButton)
-                            transportPanel.open()
-                        }
-                        contentItem: RowLayout {
-                            Row {
-                                id: playbackMeter
-                                objectName: "sessionPlaybackMeter"
-                                readonly property bool playing: screen.state.playback.state === "playing"
-                                readonly property bool animating: visible && playing && GlassStyle.motionEnabled
-                                    && screen.backend.releaseProfile !== "pi-zero-2w-arm64"
-                                    && Qt.application.state === Qt.ApplicationActive
-                                property real phase: 0
-                                spacing: 2
-                                Layout.preferredWidth: 18
-                                Layout.preferredHeight: 20
-                                Accessible.ignored: true
-                                Timer {
-                                    interval: 80
-                                    repeat: true
-                                    running: playbackMeter.animating
-                                    onTriggered: playbackMeter.phase = (playbackMeter.phase + 0.32) % (2 * Math.PI)
-                                }
-                                Repeater {
-                                    model: [0.85, 0.35, 0.62, 0.25]
-                                    Rectangle {
-                                        required property int index
-                                        required property real modelData
-                                        readonly property real level: playbackMeter.animating
-                                            ? 0.18 + 0.82 * (0.5 + 0.5 * Math.sin(playbackMeter.phase + index * 1.7))
-                                            : playbackMeter.playing ? modelData : 0.16
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        width: 3
-                                        height: Math.max(3, playbackMeter.height * level)
-                                        radius: 1
-                                        color: BrandTheme.colors.text
+                        SessionPlaybackShortcut {
+                            id: insightShortcut
+                            objectName: "sessionPlaybackInsight"
+                            Layout.preferredWidth: 44
+                            implicitHeight: 44
+                            opacity: 1
+                            padding: 0
+                            enabled: screen.liveViewOpen && !!screen.state.playback_control.available
+                                && screen.backend.hasTrackTitle && !screen.backend.askDjBusy
+                                && screen.state.playback.item_id === screen.backend.trackInsightPlaybackItemId
+                            Accessible.name: screen.tr("track_insight")
+                            Accessible.onPressAction: {
+                                if (insightShortcut.enabled && insightShortcut.visible)
+                                    insightShortcut.currentTrackClicked()
+                            }
+                            background: Item {}
+                            onCurrentTrackClicked: {
+                                if (!screen.backend.canOpenSessionTrackInsight(screen.state.session_id, screen.state.playback.item_id))
+                                    return
+                                screen.navigate("trackinsight")
+                                if (!screen.backend.playing) screen.backend.refreshTrackInsight()
+                            }
+                            contentItem: Item {
+                                Row {
+                                    id: playbackMeter
+                                    objectName: "sessionPlaybackMeter"
+                                    readonly property bool playing: screen.state.playback.state === "playing"
+                                    readonly property bool animating: visible && playing && GlassStyle.motionEnabled
+                                        && screen.backend.releaseProfile !== "pi-zero-2w-arm64"
+                                        && Qt.application.state === Qt.ApplicationActive
+                                    property real phase: 0
+                                    spacing: 2
+                                    anchors.centerIn: parent
+                                    width: 18
+                                    height: 20
+                                    Accessible.ignored: true
+                                    Timer {
+                                        interval: 80
+                                        repeat: true
+                                        running: playbackMeter.animating
+                                        onTriggered: playbackMeter.phase = (playbackMeter.phase + 0.32) % (2 * Math.PI)
+                                    }
+                                    Repeater {
+                                        model: [0.85, 0.35, 0.62, 0.25]
+                                        Rectangle {
+                                            required property int index
+                                            required property real modelData
+                                            readonly property real level: playbackMeter.animating
+                                                ? 0.18 + 0.82 * (0.5 + 0.5 * Math.sin(playbackMeter.phase + index * 1.7))
+                                                : playbackMeter.playing ? modelData : 0.16
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            width: 3
+                                            height: Math.max(3, playbackMeter.height * level)
+                                            radius: 1
+                                            color: BrandTheme.colors.text
+                                        }
                                     }
                                 }
                             }
-                            ProgressBar {
-                                id: playbackProgress
-                                objectName: "sessionPlaybackBar"
-                                value: screen.state.playback.progress || 0; Layout.fillWidth: true
-                                Accessible.ignored: true
-                                background: Rectangle { implicitHeight: 6; radius: 3; color: BrandTheme.colors.text; opacity: 0.18 }
-                                contentItem: Item {
-                                    implicitHeight: 6
-                                    Rectangle { width: playbackProgress.visualPosition * parent.width; height: parent.height; radius: 3; color: BrandTheme.colors.text }
-                                }
+                        }
+                        SessionPlaybackShortcut {
+                            id: progressButton
+                            objectName: "sessionPlaybackProgress"
+                            Layout.fillWidth: true
+                            enabled: !!screen.state.playback_control.available
+                            opacity: 1
+                            padding: 0
+                            implicitHeight: 44
+                            Accessible.name: screen.tr("session_playback_controls")
+                            Accessible.description: screen.state.playback.time_label || ""
+                            Accessible.onPressAction: {
+                                if (progressButton.visible && progressButton.enabled && progressButton.transportEpoch > 0)
+                                    progressButton.currentTrackClicked()
                             }
-                            Text {
-                                id: playbackTime
-                                objectName: "sessionPlaybackTime"
-                                text: screen.state.playback.time_label || ""
-                                textFormat: Text.PlainText
-                                font.pixelSize: screen.compact ? 16 : 18
-                                font.features: ({ "tnum": 1 })
-                                color: BrandTheme.colors.muted
-                                horizontalAlignment: Text.AlignRight
-                                Layout.preferredWidth: Math.max(implicitWidth, playbackTimeWidth.advanceWidth)
-                                Accessible.ignored: true
+                            background: Rectangle {
+                                radius: 8
+                                color: progressButton.down ? BrandTheme.colors.surfaceRaised : "transparent"
+                                border.color: progressButton.activeFocus ? BrandTheme.colors.actionAccent : "transparent"
+                            }
+                            onVisibleChanged: if (!visible && transportPanel) transportPanel.close()
+                            onEnabledChanged: if (!enabled && transportPanel) transportPanel.close()
+                            onCurrentTrackClicked: {
+                                transportPanel.captureSource(progressButton)
+                                transportPanel.open()
+                            }
+                            contentItem: RowLayout {
+                                ProgressBar {
+                                    id: playbackProgress
+                                    objectName: "sessionPlaybackBar"
+                                    value: screen.state.playback.progress || 0; Layout.fillWidth: true
+                                    Accessible.ignored: true
+                                    background: Rectangle { implicitHeight: 6; radius: 3; color: BrandTheme.colors.text; opacity: 0.18 }
+                                    contentItem: Item {
+                                        implicitHeight: 6
+                                        Rectangle { width: playbackProgress.visualPosition * parent.width; height: parent.height; radius: 3; color: BrandTheme.colors.text }
+                                    }
+                                }
+                                Text {
+                                    id: playbackTime
+                                    objectName: "sessionPlaybackTime"
+                                    text: screen.state.playback.time_label || ""
+                                    textFormat: Text.PlainText
+                                    font.pixelSize: screen.compact ? 16 : 18
+                                    font.features: ({ "tnum": 1 })
+                                    color: BrandTheme.colors.muted
+                                    horizontalAlignment: Text.AlignRight
+                                    Layout.preferredWidth: Math.max(implicitWidth, playbackTimeWidth.advanceWidth)
+                                    Accessible.ignored: true
 
-                                TextMetrics {
-                                    id: playbackTimeWidth
-                                    font: playbackTime.font
-                                    text: {
-                                        const duration = playbackTime.text.split(" / ")[1]
-                                        return duration ? duration + " / " + duration : playbackTime.text
+                                    TextMetrics {
+                                        id: playbackTimeWidth
+                                        font: playbackTime.font
+                                        text: {
+                                            const duration = playbackTime.text.split(" / ")[1]
+                                            return duration ? duration + " / " + duration : playbackTime.text
+                                        }
                                     }
                                 }
                             }
