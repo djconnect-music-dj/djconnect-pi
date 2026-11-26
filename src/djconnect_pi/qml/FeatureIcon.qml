@@ -398,9 +398,15 @@ Canvas {
                 circle(16, 16, 10, false)
                 line(12, 12, 20, 20); line(20, 12, 12, 20)
             } else if (iconName === "refresh") {
-                ctx.beginPath(); ctx.arc(px(16), py(17), s * 0.28, -Math.PI * 0.65, Math.PI * 1.1); ctx.stroke()
-                line(19, 5, 23, 10); line(23, 10, 17, 11)
-
+                const radius = 10.5
+                const tipX = 16 + radius * Math.SQRT1_2
+                const tipY = 17 - radius * Math.SQRT1_2
+                ctx.beginPath()
+                ctx.arc(px(16), py(17), radius * s / 32, Math.PI / 10, Math.PI * 7 / 4)
+                ctx.moveTo(px(tipX), py(tipY - 6))
+                ctx.lineTo(px(tipX), py(tipY))
+                ctx.lineTo(px(tipX - 6), py(tipY))
+                ctx.stroke()
             }
 
             if (heroGradient && whiteSweep >= 0) {
