@@ -3618,6 +3618,17 @@ Item {
                                 wrapMode: Text.WordWrap
                                 Layout.fillWidth: true
                             }
+                            Text {
+                                objectName: "sessionSearchPlaybackCoverage"
+                                visible: searchSources.ready && modelData.kind === "playback_observed"
+                                    && (modelData.playback || {}).coverage === "observed_playing_not_full_listen"
+                                text: screen.tr("session_search_playback_coverage")
+                                textFormat: Text.PlainText
+                                color: BrandTheme.colors.muted
+                                font.pixelSize: 16
+                                wrapMode: Text.WordWrap
+                                Layout.fillWidth: true
+                            }
                             SessionAttribution { id: searchSources; sources: modelData.display_sources || []; requiresSpotify: modelData.requires_spotify_attribution || false; spotifyURL: modelData.spotify_source_url || ""; Layout.fillWidth: true }
                             GlassButton {
                                 text: screen.tr("session_open_entry"); enabled: !screen.owner.busy

@@ -1410,6 +1410,10 @@ def main():
         assert QMetaObject.invokeMethod(keyboard, "insertKey", Q_ARG("QVariant", "synthetic"))
         assert search_input.property("text") == "synthetic"
         matches = [dict(tail["entries"][i], highlights=[{"start_utf16": 2, "length_utf16": 9}]) for i in (0, 3)]
+        matches[0].pop("archive_basis", None)
+        matches[0].update(kind="playback_observed", playback={
+            "coverage": "observed_playing_not_full_listen", "title": "Synthetic observed track",
+        })
         owner._search = search_page({"success": True, "schema_version": 2, "history_contract_version": 2,
             "session_id": sid, "query": "synthetic", "revision": tail["revision"], "matches": matches,
             "returned_count": 2, "total_count": 2, "complete": True, "next_cursor": None,
@@ -1423,6 +1427,8 @@ def main():
         result_time = visual_item(window.contentItem(), "sessionSearchResultTime")
         expected_time = owner.formatTimestamp(owner._search["matches"][0]["occurred_at"])
         assert expected_time and result_time.property("visible") and result_time.property("text") == expected_time
+        coverage = visual_item(window.contentItem(), "sessionSearchPlaybackCoverage")
+        assert coverage.property("visible") and coverage.property("text") == backend.t("session_search_playback_coverage")
         search_result = deepcopy(owner._search)
         for locale in ("en", "nl", "de", "fr", "es"):
             backend.setLanguage(locale)
