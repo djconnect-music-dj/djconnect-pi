@@ -1863,6 +1863,13 @@ _PLAYBACK_CONTROL_TRANSLATIONS = {
     "session_playback_controls": ("Playback controls", "Afspeelbediening", "Wiedergabesteuerung", "Commandes de lecture", "Controles de reproducción"),
     "session_refresh_playback_status": ("Refresh playback status", "Afspeelstatus verversen", "Wiedergabestatus aktualisieren", "Actualiser l’état de lecture", "Actualizar el estado de reproducción"),
     "session_refreshing_playback_status": ("Refreshing playback status…", "Afspeelstatus wordt opgehaald…", "Wiedergabestatus wird aktualisiert…", "Actualisation de l’état de lecture…", "Actualizando el estado de reproducción…"),
+    "session_playback_refresh_failed": (
+        "Could not refresh playback status. Try again.",
+        "Afspeelstatus ophalen is mislukt. Probeer het opnieuw.",
+        "Der Wiedergabestatus konnte nicht aktualisiert werden. Versuche es erneut.",
+        "Impossible d’actualiser l’état de lecture. Réessayez.",
+        "No se pudo actualizar el estado de reproducción. Inténtalo de nuevo.",
+    ),
     "session_playback_sent": (
         "Command sent. Playback updates from the server.",
         "Opdracht verstuurd. De server werkt de afspeelstatus bij.",

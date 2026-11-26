@@ -2698,13 +2698,14 @@ Item {
             visible: status.length > 0
             Layout.fillWidth: true
             text: screen.tr(status === "sending" ? "session_question_sending"
-                : status === "accepted" ? "session_playback_sent" : "session_uncertain")
+                : status === "accepted" ? "session_playback_sent"
+                : refreshTransport.refreshFailed ? "session_playback_refresh_failed" : "session_uncertain")
             textFormat: Text.PlainText
             Accessible.role: Accessible.StatusBar
             Accessible.name: text
-            onStatusChanged: if (status.length) Qt.callLater(announceStatus)
+            onTextChanged: if (status.length) Qt.callLater(announceStatus)
             function announceStatus() {
-                if (visible && status.length) Accessible.announce(text)
+                if (visible && status.length && !refreshTransport.refreshingStatus) Accessible.announce(text)
             }
             color: BrandTheme.colors.text
             font.pixelSize: 18
@@ -2715,6 +2716,7 @@ Item {
             id: refreshTransport
             objectName: "trackArtworkPlaybackRefresh"
             property bool refreshingStatus: false
+            property bool refreshFailed: false
             visible: refreshingStatus || screen.state.playback_control.status === "uncertain"
             Layout.alignment: Qt.AlignHCenter
             Layout.maximumWidth: transportControls.width
@@ -2726,10 +2728,20 @@ Item {
             implicitWidth: contentItem.implicitWidth + (refreshingStatus ? 72 : 36)
             onClicked: {
                 refreshingStatus = true
+                refreshFailed = false
                 screen.owner.refreshPlayback()
                 if (!screen.owner.refreshing) refreshingStatus = false
             }
-            onVisibleChanged: if (!visible) refreshingStatus = false
+            onVisibleChanged: {
+                if (visible) return
+                refreshingStatus = false
+                refreshFailed = false
+            }
+            function finishRefresh() {
+                if (!refreshingStatus || screen.owner.refreshing) return
+                refreshFailed = screen.state.playback_control.status === "uncertain"
+                refreshingStatus = false
+            }
             BusyIndicator {
                 objectName: "trackArtworkPlaybackRefreshSpinner"
                 anchors.left: parent.left
@@ -2742,7 +2754,7 @@ Item {
             Connections {
                 target: screen.owner
                 function onRefreshingChanged() {
-                    if (!screen.owner.refreshing) refreshTransport.refreshingStatus = false
+                    if (!screen.owner.refreshing) Qt.callLater(refreshTransport.finishRefresh)
                 }
             }
         }

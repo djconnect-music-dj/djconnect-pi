@@ -413,6 +413,10 @@ def main():
                 drain()
                 capture('fullscreen-track-art-refresh-failed')
                 assert owner.state['playback_control']['status'] == 'uncertain'
+                command_status = visual(overlay, 'sessionTransportCommandStatus')
+                expected_error = backend.t('session_playback_refresh_failed')
+                assert command_status.property('visible') and command_status.property('text') == expected_error
+                assert QAccessible.queryAccessibleInterface(command_status).text(QAccessible.Text.Name) == expected_error
                 assert refresh_status.property('visible') and refresh_status.property('enabled')
                 assert not spinner.property('running') and not visual(overlay, 'sessionPlaybackPrevious').property('enabled')
                 owner.transport.active.side_effect = None
@@ -420,6 +424,7 @@ def main():
                 assert owner.refreshing and len(reads) == 1
                 drain()
                 assert not refresh_status.property('visible') and not spinner.property('running') and not intents
+                assert not command_status.property('visible')
                 owner.transport.active.return_value = previous_active_result
                 current_playback = owner._session['broadcast']['playback']
                 focused_transport = visual(overlay, 'sessionPlaybackPrevious')
