@@ -820,6 +820,10 @@ class DJConnectBackend(QObject):
     def musicBackendSupportsSeek(self) -> bool:
         return self.cfg.music_backend_capabilities.get("supports_seek") is True
 
+    @Property(bool, notify=settingsChanged)
+    def musicBackendSupportsShuffle(self) -> bool:
+        return self.cfg.music_backend_capabilities.get("supports_shuffle") is True
+
     @Property(bool, notify=outputDeviceChanged)
     def playbackSeekOutputKnown(self) -> bool:
         return bool(output_id(self.playback.output_device_id))

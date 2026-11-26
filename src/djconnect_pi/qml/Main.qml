@@ -1844,6 +1844,24 @@ BrandWindow {
                 }
             }
 
+            RowLayout {
+                Layout.alignment: Qt.AlignHCenter
+                visible: djconnect.demoMode || djconnect.musicBackendSupportsShuffle
+                GlassButton {
+                    objectName: "nowShuffle"
+                    readonly property string modeLabel: root.tr(djconnect.shuffle ? "shuffle_on" : "shuffle_off")
+                    iconName: "shuffle"
+                    checked: djconnect.shuffle
+                    enabled: nowPanel.playbackActionsAvailable && !djconnect.busy
+                        && (djconnect.demoMode || djconnect.musicBackendAvailable)
+                    Accessible.name: root.tr("shuffle")
+                    Accessible.description: modeLabel
+                    ToolTip.text: modeLabel
+                    ToolTip.visible: hovered
+                    onClicked: djconnect.toggleShuffle()
+                }
+            }
+
             GlassButton {
                 objectName: "nowPlaybackOutput"
                 readonly property string reportedOutput: djconnect.outputDevice.trim()
