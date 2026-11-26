@@ -1289,9 +1289,9 @@ Item {
                 anchors.centerIn: parent; spacing: 2
                 GlassButton {
                     objectName: "sessionToolbarConnection"
-                    visible: screen.sessionControlsVisible || screen.idleWelcome
                     iconName: "globe"; foregroundColor: screen.idleWelcome ? BrandTheme.colors.cyan : BrandTheme.colors.text
                     Accessible.name: screen.tr("connection_type")
+                    Accessible.description: screen.backend.connectionType
                     implicitWidth: 52; background: Item {}
                     onClicked: connectionInfo.open()
                 }
@@ -3386,13 +3386,14 @@ Item {
     }
     GlassPopup {
         id: connectionInfo
+        objectName: "sessionConnectionInfo"
         x: screen.width - width - 20; y: toolbar.y + toolbar.height + 8
         width: Math.min(screen.width - 40, 420); padding: 22
         modal: true; dim: false
         background: GlassSurface { elevated: true }
         contentItem: ColumnLayout {
             Text { text: screen.tr("connection_type"); font.bold: true; font.pixelSize: 24; color: BrandTheme.colors.text }
-            Text { text: screen.backend.connectionType; textFormat: Text.PlainText; font.pixelSize: 22; color: BrandTheme.colors.muted; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+            Text { objectName: "sessionConnectionType"; text: screen.backend.connectionType; textFormat: Text.PlainText; font.pixelSize: 22; color: BrandTheme.colors.muted; wrapMode: Text.WordWrap; Layout.fillWidth: true }
             GlassButton {
                 visible: screen.idleWelcome && !screen.compact
                 enabled: !screen.owner.busy

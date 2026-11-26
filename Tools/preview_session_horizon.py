@@ -448,6 +448,20 @@ def main():
                 owner.changed.emit()
                 archive_search = one(screen, "sessionToolbarSearch")
                 assert archive_search.property("visible")
+                connection = one(screen, "sessionToolbarConnection")
+                assert connection.property("visible")
+                connection_accessible = QAccessible.queryAccessibleInterface(connection)
+                assert connection_accessible.text(QAccessible.Text.Name) == TRANSLATIONS[language]["connection_type"]
+                with patch.object(backend.client, "diagnostics", return_value={"websocketConnected": True}):
+                    backend.settingsChanged.emit()
+                    click(window, connection)
+                    connection_info = window.findChild(QObject, "sessionConnectionInfo")
+                    assert connection_info.property("opened")
+                    expected_connection = TRANSLATIONS[language]["local_websocket_fast_path"]
+                    assert connection_accessible.text(QAccessible.Text.Description) == expected_connection
+                    assert one(connection_info.property("contentItem"), "sessionConnectionType").property("text") == expected_connection
+                    QQmlExpression(engine.rootContext(), connection_info, "close()").evaluate()
+                backend.settingsChanged.emit()
                 find = QKeySequence.keyBindings(QKeySequence.StandardKey.Find)[0][0]
                 QTest.keyClick(window, find.key(), find.keyboardModifiers())
                 archive_panel = window.findChild(QObject, "sessionSearchPanel")
