@@ -200,7 +200,7 @@ class DJConnectBackend(QObject):
     _mediaListReady = Signal(str, object)
     _mediaArtworkReady = Signal(str, object, object)
     _outputDeviceRejected = Signal(str, str)
-    _outputChoiceFinished = Signal(object)
+    _outputChoiceFinished = Signal(object, bool)
     _backendAvailableReady = Signal(bool)
     _toastReady = Signal(str, int, str)
     _askDjReady = Signal(object)
@@ -297,6 +297,7 @@ class DJConnectBackend(QObject):
         self._pending_output_device = ""
         self._pending_output_until = 0.0
         self._pending_output_choice = None
+        self._unconfirmed_output_choice = ""
         self._last_display_wake_at = 0.0
         self._game_sound_objects: list[tuple[object, QBuffer]] = []
         self._status_text = self.tr_key("paired" if self.cfg.paired else "not_paired")
@@ -719,6 +720,10 @@ class DJConnectBackend(QObject):
     @Property(str, notify=outputDeviceChanged)
     def pendingOutputChoiceName(self) -> str:
         return self._pending_output_choice[1] if self._pending_output_choice else ""
+
+    @Property(bool, notify=outputDeviceChanged)
+    def outputChoiceUnconfirmed(self) -> bool:
+        return bool(self._unconfirmed_output_choice)
 
     @Property("QVariantList", notify=outputDeviceChanged)
     def outputDevices(self) -> list[str]:
@@ -1654,13 +1659,16 @@ class DJConnectBackend(QObject):
                 or self._pending_output_choice or output_value == self.playback.output_device_id):
             return
         context = self._private_read_context()
-        request = (output_value, name)
+        request = (output_value, name, context)
         self._pending_output_choice = request
+        self._unconfirmed_output_choice = ""
+        confirmed = False
         self.cancelControlVolume()
         self.cancelPlaybackSeek()
         self.outputDeviceChanged.emit()
 
         def worker() -> None:
+            nonlocal confirmed
             if (not self._session_controller._foreground or self._pending_output_choice is not request
                     or context != self._private_read_context()):
                 return
@@ -1668,14 +1676,16 @@ class DJConnectBackend(QObject):
             if result.get("success") is False:
                 return
             if self._pending_output_choice is request and context == self._private_read_context():
-                self._refresh_worker(ticket=context)
+                confirmed = self._refresh_worker(ticket=context, expected_output=output_value) is True
 
-        self._run(self.tr_key("output_device"), worker, done=lambda: self._outputChoiceFinished.emit(request))
+        self._run(self.tr_key("output_device"), worker, done=lambda: self._outputChoiceFinished.emit(request, confirmed))
 
-    @Slot(object)
-    def _finish_output_choice(self, request) -> None:
+    @Slot(object, bool)
+    def _finish_output_choice(self, request, confirmed: bool) -> None:
         if self._pending_output_choice is request:
             self._pending_output_choice = None
+            if not confirmed and request[2] == self._private_read_context():
+                self._unconfirmed_output_choice = request[0]
             self.controlVolumeChanged.emit()
             self.outputDeviceChanged.emit()
 
@@ -2395,7 +2405,7 @@ class DJConnectBackend(QObject):
         save_config(self.config_path, self.cfg)
         self._pairingReady.emit(True, self.tr_key("paired"))
 
-    def _refresh_worker(self, *, ticket=None) -> None:
+    def _refresh_worker(self, *, ticket=None, expected_output: str = "") -> bool | None:
         if ticket is not None and ticket != self._private_read_context():
             return
         started = time.monotonic()
@@ -2438,6 +2448,10 @@ class DJConnectBackend(QObject):
             return
         self._playbackReady.emit(playback)
         _LOGGER.info("Refresh completed in %.0fms", _elapsed_ms(started))
+        if expected_output:
+            return (data.get("success") is not False and data.get("backend_available") is not False
+                    and playback.output_device_active and playback.output_device_id == expected_output)
+        return None
 
     def _command_worker(self, command: str, **payload: object) -> None:
         started = time.monotonic()
@@ -3141,11 +3155,16 @@ class DJConnectBackend(QObject):
             self.shuffleChanged.emit()
         if old.repeat != playback.repeat:
             self.repeatChanged.emit()
+        output_confirmed = bool(self._unconfirmed_output_choice and playback.output_device_active
+                                and playback.output_device_id == self._unconfirmed_output_choice)
+        if output_confirmed:
+            self._unconfirmed_output_choice = ""
         if (
             old.output_device != playback.output_device
             or old.output_device_id != playback.output_device_id
             or old.output_devices != playback.output_devices
             or old.output_device_details != playback.output_device_details
+            or output_confirmed
         ):
             self.outputDeviceChanged.emit()
         if old.position_seconds != playback.position_seconds or old.duration_seconds != playback.duration_seconds:
@@ -3298,6 +3317,11 @@ class DJConnectBackend(QObject):
     def _clear_profile_scoped_caches(self, *, preserve_session=False) -> None:
         if not preserve_session and hasattr(self, "_session_controller"):
             self._session_controller.invalidate()
+        if self._pending_output_choice or self._unconfirmed_output_choice:
+            self._pending_output_choice = None
+            self._unconfirmed_output_choice = ""
+            self.controlVolumeChanged.emit()
+            self.outputDeviceChanged.emit()
         self._shared_settings_epoch += 1
         self._shared_settings_state = {}
         self.sharedSettingsChanged.emit()

@@ -175,6 +175,13 @@ def main():
             assert visual_item(window.contentItem(), "nowPlaybackOutput").property("text") == "Fixture output"
             assert visual_item(window.contentItem(), "nowOutputSwitching").property("visible")
             backend._pending_output_choice = None
+            backend._unconfirmed_output_choice = "speaker-a"
+            backend.outputDeviceChanged.emit()
+            notice = visual_item(window.contentItem(), "nowOutputSwitching")
+            assert notice.property("text") == backend.t("session_output_switch_unconfirmed")
+            assert visual_item(window.contentItem(), "nowPlaybackOutput").property("text") == "Fixture output"
+            capture("now-output-unconfirmed")
+            backend._unconfirmed_output_choice = ""
             backend.playback.output_device_details = ()
             backend.playback.output_device_id = ""
             backend.playback.output_device = ""

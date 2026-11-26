@@ -119,6 +119,7 @@ class Playback:
     output_device_details: tuple[dict[str, Any], ...] = ()
     is_favorite: bool = False
     output_device_id: str = ""
+    output_device_active: bool = False
     volume_output_id: str = ""
 
 
@@ -639,6 +640,7 @@ class HAClient:
             ),
             output_device=output_device,
             output_device_id=device_id if isinstance(device_id, str) and device_id.strip() else "",
+            output_device_active=isinstance(device, dict) and device.get("active") is True,
             output_devices=tuple(output_devices),
             output_device_details=tuple(output_device_details),
             volume_output_id=volume_output_id,

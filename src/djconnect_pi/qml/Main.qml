@@ -1829,10 +1829,11 @@ BrandWindow {
 
             Text {
                 objectName: "nowOutputSwitching"
-                visible: djconnect.pendingOutputChoiceName.length > 0
+                visible: djconnect.pendingOutputChoiceName.length > 0 || djconnect.outputChoiceUnconfirmed
                 Layout.alignment: Qt.AlignHCenter
                 Layout.maximumWidth: parent.width
-                text: root.tr("session_output_switching").replace("%1", () => djconnect.pendingOutputChoiceName)
+                text: djconnect.outputChoiceUnconfirmed ? root.tr("session_output_switch_unconfirmed")
+                    : root.tr("session_output_switching").replace("%1", () => djconnect.pendingOutputChoiceName)
                 textFormat: Text.PlainText
                 color: BrandTheme.colors.muted
                 font.pixelSize: 17
@@ -2182,9 +2183,10 @@ BrandWindow {
 
             Text {
                 objectName: "controlOutputSwitching"
-                visible: djconnect.pendingOutputChoiceName.length > 0
+                visible: djconnect.pendingOutputChoiceName.length > 0 || djconnect.outputChoiceUnconfirmed
                 Layout.fillWidth: true
-                text: root.tr("session_output_switching").replace("%1", () => djconnect.pendingOutputChoiceName)
+                text: djconnect.outputChoiceUnconfirmed ? root.tr("session_output_switch_unconfirmed")
+                    : root.tr("session_output_switching").replace("%1", () => djconnect.pendingOutputChoiceName)
                 textFormat: Text.PlainText
                 color: BrandTheme.colors.muted
                 horizontalAlignment: Text.AlignHCenter

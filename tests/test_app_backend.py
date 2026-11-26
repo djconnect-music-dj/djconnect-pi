@@ -2766,7 +2766,8 @@ def test_backend_cached_output_device_remains_selectable(tmp_path: Path) -> None
     assert calls == ["set_output"]
 
 
-def test_backend_output_choice_sends_id_when_two_devices_have_the_same_name(tmp_path: Path) -> None:
+@pytest.mark.parametrize("confirmed", [True, False])
+def test_backend_output_choice_sends_id_when_two_devices_have_the_same_name(tmp_path: Path, confirmed: bool) -> None:
     ensure_app()
     backend = DJConnectBackend(tmp_path / "config.json")
     backend.cfg.paired = True
@@ -2777,7 +2778,7 @@ def test_backend_output_choice_sends_id_when_two_devices_have_the_same_name(tmp_
         {"name": "Speaker", "value": "speaker-a"}, {"name": "Speaker", "value": "speaker-b"},
     ))
     backend.client.command = Mock(return_value={"success": True})
-    backend._refresh_worker = Mock()
+    backend._refresh_worker = Mock(return_value=confirmed)
     backend.setOutputChoice("speaker-b")
     assert backend.pendingOutputChoiceName == "Speaker" and backend.outputDevice == "Other speaker"
     backend.setOutputChoice("speaker-a")
@@ -2788,6 +2789,10 @@ def test_backend_output_choice_sends_id_when_two_devices_have_the_same_name(tmp_
     assert backend.outputDevice == "Other speaker"
     backend._run.call_args.kwargs["done"]()
     assert not backend.pendingOutputChoiceName
+    assert backend.outputChoiceUnconfirmed is not confirmed
+    if not confirmed:
+        backend._apply_playback(Playback(output_device="Speaker", output_device_id="speaker-b", output_device_active=True))
+        assert not backend.outputChoiceUnconfirmed
 
 
 def test_backend_manual_refresh_clears_pending_output_device(tmp_path: Path) -> None:
