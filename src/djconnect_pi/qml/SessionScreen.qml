@@ -2803,9 +2803,12 @@ Item {
         contentItem: ColumnLayout {
             spacing: 12
             Text {
+                objectName: "sessionVolumeHeading"
                 text: screen.tr("volume")
                 font.pixelSize: 25; font.bold: true; color: BrandTheme.colors.text
                 Layout.fillWidth: true; wrapMode: Text.WordWrap
+                Accessible.role: Accessible.Heading
+                Accessible.name: text
             }
             ColumnLayout {
                 id: volumeControls
@@ -2995,7 +2998,14 @@ Item {
             spacing: 16
             RowLayout {
                 Layout.fillWidth: true
-                Text { text: screen.tr("output_device"); textFormat: Text.PlainText; font.pixelSize: 25; font.bold: true; color: BrandTheme.colors.text; Layout.fillWidth: true; wrapMode: Text.WordWrap }
+                Text {
+                    objectName: "sessionOutputHeading"
+                    text: screen.tr("output_device"); textFormat: Text.PlainText
+                    font.pixelSize: 25; font.bold: true; color: BrandTheme.colors.text
+                    Layout.fillWidth: true; wrapMode: Text.WordWrap
+                    Accessible.role: Accessible.Heading
+                    Accessible.name: text
+                }
                 GlassButton {
                     id: outputRefresh
                     objectName: "sessionOutputRead"

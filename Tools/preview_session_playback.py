@@ -601,6 +601,9 @@ def main():
                 QTest.qWait(80)
                 click('sessionCurrentOutput')
                 assert output_panel.property('opened') and not popup.property('opened') and len(intents) == 1
+                output_heading = QAccessible.queryAccessibleInterface(window.findChild(QObject, 'sessionOutputHeading'))
+                assert output_heading.role() == QAccessible.Role.Heading
+                assert output_heading.text(QAccessible.Text.Name) == TRANSLATIONS[language]['output_device']
                 output_refresh = window.findChild(QObject, 'sessionOutputRead')
                 output_spinner = window.findChild(QObject, 'sessionOutputReadSpinner')
                 assert output_spinner.property('visible') and not output_refresh.property('enabled')
@@ -751,6 +754,9 @@ def main():
                 observed['playback']['volume_percent'] = 11
                 click('sessionCurrentVolume')
                 assert popup.property('opened') and not output_panel.property('opened') and len(intents) == 1
+                volume_heading = QAccessible.queryAccessibleInterface(window.findChild(QObject, 'sessionVolumeHeading'))
+                assert volume_heading.role() == QAccessible.Role.Heading
+                assert volume_heading.text(QAccessible.Text.Name) == TRANSLATIONS[language]['volume']
                 intents.pop()()
                 QTest.qWait(80)
                 slider = window.findChild(QObject, 'sessionVolumeSlider')
