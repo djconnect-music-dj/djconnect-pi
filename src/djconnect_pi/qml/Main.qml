@@ -2322,10 +2322,15 @@ BrandWindow {
                     objectName: "playbackControlFavorite"
                     iconName: djconnect.currentTrackFavorite ? "heartFilled" : "heart"
                     active: djconnect.currentTrackFavorite
+                    Accessible.name: root.tr(djconnect.currentTrackFavorite ? "session_favorite_remove" : "session_favorite_add")
                     enabled: djconnect.favoriteAvailable && !djconnect.favoriteBusy
+                        && (!djconnect.currentTrackFavorite || djconnect.favoriteRemovalAvailable)
                     waiting: djconnect.favoriteAvailable && djconnect.favoriteBusy
                     opacity: djconnect.favoriteAvailable ? 1.0 : 0.0
-                    onClicked: djconnect.saveCurrentTrack()
+                    onClicked: {
+                        if (djconnect.currentTrackFavorite) djconnect.removeCurrentTrackFavorite()
+                        else djconnect.saveCurrentTrack()
+                    }
                 }
 
                 IconButton {

@@ -2621,6 +2621,36 @@ def test_backend_save_current_track_uses_existing_command_route_and_busy_state(t
     assert backend.currentTrackFavorite is True
 
 
+@pytest.mark.parametrize("observed_uri", ["spotify:track:current", "spotify:track:other"])
+def test_backend_removes_only_the_current_observed_favorite(tmp_path: Path, monkeypatch, observed_uri) -> None:
+    ensure_app()
+    backend = DJConnectBackend(tmp_path / "config.json")
+    backend.cfg.paired = True
+    backend.cfg.device_token = "token-1"
+    backend.cfg.music_backend = "spotify_direct"
+    backend.cfg.music_backend_capabilities = {"supports_favorites": True}
+    backend.playback = Playback(title="Fixture", uri="spotify:track:current", is_favorite=True)
+    monkeypatch.setattr(backend, "_sync_config_from_disk", lambda: None)
+    monkeypatch.setattr(backend, "_run", lambda _, worker, done: (worker(), done()))
+    status = {"success": True, "music_backend": "spotify_direct",
+              "music_backend_capabilities": {"supports_favorites": True},
+              "playback": {"uri": observed_uri, "favorite_status": True, "is_liked": True}}
+    accepted = {"success": True, "playback": {"uri": observed_uri, "favorite_status": False, "is_liked": False}}
+    command = Mock(side_effect=[status, accepted])
+    monkeypatch.setattr(backend.client, "command", command)
+
+    backend.removeCurrentTrackFavorite()
+
+    assert not backend.favoriteBusy and backend.title == "Fixture"
+    if observed_uri == backend.playback.uri:
+        assert [entry.args for entry in command.call_args_list] == [("status",), ("set_current_track_favorite",)]
+        assert command.call_args.kwargs == {"value": False}
+        assert not backend.currentTrackFavorite and backend.toastText == backend.t("favorite_removed")
+    else:
+        command.assert_called_once_with("status")
+        assert backend.currentTrackFavorite
+
+
 def test_backend_requests_temporary_wake_for_backend_track_change(tmp_path: Path) -> None:
     ensure_app()
     backend = DJConnectBackend(tmp_path / "config.json")

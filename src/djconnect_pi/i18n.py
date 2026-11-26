@@ -2017,6 +2017,7 @@ _PLAYBACK_CONTROL_TRANSLATIONS = {
     "session_favorite_read": ("Check favorite status", "Favorietenstatus lezen", "Favoritenstatus prüfen", "Vérifier le favori", "Consultar favorito"),
     "session_favorite_add": ("Add to favorites", "Toevoegen aan favorieten", "Zu Favoriten hinzufügen", "Ajouter aux favoris", "Añadir a favoritos"),
     "session_favorite_remove": ("Remove from favorites", "Verwijderen uit favorieten", "Aus Favoriten entfernen", "Retirer des favoris", "Quitar de favoritos"),
+    "favorite_removed": ("Removed from favorites", "Verwijderd uit favorieten", "Aus Favoriten entfernt", "Retiré des favoris", "Quitado de favoritos"),
     "session_favorite_unavailable": ("Favorite status is unavailable.", "De favorietenstatus is niet beschikbaar.", "Der Favoritenstatus ist nicht verfügbar.", "Le statut de favori est indisponible.", "El estado de favorito no está disponible."),
     "session_volume_read": ("Read current volume", "Huidig volume lezen", "Aktuelle Lautstärke lesen", "Lire le volume actuel", "Leer volumen actual"),
     "session_volume_unknown": ("Read the volume before adjusting it.", "Lees het volume voordat je het aanpast.", "Lies die Lautstärke, bevor du sie änderst.", "Lisez le volume avant de le modifier.", "Lee el volumen antes de ajustarlo."),

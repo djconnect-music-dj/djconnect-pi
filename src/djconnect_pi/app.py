@@ -80,7 +80,7 @@ from .logging_config import clear_log_files, setup_logging
 from .navigation_gesture import EdgeBackGesture
 from .queue_projection import compact_adjacent_tracks, queue_artist_and_album
 from .session_controller import SessionController
-from .session_playback_control import output_id
+from .session_playback_control import favorite_observation, output_id
 from .session_playback_control import reference as session_playback_reference
 from .session_projection import safe_link, timestamp, volume_observation
 from .session_projection import text as bounded_text
@@ -178,6 +178,7 @@ class DJConnectBackend(QObject):
     playingChanged = Signal()
     favoriteChanged = Signal()
     favoriteBusyChanged = Signal()
+    _favoriteRemovalFinished = Signal(object, str)
     volumeChanged = Signal()
     controlVolumeChanged = Signal()
     _controlVolumeFinished = Signal()
@@ -410,6 +411,7 @@ class DJConnectBackend(QObject):
         self._event_timer.start()
         self._playbackReady.connect(self._apply_playback)
         self._playbackModeFinished.connect(self._finish_playback_mode)
+        self._favoriteRemovalFinished.connect(self._finish_favorite_removal)
         for signal in (self.outputDeviceChanged, self.profileChanged, self.pairedChanged,
                        self.demoModeChanged, self.settingsChanged):
             signal.connect(self._invalidate_playback_mode)
@@ -940,6 +942,10 @@ class DJConnectBackend(QObject):
     def favoriteAvailable(self) -> bool:
         capabilities = self.cfg.music_backend_capabilities or {}
         return bool(self.paired and capabilities.get("supports_favorites") and self.playback.uri)
+
+    @Property(bool, notify=favoriteChanged)
+    def favoriteRemovalAvailable(self) -> bool:
+        return self.favoriteAvailable and self.cfg.music_backend == "spotify_direct"
 
     @Property(bool, notify=favoriteBusyChanged)
     def favoriteBusy(self) -> bool:
@@ -1746,6 +1752,70 @@ class DJConnectBackend(QObject):
         _LOGGER.info("User requested saving the current track")
         self._set_favorite_busy(True)
         self._run("save_current_track", self._save_current_track_worker, done=lambda: self._set_favorite_busy(False))
+
+    def _favorite_removal_context(self) -> tuple | None:
+        if (not self._application_foreground or not self.favoriteRemovalAvailable
+                or self._demo_mode or self._shutting_down):
+            return None
+        return self._playback_mode_context(), self.playback.uri.strip()
+
+    @Slot()
+    def removeCurrentTrackFavorite(self) -> None:
+        self._sync_config_from_disk()
+        context = self._favorite_removal_context()
+        if context is None or not self.playback.is_favorite or self._favorite_busy:
+            return
+        self._set_favorite_busy(True)
+        result = ""
+
+        def worker() -> None:
+            nonlocal result
+            result = self._remove_current_favorite_worker(context)
+
+        self._run("set_current_track_favorite", worker, done=lambda: self._favoriteRemovalFinished.emit(context, result))
+
+    def _remove_current_favorite_worker(self, context: tuple) -> str:
+        if context != self._favorite_removal_context():
+            return ""
+        expected_uri = context[1]
+        try:
+            status = self.client.command("status")
+            current = status.get("playback")
+            if (status.get("success") is not True or not isinstance(current, dict)
+                    or current.get("uri") != expected_uri or status.get("music_backend") != "spotify_direct"):
+                return "unavailable"
+            liked = favorite_observation(status, "spotify_direct")
+            if context != self._favorite_removal_context():
+                return ""
+            if not liked:
+                return "already_removed"
+            response = self.client.command("set_current_track_favorite", value=False)
+        except SessionError:
+            return "unavailable"
+        except requests.RequestException:
+            return "uncertain"
+        if response.get("success") is not True:
+            return "unavailable"
+        observed = response.get("playback")
+        if (not isinstance(observed, dict) or observed.get("uri") != expected_uri
+                or observed.get("favorite_status") is not False or observed.get("is_liked", False) is not False):
+            return "uncertain"
+        return "removed"
+
+    @Slot(object, str)
+    def _finish_favorite_removal(self, context: tuple, result: str) -> None:
+        self._set_favorite_busy(False)
+        if not result or context != self._favorite_removal_context():
+            return
+        if result in {"removed", "already_removed"}:
+            if self.playback.is_favorite:
+                self.playback.is_favorite = False
+                self.favoriteChanged.emit()
+            if result == "removed":
+                self._show_toast(self.tr_key("favorite_removed"), 2200, "playback")
+        else:
+            key = "session_uncertain" if result == "uncertain" else "session_favorite_unavailable"
+            self._show_toast(self.tr_key(key), 3500, "connectivity")
 
     def setApplicationForeground(self, foreground: bool) -> None:
         if foreground != self._application_foreground:

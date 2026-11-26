@@ -474,7 +474,8 @@ def test_qml_control_screen_has_favorite_icon_between_shuffle_and_repeat() -> No
     assert 'iconName: djconnect.currentTrackFavorite ? "heartFilled" : "heart"' in control_block
     assert 'iconName: djconnect.repeat === "track" ? "repeatOne" : djconnect.repeat === "context" ? "repeat" : "repeatOff"' in control_block
     assert "enabled: djconnect.favoriteAvailable && !djconnect.favoriteBusy" in control_block
-    assert "onClicked: djconnect.saveCurrentTrack()" in control_block
+    assert "if (djconnect.currentTrackFavorite) djconnect.removeCurrentTrackFavorite()" in control_block
+    assert "else djconnect.saveCurrentTrack()" in control_block
     assert control_block.index('iconName: "shuffle"') < control_block.index('iconName: djconnect.currentTrackFavorite ? "heartFilled" : "heart"')
     assert control_block.index('iconName: djconnect.currentTrackFavorite ? "heartFilled" : "heart"') < control_block.index('iconName: djconnect.repeat === "track"')
     assert 'control.iconName === "heart" || control.iconName === "heartFilled"' in main_qml
