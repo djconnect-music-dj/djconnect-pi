@@ -992,6 +992,12 @@ BrandWindow {
             if (!visible || !query || !matches.length) return
             mediaRows.positionViewAtIndex(selectedMatchIndex, ListView.Center)
         }
+        function openSearch(showKeyboard) {
+            if (!searchToggle.enabled) return
+            searching = true
+            keyboardOpen = showKeyboard
+            searchInput.forceActiveFocus()
+        }
         function closeSearch(resetPending) {
             const restoreFocus = !resetPending && searching && visible
             if (resetPending) pendingMediaItem = null
@@ -1053,6 +1059,12 @@ BrandWindow {
             function onActiveChanged() { if (!root.active) panel.closeSearch(true) }
             function onScreenBlankedChanged() { if (root.screenBlanked) panel.closeSearch(true) }
         }
+        Shortcut {
+            sequences: [StandardKey.Find]
+            enabled: panel.visible && root.active && !root.screenBlanked && !root.splashVisible
+                && !root.trackArtworkOpen && !djconnect.logsVisible && searchToggle.enabled
+            onActivated: panel.openSearch(false)
+        }
 
         ModalBlocker {}
 
@@ -1088,11 +1100,7 @@ BrandWindow {
                     enabled: panel.searching || panel.items.length > 0
                     onClicked: {
                         if (panel.searching) panel.closeSearch()
-                        else {
-                            panel.searching = true
-                            panel.keyboardOpen = true
-                            searchInput.forceActiveFocus()
-                        }
+                        else panel.openSearch(true)
                     }
                 }
                 RefreshIconButton {

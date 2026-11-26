@@ -10,7 +10,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from PySide6.QtCore import Q_ARG, Q_RETURN_ARG, QMetaObject, QObject, QPointF, Qt, QTimer, qInstallMessageHandler
-from PySide6.QtGui import QAccessible, QGuiApplication
+from PySide6.QtGui import QAccessible, QGuiApplication, QKeySequence
 from PySide6.QtQml import QQmlApplicationEngine, QQmlExpression
 from PySide6.QtQuickControls2 import QQuickStyle
 from PySide6.QtTest import QTest
@@ -125,6 +125,18 @@ def main():
         QMetaObject.invokeMethod(visual_item(queue_panel, "mediaSearchClose"), "clicked")
         assert search_accessible.text(QAccessible.Text.Name) == backend.t("media_search_queue")
         assert search_toggle.property("activeFocus") and not queue_panel.property("searching")
+        find = QKeySequence.keyBindings(QKeySequence.StandardKey.Find)[0][0]
+        QTest.keyClick(window, find.key(), find.keyboardModifiers())
+        assert queue_panel.property("searching") and not queue_panel.property("keyboardOpen")
+        search_input = visual_item(queue_panel, "mediaSearchInput")
+        assert search_input.property("activeFocus")
+        search_input.setProperty("text", "Repeated")
+        QTest.keyClick(window, find.key(), find.keyboardModifiers())
+        assert search_input.property("text") == "Repeated"
+        QTest.keyClick(window, Qt.Key.Key_Escape)
+        assert not queue_panel.property("searching")
+        QTest.qWait(65)
+        repeated_row = visual_item(media_rows, "mediaItemRow-2")
         with patch.object(backend, "_run"):
             backend._demo_mode = False
             QMetaObject.invokeMethod(repeated_row, "clicked")
