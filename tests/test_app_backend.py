@@ -2203,6 +2203,7 @@ def test_playlist_parser_accepts_aliases_and_ignores_unplayable_items() -> None:
                 {
                     "display_title": "Alias Playlist",
                     "playlist_uri": "spotify:playlist:alias",
+                    "id": "catalog-row-alias",
                     "owner_name": "Peter",
                     "imageUrl": "https://example.test/image-url.jpg",
                 },
@@ -2225,6 +2226,16 @@ def test_playlist_parser_accepts_aliases_and_ignores_unplayable_items() -> None:
 
 def test_empty_playlists_response_decodes_empty_state() -> None:
     assert parse_playlist_items({"playlists": []}) == []
+
+
+def test_playlist_explicit_playable_aliases_take_precedence_over_catalog_id() -> None:
+    items = parse_playlist_items({"playlists": [
+        {"name": "Preferred URI", "uri": "spotify:playlist:uri", "value": "alternate", "id": "row-1"},
+        {"name": "Preferred value", "uri": " ", "value": "spotify:playlist:value",
+         "playlist_uri": "alternate", "id": "row-2"},
+        {"name": "Fallback", "id": "provider-id"},
+    ]})
+    assert [item["uri"] for item in items] == ["spotify:playlist:uri", "spotify:playlist:value", "provider-id"]
 
 
 def test_playlist_parser_limits_to_100_items() -> None:

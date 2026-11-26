@@ -5095,31 +5095,25 @@ def parse_playlist_items(data: dict[str, object]) -> list[dict[str, object]]:
     raw_items = _first_present(data, ("playlists", "items"))
     if not isinstance(raw_items, list):
         return []
-    return [parsed for item in raw_items[:100] if isinstance(item, dict) and (parsed := _media_item(item, playlist=True))]
+    return [parsed for item in raw_items[:100] if isinstance(item, dict) and (parsed := _playlist_item(item))]
 
 
-def _media_item(item: dict[str, object], playlist: bool = False) -> dict[str, object] | None:
+def _playlist_item(item: dict[str, object]) -> dict[str, object] | None:
     title = str(item.get("name") or item.get("title") or item.get("display_title") or item.get("track_name") or "")
-    subtitle = str(item.get("artist") or item.get("artist_name") or item.get("artists") or item.get("subtitle") or item.get("album") or "")
-    uri = str(item.get("uri") or item.get("id") or item.get("value") or item.get("playlist_uri") or item.get("track_uri") or "")
-    context_uri = str(item.get("context_uri") or item.get("contextUri") or item.get("queue_context") or item.get("queueContext") or "")
-    index = item.get("index")
-    image_url = _image_url_from(item)
-    if playlist:
-        subtitle = str(item.get("owner") or item.get("owner_name") or item.get("description") or subtitle)
-        if not title or not uri:
-            return None
-    result: dict[str, object] = {
+    uri = next((value.strip() for key in ("uri", "value", "playlist_uri", "id", "track_uri")
+                if isinstance(value := item.get(key), str) and value.strip()), "")
+    if not title or not uri:
+        return None
+    subtitle = str(item.get("owner") or item.get("owner_name") or item.get("description")
+                   or item.get("artist") or item.get("artist_name") or item.get("artists")
+                   or item.get("subtitle") or item.get("album") or "")
+    return {
         "title": title,
         "subtitle": subtitle,
         "uri": uri,
-        "imageUrl": image_url,
-        "tint": "#8b5cf6" if playlist else "#38bdf8",
+        "imageUrl": _image_url_from(item),
+        "tint": "#8b5cf6",
     }
-    if not playlist:
-        result["contextUri"] = context_uri
-        result["index"] = index if isinstance(index, int) else None
-    return result
 
 
 def _queue_item(item: dict[str, object], queue_context_uri: str = "") -> dict[str, object] | None:
