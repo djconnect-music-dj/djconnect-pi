@@ -963,7 +963,7 @@ BrandWindow {
             var term = searchText(query.trim())
             if (!term) return source
             return source.filter(function(item) {
-                return [item.title, item.subtitle, item.artist, item.album].some(function(value) {
+                return [item.title, item.subtitle, item.artist, item.album, item.uri].some(function(value) {
                     return searchText(value || "").indexOf(term) >= 0
                 })
             })
@@ -1228,8 +1228,9 @@ BrandWindow {
                                     Layout.fillWidth: true
                                 }
                                 MediaOverflowText {
+                                    objectName: "mediaTrackSubtitle"
                                     text: mediaRow.modelData.subtitle || ""
-                                    visible: text.length > 0
+                                    visible: mediaText.trackQueue && text.length > 0
                                     color: BrandTheme.colors.muted
                                     font.pixelSize: panel.compact ? 16 : 19
                                     queueLabel: mediaText.trackQueue
@@ -1237,8 +1238,10 @@ BrandWindow {
                                     Layout.fillWidth: true
                                 }
                                 MediaOverflowText {
+                                    objectName: "mediaTrackAlbum"
                                     text: mediaRow.modelData.album || ""
-                                    visible: text.length > 0 && text !== (mediaRow.modelData.subtitle || "")
+                                    visible: mediaText.trackQueue && text.length > 0
+                                        && text !== (mediaRow.modelData.subtitle || "")
                                     color: BrandTheme.colors.muted
                                     font.pixelSize: panel.compact ? 14 : 16
                                     queueLabel: mediaText.trackQueue

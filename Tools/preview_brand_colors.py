@@ -16,7 +16,7 @@ from PySide6.QtQuickControls2 import QQuickStyle
 from PySide6.QtTest import QTest
 from shiboken6 import delete
 
-from djconnect_pi.app import DJConnectBackend, parse_queue_items
+from djconnect_pi.app import DJConnectBackend, parse_playlist_items, parse_queue_items
 from djconnect_pi.brand_theme import apply_palette
 from djconnect_pi.config import Config, save_config
 from djconnect_pi.expiry_clock import ExpiryClock
@@ -135,6 +135,26 @@ def main():
         search_input.setProperty("text", "fixture 0")
         QTest.qWait(80)
         assert count.property("text") == "1 / 10"
+        backend._playlist_items = parse_playlist_items({"playlists": [{
+            "name": "Long playlist title with more detail " * 12,
+            "owner": "Fixture curator", "uri": "spotify:playlist:fixture-only",
+        }]})
+        backend.mediaListsChanged.emit()
+        window.setProperty("activeScreen", "playlists")
+        QTest.qWait(120)
+        playlist_panel = visual_item(window.contentItem(), "playlistsPanel")
+        playlist_row = visual_item(playlist_panel, "mediaItemRow-0")
+        playlist_title = visual_item(playlist_row, "mediaTrackTitle")
+        assert not playlist_title.property("scrolling")
+        assert visual_item(playlist_title, "mediaOverflowLabel").property("lineCount") == 2
+        assert not visual_item(playlist_row, "mediaTrackSubtitle").property("visible")
+        assert visual_item(playlist_row, "mediaPlayIndicator").property("visible")
+        playlist_panel.setProperty("searching", True)
+        search_input = visual_item(playlist_panel, "mediaSearchInput")
+        for term in ("curator", "fixture-only"):
+            search_input.setProperty("text", term)
+            QTest.qWait(80)
+            assert visual_item(playlist_panel, "mediaSearchMatchCount").property("text") == "1 / 1"
         window.setProperty("activeScreen", "session")
         for runtime_state in ("opening", "ending"):
             backend.djSession._session["runtime_state"] = runtime_state
