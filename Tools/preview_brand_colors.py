@@ -116,6 +116,24 @@ def main():
             playing_before = backend.playing
             tap_now_control("nowTogglePlayback")
             assert backend.playing != playing_before
+            position = visual_item(window.contentItem(), "nowPlaybackPosition")
+            progress = visual_item(position, "nowPlaybackProgress")
+            time_label = visual_item(position, "nowPlaybackTime")
+            duration_before = backend.playback.duration_seconds
+            position_before = backend.playback.position_seconds
+            backend.playback.duration_seconds = 240
+            backend.playback.position_seconds = 75
+            backend.progressChanged.emit()
+            assert position.property("visible") and progress.property("value") == 0.3125
+            assert time_label.property("text") == "1:15 / 4:00"
+            assert position.mapToScene(QPointF(0, position.height())).y() <= controls.mapToScene(QPointF()).y()
+            capture("now-playback-position")
+            backend.playback.duration_seconds = 0
+            backend.progressChanged.emit()
+            assert not position.property("visible") and controls.property("visible")
+            backend.playback.duration_seconds = duration_before
+            backend.playback.position_seconds = position_before
+            backend.progressChanged.emit()
             tap_now_control("nowTogglePlayback")
             assert backend.playing == playing_before
             backend.hideToast()

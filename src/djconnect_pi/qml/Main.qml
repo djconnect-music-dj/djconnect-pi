@@ -1673,6 +1673,36 @@ BrandWindow {
                 }
             }
 
+            RowLayout {
+                objectName: "nowPlaybackPosition"
+                visible: djconnect.hasTrackTitle && djconnect.durationSeconds > 0
+                Layout.alignment: Qt.AlignHCenter
+                Layout.preferredWidth: Math.min(parent.width, 416)
+                spacing: 10
+                ProgressBar {
+                    objectName: "nowPlaybackProgress"
+                    Layout.fillWidth: true
+                    value: djconnect.trackProgress
+                    Accessible.ignored: true
+                    background: Rectangle { implicitHeight: 6; radius: 3; color: BrandTheme.colors.text; opacity: 0.18 }
+                    contentItem: Item {
+                        implicitHeight: 6
+                        Rectangle {
+                            width: parent.width * djconnect.trackProgress
+                            height: parent.height
+                            radius: 3
+                            color: BrandTheme.colors.text
+                        }
+                    }
+                }
+                Text {
+                    objectName: "nowPlaybackTime"
+                    text: djconnect.progressLabel.replace("/", " / ")
+                    color: BrandTheme.colors.muted
+                    font.pixelSize: 18
+                }
+            }
+
             GlassSurface {
                 objectName: "nowPlaybackControls"
                 Layout.alignment: Qt.AlignHCenter
