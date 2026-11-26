@@ -262,7 +262,7 @@ def main():
                                 flow_view = window.findChild(QObject, "sessionHistoryScroll")
                                 spinner = one(screen, "sessionPullRefreshSpinner")
                                 with QSignalBlocker(poll_timer), patch.object(owner, "_launch", side_effect=(
-                                    lambda action, **kwargs: owner._set_running(1, action, **kwargs)
+                                    lambda action, *, background=False, manual_refresh=False: owner._set_running(1, action, background=background)
                                 )) as refresh:
                                     owner.poll()
                                     assert owner.refreshing and not spinner.property("visible")
@@ -276,13 +276,18 @@ def main():
                                         refresh.assert_not_called()
                                         assert not spinner.property("visible")
                                         drag_scroll(window, view, touch, 230)
-                                        refresh.assert_called_once_with("refresh", background=True)
+                                        refresh.assert_called_once_with("refresh", background=True, manual_refresh=True)
                                         assert spinner.property("visible") and spinner.property("running")
                                         assert spinner.y() == view.y() + 8
                                         click(window, switch)
                                         assert not spinner.property("visible")
                                         owner._set_running()
                                         refresh.reset_mock()
+                                owner.runtimeRefreshFinished.emit(True)
+                                assert backend.toastText == TRANSLATIONS[language]["session_runtime_updated"]
+                                owner.runtimeRefreshFinished.emit(False)
+                                assert backend.toastText == TRANSLATIONS[language]["session_runtime_refresh_failed"]
+                                backend.hideToast()
 
                     # Ordinary prose and a malformed six-track lookalike stay verbatim.
                     for fallback in (prose, f"{intro} {', '.join([track_names[0]] * 6)}. {note}"):
@@ -308,7 +313,7 @@ def main():
                             drag_scroll(window, forecast_view, touch, 230, retract=True)
                             refresh.assert_not_called()
                             drag_scroll(window, forecast_view, touch, 230)
-                            refresh.assert_called_once_with("refresh", background=True)
+                            refresh.assert_called_once_with("refresh", background=True, manual_refresh=True)
                     click(window, flow)
                     sid = session["session_id"]
                     if language == "nl":

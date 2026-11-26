@@ -94,6 +94,7 @@ class SessionController(QObject):
     searchUpdated = Signal()
     historyUpdated = Signal()
     archiveRefreshFinished = Signal(bool)
+    runtimeRefreshFinished = Signal(bool)
     archiveInvalidated = Signal()
     archivePositioned = Signal(str, float)
     timelineUpdated = Signal(str)
@@ -1117,8 +1118,13 @@ class SessionController(QObject):
         self.refresh()
 
     @Slot()
-    def refresh(self):
-        self._launch("refresh", background=self._loaded or bool(self._error))
+    @Slot(bool)
+    def refresh(self, manual=False):
+        background = self._loaded or bool(self._error)
+        if manual:
+            self._launch("refresh", background=background, manual_refresh=True)
+        else:
+            self._launch("refresh", background=background)
 
     @Slot()
     def poll(self):
@@ -1557,7 +1563,7 @@ class SessionController(QObject):
         self._view_epoch += 1
         self._launch("open_entry", {"session_id": session_id, "entry_id": entry_id})
 
-    def _launch(self, action, value="", *, background=False):
+    def _launch(self, action, value="", *, background=False, manual_refresh=False):
         if not self._foreground or (action == "refresh" and not self._view_active):
             return
         if (self._artwork_prepare.running or self._playback_control.running or self._archive_delete.running or self._content_delete.running) and action != "end":
@@ -1652,6 +1658,8 @@ class SessionController(QObject):
 
         def worker():
             result = {"serial": serial, "binding": binding, "action": action, "view_epoch": view_epoch, "question_epoch": question_epoch, "raw_binding": raw_binding}
+            if action == "refresh" and manual_refresh:
+                result["manual_runtime_refresh"] = True
             if action in {"history", "history_refresh"} and value.get("manual_refresh"):
                 result["manual_archive_refresh"] = True
             def read_active(*, isolated=False):
@@ -1912,6 +1920,7 @@ class SessionController(QObject):
         if result.get("flow_expanded") and result.get("view_epoch") != self._view_epoch:
             self.changed.emit()
             return
+        manual_runtime_refresh = result.get("manual_runtime_refresh") and result["view_epoch"] == self._view_epoch
         if (result.get("receipt_update") and result["question_epoch"] == self._question_epoch
                 and result["receipt_update"].get("client_message_id") == self._question_receipt.get("client_message_id")):
             self._question_receipt = result["receipt_update"]
@@ -2046,6 +2055,8 @@ class SessionController(QObject):
                 # Keep the confirmed view briefly without extending any content grant.
                 self._expire()
                 self.changed.emit()
+                if manual_runtime_refresh:
+                    self.runtimeRefreshFinished.emit(False)
                 self._reconcile_if_idle()
                 return
         if "error" in result:
@@ -2195,6 +2206,8 @@ class SessionController(QObject):
         self._expire()
         confirmed = self._confirm_question()
         self.changed.emit()
+        if manual_runtime_refresh:
+            self.runtimeRefreshFinished.emit("session" in result and "error" not in result)
         if "session" in result and "error" not in result:
             self._observe_contribution_wake(result)
         elif "error" in result and not self._session:

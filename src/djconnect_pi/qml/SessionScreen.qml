@@ -353,7 +353,7 @@ Item {
     onHistoryPullScopeChanged: clearHistoryRefreshIndicators()
     onHistoryViewOpenChanged: if (!historyViewOpen) clearHistoryRefreshIndicators()
     function refreshFromPull(view) {
-        owner.refresh()
+        owner.refresh(true)
         if (owner.refreshing) pullRefreshView = view
     }
     function refreshHistoryFromPull() {
@@ -1133,6 +1133,10 @@ Item {
             if (screen.historyViewOpen && !screen.currentHistory && !screen.state.timeline.session)
                 screen.backend.showToastForContext(screen.tr(succeeded ? "session_archive_updated" : "session_archive_refresh_failed"), "refresh")
         }
+        function onRuntimeRefreshFinished(succeeded) {
+            if (screen.liveViewOpen)
+                screen.backend.showToastForContext(screen.tr(succeeded ? "session_runtime_updated" : "session_runtime_refresh_failed"), "refresh")
+        }
         function onArchiveInvalidated() {
             screen.cancelArchiveRead(); screen.archiveReturn = null; screen.archiveDetailReturn = null
             screen.archiveSearchOrigin = null; screen.pendingArchiveSearchReturn = null
@@ -1302,7 +1306,7 @@ Item {
                         if (screen.historical) {
                             screen.refreshHistory(true)
                             screen.historyToolbarRefreshing = screen.historyReadOutstanding
-                        } else screen.owner.refresh()
+                        } else screen.owner.refresh(true)
                         screen.backend.pollSharedSettings()
                     }
                     BusyIndicator {

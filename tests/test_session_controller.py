@@ -214,6 +214,27 @@ def test_same_context_refresh_marks_empty_only_after_success(controller):
     assert owner.state["history_available"] and not owner.state["session_id"]
 
 
+def test_manual_runtime_refresh_reports_confirmed_outcomes_only(controller):
+    owner, backend = controller
+    completed = []
+    owner.runtimeRefreshFinished.connect(completed.append)
+    owner.poll()
+    backend.jobs.pop()()
+    assert completed == []
+    owner.refresh(True)
+    assert completed == []
+    backend.jobs.pop()()
+    assert completed == [True]
+    owner.refresh(True)
+    owner.clearSearch()
+    backend.jobs.pop()()
+    assert completed == [True]
+    owner.transport.active.side_effect = SessionError("offline")
+    owner.refresh(True)
+    backend.jobs.pop()()
+    assert completed == [True, False]
+
+
 def test_automatic_refresh_keeps_controls_available_and_drops_superseded_read(controller):
     owner, backend = controller
     owner.refresh()
