@@ -732,7 +732,7 @@ def main():
                 assert strip.property("activeFocus") and strip.property("contentWidth") > strip.width()
                 assert QAccessible.queryAccessibleInterface(strip).text(QAccessible.Text.Name) == backend.t(label_key)
                 start_x = strip.property("originX")
-                strip.setProperty("contentX", start_x)
+                assert abs(strip.property("contentX") - start_x) < 1
                 QTest.keyClick(window, Qt.Key.Key_Right)
                 assert strip.property("contentX") > start_x and strip.property("activeFocus")
                 QTest.keyClick(window, Qt.Key.Key_Left)
@@ -746,8 +746,16 @@ def main():
                 QTest.keyClick(window, Qt.Key.Key_Backtab, Qt.KeyboardModifier.ShiftModifier)
                 top = action.mapToItem(scroller, QPointF()).y()
                 assert action.property("activeFocus") and top >= -1 and top + action.height() <= scroller.height() + 1
+                if action in strips:
+                    QTest.keyClick(window, Qt.Key.Key_Right)
+                    assert action.property("contentX") > action.property("originX")
             QTest.keyClick(window, Qt.Key.Key_Escape)
             assert not detail.property("opened") and recommendation.property("activeFocus")
+            QTest.keyClick(window, Qt.Key.Key_Space)
+            assert detail.property("opened") and close_detail.property("activeFocus")
+            for strip in strips:
+                assert abs(strip.property("contentX") - strip.property("originX")) < 1
+            QTest.keyClick(window, Qt.Key.Key_Escape)
         backend.setLanguage("nl")
         backend._demo_mode = True
         backend.demoModeChanged.emit()

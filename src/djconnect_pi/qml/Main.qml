@@ -3371,6 +3371,10 @@ BrandWindow {
             contentX = Math.max(originX, Math.min(contentX + direction * width / 2,
                                                  originX + Math.max(0, contentWidth - width)))
         }
+        function resetLabelScroll() {
+            cancelFlick()
+            contentX = originX
+        }
 
         RowLayout {
             id: chips
@@ -3794,7 +3798,11 @@ BrandWindow {
             closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
             background: GlassSurface { popover: true; elevated: true }
             onItemChanged: if (!item) close()
-            onOpened: closeRecommendationButton.forceActiveFocus(Qt.PopupFocusReason)
+            onOpened: {
+                recommendationQualityStrip.resetLabelScroll()
+                recommendationSourceStrip.resetLabelScroll()
+                closeRecommendationButton.forceActiveFocus(Qt.PopupFocusReason)
+            }
             onClosed: selected = null
 
             function showRecommendation(recommendation) {
