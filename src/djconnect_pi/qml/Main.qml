@@ -1985,6 +1985,11 @@ BrandWindow {
         id: settingsPanel
         objectName: "settingsPanel"
         color: "transparent"
+        readonly property bool canChangeMusicDna: djconnect.musicDnaLoaded && !djconnect.musicDnaBusy
+            && (djconnect.paired || djconnect.demoMode)
+
+        MusicDnaProfileRead { surfaceVisible: settingsPanel.visible }
+
         onVisibleChanged: {
             if (visible && settingsScroll.contentItem) {
                 settingsScroll.contentItem.contentY = 0
@@ -2328,7 +2333,15 @@ BrandWindow {
                 }
 
                 Text {
-                    text: djconnect.musicDnaEnabled ? root.tr("music_dna_settings_enabled_description") : root.tr("music_dna_settings_disabled_description")
+                    objectName: "musicDnaSettingsStatusText"
+                    text: {
+                        if (!djconnect.musicDnaLoaded) {
+                            return djconnect.musicDnaBusy ? root.tr("music_dna_loading_profile")
+                                : djconnect.musicDnaError || root.tr("music_dna_profile_unavailable")
+                        }
+                        return djconnect.musicDnaEnabled ? root.tr("music_dna_settings_enabled_description")
+                            : root.tr("music_dna_settings_disabled_description")
+                    }
                     color: BrandTheme.colors.muted
                     font.pixelSize: 22
                     font.bold: true
@@ -2353,9 +2366,10 @@ BrandWindow {
                 Item { Layout.fillWidth: true }
 
                 PurpleButton {
+                    objectName: "musicDnaSettingsToggle"
                     text: djconnect.musicDnaEnabled ? root.tr("music_dna_disable") : root.tr("music_dna_enable")
                     primary: !djconnect.musicDnaEnabled
-                    enabled: !djconnect.musicDnaBusy
+                    enabled: settingsPanel.canChangeMusicDna
                     font.pixelSize: 22
                     Layout.preferredWidth: 190
                     Layout.preferredHeight: 52
@@ -2384,8 +2398,9 @@ BrandWindow {
                 Item { Layout.fillWidth: true }
 
                 DangerButton {
+                    objectName: "musicDnaSettingsClear"
                     text: root.tr("music_dna_clear")
-                    enabled: djconnect.musicDnaEnabled && !djconnect.musicDnaBusy
+                    enabled: djconnect.musicDnaEnabled && settingsPanel.canChangeMusicDna
                     font.pixelSize: 22
                     Layout.preferredWidth: 150
                     Layout.preferredHeight: 52
@@ -3821,11 +3836,9 @@ BrandWindow {
         }
     }
 
-    component MusicDnaPage: Rectangle {
-        id: musicDnaPanel
-        objectName: "musicDnaPanel"
-        color: "transparent"
-        readonly property bool profileViewActive: visible && root.active && !root.screenBlanked
+    component MusicDnaProfileRead: QtObject {
+        required property bool surfaceVisible
+        readonly property bool profileViewActive: surfaceVisible && root.active && !root.screenBlanked
             && !root.splashVisible && djconnect.paired && !djconnect.demoMode && !djconnect.versionMismatchVisible
         readonly property bool canLoadProfile: profileViewActive && !djconnect.musicDnaBusy
         readonly property int profileRevision: djconnect.musicDnaContextRevision
@@ -3841,6 +3854,14 @@ BrandWindow {
             requestedProfileRevision = profileRevision
             if (!alreadyLoaded) djconnect.loadMusicDna()
         }
+    }
+
+    component MusicDnaPage: Rectangle {
+        id: musicDnaPanel
+        objectName: "musicDnaPanel"
+        color: "transparent"
+
+        MusicDnaProfileRead { surfaceVisible: musicDnaPanel.visible }
 
         ModalBlocker {}
 

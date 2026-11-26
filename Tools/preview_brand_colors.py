@@ -412,6 +412,35 @@ def main():
             backend.demoModeChanged.emit()
         backend._set_demo_music_dna(True)
         assert not footer.property("visible")
+        window.setProperty("activeScreen", "settings")
+        QTest.qWait(65)
+        status = visual_item(window.contentItem(), "musicDnaSettingsStatusText")
+        toggle = visual_item(window.contentItem(), "musicDnaSettingsToggle")
+        clear = visual_item(window.contentItem(), "musicDnaSettingsClear")
+        with patch.object(backend, "_sync_config_from_disk"), patch.object(backend, "_run") as request:
+            backend._clear_profile_scoped_caches(preserve_session=True)
+            assert status.property("text") == backend.t("music_dna_profile_unavailable")
+            assert not toggle.property("enabled") and not clear.property("enabled")
+            backend.cfg.paired, backend.cfg.device_token = True, "synthetic-not-a-credential"
+            backend.pairedChanged.emit()
+            backend._demo_mode = False
+            backend.demoModeChanged.emit()
+            QTest.qWait(65)
+            request.assert_called_once()
+            assert status.property("text") == backend.t("music_dna_loading_profile")
+            assert not toggle.property("enabled") and not clear.property("enabled")
+            backend._apply_music_dna_data({"success": True, "enabled": True})
+            backend._set_music_dna_busy(False)
+            assert status.property("text") == backend.t("music_dna_settings_enabled_description")
+            assert toggle.property("enabled") and clear.property("enabled")
+            backend._apply_music_dna_data({"success": True, "enabled": False})
+            assert status.property("text") == backend.t("music_dna_settings_disabled_description")
+            assert toggle.property("enabled") and not clear.property("enabled")
+            backend._demo_mode = True
+            backend.demoModeChanged.emit()
+            backend.cfg.paired, backend.cfg.device_token = False, ""
+            backend.pairedChanged.emit()
+        backend._set_demo_music_dna(True)
         backend.setLanguage("nl")
         window.setProperty("activeScreen", "session")
         for runtime_state in ("opening", "ending"):
