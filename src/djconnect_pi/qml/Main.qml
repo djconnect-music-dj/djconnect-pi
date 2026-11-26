@@ -3660,17 +3660,11 @@ BrandWindow {
                 connectionText: djconnect.connectionType
                 Layout.fillWidth: true
 
-                LoadingSpinner {
-                    visible: djconnect.musicDnaBusy
-                    running: visible
-                    Layout.preferredWidth: 38
-                    Layout.preferredHeight: 38
-                }
-
                 RefreshIconButton {
                     id: musicDnaRefreshButton
                     objectName: "musicDnaRefreshButton"
-                    enabled: !djconnect.musicDnaBusy
+                    loading: djconnect.musicDnaBusy
+                    enabled: !loading
                     onClicked: djconnect.refreshMusicDna()
                 }
             }
@@ -4026,13 +4020,6 @@ BrandWindow {
                 connectionText: djconnect.connectionType
                 Layout.fillWidth: true
 
-                BusyIndicator {
-                    running: djconnect.askDjBusy
-                    visible: djconnect.askDjBusy
-                    implicitWidth: 30
-                    implicitHeight: 30
-                }
-
                 GlassButton {
                     objectName: "askDjSearchToggle"
                     iconName: "search"
@@ -4046,7 +4033,9 @@ BrandWindow {
 
                 RefreshIconButton {
                     id: askDjRefreshButton
-                    enabled: !djconnect.askDjBusy
+                    objectName: "askDjRefreshButton"
+                    loading: djconnect.askDjBusy
+                    enabled: !loading
                     onClicked: djconnect.refreshAskDjHistory()
                 }
 

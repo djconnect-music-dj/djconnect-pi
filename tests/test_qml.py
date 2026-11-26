@@ -373,6 +373,7 @@ def test_qml_ask_dj_screen_keeps_history_actions_and_text_composer() -> None:
     assert "focused: askDjButton.activeFocus" in action_button
     assert "djconnect.refreshAskDjHistory()" in ask_dj_block
     assert "id: askDjRefreshButton" in ask_dj_block
+    assert "loading: djconnect.askDjBusy" in ask_dj_block
     assert "RefreshIconButton" in ask_dj_block
     assert "id: askDjClearButton" in ask_dj_block
     assert 'ToolTip.text: root.tr("ask_dj_clear_chat")' in ask_dj_block
@@ -590,6 +591,7 @@ def test_qml_music_dna_enable_is_available_in_disabled_screen() -> None:
     assert "Layout.preferredHeight: 56" in music_dna_block
     assert 'root.tr("music_dna_enabled")' not in music_dna_block
     assert "id: musicDnaRefreshButton" in music_dna_block
+    assert "loading: djconnect.musicDnaBusy" in music_dna_block
     assert "RefreshIconButton" in music_dna_block
 
 
