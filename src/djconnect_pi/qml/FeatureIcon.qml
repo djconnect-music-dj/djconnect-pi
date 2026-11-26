@@ -409,6 +409,9 @@ Canvas {
                 ctx.beginPath(); ctx.moveTo(px(8), py(23)); ctx.quadraticCurveTo(px(16), py(19), px(24), py(23)); ctx.stroke()
                 ctx.beginPath(); ctx.moveTo(px(16), py(5)); ctx.bezierCurveTo(px(8), py(10), px(8), py(22), px(16), py(27)); ctx.stroke()
                 ctx.beginPath(); ctx.moveTo(px(16), py(5)); ctx.bezierCurveTo(px(24), py(10), px(24), py(22), px(16), py(27)); ctx.stroke()
+            } else if (iconName === "close") {
+                line(9, 9, 23, 23)
+                line(23, 9, 9, 23)
             } else if (iconName === "end") {
                 ctx.strokeStyle = BrandTheme.colors.danger
                 circle(16, 16, 10, false)

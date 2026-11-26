@@ -309,6 +309,7 @@ def main():
                     QTest.qWait(60)
                     assert window.property('trackArtworkOpen') and not popup.property('opened') and not intents
                     owner.transport.playback_command.assert_not_called()
+                    assert visual(window.contentItem(), 'closeTrackArtwork').property('iconName') == 'close'
                     click('closeTrackArtwork')
                     assert not window.property('trackArtworkOpen')
                 current_playback['item_id'] = 'synthetic-cover-replacement'

@@ -6897,7 +6897,7 @@ BrandWindow {
                     Item { Layout.fillWidth: true }
                     GlassButton {
                         objectName: "closeTrackArtwork"
-                        iconName: "end"
+                        iconName: "close"
                         Accessible.name: root.tr("close")
                         onClicked: root.trackArtworkOpen = false
                     }
