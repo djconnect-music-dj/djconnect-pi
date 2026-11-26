@@ -256,10 +256,11 @@ def test_qml_has_touch_readable_glass_controls_and_scrollable_settings() -> None
     assert 'djconnect.haUrl.length ? djconnect.haUrl : "http://homeassistant.local:8123"' in main_qml
     assert "djconnect.outputDeviceChoices" in main_qml
     assert 'textRole: "name"' in main_qml
-    assert "choiceName(modelData)" in main_qml
+    assert "controlOutputDeviceCombo.displayName(index)" in main_qml
     assert "property var deviceChoices" in main_qml
     assert 'property string noOutputDeviceLabel: root.tr("none")' in main_qml
     assert "djconnect.setOutputDevice" in main_qml
+    assert "djconnect.setOutputChoice" in main_qml
     assert "controlPanel.adjustVolume(-10)" in main_qml
     assert "controlPanel.adjustVolume(10)" in main_qml
     assert 'text: "-"' in main_qml

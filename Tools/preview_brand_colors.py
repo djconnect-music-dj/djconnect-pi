@@ -157,6 +157,16 @@ def main():
             center = output.mapToScene(QPointF(output.width() / 2, output.height() / 2))
             QTest.mouseClick(window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, center.toPoint())
             assert window.property("activeScreen") == "control" and backend.outputDevice == "Fixture output"
+            QTest.qWait(80)
+            outputs = visual_item(window.contentItem(), "controlOutputDeviceCombo")
+            backend.playback.output_device_details = (
+                {"name": "Fixture output", "value": "speaker-a"}, {"name": "Fixture output", "value": "speaker-b"},
+            )
+            backend.playback.output_device_id = "speaker-b"
+            backend.outputDeviceChanged.emit()
+            assert outputs.property("currentIndex") == 2 and outputs.property("displayText") == "Fixture output (2)"
+            backend.playback.output_device_details = ()
+            backend.playback.output_device_id = ""
             backend.playback.output_device = ""
             backend.outputDeviceChanged.emit()
         track = {"title": "Repeated track title with more detail " * 12, "uri": "spotify:track:fixture-a", "index": 4}

@@ -709,6 +709,10 @@ class DJConnectBackend(QObject):
     def outputDevice(self) -> str:
         return self.playback.output_device
 
+    @Property(str, notify=outputDeviceChanged)
+    def outputDeviceId(self) -> str:
+        return self.playback.output_device_id
+
     @Property("QVariantList", notify=outputDeviceChanged)
     def outputDevices(self) -> list[str]:
         return list(self.playback.output_devices)
@@ -1626,6 +1630,15 @@ class DJConnectBackend(QObject):
             _LOGGER.info("User cleared output device selection from touch UI")
             self.showToastForContext(self.tr_key("none"), "playback")
             return
+        self._select_output(value, value)
+
+    @Slot(str)
+    def setOutputChoice(self, output_value: str) -> None:
+        matches = [choice for choice in self.outputDeviceChoices if choice.get("value") == output_value]
+        if output_value and len(matches) == 1 and matches[0].get("name"):
+            self._select_output(matches[0]["name"], output_value)
+
+    def _select_output(self, value: str, command_value: str) -> None:
         previous = self.playback.output_device
         self.playback.output_device = value
         self._pending_output_device = value
@@ -1636,7 +1649,7 @@ class DJConnectBackend(QObject):
         self.showToastForContext(value, "playback")
         if self._demo_mode:
             return
-        self._run("set_output", lambda: self._set_output_worker(value, previous))
+        self._run("set_output", lambda: self._set_output_worker(value, previous, command_value=command_value))
 
     @Slot()
     def enterDemoMode(self) -> None:
@@ -2424,10 +2437,10 @@ class DJConnectBackend(QObject):
             self._refresh_worker()
         _LOGGER.info("Media item command %s completed in %.0fms", command, _elapsed_ms(started))
 
-    def _set_output_worker(self, value: str, previous: str) -> None:
+    def _set_output_worker(self, value: str, previous: str, *, command_value: str | None = None) -> None:
         started = time.monotonic()
         try:
-            data = self.client.command("set_output", value=value)
+            data = self.client.command("set_output", value=command_value if command_value is not None else value)
             self._persist_backend_summary()
             playback = self.client.playback_from_status(data)
             if playback.output_devices and value not in playback.output_devices:

@@ -2095,6 +2095,7 @@ BrandWindow {
 
                 BrandComboBox {
                     id: controlOutputDeviceCombo
+                    objectName: "controlOutputDeviceCombo"
                     property string noOutputDeviceLabel: root.tr("none")
                     property var deviceChoices: [{ "name": noOutputDeviceLabel, "value": "" }].concat(djconnect.outputDeviceChoices.length > 0 ? djconnect.outputDeviceChoices : (djconnect.outputDevice.length > 0 ? [{ "name": djconnect.outputDevice, "value": djconnect.outputDevice }] : []))
                     function choiceName(choice) {
@@ -2105,30 +2106,51 @@ BrandWindow {
                         if (typeof choice === "string") return choice
                         return ((choice && choice.value) || (choice && choice.name) || "").toString()
                     }
+                    function displayName(index) {
+                        const name = choiceName(deviceChoices[index])
+                        if (index <= 0) return name
+                        let count = 0
+                        let ordinal = 0
+                        for (let i = 1; i < deviceChoices.length; i++) {
+                            if (choiceName(deviceChoices[i]) !== name) continue
+                            count++
+                            if (i === index) ordinal = count
+                        }
+                        return count > 1 ? name + " (" + ordinal + ")" : name
+                    }
                     function selectedIndex() {
+                        const selectedId = djconnect.outputDeviceId
                         var selected = (djconnect.outputDevice || "").trim()
                         if (selected.length === 0) return 0
-                        for (var i = 0; i < deviceChoices.length; i++) {
-                            if (choiceName(deviceChoices[i]).trim() === selected || choiceValue(deviceChoices[i]).trim() === selected) return i
+                        if (selectedId) {
+                            for (var index = 1; index < deviceChoices.length; index++) {
+                                if (choiceValue(deviceChoices[index]) === selectedId) return index
+                            }
                         }
-                        return 0
+                        let match = 0
+                        for (var i = 0; i < deviceChoices.length; i++) {
+                            if (choiceName(deviceChoices[i]).trim() !== selected) continue
+                            if (match > 0) return 0
+                            match = i
+                        }
+                        return match
                     }
                     model: deviceChoices
                     textRole: "name"
+                    displayText: displayName(currentIndex)
                     visible: count > 1 || djconnect.outputDevice.length === 0
                     currentIndex: selectedIndex()
                     font.pixelSize: 26
                     delegate: ItemDelegate {
                         width: controlOutputDeviceCombo.width
-                        text: controlOutputDeviceCombo.choiceName(modelData)
+                        text: controlOutputDeviceCombo.displayName(index)
                         font.pixelSize: 28
                     }
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     onActivated: function(index) {
-                        var value = controlOutputDeviceCombo.choiceName(controlOutputDeviceCombo.deviceChoices[index])
-                        if (value === controlOutputDeviceCombo.noOutputDeviceLabel) value = ""
-                        djconnect.setOutputDevice(value)
+                        if (index === 0) djconnect.setOutputDevice("")
+                        else djconnect.setOutputChoice(controlOutputDeviceCombo.choiceValue(controlOutputDeviceCombo.deviceChoices[index]))
                     }
                 }
 
