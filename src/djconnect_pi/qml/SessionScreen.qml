@@ -1397,6 +1397,8 @@ Item {
         id: forecastScroll
         objectName: "sessionForecastScroll"
         visible: screen.showForecast
+        readonly property bool canRefreshForecast: visible && screen.liveViewOpen && screen.backend.paired
+            && !screen.backend.demoMode && !screen.owner.busy && !screen.owner.refreshing
         anchors.top: modeSwitch.bottom; anchors.bottom: parent.bottom
         anchors.left: parent.left; anchors.right: parent.right
         anchors.margins: 20; anchors.bottomMargin: composerDock.visible ? composerDock.height + 144 : 132
@@ -1405,8 +1407,7 @@ Item {
         PullToRefresh {
             objectName: "sessionForecastPullToRefresh"
             flickable: forecastScroll.contentItem
-            canRefresh: forecastScroll.visible && screen.liveViewOpen && screen.backend.paired
-                && !screen.backend.demoMode && !screen.owner.busy && !screen.owner.refreshing
+            canRefresh: forecastScroll.canRefreshForecast
             onRefreshRequested: screen.refreshFromPull(forecastScroll)
         }
         ColumnLayout {
@@ -1527,13 +1528,22 @@ Item {
                     }
                     Text {
                         objectName: "sessionForecastEmptyMessage"
-                        text: screen.tr("session_forecast_empty")
+                        text: screen.tr(screen.owner.refreshing ? "session_forecast_loading" : "session_forecast_empty")
                         textFormat: Text.PlainText
                         color: BrandTheme.colors.muted
                         font.pixelSize: 23
                         wrapMode: Text.WordWrap
                         horizontalAlignment: Text.AlignHCenter
                         Layout.fillWidth: true
+                    }
+                    GlassButton {
+                        objectName: "sessionForecastEmptyRefresh"
+                        visible: !screen.backend.demoMode
+                        enabled: forecastScroll.canRefreshForecast
+                        iconName: "refresh"
+                        text: screen.tr("session_forecast_refresh")
+                        Layout.alignment: Qt.AlignHCenter
+                        onClicked: screen.refreshFromPull(forecastScroll)
                     }
                 }
             }

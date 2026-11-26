@@ -1868,6 +1868,12 @@ _SESSION_FORECAST_TRANSLATIONS = {
     "session_forecast_intention": ("Intention", "Voornemen", "Absicht", "Intention", "Intención"),
     "session_forecast_conditional_target": ("Possible direction", "Mogelijke richting", "Mögliche Richtung", "Direction possible", "Dirección posible"),
     "session_forecast_empty": ("Horizon is currently unavailable.", "Horizon is nu niet beschikbaar.", "Horizon ist derzeit nicht verfügbar.", "Horizon est actuellement indisponible.", "Horizon no está disponible actualmente."),
+    "session_forecast_loading": (
+        "Loading Horizon…", "Horizon laden…", "Horizon wird geladen…", "Chargement de Horizon…", "Cargando Horizon…",
+    ),
+    "session_forecast_refresh": (
+        "Refresh Horizon", "Horizon vernieuwen", "Horizon aktualisieren", "Actualiser Horizon", "Actualizar Horizon",
+    ),
     "session_attribution_source": ("Source", "Bron", "Quelle", "Source", "Fuente"),
 }
 for _key, _values in _SESSION_FORECAST_TRANSLATIONS.items():
