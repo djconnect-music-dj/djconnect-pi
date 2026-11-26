@@ -6946,6 +6946,18 @@ BrandWindow {
                 if (root.trackArtworkOpeningControl) closeArtworkButton.forceActiveFocus(Qt.PopupFocusReason)
                 else forceActiveFocus()
             }
+            function moveControlFocus(backward) {
+                const playback = artworkTransportLoader.item
+                const targets = [closeArtworkButton, artworkControlsToggle]
+                    .concat(playback ? playback.artworkFocusOrder : [], [expandedSource.spotifyFocusTarget])
+                    .filter(control => control.visible && control.enabled && control.activeFocusOnTab)
+                const index = targets.indexOf(root.activeFocusItem)
+                const next = index < 0 ? (backward ? targets.length - 1 : 0)
+                    : (index + (backward ? -1 : 1) + targets.length) % targets.length
+                if (targets[next]) targets[next].forceActiveFocus(backward ? Qt.BacktabFocusReason : Qt.TabFocusReason)
+            }
+            Shortcut { sequence: "Tab"; onActivated: moveControlFocus(false) }
+            Shortcut { sequence: "Shift+Tab"; onActivated: moveControlFocus(true) }
             Keys.onEscapePressed: {
                 if (root.trackArtworkControlsOpen) {
                     root.toggleTrackArtworkControls()
@@ -7085,6 +7097,7 @@ BrandWindow {
                                 onClicked: root.toggleTrackArtworkControls()
                             }
                             Loader {
+                                id: artworkTransportLoader
                                 anchors.centerIn: parent
                                 width: parent.width - 20
                                 height: parent.height - 20
@@ -7125,6 +7138,7 @@ BrandWindow {
                             }
                             SessionAttribution {
                                 id: expandedSource
+                                objectName: "expandedTrackSource"
                                 visible: requiresSpotify && ready
                                 requiresSpotify: root.sessionTrackArtwork && !!sharedSessionScreen.state.playback.requires_spotify_attribution
                                 spotifyURL: requiresSpotify ? sharedSessionScreen.state.playback.source_url || "" : ""

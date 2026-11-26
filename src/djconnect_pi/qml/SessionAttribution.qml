@@ -10,6 +10,7 @@ ColumnLayout {
     property bool requiresSpotify: false
     property string spotifyURL: ""
     readonly property bool ready: !requiresSpotify || (spotifyLogo.status === Image.Ready && spotifyURL.length > 0)
+    readonly property Item spotifyFocusTarget: spotifyLogo
     spacing: 4
     Image {
         id: spotifyLogo

@@ -277,17 +277,30 @@ def main():
                 previous = visual(window.contentItem(), 'sessionPlaybackPrevious')
                 toggle = visual(window.contentItem(), 'sessionPlaybackToggle')
                 controls = visual(overlay, 'trackArtworkTransportControls')
+                focus_order = [close_artwork, artwork_controls]
                 for name in ('sessionPlaybackRepeat', 'sessionPlaybackShuffle', 'sessionArtworkFavorite',
                              'sessionPlaybackPrevious', 'sessionPlaybackToggle', 'sessionPlaybackNext',
                              'sessionPlaybackSeekBack', 'sessionPlaybackSeekForward'):
                     button = visual(controls, name)
                     assert button is not None and button.width() == button.height()
+                    if button.property('enabled'):
+                        focus_order.append(button)
                     icon = button.property('contentItem').childItems()[0]
                     scale = 1 if width == 720 else min(1.45, width / 835)
                     assert icon.width() >= 77 * scale
                     start = button.mapToItem(card, QPointF())
                     end = button.mapToItem(card, QPointF(button.width(), button.height()))
                     assert start.x() >= 0 and start.y() >= 0 and end.x() <= card.width() and end.y() <= card.height()
+                source_link = visual(overlay, 'expandedTrackSource').property('spotifyFocusTarget')
+                if source_link.property('visible'):
+                    focus_order.append(source_link)
+                close_artwork.forceActiveFocus()
+                for control in focus_order[1:] + focus_order[:1]:
+                    QTest.keyClick(window, Qt.Key.Key_Tab)
+                    assert control.property('activeFocus'), control.objectName()
+                for control in reversed(focus_order):
+                    QTest.keyClick(window, Qt.Key.Key_Backtab, Qt.KeyboardModifier.ShiftModifier)
+                    assert control.property('activeFocus'), control.objectName()
                 back = visual(controls, 'sessionPlaybackSeekBack')
                 forward = visual(controls, 'sessionPlaybackSeekForward')
                 assert back.y() == forward.y() > previous.y() and back.x() < toggle.x() < forward.x()

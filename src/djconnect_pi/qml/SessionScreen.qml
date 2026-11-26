@@ -2567,6 +2567,8 @@ Item {
         property bool overArtwork: false
         readonly property int optionsRow: overArtwork ? 0 : 2
         readonly property int seekRow: overArtwork ? 2 : 0
+        readonly property var artworkFocusOrder: [repeatTransport, shuffleTransport, favoriteTransport,
+            previousTransport, toggleTransport, nextTransport, seekBackTransport, seekForwardTransport, refreshTransport]
         spacing: 8
         function focusFirstControl() {
             const first = [seekBackTransport, previousTransport, refreshTransport].find(button => button.visible && button.enabled)
