@@ -1419,12 +1419,13 @@ Item {
                             iconName: "speaker"
                             text: screen.state.playback.target_name || ""
                             textAlignment: Text.AlignLeft
+                            wrapText: true
                             Accessible.name: screen.tr("output_device") + ": " + text
                             Layout.fillWidth: true
                             Layout.minimumWidth: 0
                             opacity: 1
                             padding: 4
-                            implicitHeight: 44
+                            implicitHeight: Math.max(44, contentItem.implicitHeight + topPadding + bottomPadding)
                             background: Item {}
                             onCurrentTrackClicked: outputsPanel.openForCurrentItem(outputShortcut)
                         }

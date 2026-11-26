@@ -7,6 +7,7 @@ Button {
     id: control
     property string iconName: ""
     property int textAlignment: Text.AlignHCenter
+    property bool wrapText: false
     property real cornerRadius: height / 2
     property bool primary: false
     property color tint: BrandTheme.colors.actionAccent
@@ -56,7 +57,8 @@ Button {
             textFormat: Text.PlainText
             horizontalAlignment: control.textAlignment
             verticalAlignment: Text.AlignVCenter
-            elide: Text.ElideRight
+            wrapMode: control.wrapText ? Text.Wrap : Text.NoWrap
+            elide: control.wrapText ? Text.ElideNone : Text.ElideRight
             Layout.leftMargin: control.iconName.length > 0 ? 10 : 0
             Layout.fillWidth: !control.primary
             Layout.minimumWidth: 0

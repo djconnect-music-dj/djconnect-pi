@@ -443,15 +443,17 @@ def main():
                 owner._session = deepcopy(original_session)
                 original_status = owner.transport.playback_status.return_value
                 observed = deepcopy(original_status)
+                speaker_name = 'Living room and dining room speakers with the hallway and balcony grouped together'
+                owner._session['broadcast']['playback']['target_name'] = speaker_name
                 observed['music_backend_capabilities'].update(
                     supports_volume=True, supports_outputs=True, supports_transfer_or_output_selection=True)
                 observed['playback'].update(volume_percent=11, device={
-                    'id': 'synthetic-output', 'name': 'Synthetic loudspeaker', 'active': True,
+                    'id': 'synthetic-output', 'name': speaker_name, 'active': True,
                     'is_restricted': False, 'supports_volume': True,
                 })
                 owner.transport.playback_status.return_value = observed
                 owner.transport.playback_outputs = Mock(return_value={**observed, 'devices': [
-                    {'id': 'synthetic-output', 'name': 'Synthetic loudspeaker', 'active': True, 'cached': False, 'is_restricted': False},
+                    {'id': 'synthetic-output', 'name': speaker_name, 'active': True, 'cached': False, 'is_restricted': False},
                     {'id': 'synthetic-alternative', 'name': 'Synthetic second speaker', 'active': False, 'cached': False, 'is_restricted': False},
                 ]})
                 owner.changed.emit()
@@ -470,6 +472,9 @@ def main():
                     f'Number(horizontalAlignment) === {Qt.AlignmentFlag.AlignLeft.value}')
                 assert left_aligned.evaluate()[0] is True, left_aligned.error().toString()
                 assert abs(output_label.x() - output_icon.x() - output_icon.width() - 10) <= 1
+                assert output_label.property('text') == speaker_name
+                assert output_label.property('lineCount') > 1 and not output_label.property('truncated')
+                assert output_label.mapToItem(output_shortcut, 0, output_label.height()).y() <= output_shortcut.height()
                 selected_output = visual(window.contentItem(), 'sessionOutputChoice-synthetic-output')
                 assert selected_output.property('checked') and not selected_output.property('enabled')
                 speaker_icon = visual(selected_output, 'sessionOutputChoiceSpeaker')
