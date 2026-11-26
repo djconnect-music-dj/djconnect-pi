@@ -5587,6 +5587,11 @@ BrandWindow {
                 askDjPanel.updateMessages()
                 if (!djconnect.askDjBusy) askDjPanel.pendingQuestionText = ""
             }
+            function onAskDjUnsentDraft(text) {
+                if (!askDjPanel.visible || askDjPanel.pendingQuestionText !== text || askDjChatInput.text) return
+                askDjChatInput.text = text
+                askDjChatInput.cursorPosition = text.length
+            }
             function onAskDjHelpSelected(text, placeholder, revision) {
                 if (!askDjPanel.helpOpen || revision !== askDjPanel.draftEditRevision
                         || askDjChatInput.text !== "" || !askDjChatInput.enabled) return

@@ -203,6 +203,8 @@ class DJConnectBackend(QObject):
     _mediaListFinished = Signal(str)
     _mediaPlaybackFinished = Signal()
     askDjChanged = Signal()
+    askDjUnsentDraft = Signal(str)
+    _askDjUnsentDraftReady = Signal(object, str)
     musicDnaChanged = Signal()
     musicDiscoveryChanged = Signal()
     musicDiscoveryItemsChanged = Signal()
@@ -439,6 +441,7 @@ class DJConnectBackend(QObject):
         self._toastReady.connect(self._show_toast)
         self._updateCheckFinished.connect(self._finish_update_check)
         self._askDjReady.connect(self._apply_ask_dj_data)
+        self._askDjUnsentDraftReady.connect(self._restore_unsent_ask_dj_draft)
         self._askDjRefreshReady.connect(self._apply_ask_dj_refresh_result)
         self._askDjClearReady.connect(self._apply_ask_dj_clear_result)
         self._askDjHelpReady.connect(self._apply_ask_dj_help)
@@ -2671,6 +2674,7 @@ class DJConnectBackend(QObject):
                 if not current():
                     return
                 if not owner:
+                    self._askDjUnsentDraftReady.emit(ticket, text)
                     self._toastReady.emit(self.tr_key("session_profile_missing"), 5000, "askdj")
                     return
                 transport.standalone_question(binding, text, message_id, owner)
@@ -2694,6 +2698,12 @@ class DJConnectBackend(QObject):
         self._set_ask_dj_busy(True)
         self._question_executor.submit(execute)
         return True
+
+    @Slot(object, str)
+    def _restore_unsent_ask_dj_draft(self, ticket, text: str) -> None:
+        if (self._application_foreground and not self._shutting_down and not self._demo_mode
+                and ticket == self._private_read_context()):
+            self.askDjUnsentDraft.emit(text)
 
     @Slot(str)
     def sendAskDjAction(self, action_payload: str) -> None:

@@ -482,6 +482,8 @@ def test_ask_dj_distinguishes_missing_answer_from_unconfirmed_delivery(tmp_path,
     transport.private_scope_owner = Mock(return_value="owner")
     transport.standalone_question = Mock(side_effect=None if accepted else SessionError("uncertain"))
     transport.standalone_history = Mock(side_effect=SessionError("unavailable"))
+    unsent = Mock()
+    backend.askDjUnsentDraft.connect(unsent)
 
     assert backend.sendAskDjQuestion("Is there an answer?")
     backend._question_executor.submit.call_args.args[0]()
@@ -491,6 +493,26 @@ def test_ask_dj_distinguishes_missing_answer_from_unconfirmed_delivery(tmp_path,
     key = "session_question_accepted_unavailable" if accepted else "session_question_uncertain"
     assert backend.toastText == backend.t(key)
     assert not backend.askDjBusy and backend.askDjMessages == []
+    unsent.assert_not_called()
+
+
+def test_ask_dj_returns_draft_if_profile_cannot_send(tmp_path, monkeypatch):
+    ensure_app()
+    config_path = tmp_path / "config.json"
+    save_config(config_path, Config(paired=True, device_token="fixture", ha_url="http://fixture.invalid"))
+    backend = DJConnectBackend(config_path)
+    submit = Mock()
+    monkeypatch.setattr(backend._question_executor, "submit", submit)
+    transport = backend.djSession.transport
+    monkeypatch.setattr(transport, "private_scope_owner", Mock(return_value=None))
+    send = Mock()
+    monkeypatch.setattr(transport, "standalone_question", send)
+    unsent = Mock()
+    backend.askDjUnsentDraft.connect(unsent)
+    assert backend.sendAskDjQuestion("Keep this draft")
+    submit.call_args.args[0]()
+    send.assert_not_called()
+    unsent.assert_called_once_with("Keep this draft")
 
 
 @pytest.mark.parametrize("available_on_selection", [True, False])
