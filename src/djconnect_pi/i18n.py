@@ -1711,6 +1711,9 @@ _SESSION_COMPOSER_TRANSLATIONS = {
     "privacy_open_failed": ("Could not open the privacy statement.", "De privacyverklaring kon niet worden geopend.", "Die Datenschutzerklärung konnte nicht geöffnet werden.", "Impossible d’ouvrir la déclaration de confidentialité.", "No se pudo abrir la declaración de privacidad."),
     "ask_dj_feedback_title": ("Ask DJ answer feedback", "Feedback op Ask DJ-antwoord", "Feedback zur Ask-DJ-Antwort", "Avis sur la réponse Ask DJ", "Comentarios sobre la respuesta de Ask DJ"),
     "ask_dj_feedback_copy": ("Copy answer", "Antwoord kopiëren", "Antwort kopieren", "Copier la réponse", "Copiar respuesta"),
+    "ask_dj_feedback_note": ("Comment", "Toelichting", "Anmerkung", "Commentaire", "Comentario"),
+    "ask_dj_feedback_note_prompt": ("What was wrong or missing?", "Wat klopte er niet of wat miste je?", "Was war falsch oder hat gefehlt?", "Qu’est-ce qui était incorrect ou manquant ?", "¿Qué era incorrecto o faltaba?"),
+    "ask_dj_feedback_copy_with_note": ("Copy feedback", "Feedback kopiëren", "Feedback kopieren", "Copier l’avis", "Copiar comentarios"),
     "ask_dj_use_as_draft": ("Use as draft", "Gebruik als concept", "Als Entwurf verwenden", "Utiliser comme brouillon", "Usar como borrador"),
     "ask_dj_replace_draft": ("Replace draft with this message", "Vervang concept door dit bericht", "Entwurf durch diese Nachricht ersetzen", "Remplacer le brouillon par ce message", "Sustituir el borrador por este mensaje"),
     "ask_dj_feedback_review": (

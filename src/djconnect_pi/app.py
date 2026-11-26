@@ -1243,14 +1243,19 @@ class DJConnectBackend(QObject):
         return QDesktopServices.openUrl(QUrl("https://github.com/djconnect-music-dj/djconnect-pi/issues/new?" + query))
 
     @Slot(str)
-    def copyAskDjFeedbackAnswer(self, message_id: str) -> None:
+    @Slot(str, str)
+    def copyAskDjFeedbackAnswer(self, message_id: str, note: str = "") -> None:
         if (not message_id or not self._application_foreground
                 or (not self._demo_mode and (not self.paired or not self.backendAvailable or self.versionMismatchVisible))):
             return
         for message in self._ask_dj_messages:
             if (message.get("id") == message_id and message.get("role") == "assistant"
                     and message.get("messageKind") not in {"system", "status"} and message.get("text")):
-                QGuiApplication.clipboard().setText(message["text"])
+                note = note.strip()[:1200]
+                answer = message["text"]
+                if note:
+                    answer = f"{self.tr_key('ask_dj_feedback_note')}:\n{note}\n\n{answer}"
+                QGuiApplication.clipboard().setText(answer)
                 self.showToastForContext(self.tr_key("copied"), "connectivity")
                 return
 

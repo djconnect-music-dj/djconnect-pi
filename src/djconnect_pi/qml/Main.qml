@@ -5121,7 +5121,12 @@ BrandWindow {
             width: Math.min(askDjPanel.width - 40, 620)
             modal: true
             padding: 20
-            onClosed: askDjPanel.feedbackMessageId = ""
+            property bool noteKeyboardOpen: false
+            onClosed: {
+                askDjPanel.feedbackMessageId = ""
+                noteKeyboardOpen = false
+                feedbackNote.clear()
+            }
             contentItem: ColumnLayout {
                 spacing: 12
                 Text {
@@ -5130,6 +5135,7 @@ BrandWindow {
                     wrapMode: Text.Wrap; Layout.fillWidth: true
                 }
                 ScrollView {
+                    visible: !askDjFeedbackPopup.noteKeyboardOpen
                     Layout.fillWidth: true; Layout.preferredHeight: Math.min(answerText.implicitHeight, 180)
                     contentWidth: availableWidth; clip: true
                     Text {
@@ -5142,18 +5148,43 @@ BrandWindow {
                     }
                 }
                 Text {
+                    visible: !askDjFeedbackPopup.noteKeyboardOpen
                     text: root.tr("ask_dj_feedback_review"); textFormat: Text.PlainText
                     color: BrandTheme.colors.muted; font.pixelSize: 18
                     wrapMode: Text.Wrap; Layout.fillWidth: true
                 }
+                TextField {
+                    id: feedbackNote
+                    objectName: "askDjFeedbackNote"
+                    placeholderText: root.tr("ask_dj_feedback_note_prompt")
+                    Accessible.name: placeholderText
+                    maximumLength: 1200
+                    selectByMouse: true
+                    background: GlassSurface { radius: 18; interactive: true; focused: feedbackNote.activeFocus }
+                    Layout.fillWidth: true
+                    Layout.minimumHeight: 48
+                    onAccepted: askDjFeedbackPopup.noteKeyboardOpen = false
+                    TapHandler { onTapped: askDjFeedbackPopup.noteKeyboardOpen = true }
+                }
+                SearchKeyboardDock {
+                    visible: askDjFeedbackPopup.noteKeyboardOpen
+                    Layout.fillWidth: true
+                    backend: djconnect
+                    target: feedbackNote
+                    keyboardName: "askDjFeedbackNoteKeyboard"
+                    onSubmitted: askDjFeedbackPopup.noteKeyboardOpen = false
+                    onDismissed: askDjFeedbackPopup.noteKeyboardOpen = false
+                }
                 GlassButton {
                     objectName: "askDjFeedbackCopy"
-                    iconName: "copy"; text: root.tr("ask_dj_feedback_copy")
+                    visible: !askDjFeedbackPopup.noteKeyboardOpen
+                    iconName: "copy"; text: root.tr(feedbackNote.text.trim().length ? "ask_dj_feedback_copy_with_note" : "ask_dj_feedback_copy")
                     Layout.fillWidth: true; enabled: !!askDjPanel.feedbackAnswer
-                    onClicked: djconnect.copyAskDjFeedbackAnswer(askDjPanel.feedbackMessageId)
+                    onClicked: djconnect.copyAskDjFeedbackAnswer(askDjPanel.feedbackMessageId, feedbackNote.text)
                 }
                 GlassButton {
                     objectName: "askDjFeedbackOpenIssue"
+                    visible: !askDjFeedbackPopup.noteKeyboardOpen
                     iconName: "globe"; text: root.tr("feedback_open")
                     Layout.fillWidth: true; enabled: !!askDjPanel.feedbackAnswer
                     onClicked: {
@@ -5162,6 +5193,7 @@ BrandWindow {
                     }
                 }
                 GlassButton {
+                    visible: !askDjFeedbackPopup.noteKeyboardOpen
                     text: root.tr("close"); tertiary: true; Layout.fillWidth: true
                     onClicked: askDjFeedbackPopup.close()
                 }
