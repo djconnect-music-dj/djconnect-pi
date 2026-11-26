@@ -429,6 +429,7 @@ Item {
     }
     property string proposedMood: "groove"
     readonly property string searchTarget: historical ? ((state.timeline.session || {}).session_id || "") : state.session_id
+    property string appliedSearchTarget: ""
     readonly property bool archiveSearchAvailable: historical && !currentHistory && !state.timeline.session
         && state.search_available && backend.paired && !backend.demoMode
     readonly property bool searchAvailable: !flowSearchBlocked
@@ -879,6 +880,7 @@ Item {
     }
     function showSearch() {
         if (!searchAvailable) return
+        syncSearchTarget()
         searchPanel.openTouchKeyboard = true
         searchPanel.keyboardVisible = !searchInput.text.length
         searchPanel.open()
@@ -893,6 +895,7 @@ Item {
         enabled: screen.historyViewOpen && screen.searchAvailable
             && (!screen.historyNavigationBlocked || searchPanel.visible)
         onActivated: {
+            screen.syncSearchTarget()
             searchPanel.openTouchKeyboard = false
             searchPanel.keyboardVisible = false
             searchPanel.open()
@@ -945,7 +948,10 @@ Item {
     }
     onVisibleChanged: { syncMediaVisibility(); if (!visible) { cancelArchiveRead(); if (owner) owner.clearArchive(); clearFlowReturn(); historyRead.stop(); historyReadProfile = ""; historyReadSession = ""; historyReadPending = false; readingRestore.stop(); pendingReadingAnchor = ""; closeTransient() } }
     onHistoricalChanged: { if (historical) closePlaybackPanels(); syncMediaVisibility(); if (!historical) { archiveDetailReturn = null; cancelArchiveRead(); if (owner) owner.clearArchive() } readingRestore.stop(); pendingReadingAnchor = ""; readingOffset = 0; if (!historical && flowReturn) { historyScroll.contentItem.cancelFlick(); flowReturnRestore.restart() } }
-    onSearchTargetChanged: {
+    onSearchTargetChanged: Qt.callLater(syncSearchTarget)
+    function syncSearchTarget() {
+        if (appliedSearchTarget === searchTarget) return
+        appliedSearchTarget = searchTarget
         if (searchPanel) searchPanel.cancelTypedSearch()
         const handoff = archiveSearchHandoff
         archiveSearchHandoff = null
@@ -1176,10 +1182,12 @@ Item {
         function onSearchUpdated() { searchPosition.restart() }
         function onContextCleared() { screen.cancelArchiveRead(); screen.clearFlowReturn(); historyRead.stop(); screen.historyReadProfile = ""; screen.historyReadSession = ""; readingRestore.stop(); screen.pendingReadingAnchor = ""; screen.readingOffset = 0; screen.closeTransient(); if (screen.historical) screen.navigate(screen.currentHistory ? "session" : "more"); screen.historyReadPending = false }
         function onEntryOpened() {
+            const anchor = (screen.state.timeline || {}).selected_entry_id || ""
             if (!screen.historical) screen.rememberFlow()
             searchPanel.close()
             screen.readingOffset = 0
             screen.navigate(screen.currentHistory || !screen.historical ? "session-history" : "history")
+            screen.restoreReading(anchor)
         }
     }
 
@@ -3586,7 +3594,7 @@ Item {
                     width: searchScroll.availableWidth; spacing: 14
                     Repeater {
                         id: archiveSearchRows
-                        model: screen.archiveSearchAvailable ? searchPanel.matches : []
+                        model: screen.archiveSearchAvailable && searchPanel.matchingQuery ? searchPanel.matches : []
                         ArchiveSessionRow {
                             objectName: "sessionArchiveSearchRow"
                             selectionFill: selected ? BrandTheme.colors.actionAccent : "transparent"
@@ -3598,7 +3606,7 @@ Item {
                     Repeater {
                         id: searchRows
                         objectName: "sessionSearchRows"
-                        model: screen.archiveSearchAvailable ? [] : searchPanel.matches
+                        model: !screen.archiveSearchAvailable && searchPanel.matchingQuery ? searchPanel.matches : []
                         GlassCard {
                             id: searchMatch
                             required property var modelData

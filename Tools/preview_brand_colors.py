@@ -1457,6 +1457,17 @@ def main():
         capture("history-highlight-literal")
         owner.invalidate()
         assert search_input.property("text") == "", "Private query survives context invalidation"
+        window.setProperty("activeScreen", "session")
+        QTest.qWait(65)
+        target_entry = extended["entries"][3]["entry_id"]
+        owner._timeline = {**extended, "selected_entry_id": target_entry}
+        owner.changed.emit()
+        owner.timelineUpdated.emit(target_entry)
+        owner.entryOpened.emit()
+        capture("history-open-selected-result-from-flow")
+        assert window.property("activeScreen") == "session-history"
+        actual_anchor = QMetaObject.invokeMethod(session_item, "readingAnchor", Q_RETURN_ARG("QVariant"))
+        assert actual_anchor == target_entry, (width, actual_anchor, target_entry)
         owner.closeSaved()
         window.setProperty("activeScreen", "now")
         window.setProperty("aboutOpen", True)
