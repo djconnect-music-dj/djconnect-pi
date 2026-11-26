@@ -317,6 +317,7 @@ class DJConnectBackend(QObject):
         self._track_insight_result_scope = None
         self._track_insight_last_proof = None
         self._track_insight_deadline = None
+        self._track_insight_retryable = False
         self._ask_dj_unavailable_until = 0.0
         self._ask_dj_poll_error_count = 0
         self._ask_dj_poll_in_flight = False
@@ -661,6 +662,14 @@ class DJConnectBackend(QObject):
     @Property(bool, notify=trackInsightChanged)
     def trackInsightMatchesPlayback(self) -> bool:
         return self._demo_mode or self._track_insight_result_scope == self._track_insight_scope()
+
+    @Property(bool, notify=trackInsightChanged)
+    def trackInsightRenewalNeeded(self) -> bool:
+        previous = self._track_insight_last_proof
+        return bool(previous and self._track_insight_result_scope is None
+                    and previous[0] == self._track_insight_scope()
+                    and previous[2] <= self._session_controller._clock.now()
+                    and self._track_insight_retryable)
 
     @Property(str, notify=trackInsightPlaybackItemChanged)
     def trackInsightPlaybackItemId(self) -> str:
@@ -3845,13 +3854,15 @@ class DJConnectBackend(QObject):
             return
         error = str(data.get("error") or "").strip()
         if error in ("no_track_playing", "current_track_unavailable"):
-            self._clear_track_insight(error=self.tr_key("track_insight_no_track"))
+            self._clear_track_insight(error=self.tr_key("track_insight_no_track"),
+                                      retryable=error == "current_track_unavailable")
             return
         if error == "rate_limited":
-            self._clear_track_insight(error=self.tr_key("track_insight_rate_limited"))
+            self._clear_track_insight(error=self.tr_key("track_insight_rate_limited"), retryable=True)
             return
         if error:
-            self._clear_track_insight(error=self.tr_key("track_insight_retry"))
+            self._clear_track_insight(error=self.tr_key("track_insight_retry"),
+                                      retryable=error in {"transient", "track_insight_context_changed"})
             return
         proof = data.proof if isinstance(data, _TrackInsightResult) else None
         deadline = None
@@ -3888,6 +3899,7 @@ class DJConnectBackend(QObject):
         self._track_insight_visualizer = _track_insight_visualizer(track, self._track_insight_items, self._track_insight_sections) if isinstance(track, dict) else {}
         self._track_insight_result_scope = scope
         self._track_insight_deadline = deadline
+        self._track_insight_retryable = False
         self._schedule_track_insight_expiry()
         self._set_backend_available(True)
         self.trackInsightChanged.emit()
@@ -3941,7 +3953,7 @@ class DJConnectBackend(QObject):
         if self._track_insight_deadline is None:
             return
         if self._track_insight_deadline <= self._session_controller._clock.now():
-            self._clear_track_insight()
+            self._clear_track_insight(retryable=True)
             self.trackInsightObservationChanged.emit()
         else:
             self._schedule_track_insight_expiry()
@@ -3954,7 +3966,7 @@ class DJConnectBackend(QObject):
         else:
             self._clear_track_insight()
 
-    def _clear_track_insight(self, *, error: str = "") -> None:
+    def _clear_track_insight(self, *, error: str = "", retryable: bool = False) -> None:
         changed = any(
             (
                 self._track_insight_title,
@@ -3984,6 +3996,7 @@ class DJConnectBackend(QObject):
         self._track_insight_visualizer = {}
         self._track_insight_result_scope = None
         self._track_insight_deadline = None
+        self._track_insight_retryable = retryable
         self._track_insight_expiry_timer.stop()
         if changed or error:
             self.trackInsightChanged.emit()

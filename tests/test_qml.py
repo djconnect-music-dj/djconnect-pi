@@ -486,7 +486,8 @@ def test_qml_track_insight_panel_renders_contract_fields() -> None:
 
     assert 'visible: root.activeScreen === "trackinsight"' in main_qml
     assert 'property string requestedInsightKey: ""' in panel
-    assert "onAutoInsightKeyChanged: Qt.callLater(requestInsightIfVisible)" in panel
+    assert "onAutoInsightKeyChanged: {" in panel
+    assert "Qt.callLater(requestInsightIfVisible)" in panel
     assert "onAutoInsightSurfaceActiveChanged: if (!autoInsightSurfaceActive) requestedInsightKey" in panel
     assert "autoInsightKey === requestedInsightKey" in panel
     assert "djconnect.openTrackInsight()" in panel

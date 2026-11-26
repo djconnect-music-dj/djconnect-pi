@@ -676,15 +676,25 @@ def main():
                 backend._expire_track_insight()
                 QTest.qWait(65)
                 assert not backend.trackInsightTitle and request.call_count == 7
+                current.side_effect = requests.ReadTimeout
+                request.call_args.args[1]()
+                request.call_args.kwargs["done"]()
+                retry_timer = window.findChild(QObject, "trackInsightRenewalRetry")
+                page = visual_item(window.contentItem(), "trackInsightPanel")
+                assert retry_timer.property("running") and retry_timer.property("interval") == 3000
+                page.setProperty("renewalDelay", 25)
+                QTest.qWait(80)
+                assert request.call_count == 8 and page.property("renewalDelay") == 50
+                request.call_args.args[1]()
                 request.call_args.kwargs["done"]()
                 paused = deepcopy(backend.playback)
                 paused.is_playing = False
                 backend._apply_playback(paused)
                 QTest.qWait(65)
-                assert request.call_count == 7
+                assert request.call_count == 8 and not retry_timer.property("running")
                 backend._apply_playback(Playback(title="Qualified fixture", uri=recording, is_playing=True))
                 QTest.qWait(65)
-                assert request.call_count == 8
+                assert request.call_count == 9
                 request.call_args.kwargs["done"]()
             owner._caps = previous_caps
         backend.cfg.paired, backend.cfg.device_token = False, ""

@@ -3086,16 +3086,38 @@ BrandWindow {
                 djconnect.demoMode ? null : (djconnect.outputDeviceId
                     ? ["id", djconnect.outputDeviceId] : ["label", djconnect.outputDevice])]) : ""
         property string requestedInsightKey: ""
+        property int renewalDelay: 3000
+        readonly property bool shouldRetryRenewal: canAutoRequestAnalysis && djconnect.trackInsightRenewalNeeded
+            && requestedInsightKey === autoInsightKey
         color: "transparent"
         Component.onCompleted: Qt.callLater(requestInsightIfVisible)
         onCanAutoRequestAnalysisChanged: if (canAutoRequestAnalysis) Qt.callLater(requestInsightIfVisible)
-        onAutoInsightKeyChanged: Qt.callLater(requestInsightIfVisible)
+        onAutoInsightKeyChanged: {
+            renewalDelay = 3000
+            Qt.callLater(requestInsightIfVisible)
+        }
         onAutoInsightSurfaceActiveChanged: if (!autoInsightSurfaceActive) requestedInsightKey = ""
+        onShouldRetryRenewalChanged: {
+            if (shouldRetryRenewal) trackInsightRenewalRetry.restart()
+            else trackInsightRenewalRetry.stop()
+        }
+
+        Timer {
+            id: trackInsightRenewalRetry
+            objectName: "trackInsightRenewalRetry"
+            interval: trackInsightPanel.renewalDelay
+            onTriggered: {
+                if (!trackInsightPanel.shouldRetryRenewal) return
+                trackInsightPanel.renewalDelay = Math.min(trackInsightPanel.renewalDelay * 2, 30000)
+                djconnect.openTrackInsight()
+            }
+        }
 
         Connections {
             target: djconnect
             function onTrackInsightObservationChanged() {
                 trackInsightPanel.requestedInsightKey = ""
+                trackInsightPanel.renewalDelay = 3000
                 Qt.callLater(trackInsightPanel.requestInsightIfVisible)
             }
         }
