@@ -462,8 +462,14 @@ def main():
                 QTest.qWait(80)
                 click('sessionCurrentOutput')
                 assert output_panel.property('opened') and not popup.property('opened') and len(intents) == 1
+                output_refresh = window.findChild(QObject, 'sessionOutputRead')
+                output_spinner = window.findChild(QObject, 'sessionOutputReadSpinner')
+                assert output_spinner.property('visible') and not output_refresh.property('enabled')
                 intents.pop()()
                 QTest.qWait(80)
+                assert output_refresh.property('iconName') == 'refresh' and not output_spinner.property('visible')
+                output_choices = window.findChild(QObject, 'sessionOutputChoices')
+                assert output_refresh.mapToScene(QPointF(0, output_refresh.height())).y() <= output_choices.mapToScene(QPointF()).y()
                 output_shortcut = window.findChild(QObject, 'sessionCurrentOutput')
                 assert_popup_anchor(output_shortcut, output_panel)
                 assert output_shortcut.property('iconName') == 'speaker'
@@ -496,6 +502,15 @@ def main():
                     assert row_volume.property('text') == volume and check.property('visible') == active
                     assert row_name.mapToItem(row, 0, 0).x() == row_volume.mapToItem(row, 0, 0).x()
                 capture('direct-output-inventory')
+                click('sessionOutputRead')
+                assert len(intents) == 1 and output_spinner.property('visible')
+                point = output_refresh.mapToScene(QPointF(output_refresh.width()/2, output_refresh.height()/2))
+                QTest.mouseClick(window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier,
+                                 QPoint(round(point.x()), round(point.y())))
+                assert len(intents) == 1
+                intents.pop()()
+                QTest.qWait(80)
+                assert owner.transport.playback_outputs.call_count == 2 and not output_spinner.property('visible')
                 click('sessionOutputClose')
                 QTest.qWait(120)
                 click('sessionCurrentVolume')

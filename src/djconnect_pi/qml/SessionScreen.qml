@@ -2296,9 +2296,29 @@ Item {
         contentItem: ColumnLayout {
             spacing: 16
             RowLayout {
-                id: outputHeader
                 Layout.fillWidth: true
                 Text { text: screen.tr("output_device"); textFormat: Text.PlainText; font.pixelSize: 25; font.bold: true; color: BrandTheme.colors.text; Layout.fillWidth: true; wrapMode: Text.WordWrap }
+                GlassButton {
+                    id: outputRefresh
+                    objectName: "sessionOutputRead"
+                    readonly property bool reading: !!screen.state.playback_control.reading_outputs
+                    iconName: reading ? "" : "refresh"
+                    implicitWidth: implicitHeight
+                    Accessible.name: screen.tr("refresh")
+                    enabled: !screen.owner.busy && !!screen.state.playback_control.available && !!screen.state.playback_control.outputs_supported
+                    onClicked: {
+                        if (screen.state.playback_control.status === "uncertain") screen.owner.refreshPlayback()
+                        else screen.owner.readPlaybackOutputs(screen.state.session_id, screen.state.playback.item_id)
+                    }
+                    BusyIndicator {
+                        objectName: "sessionOutputReadSpinner"
+                        anchors.centerIn: parent
+                        width: 28
+                        height: width
+                        visible: outputRefresh.reading
+                        running: visible
+                    }
+                }
             }
             ListView {
                 id: outputChoices
@@ -2373,20 +2393,7 @@ Item {
                     : outputsPanel.observation.lease !== undefined && outputsPanel.choices.length <= 1 ? screen.tr("session_output_empty") : ""
             }
             RowLayout {
-                id: outputFooter
                 Layout.fillWidth: true
-                GlassButton {
-                    parent: screen.compact ? outputFooter : outputHeader
-                    objectName: "sessionOutputRead"
-                    text: screen.compact ? screen.tr("refresh") : ""
-                    iconName: screen.compact ? "" : "refresh"
-                    Accessible.name: screen.tr("refresh")
-                    enabled: !screen.owner.busy && !!screen.state.playback_control.available && !!screen.state.playback_control.outputs_supported
-                    onClicked: {
-                        if (screen.state.playback_control.status === "uncertain") screen.owner.refreshPlayback()
-                        else screen.owner.readPlaybackOutputs(screen.state.session_id, screen.state.playback.item_id)
-                    }
-                }
                 Item { Layout.fillWidth: true }
                 GlassButton { objectName: "sessionOutputClose"; text: screen.tr("close"); onClicked: outputsPanel.close() }
             }
