@@ -1085,7 +1085,7 @@ def main():
         window.setProperty("aboutOpen", False)
         backend.cfg.log_level = "INFO"
         backend.showLogs()
-        backend._logs_text = "sample first\nunrelated entry\nsample second\nsample third"
+        backend._logs_text = "sample first\n<repeat> & repeat\nsample second\nsample third"
         backend.logsChanged.emit()
         capture("logs")
         logs = visual_item(window.contentItem(), "logsView")
@@ -1138,6 +1138,15 @@ def main():
             assert accessible_count.text(QAccessible.Text.Name) == "2/3"
             assert search_count.width() == empty_count_width
             assert search_input.property("text") == "  sample  " and search_count.property("visible")
+            search_input.setProperty("text", "repeat")
+            same_line = QQmlExpression(engine.rootContext(), logs, "lineText(1, lines[1])")
+            highlighted = same_line.evaluate()[0]
+            assert not same_line.hasError() and highlighted.count("</font>") == 2
+            assert highlighted.startswith("&lt;<b>") and "&gt; &amp; " in highlighted
+            capture("logs-search-same-line-" + locale)
+            QTest.keyClick(window, Qt.Key.Key_Down)
+            highlighted = same_line.evaluate()[0]
+            assert highlighted.count("</font>") == 2 and "&amp; <b>" in highlighted
             search_input.setProperty("text", "   ")
             assert logs.property("matchIndex") == -1 and not search_count.property("visible")
             QTest.keyClick(window, Qt.Key.Key_Escape)

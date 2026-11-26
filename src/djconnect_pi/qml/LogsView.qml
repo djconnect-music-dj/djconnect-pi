@@ -18,19 +18,24 @@ Item {
     property bool keyboardOpen: false
     property int matchIndex: -1
     readonly property string query: searchInput.text.trim()
-    readonly property var matches: findMatches(lines, query)
+    readonly property var searchMatches: findMatches(lines, query)
+    readonly property var matches: searchMatches.ordered
     readonly property var currentMatch: matches[matchIndex] || null
 
     function tr(key) { backend.translationVersion; return backend.t(key) }
     function findMatches(rows, query) {
-        if (!query) return []
-        var result = []
+        const result = {ordered: [], byRow: {}}
+        if (!query) return result
         var pattern = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "giu")
         for (var row = 0; row < rows.length; row++) {
             pattern.lastIndex = 0
             var hit
-            while ((hit = pattern.exec(rows[row])) !== null)
-                result.push({row: row, start: hit.index, end: hit.index + hit[0].length})
+            while ((hit = pattern.exec(rows[row])) !== null) {
+                const match = {row: row, start: hit.index, end: hit.index + hit[0].length}
+                result.ordered.push(match)
+                if (!result.byRow[row]) result.byRow[row] = []
+                result.byRow[row].push(match)
+            }
         }
         return result
     }
@@ -38,11 +43,19 @@ Item {
         return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
     }
     function lineText(row, text) {
-        var hit = currentMatch
-        if (!hit || hit.row !== row) return escapeText(text)
-        return escapeText(text.slice(0, hit.start))
-            + '<b><font color="' + BrandTheme.colors.actionAccent + '">' + escapeText(text.slice(hit.start, hit.end))
-            + '</font></b>' + escapeText(text.slice(hit.end))
+        const rowMatches = searchMatches.byRow[row]
+        if (!rowMatches) return escapeText(text)
+        const selected = currentMatch
+        var styled = ""
+        var cursor = 0
+        for (const hit of rowMatches) {
+            const active = selected && selected.row === row && selected.start === hit.start
+            const color = active ? BrandTheme.colors.actionAccent : BrandTheme.colors.warning
+            const highlight = '<font color="' + color + '">' + escapeText(text.slice(hit.start, hit.end)) + '</font>'
+            styled += escapeText(text.slice(cursor, hit.start)) + (active ? '<b>' + highlight + '</b>' : highlight)
+            cursor = hit.end
+        }
+        return styled + escapeText(text.slice(cursor))
     }
     function moveMatch(step) {
         if (!matches.length) return false
