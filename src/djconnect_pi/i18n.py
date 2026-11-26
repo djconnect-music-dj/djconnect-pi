@@ -1276,6 +1276,13 @@ _MUSIC_DNA_CARD_TRANSLATIONS = {
         "Music DNA updated", "Music DNA bijgewerkt", "Music DNA aktualisiert",
         "Music DNA mis à jour", "Music DNA actualizado",
     ),
+    "music_dna_recovering": (
+        "Music DNA is temporarily unavailable. Trying again automatically.",
+        "Music DNA is tijdelijk niet beschikbaar. We proberen het automatisch opnieuw.",
+        "Music DNA ist vorübergehend nicht verfügbar. Ein neuer Versuch erfolgt automatisch.",
+        "Music DNA est temporairement indisponible. Une nouvelle tentative aura lieu automatiquement.",
+        "Music DNA no está disponible temporalmente. Se reintentará automáticamente.",
+    ),
     "music_dna_updated_at": (
         "Updated %1", "Bijgewerkt %1", "Aktualisiert %1", "Mis à jour %1", "Actualizado %1",
     ),

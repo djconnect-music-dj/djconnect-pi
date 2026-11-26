@@ -4395,6 +4395,8 @@ BrandWindow {
         id: musicDnaPanel
         objectName: "musicDnaPanel"
         color: "transparent"
+        readonly property bool showProfile: djconnect.musicDnaLoaded && djconnect.musicDnaEnabled
+            && (djconnect.musicDnaError.length === 0 || djconnect.musicDnaNeedsRecovery)
 
         ProfileReadOnOpen {
             id: musicDnaProfileRead
@@ -4510,7 +4512,7 @@ BrandWindow {
             ScrollView {
                 id: musicDnaScroll
                 objectName: "musicDnaScroll"
-                visible: djconnect.musicDnaLoaded && djconnect.musicDnaError.length === 0 && djconnect.musicDnaEnabled
+                visible: musicDnaPanel.showProfile
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 clip: true
@@ -4747,7 +4749,7 @@ BrandWindow {
                 }
             }
             Item {
-                visible: !djconnect.musicDnaEnabled || djconnect.musicDnaError.length > 0
+                visible: !musicDnaPanel.showProfile
                 Layout.fillWidth: true; Layout.fillHeight: true
             }
         }

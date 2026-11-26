@@ -3501,10 +3501,11 @@ class DJConnectBackend(QObject):
         if data.get("success") is False:
             code = data.get("error")
             key = "session_profile_missing" if isinstance(code, str) and code in PROFILE_ERROR_CODES | {"music_dna_context_changed"} else "backend_unavailable"
-            self._music_dna_error = self.tr_key(key)
-            self._music_dna_summary = ""
-            self._music_dna_sections = []
-            self._music_dna_updated_at = ""
+            self._music_dna_error = self.tr_key("music_dna_recovering" if self._music_dna_needs_recovery else key)
+            if not self._music_dna_needs_recovery:
+                self._music_dna_summary = ""
+                self._music_dna_sections = []
+                self._music_dna_updated_at = ""
             self.musicDnaChanged.emit()
             if profile_read and data.manual:
                 notice_key = key if key == "session_profile_missing" else "music_dna_profile_unavailable"

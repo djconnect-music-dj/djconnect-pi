@@ -670,7 +670,7 @@ def main():
             request.assert_called_once()
             assert loading.property("visible") and not reload_button.property("enabled")
             with (patch.object(backend.client, "music_dna_profile", side_effect=[
-                      {"success": True, "enabled": False, "profile": {}},
+                      {"success": True, "enabled": True, "profile": {"summary": "Last confirmed profile"}},
                       requests.ReadTimeout,
                       {"success": True, "enabled": False, "profile": {}},
                   ]), patch.object(backend, "_persist_backend_summary")):
@@ -683,6 +683,9 @@ def main():
                 request.call_args.args[1]()
                 request.call_args.kwargs["done"]()
                 assert backend.toastText == backend.t("music_dna_profile_unavailable") and unavailable.property("visible")
+                assert backend.musicDnaError == backend.t("music_dna_recovering")
+                assert backend.musicDnaSummary == "Last confirmed profile"
+                assert visual_item(window.contentItem(), "musicDnaScroll").property("visible")
                 recovery = window.findChild(QObject, "musicDnaRecoveryTimer")
                 assert recovery.property("running")
                 backend.hideToast()
