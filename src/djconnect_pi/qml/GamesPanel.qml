@@ -8,6 +8,8 @@ Rectangle {
     id: root
     objectName: "gamesPanel"
     readonly property bool compact: width < 900
+    property bool foreground: false
+    readonly property bool gameplayActive: visible && foreground
     color: BrandTheme.colors.background
     SessionMoodCanvas { anchors.fill: parent; mood: root.gameMood; activeSession: true }
 
@@ -53,7 +55,14 @@ Rectangle {
     }
     onVisibleChanged: {
         if (visible) forceActiveFocus()
-        else playing = false
+    }
+    onGameplayActiveChanged: {
+        if (gameplayActive || !playing) return
+        playing = false
+        flashTimer.stop()
+        flash = false
+        djconnect.stopGameSounds()
+        gameCanvas.requestPaint()
     }
     Keys.onUpPressed: root.useDirection("up")
     Keys.onDownPressed: root.useDirection("down")
@@ -124,10 +133,12 @@ Rectangle {
     }
 
     function startGame() {
+        if (!gameplayActive) return false
         if (!playing) {
             playing = true
             playSfx("start")
         }
+        return true
     }
 
     function resetGame() {
@@ -239,7 +250,7 @@ Rectangle {
     }
 
     function move(direction) {
-        startGame()
+        if (!startGame()) return
         playSfx("move")
         if (gameId === "pong") {
             paddleY = Math.max(42, Math.min(126, paddleY + direction * 12))
@@ -255,7 +266,7 @@ Rectangle {
     }
 
     function moveHorizontal(direction) {
-        startGame()
+        if (!startGame()) return
         playSfx("move")
         if (gameId === "pacman") {
             pacmanDX = direction
@@ -267,8 +278,7 @@ Rectangle {
     }
 
     function fire() {
-        if (!fireControl) return
-        startGame()
+        if (!fireControl || !startGame()) return
         if (gameId === "asteroids" && !asteroidBulletActive) {
             asteroidBulletActive = true
             asteroidBulletY = 120
@@ -281,7 +291,7 @@ Rectangle {
     }
 
     function handleTouch(x, y) {
-        startGame()
+        if (!startGame()) return
         var gx = x / gameCanvas.width * 320
         var gy = y / gameCanvas.height * 170
         if (gameId === "pong") {
@@ -452,7 +462,7 @@ Rectangle {
 
     Timer {
         interval: 33
-        running: root.visible && playing
+        running: root.gameplayActive && playing
         repeat: true
         onTriggered: tickGame()
     }
@@ -774,8 +784,10 @@ Rectangle {
                 }
 
                 GlassButton {
+                    objectName: "gameStart"
                     anchors.centerIn: parent
                     visible: !root.playing
+                    enabled: root.gameplayActive
                     text: root.tr("tap_to_play")
                     font.pixelSize: 22
                     onClicked: root.startGame()

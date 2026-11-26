@@ -3013,7 +3013,14 @@ class DJConnectBackend(QObject):
         except Exception as exc:  # noqa: BLE001 - optional game audio must not affect the renderer lifecycle
             _LOGGER.debug("Game sound skipped: %s", exc)
 
+    @Slot()
+    def stopGameSounds(self) -> None:
+        for sink, buffer in tuple(self._game_sound_objects):
+            self._cleanup_game_sound(sink, buffer)
+
     def _cleanup_game_sound(self, sink: object, buffer: QBuffer) -> None:
+        if (sink, buffer) not in self._game_sound_objects:
+            return
         try:
             if hasattr(sink, "stop"):
                 sink.stop()

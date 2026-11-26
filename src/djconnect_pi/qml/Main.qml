@@ -6398,6 +6398,7 @@ BrandWindow {
         id: gamesPanel
         anchors.fill: parent
         visible: gamesOpen
+        foreground: root.active && !root.screenBlanked && !root.splashVisible
         z: 18
         onCloseRequested: root.activeScreen = "more"
     }
