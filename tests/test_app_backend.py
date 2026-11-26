@@ -3102,6 +3102,22 @@ def test_backend_sync_config_updates_live_settings(tmp_path: Path, monkeypatch) 
     assert backend.updateChannel == "beta"
 
 
+def test_backend_sync_config_updates_device_name_when_it_is_the_only_change(tmp_path: Path) -> None:
+    ensure_app()
+    config_path = tmp_path / "config.json"
+    backend = DJConnectBackend(config_path)
+    settings_changed = Mock()
+    backend.settingsChanged.connect(settings_changed)
+    renamed = load_config(config_path)
+    renamed.device_name = "Living room Pi"
+    save_config(config_path, renamed)
+
+    backend._sync_config_from_disk()
+
+    assert backend.deviceName == "Living room Pi"
+    settings_changed.assert_called_once()
+
+
 def test_switching_logging_off_clears_app_logs_and_hides_the_open_view(tmp_path, monkeypatch):
     ensure_app()
     config = tmp_path / "client.json"

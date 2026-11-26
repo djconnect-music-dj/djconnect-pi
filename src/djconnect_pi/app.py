@@ -810,6 +810,10 @@ class DJConnectBackend(QObject):
     def deviceId(self) -> str:
         return self.cfg.device_id
 
+    @Property(str, notify=settingsChanged)
+    def deviceName(self) -> str:
+        return self.cfg.device_name
+
     @Property(str, notify=pairingCodeChanged)
     def pairingCode(self) -> str:
         return self.cfg.pairing_code
@@ -1274,6 +1278,7 @@ class DJConnectBackend(QObject):
             latest.device_token == self.cfg.device_token
             and latest.paired == self.cfg.paired
             and latest.ha_url == self.cfg.ha_url
+            and latest.device_name == self.cfg.device_name
             and latest.language == self.cfg.language
             and latest.log_level == self.cfg.log_level
             and latest.screen_brightness_percent == self.cfg.screen_brightness_percent

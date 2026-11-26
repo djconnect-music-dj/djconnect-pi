@@ -53,7 +53,8 @@ def main():
     checks = []
     for width, height, profile in [(720, 720, "pi-zero-2w-arm64"), (1200, 1920, "pi5-arm64")]:
         config = args.output / f"fixture-{width}.json"
-        save_config(config, Config(language="nl", release_profile=profile, log_file=str(args.output / "fixture.log"), screen_timeout_seconds=0))
+        save_config(config, Config(language="nl", device_name="Fixture living room Pi", release_profile=profile,
+                                   log_file=str(args.output / "fixture.log"), screen_timeout_seconds=0))
         with patch.object(QTimer, "singleShot"):
             backend = DJConnectBackend(config)
         for timer in backend.findChildren(QTimer):
@@ -1494,6 +1495,8 @@ def main():
         window.setProperty("activeScreen", "now")
         window.setProperty("aboutOpen", True)
         capture("about")
+        device_name = visual_item(window.contentItem(), "aboutDeviceName")
+        assert device_name.property("visible") and device_name.property("text") == "Fixture living room Pi"
         website = visual_item(window.contentItem(), "aboutWebsiteLink")
         assert website.property("visible") and website.property("enabled")
         recorded = RecordedUrls()

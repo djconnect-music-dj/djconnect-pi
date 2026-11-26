@@ -7143,7 +7143,15 @@ BrandWindow {
                     Text { text: root.tr("version"); color: BrandTheme.colors.muted; font.pixelSize: 20; font.bold: true; horizontalAlignment: Text.AlignRight; Layout.preferredWidth: 190 }
                     Text { text: djconnect.version; color: BrandTheme.colors.text; font.pixelSize: 20; Layout.fillWidth: true }
                     Text { text: root.tr("device_name"); color: BrandTheme.colors.muted; font.pixelSize: 20; font.bold: true; horizontalAlignment: Text.AlignRight; Layout.preferredWidth: 190 }
-                    Text { text: "DJConnect"; color: BrandTheme.colors.text; font.pixelSize: 20; Layout.fillWidth: true }
+                    Text {
+                        objectName: "aboutDeviceName"
+                        text: djconnect.deviceName
+                        textFormat: Text.PlainText
+                        color: BrandTheme.colors.text
+                        font.pixelSize: 20
+                        wrapMode: Text.Wrap
+                        Layout.fillWidth: true
+                    }
                     Text { text: root.tr("client_type"); color: BrandTheme.colors.muted; font.pixelSize: 20; font.bold: true; horizontalAlignment: Text.AlignRight; Layout.preferredWidth: 190 }
                     Text { text: djconnect.clientType; color: BrandTheme.colors.text; font.pixelSize: 20; Layout.fillWidth: true }
                     Text { text: root.tr("website"); color: BrandTheme.colors.muted; font.pixelSize: 20; font.bold: true; horizontalAlignment: Text.AlignRight; Layout.preferredWidth: 190 }
