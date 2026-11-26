@@ -352,9 +352,27 @@ def main():
                 close_artwork = visual(overlay, 'closeTrackArtwork')
                 assert window.property('trackArtworkOpen') and close_artwork.property('activeFocus')
                 assert not window.property('trackArtworkControlsOpen') and not window.property('trackArtworkCanControl')
+                current_playback.update(title='UnbrokenTrackTitle' * 8,
+                                        artist=('Nora Vale and the Midnight House Orchestra with the East Coast Quartet ' * 3).strip())
+                owner.changed.emit()
+                capture('fullscreen-track-art-long-metadata')
+                title = visual(overlay, 'expandedTrackTitle')
+                artist = visual(overlay, 'expandedTrackArtist')
+                source = visual(overlay, 'expandedTrackSource')
+                expanded = visual(overlay, 'expandedTrackArtwork')
+                artwork_card = expanded.parentItem()
+                layout = artwork_card.parentItem()
+                for key, label in [('title', title), ('artist', artist)]:
+                    assert label.property('text') == current_playback[key] and label.property('lineCount') == 2, key
+                    assert label.mapToItem(layout, label.width(), label.height()).y() <= layout.height() + 1
+                if owner.state['playback']['requires_spotify_attribution']:
+                    assert source.property('visible') and source.mapToItem(layout, source.width(), 0).x() <= layout.width() + 1
+                assert artwork_card.width() == artwork_card.height() and artwork_card.width() > width * 0.55
+                assert layout.height() <= layout.parentItem().height() + 1
                 QTest.keyClick(window, Qt.Key.Key_Space)
                 QTest.qWait(60)
                 assert not window.property('trackArtworkOpen') and artwork_button.property('activeFocus')
+                current_playback.update(original_metadata)
                 backend.cfg.music_backend_available = True
                 owner.changed.emit()
                 current_playback['item_id'] = 'synthetic-cover-replacement'

@@ -7128,6 +7128,8 @@ BrandWindow {
                             font.pixelSize: root.wallProfile ? 42 : 32
                             font.bold: true
                             horizontalAlignment: Text.AlignHCenter
+                            wrapMode: Text.Wrap
+                            maximumLineCount: 2
                             elide: Text.ElideRight
                         }
 
@@ -7140,12 +7142,15 @@ BrandWindow {
                                 id: expandedArtist
                                 objectName: "expandedTrackArtist"
                                 Layout.fillWidth: true
+                                Layout.minimumWidth: 0
                                 visible: text.length > 0
                                 text: root.sessionTrackArtwork ? sharedSessionScreen.state.playback.artist || "" : djconnect.artist
                                 textFormat: Text.PlainText
                                 color: BrandTheme.colors.muted
                                 font.pixelSize: root.wallProfile ? 30 : 24
                                 horizontalAlignment: Text.AlignHCenter
+                                wrapMode: Text.Wrap
+                                maximumLineCount: 2
                                 elide: Text.ElideRight
                             }
                             SessionAttribution {
