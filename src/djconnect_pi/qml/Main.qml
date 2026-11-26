@@ -5660,6 +5660,14 @@ BrandWindow {
         property string selectedMessageId: ""
         property var displayedMessages: []
         property var readingAnchor: null
+        property real messageClock: Date.now()
+        Timer {
+            interval: 60000
+            running: askDjPanel.visible && root.active && !root.screenBlanked
+            repeat: true
+            triggeredOnStart: true
+            onTriggered: askDjPanel.messageClock = Date.now()
+        }
         Component.onCompleted: updateMessages()
         readonly property var matches: {
             const query = searchText(askDjSearchInput.text.trim())
@@ -6018,8 +6026,13 @@ BrandWindow {
                                 spacing: 8
 
                                 Text {
-                                    text: modelData.displayTime || ""
-                                    visible: modelData.displayTime && modelData.displayTime.length > 0
+                                    objectName: "askDjMessageTime"
+                                    text: {
+                                        root.trVersion
+                                        return djconnect.formatAskDjTimestamp(modelData.created_at || "", askDjPanel.messageClock)
+                                            || modelData.displayTime || ""
+                                    }
+                                    visible: text.length > 0
                                     color: bubble.systemBubble ? BrandTheme.colors.muted : (bubble.userBubble ? BrandTheme.colors.muted : BrandTheme.colors.purple)
                                     opacity: 0.82
                                     font.pixelSize: 14

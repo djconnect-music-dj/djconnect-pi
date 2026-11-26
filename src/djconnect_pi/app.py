@@ -651,6 +651,30 @@ class DJConnectBackend(QObject):
     def askDjMessages(self) -> list[dict[str, object]]:
         return self._ask_dj_messages
 
+    @Slot(str, float, result=str)
+    def formatAskDjTimestamp(self, created_at: str, now_ms: float) -> str:
+        stamp = timestamp(created_at)
+        if stamp is None:
+            return ""
+        elapsed = max(0, now_ms / 1000 - stamp)
+        if elapsed < 3600:
+            return self.tr_key("ask_dj_minutes_ago", count=max(1, int(elapsed // 60)))
+        created = datetime.fromtimestamp(stamp)
+        days = (datetime.fromtimestamp(now_ms / 1000).date() - created.date()).days
+        if days <= 0:
+            return created.strftime("%H:%M")
+        if days == 1:
+            return self.tr_key("ask_dj_yesterday")
+        if days < 7:
+            return self.tr_key("ask_dj_days_ago", count=days)
+        if days < 14:
+            return self.tr_key("ask_dj_last_week")
+        if days <= 30:
+            return self.tr_key("ask_dj_weeks_ago", count=days // 7)
+        if days <= 61:
+            return self.tr_key("ask_dj_last_month")
+        return self.tr_key("ask_dj_months_ago", count=days // 30)
+
     @Property(bool, notify=askDjChanged)
     def askDjBusy(self) -> bool:
         return self._ask_dj_busy

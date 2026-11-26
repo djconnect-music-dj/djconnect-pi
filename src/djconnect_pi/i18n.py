@@ -1548,6 +1548,13 @@ _KEYBOARD_TRANSLATIONS = {
     ),
     "ask_dj_history_updated": ("Ask DJ history updated", "Ask DJ-geschiedenis vernieuwd", "Ask-DJ-Verlauf aktualisiert", "Historique Ask DJ actualisé", "Historial de Ask DJ actualizado"),
     "ask_dj_history_refresh_failed": ("Could not refresh Ask DJ history", "Ask DJ-geschiedenis kon niet worden vernieuwd", "Ask-DJ-Verlauf konnte nicht aktualisiert werden", "Impossible d’actualiser l’historique Ask DJ", "No se pudo actualizar el historial de Ask DJ"),
+    "ask_dj_minutes_ago": ("{count} min ago", "{count} min geleden", "vor {count} Min.", "il y a {count} min", "hace {count} min"),
+    "ask_dj_yesterday": ("Yesterday", "Gisteren", "Gestern", "Hier", "Ayer"),
+    "ask_dj_days_ago": ("{count} days ago", "{count} dagen geleden", "vor {count} Tagen", "il y a {count} jours", "hace {count} días"),
+    "ask_dj_last_week": ("Last week", "Vorige week", "Letzte Woche", "La semaine dernière", "La semana pasada"),
+    "ask_dj_weeks_ago": ("{count} weeks ago", "{count} weken geleden", "vor {count} Wochen", "il y a {count} semaines", "hace {count} semanas"),
+    "ask_dj_last_month": ("Last month", "Vorige maand", "Letzten Monat", "Le mois dernier", "El mes pasado"),
+    "ask_dj_months_ago": ("{count} months ago", "{count} maanden geleden", "vor {count} Monaten", "il y a {count} mois", "hace {count} meses"),
     "ask_dj_offline_title": ("Ask DJ is offline", "Ask DJ is offline", "Ask DJ ist offline", "Ask DJ est hors ligne", "Ask DJ está sin conexión"),
     "ask_dj_offline_history": (
         "Messages shown here may be out of date.",
