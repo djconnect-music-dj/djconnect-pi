@@ -835,6 +835,19 @@ def main():
         QTest.qWait(65)
         assert reading_offset > 400
         assert abs(ask_history.property("contentY") - ask_history.property("originY") - reading_offset) < 10
+        visible_message = QQmlExpression(engine.rootContext(), ask_history, """
+            let index = indexAt(width / 2, contentY)
+            if (index < 0) index = indexAt(width / 2, contentY + spacing + 1)
+            model[index] ? model[index].id : ""
+        """)
+        message_before, _ = visible_message.evaluate()
+        assert message_before.startswith("chat-row-")
+        backend._apply_ask_dj_data({"success": True, "clear_revision": 2, "history_revision": 13, "messages": [
+            {"id": "incoming-answer", "role": "assistant", "text": "A new answer above the reading position"},
+        ]})
+        QTest.qWait(100)
+        assert backend.askDjMessages[0]["id"] == "incoming-answer" and ask_history.property("count") == 32
+        assert visible_message.evaluate()[0] == message_before, (width, message_before, visible_message.evaluate()[0])
         backend._demo_mode = True
         backend.demoModeChanged.emit()
         backend.cfg.paired, backend.cfg.device_token = False, ""

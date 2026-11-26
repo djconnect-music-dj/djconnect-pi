@@ -4407,6 +4407,7 @@ BrandWindow {
         function clearQuestionUi() {
             root.askDjClearConfirmOpen = false
             pendingQuestionText = ""
+            readingAnchor = null
             clearChatDraft()
         }
 
@@ -4415,7 +4416,10 @@ BrandWindow {
             function onProfileChanged() { askDjPanel.clearQuestionUi() }
             function onPairedChanged() { askDjPanel.clearQuestionUi() }
             function onDemoModeChanged() { askDjPanel.clearQuestionUi() }
-            function onAskDjChanged() { if (!djconnect.askDjBusy) askDjPanel.pendingQuestionText = "" }
+            function onAskDjChanged() {
+                askDjPanel.updateMessages()
+                if (!djconnect.askDjBusy) askDjPanel.pendingQuestionText = ""
+            }
         }
         Connections {
             target: root
@@ -4428,9 +4432,12 @@ BrandWindow {
         property bool returnFocusToChat: false
         property int selectedMatch: -1
         property string selectedMessageId: ""
+        property var displayedMessages: []
+        property var readingAnchor: null
+        Component.onCompleted: updateMessages()
         readonly property var matches: {
             const query = searchText(askDjSearchInput.text.trim())
-            const messages = djconnect.askDjMessages
+            const messages = displayedMessages
             const results = []
             if (query) {
                 for (let i = 0; i < messages.length; i++) {
@@ -4458,7 +4465,37 @@ BrandWindow {
         }
 
         function scrollToTop() {
+            readingAnchor = null
             askDjMessagesView.positionViewAtBeginning()
+        }
+
+        function updateMessages() {
+            const view = askDjMessagesView
+            if (visible && !searchOpen && !readingAnchor && !view.atYBeginning && !view.moving) {
+                // The top of the viewport can fall in the spacing between message rows.
+                let index = view.indexAt(view.width / 2, view.contentY)
+                if (index < 0) index = view.indexAt(view.width / 2, view.contentY + view.spacing + 1)
+                const row = view.itemAtIndex(index)
+                const message = displayedMessages[index]
+                if (row && message && message.id)
+                    readingAnchor = {id: message.id, offset: view.contentY - row.y}
+            }
+            displayedMessages = djconnect.askDjMessages
+            if (readingAnchor) Qt.callLater(restoreReadingAnchor)
+        }
+
+        function restoreReadingAnchor() {
+            const anchor = readingAnchor
+            readingAnchor = null
+            if (!anchor || !visible || searchOpen || askDjMessagesView.moving) return
+            const index = displayedMessages.findIndex(message => message.id === anchor.id)
+            if (index < 0) return
+            const view = askDjMessagesView
+            view.positionViewAtIndex(index, ListView.Beginning)
+            view.forceLayout()
+            const row = view.itemAtIndex(index)
+            if (row) view.contentY = row.y + anchor.offset
+            view.returnToBounds()
         }
 
         function searchText(value) {
@@ -4668,7 +4705,7 @@ BrandWindow {
                 ListView {
                     id: askDjMessagesView
                     objectName: "askDjMessagesView"
-                    model: djconnect.askDjMessages
+                    model: askDjPanel.displayedMessages
                     spacing: 10
                     cacheBuffer: root.lowMemoryProfile ? 160 : 320
 
