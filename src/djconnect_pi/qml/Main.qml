@@ -3880,9 +3880,16 @@ BrandWindow {
             : djconnect.musicDiscoveryDnaDisabled
         readonly property bool showEmptyFeed: sections.length === 0 && !djconnect.musicDiscoveryBusy
         readonly property int profileRevision: djconnect.musicDnaContextRevision
+        property var shelfReading: new Map()
         onProfileRevisionChanged: {
             closeDetail()
             renewedArtworkThrough = 0
+            shelfReading.clear()
+        }
+        onRequiresMusicDnaChanged: if (requiresMusicDna) shelfReading.clear()
+        Connections {
+            target: djconnect
+            function onDemoModeChanged() { musicDiscoveryPanel.shelfReading.clear() }
         }
         readonly property bool canRenewArtwork: visible && root.active && !root.screenBlanked
             && !root.splashVisible && djconnect.paired && !djconnect.demoMode
@@ -3944,6 +3951,35 @@ BrandWindow {
                     groups.push({id: item.sectionId, title: item.sectionTitle, items: [item]})
             }
             return groups
+        }
+        onSectionsChanged: {
+            const visibleIds = new Set(sections.map(section => section.id))
+            for (const id of shelfReading.keys())
+                if (!visibleIds.has(id)) shelfReading.delete(id)
+        }
+
+        function rememberShelfReading(view, sectionId, userMovement) {
+            const x = view.contentX
+            if (x <= view.originX + 1) {
+                if (userMovement) shelfReading.delete(sectionId)
+                return
+            }
+            let index = view.indexAt(x + 1, 1)
+            if (index < 0) index = view.indexAt(x + view.spacing + 1, 1)
+            const card = view.itemAtIndex(index)
+            if (card) shelfReading.set(sectionId, {id: card.modelData.discoveryItemId, offset: x - card.x, index: index})
+        }
+
+        function restoreShelfReading(view, sectionId) {
+            const anchor = shelfReading.get(sectionId)
+            if (!anchor || !visible || !view || view.moving || !view.count) return
+            const found = view.model.findIndex(candidate => candidate.discoveryItemId === anchor.id)
+            const index = found >= 0 ? found : Math.min(anchor.index, view.count - 1)
+            view.positionViewAtIndex(index, ListView.Beginning)
+            view.forceLayout()
+            const card = view.itemAtIndex(index)
+            if (card) view.contentX = Math.max(view.originX,
+                Math.min(card.x + anchor.offset, view.originX + Math.max(0, view.contentWidth - view.width)))
         }
 
         function kindLabel(kind) {
@@ -4120,6 +4156,11 @@ BrandWindow {
                                         objectName: "discoveryShelfItems"
                                         readonly property int tileWidth: root.wallProfile ? 192 : 142
                                         readonly property int textSpacing: 4
+                                        property bool readingReady: false
+                                        function scheduleReadingRestore() {
+                                            readingReady = false
+                                            if (shelfReadingRestore) shelfReadingRestore.restart()
+                                        }
                                         Layout.fillWidth: true
                                         Layout.preferredHeight: tileWidth
                                             + 2 * Math.ceil(Math.max(titleMetrics.height, titleMetrics.lineSpacing))
@@ -4130,7 +4171,20 @@ BrandWindow {
                                         clip: true
                                         spacing: 12
                                         model: shelf.modelData.items
-                                        ScrollBar.horizontal: ScrollBar {}
+                                        Component.onCompleted: scheduleReadingRestore()
+                                        onModelChanged: scheduleReadingRestore()
+                                        onContentXChanged: if (readingReady)
+                                            musicDiscoveryPanel.rememberShelfReading(shelfItems, shelf.modelData.id,
+                                                                                    moving || shelfScrollBar.pressed)
+                                        ScrollBar.horizontal: ScrollBar { id: shelfScrollBar }
+                                        Timer {
+                                            id: shelfReadingRestore
+                                            interval: 32
+                                            onTriggered: {
+                                                musicDiscoveryPanel.restoreShelfReading(shelfItems, shelf.modelData.id)
+                                                shelfItems.readingReady = true
+                                            }
+                                        }
                                         FontMetrics { id: titleMetrics; font.pixelSize: 18; font.bold: true }
                                         FontMetrics { id: captionMetrics; font.pixelSize: 15 }
                                         FontMetrics {
