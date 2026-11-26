@@ -2854,8 +2854,14 @@ def test_backend_check_for_updates_triggers_updater_service(tmp_path: Path) -> N
     ensure_app()
     backend = DJConnectBackend(tmp_path / "config.json")
 
-    with patch("djconnect_pi.app.subprocess.run") as run:
+    with (patch("djconnect_pi.app.subprocess.run") as run,
+          patch.object(backend._executor, "submit") as submit):
         backend.checkForUpdates()
+        backend.checkForUpdates()
+        assert backend.updateCheckRunning and backend.statusText == backend.t("checking_updates")
+        run.assert_not_called()
+        submit.assert_called_once()
+        submit.call_args.args[0]()
 
     run.assert_called_once_with(
         ["sudo", "-n", "/usr/bin/systemctl", "start", "djconnect-updater.service"],
@@ -2864,7 +2870,7 @@ def test_backend_check_for_updates_triggers_updater_service(tmp_path: Path) -> N
         capture_output=True,
         text=True,
     )
-    assert backend.statusText == backend.t("update_check_started")
+    assert not backend.updateCheckRunning and backend.statusText == backend.t("update_check_started")
 
 
 def test_about_music_availability_requires_current_paired_status(tmp_path):

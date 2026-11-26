@@ -2880,10 +2880,11 @@ BrandWindow {
             }
 
             PurpleButton {
-                text: root.tr("check_updates")
+                text: djconnect.updateCheckRunning ? root.tr("checking_updates") : root.tr("check_updates")
                 font.pixelSize: 24
                 Layout.fillWidth: true
                 Layout.preferredHeight: 58
+                enabled: !djconnect.updateCheckRunning
                 onClicked: djconnect.checkForUpdates()
             }
 
@@ -7451,12 +7452,13 @@ BrandWindow {
                     }
                     GlassButton {
                         objectName: "aboutCheckUpdates"
-                        text: root.tr("check_updates")
-                        iconName: "refresh"
+                        text: djconnect.updateCheckRunning ? root.tr("checking_updates") : root.tr("check_updates")
+                        iconName: djconnect.updateCheckRunning ? "" : "refresh"
                         wrapText: true
                         textAlignment: Text.AlignLeft
                         Layout.fillWidth: true
                         Layout.maximumWidth: 390
+                        enabled: !djconnect.updateCheckRunning
                         onClicked: djconnect.checkForUpdates()
                     }
                     Text { text: root.tr("web_address"); color: BrandTheme.colors.muted; font.pixelSize: 20; font.bold: true; horizontalAlignment: Text.AlignRight; Layout.preferredWidth: 190 }

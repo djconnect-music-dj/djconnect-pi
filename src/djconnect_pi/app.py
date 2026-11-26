@@ -206,6 +206,7 @@ class DJConnectBackend(QObject):
     returnToNowChanged = Signal()
     screenBrightnessChanged = Signal()
     updateChannelChanged = Signal()
+    updateCheckChanged = Signal()
     logFileChanged = Signal()
     logLevelChanged = Signal()
     languageChanged = Signal()
@@ -234,6 +235,7 @@ class DJConnectBackend(QObject):
     _backendAvailableReady = Signal(bool)
     _aboutMusicAvailabilityReady = Signal(object, object, float)
     _toastReady = Signal(str, int, str)
+    _updateCheckFinished = Signal(str)
     _askDjReady = Signal(object)
     _askDjRefreshReady = Signal(object)
     _askDjClearReady = Signal(object)
@@ -350,6 +352,7 @@ class DJConnectBackend(QObject):
         self._game_sound_objects: list[tuple[object, QBuffer]] = []
         self._status_text = self.tr_key("paired" if self.cfg.paired else "not_paired")
         self._backend_available = True
+        self._update_check_running = False
         self._about_music_availability = None
         self._about_music_request_time = 0.0
         self._busy = False
@@ -396,6 +399,7 @@ class DJConnectBackend(QObject):
                        self.versionMismatchChanged, self.backendAvailableChanged, self.settingsChanged):
             signal.connect(self._reconcile_about_music_availability)
         self._toastReady.connect(self._show_toast)
+        self._updateCheckFinished.connect(self._finish_update_check)
         self._askDjReady.connect(self._apply_ask_dj_data)
         self._askDjRefreshReady.connect(self._apply_ask_dj_refresh_result)
         self._askDjClearReady.connect(self._apply_ask_dj_clear_result)
@@ -2628,20 +2632,32 @@ class DJConnectBackend(QObject):
 
     @Slot()
     def checkForUpdates(self) -> None:
+        if self._update_check_running or self._shutting_down:
+            return
+        self._update_check_running = True
+        self.updateCheckChanged.emit()
         _LOGGER.info("User requested update check from touch UI")
         self._set_status_text(self.tr_key("checking_updates"))
         self.showToastForContext(self.tr_key("checking_updates"), "updates")
+        self._executor.submit(self._check_for_updates_worker)
+
+    @Property(bool, notify=updateCheckChanged)
+    def updateCheckRunning(self) -> bool:
+        return self._update_check_running
+
+    def _check_for_updates_worker(self) -> None:
         commands = (
             ["sudo", "-n", "/usr/bin/systemctl", "start", "djconnect-updater.service"],
             ["sudo", "-n", "/bin/systemctl", "start", "djconnect-updater.service"],
         )
         last_error = "unknown error"
         for command in commands:
+            if self._shutting_down:
+                return
             try:
                 _LOGGER.info("Starting update check command: %s", " ".join(command))
                 subprocess.run(command, check=True, timeout=8, capture_output=True, text=True)
-                self._set_status_text(self.tr_key("update_check_started"))
-                self.showToastForContext(self.tr_key("update_check_started"), "updates")
+                self._updateCheckFinished.emit("")
                 return
             except subprocess.CalledProcessError as exc:
                 detail = (exc.stderr or exc.stdout or str(exc)).strip()
@@ -2650,9 +2666,20 @@ class DJConnectBackend(QObject):
             except Exception as exc:  # noqa: BLE001 - native command boundary must surface every local failure to the UI
                 last_error = str(exc)
                 _LOGGER.warning("Update check command failed: %s: %s", " ".join(command), exc)
-        message = self.tr_key("update_check_failed", error=last_error)
+        self._updateCheckFinished.emit(last_error or "unknown error")
+
+    @Slot(str)
+    def _finish_update_check(self, error) -> None:
+        if self._shutting_down:
+            return
+        self._update_check_running = False
+        self.updateCheckChanged.emit()
+        message = self.tr_key("update_check_failed", error=error) if error else self.tr_key("update_check_started")
         self._set_status_text(message)
-        self._show_toast(message, 5000, "updates")
+        if error:
+            self._show_toast(message, 5000, "updates")
+        else:
+            self.showToastForContext(message, "updates")
 
     def _run_power_command(self, *, action: str, status_key: str, failure_key: str, commands: tuple[list[str], ...]) -> None:
         self._set_status_text(self.tr_key(status_key))

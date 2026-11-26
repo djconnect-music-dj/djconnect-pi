@@ -1645,13 +1645,19 @@ def main():
         assert updates.property("visible") and updates.property("enabled")
         assert updates.property("text") == backend.t("check_updates")
         position = updates.mapToScene(updates.boundingRect().center()).toPoint()
-        with patch("djconnect_pi.app.subprocess.run") as update_service:
+        with (patch("djconnect_pi.app.subprocess.run") as update_service,
+              patch.object(backend._executor, "submit") as update_worker):
             QTest.mouseClick(window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, position)
+            assert not updates.property("enabled") and updates.property("text") == backend.t("checking_updates")
+            QTest.mouseClick(window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, position)
+            update_worker.assert_called_once()
+            update_service.assert_not_called()
+            update_worker.call_args.args[0]()
             update_service.assert_called_once_with(
                 ["sudo", "-n", "/usr/bin/systemctl", "start", "djconnect-updater.service"],
                 check=True, timeout=8, capture_output=True, text=True,
             )
-        assert backend.toastText == backend.t("update_check_started")
+        assert backend.toastText == backend.t("update_check_started") and updates.property("enabled")
         backend.hideToast()
         about_flick = visual_item(window.contentItem(), "aboutScroll").property("contentItem")
         copy_device = visual_item(window.contentItem(), "aboutCopyDeviceId")
