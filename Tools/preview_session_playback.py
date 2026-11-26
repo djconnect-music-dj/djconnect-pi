@@ -375,10 +375,19 @@ def main():
                 capture('fullscreen-track-art-spotify-without-artist')
                 assert not artist.property('visible') and source.property('visible')
                 assert abs(source.mapToItem(layout, source.width() / 2, 0).x() - layout.width() / 2) < 1
+                current_playback.update(title='  ', artist=original_metadata['artist'])
+                owner.changed.emit()
+                capture('fullscreen-track-art-unknown-title')
+                assert window.property('trackArtworkOpen') and title.property('text') == backend.t('session_track_title_unknown')
+                title_accessible = QAccessible.queryAccessibleInterface(title)
+                assert title_accessible.role() == QAccessible.Role.Heading
+                assert title_accessible.text(QAccessible.Text.Name) == title.property('text')
+                current_playback.update(original_metadata)
+                owner.changed.emit()
+                assert title.property('text') == original_metadata['title']
                 QTest.keyClick(window, Qt.Key.Key_Space)
                 QTest.qWait(60)
                 assert not window.property('trackArtworkOpen') and artwork_button.property('activeFocus')
-                current_playback.update(original_metadata)
                 backend.cfg.music_backend_available = True
                 owner.changed.emit()
                 current_playback['item_id'] = 'synthetic-cover-replacement'

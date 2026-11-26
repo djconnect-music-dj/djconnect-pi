@@ -7122,8 +7122,12 @@ BrandWindow {
                             id: expandedTitle
                             objectName: "expandedTrackTitle"
                             width: parent.width
-                            text: root.sessionTrackArtwork ? sharedSessionScreen.state.playback.title || "" : djconnect.title
+                            text: root.sessionTrackArtwork
+                                ? (sharedSessionScreen.state.playback.title || "").trim() || root.tr("session_track_title_unknown")
+                                : djconnect.title
                             textFormat: Text.PlainText
+                            Accessible.role: Accessible.Heading
+                            Accessible.name: text
                             color: BrandTheme.colors.text
                             font.pixelSize: root.wallProfile ? 42 : 32
                             font.bold: true
