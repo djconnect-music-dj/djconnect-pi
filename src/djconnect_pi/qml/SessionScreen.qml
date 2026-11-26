@@ -269,6 +269,12 @@ Item {
     }
     property bool forecastMode: false
     readonly property bool showForecast: !historical && state.forecast_supported && forecastMode
+    property Item pullRefreshView: null
+    function refreshFromPull(view) {
+        owner.refresh()
+        if (owner.refreshing) pullRefreshView = view
+    }
+
     function syncMediaVisibility() {
         if (!owner) return
         owner.setContentDeleteVisible(visible && !showForecast)
@@ -854,6 +860,9 @@ Item {
     }
     Connections {
         target: screen.owner
+        function onRefreshingChanged() {
+            if (!screen.owner.refreshing) screen.pullRefreshView = null
+        }
         function onFlowExpansionAboutToChange() {
             if (!screen.visible || screen.historical || screen.showForecast || screen.followQuestionReply
                     || historyScroll.contentItem.moving || screen.flowReturn) return
@@ -1058,6 +1067,20 @@ Item {
         onForecastRequested: screen.forecastMode = true
         onVibeScapeRequested: screen.openVibeScape(modeSwitch.mapToItem(null, 0, 0).y)
     }
+    BusyIndicator {
+        objectName: "sessionPullRefreshSpinner"
+        anchors.horizontalCenter: parent.horizontalCenter
+        y: screen.pullRefreshView ? screen.pullRefreshView.y + 8 : 0
+        z: 1
+        width: 40
+        height: width
+        padding: 7
+        visible: screen.liveViewOpen && screen.pullRefreshView !== null
+            && screen.pullRefreshView.visible && !searchPanel.visible
+        running: visible
+        Accessible.name: screen.tr("loading")
+        background: GlassSurface { elevated: true; radius: width / 2 }
+    }
     ScrollView {
         id: forecastScroll
         objectName: "sessionForecastScroll"
@@ -1072,7 +1095,7 @@ Item {
             flickable: forecastScroll.contentItem
             canRefresh: forecastScroll.visible && screen.liveViewOpen && screen.backend.paired
                 && !screen.backend.demoMode && !screen.owner.busy && !screen.owner.refreshing
-            onRefreshRequested: screen.owner.refresh()
+            onRefreshRequested: screen.refreshFromPull(forecastScroll)
         }
         ColumnLayout {
             width: parent.width; spacing: 16
@@ -1226,7 +1249,7 @@ Item {
             canRefresh: historyScroll.visible && screen.liveViewOpen && screen.backend.paired
                 && !screen.backend.demoMode && !screen.owner.busy && !screen.owner.refreshing
                 && !searchPanel.visible && !screen.searchRefreshPending
-            onRefreshRequested: screen.owner.refresh()
+            onRefreshRequested: screen.refreshFromPull(historyScroll)
         }
         ColumnLayout {
             id: historyContent

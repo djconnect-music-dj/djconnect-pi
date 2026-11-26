@@ -246,28 +246,35 @@ def main():
                             click(window, flow)
                             click(window, horizon)
                             assert abs(scroll.property("contentY") - scroll.property("originY") - offset) <= 1
+                            click(window, flow)
                             if language == "nl":
                                 forecast_scroll = window.findChild(QObject, "sessionForecastScroll")
                                 poll_timer = screen.findChild(QObject, "sessionRuntimePollTimer")
                                 assert poll_timer is not None
-                                scroll.setProperty("contentY", scroll.property("originY"))
-                                QTest.qWait(65)
-                                with QSignalBlocker(poll_timer), patch.object(owner, "_launch") as refresh:
-                                    pull_down(window, forecast_scroll, touch, 24)
-                                    refresh.assert_not_called()
-                                    pull_down(window, forecast_scroll, touch, 230)
-                                    refresh.assert_called_once_with("refresh", background=True)
-                            click(window, flow)
-                            if language == "nl":
                                 flow_view = window.findChild(QObject, "sessionHistoryScroll")
-                                flow_scroll = flow_view.property("contentItem")
-                                flow_scroll.setProperty("contentY", flow_scroll.property("originY"))
-                                QTest.qWait(65)
-                                with QSignalBlocker(poll_timer), patch.object(owner, "_launch") as refresh:
-                                    pull_down(window, flow_view, touch, 24)
-                                    refresh.assert_not_called()
-                                    pull_down(window, flow_view, touch, 230)
-                                    refresh.assert_called_once_with("refresh", background=True)
+                                spinner = one(screen, "sessionPullRefreshSpinner")
+                                with QSignalBlocker(poll_timer), patch.object(owner, "_launch", side_effect=(
+                                    lambda action, **kwargs: owner._set_running(1, action, **kwargs)
+                                )) as refresh:
+                                    owner.poll()
+                                    assert owner.refreshing and not spinner.property("visible")
+                                    owner._set_running()
+                                    refresh.reset_mock()
+                                    for view, switch in ((flow_view, horizon), (forecast_scroll, flow)):
+                                        view_flickable = view.property("contentItem")
+                                        view_flickable.setProperty("contentY", view_flickable.property("originY"))
+                                        QTest.qWait(65)
+                                        pull_down(window, view, touch, 24)
+                                        refresh.assert_not_called()
+                                        assert not spinner.property("visible")
+                                        pull_down(window, view, touch, 230)
+                                        refresh.assert_called_once_with("refresh", background=True)
+                                        assert spinner.property("visible") and spinner.property("running")
+                                        assert spinner.y() == view.y() + 8
+                                        click(window, switch)
+                                        assert not spinner.property("visible")
+                                        owner._set_running()
+                                        refresh.reset_mock()
 
                     # Ordinary prose and a malformed six-track lookalike stay verbatim.
                     for fallback in (prose, f"{intro} {', '.join([track_names[0]] * 6)}. {note}"):
