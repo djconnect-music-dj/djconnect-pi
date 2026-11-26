@@ -841,7 +841,7 @@ Item {
         function onDragEnded() { Qt.callLater(searchPanel.finishKeyboardDismissalDrag) }
     }
     function searchNow() {
-        searchPanel.cancelTypedArchiveSearch()
+        searchPanel.cancelTypedSearch()
         cancelSearchRead()
         if (archiveSearchAvailable) {
             if (searchPanel.matchingQuery) rememberSearch()
@@ -916,6 +916,7 @@ Item {
     onVisibleChanged: { syncMediaVisibility(); if (!visible) { cancelArchiveRead(); if (owner) owner.clearArchive(); clearFlowReturn(); historyRead.stop(); historyReadProfile = ""; historyReadSession = ""; historyReadPending = false; readingRestore.stop(); pendingReadingAnchor = ""; closeTransient() } }
     onHistoricalChanged: { if (historical) closePlaybackPanels(); syncMediaVisibility(); if (!historical) { archiveDetailReturn = null; cancelArchiveRead(); if (owner) owner.clearArchive() } readingRestore.stop(); pendingReadingAnchor = ""; readingOffset = 0; if (!historical && flowReturn) { historyScroll.contentItem.cancelFlick(); flowReturnRestore.restart() } }
     onSearchTargetChanged: {
+        if (searchPanel) searchPanel.cancelTypedSearch()
         const handoff = archiveSearchHandoff
         archiveSearchHandoff = null
         if (handoff && searchPanel.opened && historical && handoff.scope === composerContext
@@ -1132,7 +1133,7 @@ Item {
             if (screen.historyReadPending && !screen.owner.busy) historyRead.restart()
             if (screen.searchRefreshPending && !screen.owner.busy) searchRead.restart()
             if (screen.pendingArchiveSearchReturn && !screen.owner.busy) Qt.callLater(screen.restoreArchiveSearch)
-            if (!screen.owner.busy) searchPanel.scheduleTypedArchiveSearch()
+            if (!screen.owner.busy) searchPanel.scheduleTypedSearch()
         }
         function onSearchUpdated() { searchPosition.restart() }
         function onContextCleared() { screen.cancelArchiveRead(); screen.clearFlowReturn(); historyRead.stop(); screen.historyReadProfile = ""; screen.historyReadSession = ""; readingRestore.stop(); screen.pendingReadingAnchor = ""; screen.readingOffset = 0; screen.closeTransient(); if (screen.historical) screen.navigate(screen.currentHistory ? "session" : "more"); screen.historyReadPending = false }
@@ -2970,7 +2971,7 @@ Item {
         property bool restoreControlFocus: false
         property string selectedMatchId: ""
         property var pendingArchiveMatch: null
-        property string typedArchiveQuery: ""
+        property string typedSearchQuery: ""
         readonly property var result: screen.archiveSearchAvailable ? screen.owner.archiveSearchState : screen.state.search
         readonly property var matches: screen.archiveSearchAvailable ? (result.sessions || []) : (result.matches || [])
         readonly property string searchError: result.error || screen.state.error
@@ -2998,36 +2999,36 @@ Item {
         onResultChanged: if (pendingArchiveMatch) Qt.callLater(restoreArchiveMatch)
         onHasArchiveResultsChanged: if (pendingArchiveMatch && hasArchiveResults) Qt.callLater(restoreArchiveMatch)
         function resetSearch() {
-            cancelTypedArchiveSearch()
+            cancelTypedSearch()
             selectedMatchId = ""
             pendingArchiveMatch = null
             screen.archiveSearchHandoff = null
             screen.owner.clearSearch()
             screen.owner.clearArchiveSearch()
         }
-        function cancelTypedArchiveSearch() {
-            typedArchiveQuery = ""
-            typedArchiveSearch.stop()
+        function cancelTypedSearch() {
+            typedSearchQuery = ""
+            typedSearch.stop()
         }
         function editSearch() {
             const query = searchInput.text.trim()
-            if (screen.archiveSearchAvailable && query && (query === typedArchiveQuery || query === result.query)) return
+            if (query && (query === typedSearchQuery || matchingQuery)) return
             resetSearch()
-            if (screen.archiveSearchAvailable && query) {
-                typedArchiveQuery = query
-                scheduleTypedArchiveSearch()
+            if (screen.searchAvailable && query) {
+                typedSearchQuery = query
+                scheduleTypedSearch()
             }
         }
-        function scheduleTypedArchiveSearch() {
-            if (typedArchiveQuery && !typedArchiveSearch.running)
-                typedArchiveSearch.start()
+        function scheduleTypedSearch() {
+            if (typedSearchQuery && !typedSearch.running)
+                typedSearch.start()
         }
         Timer {
-            id: typedArchiveSearch
-            interval: 350
+            id: typedSearch
+            interval: screen.archiveSearchAvailable ? 350 : 300
             onTriggered: {
-                if (!searchPanel.opened || !screen.archiveSearchAvailable
-                        || searchPanel.typedArchiveQuery !== searchInput.text.trim()) searchPanel.cancelTypedArchiveSearch()
+                if (!searchPanel.opened || !screen.searchAvailable
+                        || searchPanel.typedSearchQuery !== searchInput.text.trim()) searchPanel.cancelTypedSearch()
                 else if (!screen.owner.busy) screen.searchNow()
             }
         }
