@@ -175,7 +175,7 @@ class SessionTransport:
                                   profile_type="", privacy_mode="", private_authorized=private, owner_epoch=epoch)
         return binding
 
-    def _request(self, binding: SessionBinding, method: str, route: str, payload=None, *, timeout=None, isolated=False, archive_delete=False, content_delete=False, private_probe=False, display_owner=False) -> dict:
+    def _request(self, binding: SessionBinding, method: str, route: str, payload=None, *, timeout=None, isolated=False, archive_delete=False, content_delete=False, private_probe=False, display_owner=False, optional_capabilities=False) -> dict:
         if binding != self.binding():
             raise SessionError("context_changed")
         if private_probe:
@@ -272,6 +272,8 @@ class SessionTransport:
                     if private_probe and response.status_code == 403:
                         raise SessionError("private_scope_denied")
                     raise SessionError("denied")
+                if optional_capabilities and method == "GET" and route == "capabilities" and response.status_code == 404:
+                    return {}
                 if 300 <= response.status_code < 400 or (response.status_code >= 500 and not archive_delete):
                     raise SessionError("unavailable" if method == "GET" else "uncertain")
                 # A proxy may return a plain 404 for the current route while HA
@@ -379,6 +381,9 @@ class SessionTransport:
 
     def capabilities(self, binding, *, isolated=False):
         return self._request(binding, "GET", "capabilities", isolated=isolated)
+
+    def track_insight_capabilities(self, binding):
+        return self._request(binding, "GET", "capabilities", isolated=True, optional_capabilities=True)
 
     def active(self, binding, *, isolated=False):
         return self._request(binding, "GET", "session/active", isolated=isolated)

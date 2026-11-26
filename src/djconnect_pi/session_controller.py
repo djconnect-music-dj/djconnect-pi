@@ -1078,9 +1078,13 @@ class SessionController(QObject):
                 and type(versions.get("session_flow_text_search")) is int
                 and versions["session_flow_text_search"] == 1)
 
-    def supports_current_track_insight(self) -> bool:
-        features = self._caps.get("capabilities", {})
-        versions = self._caps.get("contract_versions", {})
+    def has_capability_snapshot(self) -> bool:
+        return bool(self._caps)
+
+    def supports_current_track_insight(self, snapshot: dict | None = None) -> bool:
+        caps = self._caps if snapshot is None else snapshot
+        features = caps.get("capabilities", {})
+        versions = caps.get("contract_versions", {})
         return (isinstance(features, dict) and isinstance(versions, dict)
                 and features.get("current_track_insight_subject_v1") is True
                 and type(versions.get("current_track_insight_subject")) is int

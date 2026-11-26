@@ -3207,8 +3207,12 @@ def test_qualified_track_insight_clears_at_expiry_and_rejects_replayed_observati
     ensure_app()
     backend = DJConnectBackend(tmp_path / "config.json")
     owner = backend.djSession
-    owner._caps = {"capabilities": {"current_track_insight_subject_v1": True},
-                   "contract_versions": {"current_track_insight_subject": 1}}
+    backend.cfg.ha_url = "http://fixture.invalid"
+    backend.cfg.paired, backend.cfg.device_token = True, "fixture-token"
+    owner.transport.track_insight_capabilities = Mock(return_value={
+        "capabilities": {"current_track_insight_subject_v1": True},
+        "contract_versions": {"current_track_insight_subject": 1},
+    })
     owner._clock = Mock()
     owner._clock.now.return_value = 100
     recording = "spotify:track:" + "a" * 22
@@ -3223,6 +3227,7 @@ def test_qualified_track_insight_clears_at_expiry_and_rejects_replayed_observati
 
     backend._track_insight_worker(backend.playback, backend._track_insight_scope(), force_refresh=False)
     assert backend.trackInsightTitle == "Track" and backend.trackInsightText
+    owner.transport.track_insight_capabilities.assert_called_once_with(owner.transport.binding())
 
     owner._clock.now.return_value = 110
     backend._expire_track_insight()
@@ -3230,6 +3235,30 @@ def test_qualified_track_insight_clears_at_expiry_and_rejects_replayed_observati
     backend._track_insight_worker(backend.playback, backend._track_insight_scope(), force_refresh=True)
     assert backend.trackInsightText == ""
     backend.client.track_insight.assert_not_called()
+
+
+@pytest.mark.parametrize("probe_fails", [False, True])
+def test_first_track_insight_only_uses_legacy_after_a_confirmed_absence(tmp_path: Path, probe_fails: bool) -> None:
+    ensure_app()
+    backend = DJConnectBackend(tmp_path / "config.json")
+    backend.cfg.ha_url = "http://fixture.invalid"
+    backend.cfg.paired, backend.cfg.device_token = True, "fixture-token"
+    backend.playback = Playback(title="Track", uri="spotify:track:" + "a" * 22, is_playing=True)
+    backend._persist_backend_summary = Mock()
+    transport = backend.djSession.transport
+    transport.track_insight_capabilities = Mock(return_value={},
+        side_effect=SessionError("offline") if probe_fails else None)
+    backend.client.current_track_insight = Mock()
+    backend.client.track_insight = Mock(return_value={"success": True, "track": {"title": "Track"}})
+
+    backend._track_insight_worker(backend.playback, backend._track_insight_scope(), force_refresh=False)
+
+    backend.client.current_track_insight.assert_not_called()
+    if probe_fails:
+        backend.client.track_insight.assert_not_called()
+        assert backend.trackInsightError == backend.t("track_insight_retry")
+    else:
+        backend.client.track_insight.assert_called_once_with(backend.playback, force_refresh=False)
 
 
 def test_confirmed_session_style_changes_reject_a_late_track_insight_result(tmp_path: Path) -> None:

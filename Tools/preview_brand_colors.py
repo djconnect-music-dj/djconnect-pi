@@ -654,8 +654,11 @@ def main():
             assert request.call_count == 5
             owner = backend.djSession
             previous_caps = owner._caps
-            owner._caps = {"capabilities": {"current_track_insight_subject_v1": True},
-                           "contract_versions": {"current_track_insight_subject": 1}}
+            previous_ha_url = backend.cfg.ha_url
+            supported_caps = {"capabilities": {"current_track_insight_subject_v1": True},
+                              "contract_versions": {"current_track_insight_subject": 1}}
+            owner._caps = {}
+            backend.cfg.ha_url = "http://fixture.invalid"
             recording = "spotify:track:" + "a" * 22
             response = {"success": True, "track": {"title": "Qualified fixture"},
                         "analysis": {"summary": "Fixture analysis"}, "subject": {
@@ -663,6 +666,7 @@ def main():
                             "observation_id": "fixture-current", "expires_in": 5, "expires_at": 105,
                         }}
             with (patch.object(owner._clock, "now", return_value=100) as clock,
+                  patch.object(owner.transport, "track_insight_capabilities", return_value=supported_caps) as capabilities,
                   patch.object(backend.client, "current_track_insight", return_value=response) as current,
                   patch.object(backend, "_persist_backend_summary")):
                 backend._apply_playback(Playback(title="Qualified fixture", uri=recording, is_playing=True))
@@ -671,7 +675,9 @@ def main():
                 request.call_args.args[1]()
                 request.call_args.kwargs["done"]()
                 assert backend.trackInsightTitle == "Qualified fixture"
+                capabilities.assert_called_once_with(owner.transport.binding())
                 current.assert_called_once_with(force_refresh=False)
+                owner._caps = supported_caps
                 clock.return_value = 105
                 backend._expire_track_insight()
                 QTest.qWait(65)
@@ -718,6 +724,7 @@ def main():
                     request.call_args.kwargs["done"]()
                     backend._shared_settings_state = shared_state
             owner._caps = previous_caps
+            backend.cfg.ha_url = previous_ha_url
         backend.cfg.paired, backend.cfg.device_token = False, ""
         backend._demo_mode = True
         backend.pairedChanged.emit()

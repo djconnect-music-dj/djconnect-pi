@@ -43,6 +43,21 @@ def test_read_is_pure_and_bound_to_device_and_explicit_profile(transport):
     assert "json" not in kwargs
 
 
+def test_track_insight_capability_probe_distinguishes_missing_route_from_failure(transport):
+    client, _, request, response = transport
+    binding = client.binding()
+    response.status_code = 404
+    assert client.track_insight_capabilities(binding) == {}
+    assert request.call_args.args[1].endswith("/capabilities")
+    assert request.call_args.kwargs["allow_redirects"] is False
+    response.iter_content.assert_not_called()
+
+    for status, category in ((403, "denied"), (503, "unavailable")):
+        response.status_code = status
+        with pytest.raises(SessionError, match=category):
+            client.track_insight_capabilities(binding)
+
+
 def test_successor_profile_discards_delayed_response(transport):
     client, cfg, request, response = transport
     def delayed(*args, **kwargs):

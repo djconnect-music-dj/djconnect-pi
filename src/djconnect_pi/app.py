@@ -2957,7 +2957,15 @@ class DJConnectBackend(QObject):
             return
         proof = None
         try:
-            if self._uses_current_track_insight():
+            current_mode = self._uses_current_track_insight()
+            if self._needs_track_insight_capabilities():
+                owner = self._session_controller
+                transport = owner.transport
+                snapshot = transport.track_insight_capabilities(transport.binding())
+                if not self._application_foreground or scope != self._track_insight_scope():
+                    return
+                current_mode = owner.supports_current_track_insight(snapshot)
+            if current_mode:
                 if not re.fullmatch(r"spotify:track:[A-Za-z0-9]{22}", playback.uri):
                     data = {"success": False, "error": "current_track_unavailable"}
                 else:
@@ -2978,7 +2986,7 @@ class DJConnectBackend(QObject):
             self._persist_backend_summary()
         except (AuthenticationError, ProtocolVersionMismatch):
             raise
-        except (DJConnectError, requests.RequestException) as exc:
+        except (DJConnectError, SessionError, requests.RequestException) as exc:
             _LOGGER.warning("Track Insight unavailable; showing retry state: %s", exc.__class__.__name__)
             data = {"success": False, "error": "transient"}
         self._trackInsightReady.emit(_TrackInsightResult(data, scope, proof))
@@ -3475,7 +3483,7 @@ class DJConnectBackend(QObject):
         if old_volume_context != self._control_volume_context(playback):
             self.cancelControlVolume()
         track_changed = old.title != playback.title or old.artist != playback.artist or old.image_url != playback.image_url or old.uri != playback.uri
-        observation_changed = (self._uses_current_track_insight()
+        observation_changed = ((self._uses_current_track_insight() or self._needs_track_insight_capabilities())
                                and (old.is_playing != playback.is_playing
                                     or old.position_seconds - playback.position_seconds > 5))
         if (self._track_insight_subject(old) != self._track_insight_subject(playback)
@@ -3943,7 +3951,7 @@ class DJConnectBackend(QObject):
         )
 
     def _current_track_insight_style(self) -> tuple:
-        if not self._uses_current_track_insight():
+        if not (self._uses_current_track_insight() or self._needs_track_insight_capabilities()):
             return ()
         return (self._session_controller.track_insight_session_style(),
                 self._shared_settings_state.get("track_insight_style", ""))
@@ -3963,6 +3971,11 @@ class DJConnectBackend(QObject):
     def _uses_current_track_insight(self) -> bool:
         return (self.cfg.music_backend not in {"music_assistant", "later_manual"}
                 and self._session_controller.supports_current_track_insight())
+
+    def _needs_track_insight_capabilities(self) -> bool:
+        return bool(self.cfg.ha_url and self.paired
+                    and self.cfg.music_backend not in {"music_assistant", "later_manual"}
+                    and not self._session_controller.has_capability_snapshot())
 
     def _schedule_track_insight_expiry(self) -> None:
         self._track_insight_expiry_timer.stop()
