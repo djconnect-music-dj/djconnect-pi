@@ -992,9 +992,25 @@ def main():
                 QTest.qWait(60)
                 assert popup.property('opened') and not intents
                 assert (popup.property('x'), popup.property('y')) == popup_position
-                owner._session['broadcast']['playback']['item_id'] = 'synthetic-new-track'
-                owner.changed.emit()
-                assert not popup.property('opened') and not intents
+                QTest.mousePress(window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, start_point)
+                QTest.mouseMove(window, end_point)
+                pending_percent = volume_pointer.property('draft')
+                QTest.mouseRelease(window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, end_point)
+                QTest.qWait(60)
+                assert len(intents) == 1
+                assert owner.state['playback_control']['pending_volume_percent'] == pending_percent
+                assert not owner.state['playback_control']['volume']
+                assert volume_readout.property('text') == TRANSLATIONS[language]['session_volume_sending'].replace(
+                    '%1', str(pending_percent))
+                assert slider.property('visible') and not slider.property('enabled')
+                assert slider.property('value') == pending_percent and not volume_read.property('visible')
+                capture('direct-volume-setting')
+                with patch.object(owner.transport, 'playback_volume') as volume_write:
+                    owner._session['broadcast']['playback']['item_id'] = 'synthetic-new-track'
+                    owner.changed.emit()
+                    assert not popup.property('opened') and owner.state['playback_control']['pending_volume_percent'] is None
+                    intents.pop()()
+                    volume_write.assert_not_called()
                 QTest.qWait(160)
                 owner.transport.playback_status.return_value = original_status
                 owner._session = original_session

@@ -3008,21 +3008,25 @@ Item {
                 Layout.fillWidth: true; spacing: 8
                 readonly property var observation: screen.state.playback_control.volume || ({})
                 readonly property bool known: typeof observation.percent === "number"
+                readonly property var pendingPercent: screen.state.playback_control.pending_volume_percent
+                readonly property bool sending: typeof pendingPercent === "number"
                 readonly property string outputName: observation.output_name || screen.state.playback.target_name || ""
-                readonly property var displayPercent: volumePointer.intentLease >= 0 ? volumePointer.draft : observation.percent
+                readonly property var displayPercent: sending ? pendingPercent
+                    : volumePointer.intentLease >= 0 ? volumePointer.draft : observation.percent
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: 8
                     FeatureIcon {
                         objectName: "sessionVolumeObservedIcon"
-                        visible: volumeControls.known
+                        visible: volumeControls.known || volumeControls.sending
                         iconName: volumeControls.displayPercent === 0 ? "voice_muted" : "voice"
                         Layout.preferredWidth: 24; Layout.preferredHeight: 24
                         Accessible.ignored: true
                     }
                     Text {
                         objectName: "sessionVolumeObserved"
-                        text: volumeControls.known ? screen.tr("volume") + ": " + volumeControls.displayPercent + "%"
+                        text: volumeControls.sending ? screen.tr("session_volume_sending").replace("%1", volumeControls.pendingPercent)
+                            : volumeControls.known ? screen.tr("volume") + ": " + volumeControls.displayPercent + "%"
                             : screen.tr(screen.state.playback_control.volume_status === "unavailable" ? "session_volume_unavailable" : "session_volume_unknown")
                         textFormat: Text.PlainText; color: BrandTheme.colors.text
                         font.pixelSize: 19; font.features: ({ "tnum": 1 }); Layout.fillWidth: true; wrapMode: Text.WordWrap
@@ -3043,7 +3047,7 @@ Item {
                     objectName: "sessionVolumeSlider"
                     from: 0; to: 60; stepSize: 1; Layout.fillWidth: true
                     implicitHeight: 44
-                    visible: parent.known && parent.observation.percent <= 60
+                    visible: volumeControls.sending || (parent.known && parent.observation.percent <= 60)
                     enabled: !!screen.state.playback_control.enabled && parent.known
                     Accessible.name: screen.tr("volume")
                     Accessible.description: volumeControls.outputName
@@ -3089,7 +3093,7 @@ Item {
                     }
                     Binding {
                         target: sessionVolumeSlider; property: "value"
-                        value: volumeControls.known ? volumeControls.displayPercent : 0
+                        value: volumeControls.known || volumeControls.sending ? volumeControls.displayPercent : 0
                         restoreMode: Binding.RestoreNone
                     }
                 }
@@ -3104,7 +3108,7 @@ Item {
                     id: volumeRead
                     objectName: "sessionVolumeRead"
                     readonly property bool reading: !!screen.state.playback_control.reading_volume
-                    visible: !volumeControls.known
+                    visible: !volumeControls.known && !volumeControls.sending
                     text: reading ? "" : screen.tr("session_volume_read")
                     Accessible.name: screen.tr(reading ? "loading" : "session_volume_read")
                     Layout.fillWidth: true
@@ -3127,7 +3131,7 @@ Item {
             Text {
                 readonly property var control: screen.state.playback_control
                 visible: text.length > 0
-                text: control.reading_volume ? ""
+                text: control.reading_volume || volumeControls.sending ? ""
                     : control.status === "sending" ? screen.tr("session_question_sending")
                     : control.status === "accepted" ? screen.tr("session_playback_sent")
                     : control.status === "uncertain" ? screen.tr("session_uncertain") : ""

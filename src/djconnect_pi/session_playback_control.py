@@ -267,6 +267,7 @@ class PlaybackControl(QObject):
         busy = bool(self.running or self.owner._running or self.owner._question_running or self.owner._artwork_prepare.running
                     or getattr(getattr(self.owner, "_archive_delete", None), "running", False))
         pending_command = self.request["command"] if self.running and self.request else ""
+        sending = self.running and self.valid()
         return {"available": available, "enabled": available and not busy and not self.blocked,
                 "transport_epoch": self._transport_epoch if available else 0,
                 "overlay_commands": self.overlay_commands() if available and current[6] else [],
@@ -283,9 +284,10 @@ class PlaybackControl(QObject):
                 "volume_supported": self.volume_supported(),
                 "volume": {**self.volume["observation"], "lease": self.volume["serial"]} if self.volume_valid() else {},
                 "display_volume_percent": self._volume_display["percent"] if self._volume_display else None,
+                "pending_volume_percent": self.request["value"] if sending and pending_command == "set_volume" else None,
                 "volume_status": self.volume_status,
                 "reading_volume": bool(self.running and self.request and self.request["command"] == "volume_read"),
-                "status": "sending" if self.running and self.valid() else "uncertain" if self.blocked else self.status}
+                "status": "sending" if sending else "uncertain" if self.blocked else self.status}
 
     def start(self, session_id, item_id, command, *, transport_epoch=None):
         if not isinstance(command, str) or (command not in COMMANDS and command not in OVERLAY_CAPABILITIES):
