@@ -2771,7 +2771,29 @@ BrandWindow {
                         visible: djconnect.trackInsightText.length > 0
                         Layout.fillWidth: true
 
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 10
+                            FeatureIcon {
+                                iconName: "trackInsight"
+                                Layout.preferredWidth: 24
+                                Layout.preferredHeight: 24
+                                Accessible.ignored: true
+                            }
+                            Text {
+                                objectName: "trackInsightAnalysisHeading"
+                                text: root.tr("track_insight_analysis_heading")
+                                textFormat: Text.PlainText
+                                color: BrandTheme.colors.text
+                                font.pixelSize: 21
+                                font.bold: true
+                                wrapMode: Text.Wrap
+                                Layout.fillWidth: true
+                                Accessible.role: Accessible.Heading
+                            }
+                        }
                         Text {
+                            objectName: "trackInsightAnalysisText"
                             text: djconnect.trackInsightText
                             textFormat: Text.PlainText
                             color: BrandTheme.colors.text
