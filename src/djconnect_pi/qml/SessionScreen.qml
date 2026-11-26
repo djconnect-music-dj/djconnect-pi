@@ -3079,7 +3079,7 @@ Item {
                 }
                 Text {
                     objectName: "sessionSearchMatchCount"
-                    visible: searchPanel.matches.length > 0
+                    visible: searchPanel.matches.length > 0 || (screen.archiveSearchAvailable && searchPanel.noMatches)
                     text: searchPanel.selectedMatchIndex < 0 ? String(searchPanel.matches.length)
                         : (searchPanel.selectedMatchIndex + 1) + " / " + searchPanel.matches.length
                     color: BrandTheme.colors.muted; font.pixelSize: 17

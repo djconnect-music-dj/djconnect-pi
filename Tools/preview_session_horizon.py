@@ -402,6 +402,8 @@ def main():
                 assert archive_field.property("placeholderText") == TRANSLATIONS[language]["session_archive_search"]
                 search_submit = window.findChild(QObject, "sessionSearchSubmit")
                 assert search_submit.property("iconName") == "search"
+                archive_count = window.findChild(QObject, "sessionSearchMatchCount")
+                assert not archive_count.property("visible")
                 with patch.object(owner, "_launch") as verify:
                     QTest.keyClick(window, Qt.Key.Key_F)
                     QTest.qWait(180)
@@ -424,6 +426,12 @@ def main():
                 with patch.object(owner, "_launch") as verify:
                     click(window, retry_search)
                     verify.assert_called_once_with("archive_search", "fixture")
+                owner._archive_search = {"query": "fixture", "complete": False, "sessions": []}
+                owner.changed.emit()
+                assert not archive_count.property("visible")
+                owner._archive_search["complete"] = True
+                owner.changed.emit()
+                assert archive_count.property("visible") and archive_count.property("text") == "0"
                 owner._archive_search = {"query": "fixture", "complete": True, "sessions": [
                     {"session_id": "hidden-on-current-page", "lifecycle_status": "ENDED",
                      "created_at": "2026-11-25T10:00:00Z", "_history_deadline": owner._clock.now() + 60},
@@ -434,6 +442,7 @@ def main():
                 QTest.qWait(65)
                 assert archive_panel.property("selectedMatchId") == "hidden-on-current-page"
                 assert archive_panel.property("selectedMatchIndex") == 0
+                assert archive_count.property("text") == "1 / 2"
                 QTest.keyClick(window, Qt.Key.Key_Up)
                 assert archive_panel.property("selectedMatchId") == "second-archive-match"
                 QTest.keyClick(window, Qt.Key.Key_Down)
