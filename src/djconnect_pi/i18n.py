@@ -1320,6 +1320,13 @@ _MUSIC_DNA_CARD_TRANSLATIONS = {
         "Ask DJ, Track Insight et les signaux d’écoute complètent ton profil au fil du temps.",
         "Ask DJ, Track Insight y las señales de escucha completarán tu perfil con el tiempo.",
     ),
+    "music_dna_hero_description": (
+        "Music DNA learns from your musical taste and listening habits to tailor recommendations to you.",
+        "Music DNA leert van je muzieksmaak en luistergedrag om aanbevelingen op jou af te stemmen.",
+        "Music DNA lernt aus deinem Musikgeschmack und Hörverhalten, um Empfehlungen auf dich abzustimmen.",
+        "Music DNA apprend de tes goûts musicaux et de tes habitudes d’écoute pour te proposer des recommandations adaptées.",
+        "Music DNA aprende de tus gustos musicales y hábitos de escucha para ofrecerte recomendaciones a tu medida.",
+    ),
     "music_dna_card_favorite_genres": ('Favorite genres', 'Favoriete genres', 'Lieblingsgenres', 'Genres favoris', 'Géneros favoritos'),
     "music_dna_card_favorite_artists": ('Favorite artists', 'Favoriete artiesten', 'Lieblingskünstler', 'Artistes favoris', 'Artistas favoritos'),
     "music_dna_card_artists": ('Artists', 'Artiesten', 'Künstler', 'Artistes', 'Artistas'),

@@ -5102,6 +5102,17 @@ BrandWindow {
                     columnSpacing: 14
                     rowSpacing: 14
 
+                    MusicDnaProfileHero {
+                        objectName: "musicDnaActiveHero"
+                        Layout.columnSpan: musicDnaGrid.columns
+                        Layout.fillWidth: true
+                        compact: root.width < 900
+                        mood: root.appearanceMood
+                        description: root.tr("music_dna_hero_description")
+                        animate: musicDnaScroll.visible && root.active && GlassStyle.awake && !GlassStyle.reduceMotion
+                            && y + height > musicDnaScroll.contentItem.contentY
+                    }
+
                     GlassCard {
                         objectName: "musicDnaNoProfile"
                         visible: !djconnect.musicDnaBusy && djconnect.musicDnaSections.length === 0
