@@ -427,6 +427,12 @@ def main():
                 QTest.keyClick(window, Qt.Key.Key_Down)
                 search_scroll = window.findChild(QObject, "sessionSearchScroll")
                 cached_results = owner.archiveSearchState
+                archive_panel.setProperty("keyboardVisible", True)
+                QTest.qWait(65)
+                with patch.object(owner, "_launch") as verify:
+                    pull_down(window, search_scroll, touch, 230)
+                    verify.assert_not_called()
+                assert not archive_panel.property("keyboardVisible") and archive_field.property("text") == "fixture"
                 with patch.object(owner, "_launch") as verify:
                     pull_down(window, search_scroll, touch, 230)
                     verify.assert_called_once_with("archive_search", "fixture")

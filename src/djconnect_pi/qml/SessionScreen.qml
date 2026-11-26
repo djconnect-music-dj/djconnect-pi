@@ -796,7 +796,16 @@ Item {
             flick.contentY = 0
         }
     }
-    Connections { target: searchScroll.contentItem; function onDraggingChanged() { if (searchScroll.contentItem.dragging) { searchPosition.stop(); screen.searchReturn = null } } }
+    Connections {
+        target: searchScroll.contentItem
+        function onDragStarted() {
+            searchPosition.stop()
+            screen.searchReturn = null
+            searchPanel.keyboardDismissalDrag = searchPanel.keyboardVisible
+            searchPanel.keyboardVisible = false
+        }
+        function onDragEnded() { Qt.callLater(searchPanel.finishKeyboardDismissalDrag) }
+    }
     function searchNow() {
         cancelSearchRead()
         if (archiveSearchAvailable) owner.searchArchive(searchInput.text)
@@ -2865,6 +2874,7 @@ Item {
         objectName: "sessionSearchPanel"
         property bool keyboardVisible: false
         property bool openTouchKeyboard: true
+        property bool keyboardDismissalDrag: false
         property bool restoreControlFocus: false
         property string selectedMatchId: ""
         readonly property var result: screen.archiveSearchAvailable ? screen.owner.archiveSearchState : screen.state.search
@@ -2919,9 +2929,13 @@ Item {
             restoreControlFocus = true
             close()
         }
+        function finishKeyboardDismissalDrag() {
+            if (!searchScroll.contentItem.dragging) keyboardDismissalDrag = false
+        }
         onOpened: keyboardVisible = openTouchKeyboard && !searchInput.text.length
         onClosed: {
             keyboardVisible = false
+            keyboardDismissalDrag = false
             screen.cancelSearchRead()
             searchInput.clear()
             resetSearch()
@@ -3069,6 +3083,7 @@ Item {
                 PullToRefresh {
                     flickable: searchScroll.contentItem
                     canRefresh: searchPanel.opened && !searchPanel.keyboardVisible && screen.backend.paired
+                        && !searchPanel.keyboardDismissalDrag
                         && !screen.backend.demoMode && searchPanel.matchingQuery && !screen.owner.busy
                         && !screen.searchRefreshPending && (screen.liveViewOpen || screen.historyViewOpen)
                     onRefreshRequested: {
