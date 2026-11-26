@@ -5138,6 +5138,26 @@ BrandWindow {
                             wrapMode: Text.WordWrap
                             Layout.fillWidth: true
                         }
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 8
+                            FeatureIcon {
+                                iconName: "history"
+                                Layout.preferredWidth: 20
+                                Layout.preferredHeight: 20
+                                Layout.alignment: Qt.AlignTop
+                                Accessible.ignored: true
+                            }
+                            Text {
+                                objectName: "musicDnaNoProfileSignals"
+                                text: root.tr("music_dna_profile_signals_hint")
+                                textFormat: Text.PlainText
+                                color: BrandTheme.colors.muted
+                                font.pixelSize: 16
+                                wrapMode: Text.WordWrap
+                                Layout.fillWidth: true
+                            }
+                        }
                     }
 
                     Repeater {
