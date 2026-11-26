@@ -501,6 +501,29 @@ BrandWindow {
         }
     }
 
+    component PullToRefresh: QtObject {
+        id: gesture
+        required property Flickable flickable
+        property bool canRefresh: false
+        property bool armed: false
+        signal refreshRequested()
+        onCanRefreshChanged: if (!canRefresh) armed = false
+        onFlickableChanged: armed = false
+
+        property Connections dragSignals: Connections {
+            target: gesture.flickable
+            function onDragStarted() { gesture.armed = false }
+            function onVerticalOvershootChanged() {
+                if (target.dragging && target.verticalOvershoot < -64 && gesture.canRefresh) gesture.armed = true
+            }
+            function onDragEnded() {
+                const refresh = gesture.armed && gesture.canRefresh
+                gesture.armed = false
+                if (refresh) gesture.refreshRequested()
+            }
+        }
+    }
+
     component MoreMenuButton: Button {
         id: moreControl
         property string iconName: ""
@@ -2551,25 +2574,14 @@ BrandWindow {
                 clip: true
                 ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
                 contentWidth: availableWidth
-                readonly property bool canPullToRefresh: trackInsightPanel.visible && root.active && !root.screenBlanked
-                    && djconnect.paired && !djconnect.demoMode && !djconnect.askDjBusy && djconnect.hasTrackTitle
-                    && (trackInsightSubject.visible || djconnect.trackInsightText.length > 0
-                        || djconnect.trackInsightItems.length > 0 || djconnect.trackInsightSections.length > 0)
-                property bool refreshArmed: false
-                onCanPullToRefreshChanged: if (!canPullToRefresh) refreshArmed = false
-
-                Connections {
-                    target: trackInsightScroll.contentItem
-                    function onDragStarted() { trackInsightScroll.refreshArmed = false }
-                    function onVerticalOvershootChanged() {
-                        if (target.dragging && target.verticalOvershoot < -64 && trackInsightScroll.canPullToRefresh)
-                            trackInsightScroll.refreshArmed = true
-                    }
-                    function onDragEnded() {
-                        const refresh = trackInsightScroll.refreshArmed && trackInsightScroll.canPullToRefresh
-                        trackInsightScroll.refreshArmed = false
-                        if (refresh) djconnect.refreshTrackInsight()
-                    }
+                PullToRefresh {
+                    objectName: "trackInsightPullToRefresh"
+                    flickable: trackInsightScroll.contentItem
+                    canRefresh: trackInsightPanel.visible && root.active && !root.screenBlanked
+                        && djconnect.paired && !djconnect.demoMode && !djconnect.askDjBusy && djconnect.hasTrackTitle
+                        && (trackInsightSubject.visible || djconnect.trackInsightText.length > 0
+                            || djconnect.trackInsightItems.length > 0 || djconnect.trackInsightSections.length > 0)
+                    onRefreshRequested: djconnect.refreshTrackInsight()
                 }
 
                 ColumnLayout {
@@ -3690,12 +3702,22 @@ BrandWindow {
 
             ScrollView {
                 id: musicDnaScroll
+                objectName: "musicDnaScroll"
                 visible: djconnect.musicDnaError.length === 0 && djconnect.musicDnaEnabled
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 clip: true
                 ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
                 contentWidth: availableWidth
+
+                PullToRefresh {
+                    objectName: "musicDnaPullToRefresh"
+                    flickable: musicDnaScroll.contentItem
+                    canRefresh: musicDnaScroll.visible && root.active && !root.screenBlanked
+                        && djconnect.paired && !djconnect.demoMode && !djconnect.musicDnaBusy
+                        && (djconnect.musicDnaSections.length > 0 || djconnect.musicDnaSummary.length > 0)
+                    onRefreshRequested: djconnect.refreshMusicDna()
+                }
 
                 GridLayout {
                     width: Math.max(0, musicDnaScroll.availableWidth)
