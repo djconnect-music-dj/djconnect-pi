@@ -955,6 +955,8 @@ BrandWindow {
         property int pendingMediaIndex: -1
         property int selectedMatchIndex: 0
         readonly property bool compact: width < 900
+        readonly property bool playbackAvailable: djconnect.demoMode || (djconnect.paired && djconnect.backendAvailable
+            && djconnect.musicBackendAvailable && !djconnect.versionMismatchVisible)
         readonly property string query: searchInput.text.trim()
         readonly property var matches: filterItems(items, query)
         signal refreshRequested()
@@ -1158,6 +1160,7 @@ BrandWindow {
                         required property int index
                         objectName: "mediaItemRow-" + index
                         readonly property bool starting: djconnect.mediaPlaybackBusy && panel.pendingMediaIndex === index
+                        readonly property bool hasPlayableUri: String(modelData.uri || "").trim().length > 0
                         width: mediaRows.width
                         implicitHeight: Math.max(panel.compact ? 86 : 100, contentItem.implicitHeight + 2 * verticalPadding)
                         topPadding: panel.compact ? 9 : 13
@@ -1167,7 +1170,7 @@ BrandWindow {
                         text: modelData.title || ""
                         Accessible.name: text
                         Accessible.description: starting ? root.tr("loading") : ""
-                        enabled: !!modelData.uri && !panel.loading && !djconnect.mediaPlaybackBusy
+                        enabled: hasPlayableUri && panel.playbackAvailable && !panel.loading && !djconnect.mediaPlaybackBusy
                         opacity: enabled || starting ? 1 : 0.58
                         onClicked: {
                             panel.pendingMediaIndex = index
@@ -1250,7 +1253,7 @@ BrandWindow {
                                 }
                             }
                             Item {
-                                visible: !!mediaRow.modelData.uri
+                                visible: mediaRow.hasPlayableUri
                                 Layout.preferredWidth: panel.compact ? 28 : 34
                                 Layout.preferredHeight: Layout.preferredWidth
                                 Accessible.ignored: true

@@ -155,6 +155,25 @@ def main():
             search_input.setProperty("text", term)
             QTest.qWait(80)
             assert visual_item(playlist_panel, "mediaSearchMatchCount").property("text") == "1 / 1"
+        backend._demo_mode = False
+        backend.demoModeChanged.emit()
+        assert not visual_item(playlist_panel, "mediaItemRow-0").property("enabled")
+        backend.cfg.paired, backend.cfg.device_token = True, "synthetic-not-a-credential"
+        backend.pairedChanged.emit()
+        backend._set_backend_available(False)
+        QTest.qWait(65)
+        assert not visual_item(playlist_panel, "mediaItemRow-0").property("enabled")
+        assert visual_item(playlist_panel, "mediaRefresh").property("enabled")
+        backend._set_backend_available(True)
+        assert visual_item(playlist_panel, "mediaItemRow-0").property("enabled")
+        backend.cfg.music_backend_available = False
+        backend.settingsChanged.emit()
+        assert not visual_item(playlist_panel, "mediaItemRow-0").property("enabled")
+        backend.cfg.paired, backend.cfg.device_token, backend.cfg.music_backend_available = False, "", True
+        backend._demo_mode = True
+        backend.pairedChanged.emit()
+        backend.demoModeChanged.emit()
+        backend.settingsChanged.emit()
         window.setProperty("activeScreen", "session")
         for runtime_state in ("opening", "ending"):
             backend.djSession._session["runtime_state"] = runtime_state

@@ -238,7 +238,8 @@ def test_qml_has_touch_readable_glass_controls_and_scrollable_settings() -> None
     assert "text: mediaRow.modelData.album || \"\"" in main_qml
     assert "djconnect.playMediaItem(panel.playCommand, panel.itemPayload(modelData))" in main_qml
     assert 'onClicked: root.activeScreen = "now"' not in main_qml[main_qml.index('visible: root.activeScreen === "queue"') : main_qml.index('visible: root.activeScreen === "playlists"')]
-    assert "enabled: !!modelData.uri" in main_qml
+    assert 'readonly property bool hasPlayableUri: String(modelData.uri || "").trim().length > 0' in media_list_component
+    assert "enabled: hasPlayableUri && panel.playbackAvailable && !panel.loading && !djconnect.mediaPlaybackBusy" in media_list_component
     assert "visible: panel.matches.length === 0" in main_qml
     assert "djconnect.loadQueue()" in main_qml
     assert "djconnect.loadPlaylists()" in main_qml

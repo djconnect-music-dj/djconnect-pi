@@ -724,6 +724,10 @@ class DJConnectBackend(QObject):
     def musicBackendId(self) -> str:
         return self.cfg.music_backend
 
+    @Property(bool, notify=settingsChanged)
+    def musicBackendAvailable(self) -> bool:
+        return self.cfg.music_backend_available
+
     @Property(str, notify=settingsChanged)
     def musicTargetPlayerName(self) -> str:
         target = self.cfg.music_target_player or {}
