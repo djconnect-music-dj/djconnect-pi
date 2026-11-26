@@ -70,6 +70,7 @@ from .ha import (
 from .i18n import LANGUAGES, normalize_language, translate
 from .logging_config import clear_log_files, setup_logging
 from .navigation_gesture import EdgeBackGesture
+from .queue_projection import compact_adjacent_tracks
 from .session_controller import SessionController
 from .session_playback_control import output_id
 from .session_playback_control import reference as session_playback_reference
@@ -3491,7 +3492,7 @@ def parse_queue_items(data: dict[str, object]) -> list[dict[str, object]]:
         raw_items = None
     if not isinstance(raw_items, list):
         return []
-    return _dedupe_queue_items([parsed for item in raw_items[:100] if isinstance(item, dict) and (parsed := _queue_item(item, context_uri))])
+    return compact_adjacent_tracks([parsed for item in raw_items[:100] if isinstance(item, dict) and (parsed := _queue_item(item, context_uri))])
 
 
 def parse_playlist_items(data: dict[str, object]) -> list[dict[str, object]]:
@@ -3499,25 +3500,6 @@ def parse_playlist_items(data: dict[str, object]) -> list[dict[str, object]]:
     if not isinstance(raw_items, list):
         return []
     return [parsed for item in raw_items[:100] if isinstance(item, dict) and (parsed := _media_item(item, playlist=True))]
-
-
-def _dedupe_queue_items(items: list[dict[str, object]]) -> list[dict[str, object]]:
-    seen: set[tuple[str, str, str, str]] = set()
-    deduped: list[dict[str, object]] = []
-    for item in items:
-        key = (
-            str(item.get("uri") or "").strip().casefold(),
-            str(item.get("title") or "").strip().casefold(),
-            str(item.get("subtitle") or "").strip().casefold(),
-            str(item.get("imageUrl") or "").strip(),
-        )
-        if key in seen:
-            continue
-        seen.add(key)
-        deduped.append(item)
-    if len(items) > 1 and len(deduped) == 1:
-        return []
-    return deduped
 
 
 def _media_item(item: dict[str, object], playlist: bool = False) -> dict[str, object] | None:

@@ -16,7 +16,7 @@ from PySide6.QtQuickControls2 import QQuickStyle
 from PySide6.QtTest import QTest
 from shiboken6 import delete
 
-from djconnect_pi.app import DJConnectBackend
+from djconnect_pi.app import DJConnectBackend, parse_queue_items
 from djconnect_pi.brand_theme import apply_palette
 from djconnect_pi.config import Config, save_config
 from djconnect_pi.expiry_clock import ExpiryClock
@@ -88,6 +88,20 @@ def main():
         for screen in ["session", "history", "now", "control", "queue", "playlists", "askdj", "trackinsight", "discover", "musicdna", "more", "settings", "games", "legal", "privacy", "feedback"]:
             window.setProperty("activeScreen", screen)
             capture(screen)
+        track = {"title": "Repeated track", "uri": "spotify:track:fixture-a", "index": 4}
+        backend._queue_items = parse_queue_items({"queue": [
+            track, track, {"title": "Other track", "uri": "spotify:track:fixture-b", "index": 5},
+            {**track, "index": 6},
+        ]})
+        backend.mediaListsChanged.emit()
+        window.setProperty("activeScreen", "queue")
+        QTest.qWait(120)
+        media_rows = visual_item(window.contentItem(), "mediaRows")
+        assert media_rows.property("count") == 3
+        repeated_row = visual_item(media_rows, "mediaItemRow-2")
+        assert repeated_row.property("text") == track["title"]
+        payload = QQmlExpression(engine.rootContext(), repeated_row, "modelData.index")
+        assert payload.evaluate()[0] == 6 and not payload.hasError()
         window.setProperty("activeScreen", "session")
         for runtime_state in ("opening", "ending"):
             backend.djSession._session["runtime_state"] = runtime_state

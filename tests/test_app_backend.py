@@ -1782,18 +1782,20 @@ def test_queue_parser_treats_repeated_current_track_as_empty_queue() -> None:
     assert queue == []
 
 
-def test_queue_parser_dedupes_repeated_items_but_keeps_real_queue() -> None:
+def test_queue_parser_compacts_adjacent_duplicates_and_keeps_later_repeats() -> None:
     queue = parse_queue_items(
         {
             "queue": [
-                {"title": "Track One", "artist": "Artist", "uri": "spotify:track:1"},
-                {"title": "Track Two", "artist": "Artist", "uri": "spotify:track:2"},
-                {"title": "Track One", "artist": "Artist", "uri": "spotify:track:1"},
+                {"title": "Track One", "artist": "Artist", "uri": "spotify:track:1", "index": 4},
+                {"title": "Track One", "artist": "Artist", "uri": "spotify:track:1", "index": 4},
+                {"title": "Track Two", "artist": "Artist", "uri": "spotify:track:2", "index": 5},
+                {"title": "Track One", "artist": "Artist", "uri": "spotify:track:1", "index": 6},
             ]
         }
     )
 
-    assert [item["title"] for item in queue] == ["Track One", "Track Two"]
+    assert [item["title"] for item in queue] == ["Track One", "Track Two", "Track One"]
+    assert [item["index"] for item in queue] == [4, 5, 6]
 
 
 @pytest.mark.parametrize("kind", ["queue", "playlists"])
