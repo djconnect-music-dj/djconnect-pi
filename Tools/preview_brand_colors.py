@@ -137,6 +137,17 @@ def main():
             tap_now_control("nowTogglePlayback")
             assert backend.playing == playing_before
             backend.hideToast()
+            output = visual_item(window.contentItem(), "nowPlaybackOutput")
+            assert output.property("visible") and output.property("text") == backend.t("output_device")
+            backend.playback.output_device = "Fixture output"
+            backend.outputDeviceChanged.emit()
+            assert output.property("text") == "Fixture output"
+            capture("now-playback-output")
+            center = output.mapToScene(QPointF(output.width() / 2, output.height() / 2))
+            QTest.mouseClick(window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, center.toPoint())
+            assert window.property("activeScreen") == "control" and backend.outputDevice == "Fixture output"
+            backend.playback.output_device = ""
+            backend.outputDeviceChanged.emit()
         track = {"title": "Repeated track title with more detail " * 12, "uri": "spotify:track:fixture-a", "index": 4}
         backend._queue_items = parse_queue_items({"queue": [
             track, track, {"title": "Other track", "uri": "spotify:track:fixture-b", "index": 5},
