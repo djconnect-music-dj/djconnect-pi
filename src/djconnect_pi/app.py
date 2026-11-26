@@ -1013,6 +1013,7 @@ class DJConnectBackend(QObject):
             return
         self.cfg.language = language
         save_config(self.config_path, self.cfg)
+        self._invalidate_track_insight_language()
         self._translation_version += 1
         self.languageChanged.emit()
         self.translationsChanged.emit()
@@ -1197,6 +1198,7 @@ class DJConnectBackend(QObject):
         if glass_changed:
             self.glassChanged.emit()
         if language_changed:
+            self._invalidate_track_insight_language()
             self._translation_version += 1
             self.languageChanged.emit()
             self.translationsChanged.emit()
@@ -3092,6 +3094,14 @@ class DJConnectBackend(QObject):
             self.cfg.music_target_player.get("id", ""),
             self._track_insight_output(self.playback),
         )
+
+    def _invalidate_track_insight_language(self) -> None:
+        self._track_insight_revision += 1
+        if self._demo_mode:
+            if self._track_insight_title:
+                self._show_demo_track_insight()
+        else:
+            self._clear_track_insight()
 
     def _clear_track_insight(self, *, error: str = "") -> None:
         changed = any(

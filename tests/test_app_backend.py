@@ -2624,7 +2624,7 @@ def test_track_insight_reuses_current_analysis_after_artwork_update(tmp_path: Pa
     assert backend._run.call_count == 1
 
 
-@pytest.mark.parametrize("change", ["none", "track", "track_return", "output", "same_output_name", "same_output_name_return", "output_renamed", "backend", "profile", "foreground_return"])
+@pytest.mark.parametrize("change", ["none", "track", "track_return", "output", "same_output_name", "same_output_name_return", "output_renamed", "backend", "profile", "foreground_return", "language", "language_return"])
 def test_track_insight_applies_queued_answer_only_in_original_scope(tmp_path: Path, change: str) -> None:
     ensure_app()
     backend = DJConnectBackend(tmp_path / "config.json")
@@ -2671,6 +2671,11 @@ def test_track_insight_applies_queued_answer_only_in_original_scope(tmp_path: Pa
         backend.cfg.music_backend_revision += 1
     elif change == "profile":
         backend.cfg.active_profile_id = "other"
+    elif change in {"language", "language_return"}:
+        original_language = backend.cfg.language
+        backend.setLanguage("es")
+        if change == "language_return":
+            backend.setLanguage(original_language)
     elif change == "foreground_return":
         backend.djSession.refresh = Mock()
         backend.setApplicationForeground(False)

@@ -285,6 +285,7 @@ def main():
         assert retry.property("visible") and retry.property("enabled")
         for language in ("en", "nl", "de", "fr", "es"):
             backend.setLanguage(language)
+            backend._apply_track_insight_data({"error": "transient"})
             QTest.qWait(35)
             assert retry.property("text") == backend.t("track_insight_retry_action")
         with patch.object(backend, "_sync_config_from_disk"), patch.object(backend, "_run") as request:
@@ -316,6 +317,15 @@ def main():
             backend._apply_playback(Playback(title="Following fixture, corrected", uri="fixture:auto-next", is_playing=True))
             QTest.qWait(65)
             assert request.call_count == 2
+            backend._apply_track_insight_data({
+                "track": {"title": "Following fixture, corrected"},
+                "analysis": {"summary": "Previous language"}
+            })
+            assert backend.trackInsightText
+            backend.setLanguage("nl")
+            QTest.qWait(65)
+            assert not backend.trackInsightText and request.call_count == 3
+            backend._set_ask_dj_busy(False)
         backend.cfg.paired, backend.cfg.device_token = False, ""
         backend._demo_mode = True
         backend.pairedChanged.emit()
