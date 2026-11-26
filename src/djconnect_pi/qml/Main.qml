@@ -3146,6 +3146,8 @@ BrandWindow {
         readonly property string visualMood: root.trackInsightVisualMood
         readonly property alias artworkTint: trackInsightArtworkFrame.artworkTint
         readonly property bool hasLiveSession: root.trackInsightHasLiveSession
+        readonly property bool hasAnalysis: djconnect.trackInsightText.length > 0
+            || djconnect.trackInsightItems.length > 0 || djconnect.trackInsightSections.length > 0
         readonly property bool canRequestAnalysis: visible && root.active && !root.screenBlanked && !root.splashVisible
             && !djconnect.versionMismatchVisible && djconnect.paired && !djconnect.demoMode
             && djconnect.hasTrackTitle && !djconnect.askDjBusy
@@ -3553,8 +3555,7 @@ BrandWindow {
                         iconName: "trackInsight"
                         title: root.tr("track_insight")
                         message: root.tr("track_insight_empty")
-                        visible: djconnect.trackInsightError.length === 0 && djconnect.trackInsightText.length === 0
-                                 && djconnect.trackInsightItems.length === 0 && djconnect.trackInsightSections.length === 0
+                        visible: djconnect.trackInsightError.length === 0 && !trackInsightPanel.hasAnalysis
                                  && !trackInsightSubject.visible && !trackInsightVisualizer.visible && !djconnect.trackInsightLoading
                     }
 
@@ -3670,6 +3671,18 @@ BrandWindow {
                                 }
                             }
                         }
+                    }
+
+                    GlassButton {
+                        objectName: "trackInsightAnalyze"
+                        text: root.tr(djconnect.trackInsightLoading ? "loading" : "track_insight_analyze")
+                        iconName: "sparkles"
+                        primary: true
+                        Layout.alignment: Qt.AlignHCenter
+                        visible: trackInsightSubject.hasPlaybackSubject && !djconnect.demoMode
+                            && !trackInsightPanel.hasAnalysis && djconnect.trackInsightError.length === 0
+                        enabled: trackInsightPanel.canRequestAnalysis
+                        onClicked: djconnect.refreshTrackInsight()
                     }
 
                     GlassSurface {
