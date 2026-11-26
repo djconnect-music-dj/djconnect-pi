@@ -600,12 +600,12 @@ def test_qml_music_dna_enable_is_available_in_disabled_screen() -> None:
 def test_qml_music_dna_opt_in_submits_only_in_confirmation_sheet() -> None:
     main = files("djconnect_pi.qml").joinpath("Main.qml").read_text(encoding="utf-8")
     sheet = main[main.index("id: musicDnaOptIn") : main.index("id: clearLogsConfirmPanel")]
-    assert main.count("djconnect.setMusicDnaEnabled(true)") == 1
-    assert main.count("djconnect.acceptMusicDiscoveryConsent()") == 1
-    assert "musicDnaOptIn.profileId === djconnect.activeProfileId" in sheet
+    assert main.count("djconnect.setMusicDnaEnabled(true, revision)") == 1
+    assert main.count("djconnect.acceptMusicDiscoveryConsent(revision)") == 1
+    assert "profileRevision === djconnect.musicDnaContextRevision" in sheet
     assert "if (!musicDnaOptIn.opened || !enabled) return" in sheet
-    assert "if (discoveryConsent) djconnect.acceptMusicDiscoveryConsent()" in sheet
-    assert "else djconnect.setMusicDnaEnabled(true)" in sheet
+    assert "if (discoveryConsent) djconnect.acceptMusicDiscoveryConsent(revision)" in sheet
+    assert "else djconnect.setMusicDnaEnabled(true, revision)" in sheet
 
 
 def test_qml_stop_demo_button_returns_to_pairing_flow() -> None:

@@ -49,10 +49,12 @@ BrandWindow {
         target: djconnect
         function onProfileChanged() { root.trackArtworkOpen = false; root.syncVibeScape(); musicDnaOptIn.close(); root.closeMusicDnaConfirmation(); root.closeDiscoveryDetail() }
         function onPairedChanged() { root.trackArtworkOpen = false; root.syncVibeScape(); musicDnaOptIn.close(); root.closeMusicDnaConfirmation(); root.closeDiscoveryDetail() }
-        function onDemoModeChanged() { root.closeMusicDnaConfirmation() }
+        function onDemoModeChanged() { musicDnaOptIn.close(); root.closeMusicDnaConfirmation() }
         function onMusicDnaChanged() {
             if (root.musicDnaConfirmationRevision !== djconnect.musicDnaContextRevision)
                 root.closeMusicDnaConfirmation()
+            if (musicDnaOptIn.visible && !musicDnaOptIn.currentProfile)
+                musicDnaOptIn.close()
         }
     }
     function openVibeScape(pickerTop) {
@@ -258,7 +260,7 @@ BrandWindow {
     function openMusicDnaPrompt(discoveryConsent) {
         if (musicDnaOptIn.visible || djconnect.musicDnaBusy || djconnect.musicDiscoveryBusy) return
         musicDnaOptIn.discoveryConsent = discoveryConsent
-        musicDnaOptIn.profileId = djconnect.activeProfileId
+        musicDnaOptIn.profileRevision = djconnect.musicDnaContextRevision
         musicDnaOptIn.open()
     }
 
@@ -5832,9 +5834,10 @@ BrandWindow {
         id: musicDnaOptIn
         objectName: "musicDnaOptInSheet"
         property bool discoveryConsent: false
-        property string profileId: ""
+        property int profileRevision: -1
+        readonly property bool currentProfile: profileRevision === djconnect.musicDnaContextRevision
         z: 86
-        onClosed: profileId = ""
+        onClosed: profileRevision = -1
 
         contentItem: ScrollView {
             id: optInScroll
@@ -5891,14 +5894,15 @@ BrandWindow {
                         iconName: "discover"
                         Layout.fillWidth: true
                         Layout.preferredHeight: musicDnaOptIn.compact ? 56 : 68
-                        enabled: djconnect.paired && !djconnect.musicDnaBusy && !djconnect.musicDiscoveryBusy
-                            && musicDnaOptIn.profileId === djconnect.activeProfileId
+                        enabled: (djconnect.paired || djconnect.demoMode) && !djconnect.musicDnaBusy
+                            && !djconnect.musicDiscoveryBusy && musicDnaOptIn.currentProfile
                         onClicked: {
                             if (!musicDnaOptIn.opened || !enabled) return
-                            var discoveryConsent = musicDnaOptIn.discoveryConsent
+                            const discoveryConsent = musicDnaOptIn.discoveryConsent
+                            const revision = musicDnaOptIn.profileRevision
                             musicDnaOptIn.close()
-                            if (discoveryConsent) djconnect.acceptMusicDiscoveryConsent()
-                            else djconnect.setMusicDnaEnabled(true)
+                            if (discoveryConsent) djconnect.acceptMusicDiscoveryConsent(revision)
+                            else djconnect.setMusicDnaEnabled(true, revision)
                         }
                     }
                     GlassButton {
@@ -5909,7 +5913,8 @@ BrandWindow {
                         tertiary: true
                         Layout.fillWidth: true
                         onClicked: {
-                            if (musicDnaOptIn.discoveryConsent) djconnect.rejectMusicDiscoveryConsent()
+                            if (musicDnaOptIn.currentProfile && musicDnaOptIn.discoveryConsent)
+                                djconnect.rejectMusicDiscoveryConsent()
                             musicDnaOptIn.close()
                         }
                     }
