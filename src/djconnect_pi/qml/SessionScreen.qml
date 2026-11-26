@@ -1708,6 +1708,22 @@ Item {
                                 }
                             }
                         }
+                        SessionPlaybackShortcut {
+                            objectName: "sessionArtworkResume"
+                            anchors.right: parent.right
+                            anchors.bottom: parent.bottom
+                            anchors.margins: screen.compact ? 8 : 14
+                            width: screen.compact ? 46 : 58
+                            height: width
+                            iconName: "play"
+                            padding: 0
+                            visible: screen.liveViewOpen && !!screen.state.playback_control.available
+                                && screen.state.playback.state === "paused"
+                            enabled: !!screen.state.playback_control.enabled
+                            Accessible.name: screen.tr("play")
+                            onCurrentTrackClicked: screen.owner.playbackCommand(screen.state.session_id,
+                                screen.state.playback.item_id, "play", transportEpoch)
+                        }
                     }
                     RowLayout {
                         id: trackTitleRow
