@@ -855,6 +855,15 @@ def main():
         QTest.mouseClick(window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, jump_position)
         QTest.qWait(65)
         assert ask_history.property("atYBeginning") and not jump_top.property("visible")
+        draft.setProperty("text", "Draft stays while reading")
+        ask_dj.setProperty("chatKeyboardOpen", True)
+        assert QMetaObject.invokeMethod(ask_history, "dragStarted")
+        assert not ask_dj.property("chatKeyboardOpen") and draft.property("text") == "Draft stays while reading"
+        QMetaObject.invokeMethod(ask_toggle, "clicked")
+        find_input.setProperty("text", "Earlier")
+        assert ask_dj.property("searchKeyboardOpen")
+        assert QMetaObject.invokeMethod(ask_history, "dragStarted")
+        assert not ask_dj.property("searchKeyboardOpen") and find_input.property("text") == "Earlier"
         backend._demo_mode = True
         backend.demoModeChanged.emit()
         backend.cfg.paired, backend.cfg.device_token = False, ""

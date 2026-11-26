@@ -4708,6 +4708,10 @@ BrandWindow {
                     model: askDjPanel.displayedMessages
                     spacing: 10
                     cacheBuffer: root.lowMemoryProfile ? 160 : 320
+                    onDragStarted: {
+                        askDjPanel.chatKeyboardOpen = false
+                        askDjPanel.searchKeyboardOpen = false
+                    }
 
                     PullToRefresh {
                         objectName: "askDjPullToRefresh"
