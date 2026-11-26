@@ -652,8 +652,15 @@ Item {
         || moreChoices.visible || connectionInfo.visible || choices.visible
     function navigateBackFromHistory() {
         if (!historical) return
-        if (currentHistory) { owner.closeSaved(); navigate("session") }
-        else if (state.timeline.session) returnArchiveDetail()
+        if (currentHistory) {
+            owner.closeSaved()
+            navigate("session")
+            if (!flowReturn) {
+                const flick = historyScroll.contentItem
+                flick.cancelFlick()
+                flick.contentY = flick.originY
+            }
+        } else if (state.timeline.session) returnArchiveDetail()
         else { owner.closeSaved(); navigate("more") }
     }
     function refreshHistory(manual) {

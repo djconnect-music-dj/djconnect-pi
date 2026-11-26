@@ -1468,6 +1468,18 @@ def main():
         assert window.property("activeScreen") == "session-history"
         actual_anchor = QMetaObject.invokeMethod(session_item, "readingAnchor", Q_RETURN_ARG("QVariant"))
         assert actual_anchor == target_entry, (width, actual_anchor, target_entry)
+        owner._retained_flow = deepcopy(extended["entries"])
+        owner.changed.emit()
+        QMetaObject.invokeMethod(session_item, "clearFlowReturn")
+        history_scroll = window.findChild(QObject, "sessionHistoryScroll").property("contentItem")
+        history_scroll.setProperty("contentY", 420)
+        back = window.findChild(QObject, "sessionHistoryBack")
+        QMetaObject.invokeMethod(back, "clicked")
+        capture("flow-return-without-anchor-starts-at-top")
+        assert window.property("activeScreen") == "session"
+        assert abs(history_scroll.property("contentY") - history_scroll.property("originY")) < 1
+        owner._retained_flow = []
+        owner.changed.emit()
         owner.closeSaved()
         window.setProperty("activeScreen", "now")
         window.setProperty("aboutOpen", True)
