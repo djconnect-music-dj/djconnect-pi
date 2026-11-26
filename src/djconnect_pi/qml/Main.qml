@@ -1466,8 +1466,15 @@ BrandWindow {
                         active: !root.screenBlanked
                         leaseKey: djconnect.activeProfileId + "|" + djconnect.title + "|" + djconnect.artist
                     }
+                    VinylPlaceholder {
+                        objectName: "nowArtworkPlaceholder"
+                        anchors.fill: parent
+                        radius: artFrame.radius
+                        visible: albumArt.opacity < 1
+                    }
                     Image {
                         id: albumArt
+                        objectName: "nowArtworkImage"
                         anchors.fill: parent
                         source: djconnect.imageUrl
                         sourceSize.width: width
@@ -1533,21 +1540,6 @@ BrandWindow {
                             style: Text.Raised
                             styleColor: "#aa000000"
                             Layout.fillWidth: true
-                        }
-                    }
-
-                    Rectangle {
-                        anchors.fill: parent
-                        z: 1
-                        color: BrandTheme.colors.background
-                        opacity: albumArt.status === Image.Ready ? 0 : 1
-
-                        Text {
-                            anchors.centerIn: parent
-                            text: "DJConnect"
-                            color: BrandTheme.colors.text
-                            font.pixelSize: 42
-                            font.bold: true
                         }
                     }
 
