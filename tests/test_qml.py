@@ -235,7 +235,7 @@ def test_qml_has_touch_readable_glass_controls_and_scrollable_settings() -> None
     assert "JSON.stringify" in main_qml
     assert "artist: item.artist || \"\"" in main_qml
     assert "album: item.album || \"\"" in main_qml
-    assert "text: mediaRow.modelData.album || \"\"" in main_qml
+    assert "text: panel.trackQueue ? panel.queueSubtitle(mediaRow.modelData)" in main_qml
     assert "djconnect.playMediaItem(panel.playCommand, panel.itemPayload(modelData))" in main_qml
     assert 'onClicked: root.activeScreen = "now"' not in main_qml[main_qml.index('visible: root.activeScreen === "queue"') : main_qml.index('visible: root.activeScreen === "playlists"')]
     assert 'readonly property bool hasPlayableUri: String(modelData.uri || "").trim().length > 0' in media_list_component

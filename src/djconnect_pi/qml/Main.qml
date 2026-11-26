@@ -1000,15 +1000,25 @@ BrandWindow {
         readonly property bool playbackAvailable: djconnect.demoMode || (djconnect.paired && djconnect.backendAvailable
             && djconnect.musicBackendAvailable && !djconnect.versionMismatchVisible)
         readonly property bool refreshAvailable: playbackAvailable && !loading
+        readonly property bool trackQueue: playCommand === "play_context_at"
         readonly property string query: searchInput.text.trim()
         readonly property var matches: filterItems(items, query)
         signal refreshRequested()
+
+        function queueSubtitle(item) {
+            var artist = (item.artist || item.subtitle || "").trim()
+            var album = (item.album || "").trim()
+            if (!artist) return album
+            return album && artist.toLowerCase() !== album.toLowerCase() ? artist + " • " + album : artist
+        }
 
         function filterItems(source, query) {
             var term = searchText(query.trim())
             if (!term) return source
             return source.filter(function(item) {
-                return [item.title, item.subtitle, item.artist, item.album, item.uri].some(function(value) {
+                var values = [item.title, item.subtitle, item.artist, item.album, item.uri]
+                if (panel.trackQueue) values.push(panel.queueSubtitle(item))
+                return values.some(function(value) {
                     return searchText(value || "").indexOf(term) >= 0
                 })
             })
@@ -1311,7 +1321,6 @@ BrandWindow {
                             }
                             ColumnLayout {
                                 id: mediaText
-                                readonly property bool trackQueue: panel.playCommand === "play_context_at"
                                 readonly property bool onScreen: mediaRow.y + mediaRow.height > mediaRows.contentY
                                     && mediaRow.y < mediaRows.contentY + mediaRows.height
                                 Layout.fillWidth: true
@@ -1323,28 +1332,17 @@ BrandWindow {
                                     font.pixelSize: panel.compact ? 20 : 24
                                     font.weight: Font.DemiBold
                                     stationaryLines: 2
-                                    queueLabel: mediaText.trackQueue
+                                    queueLabel: panel.trackQueue
                                     inViewport: mediaText.onScreen
                                     Layout.fillWidth: true
                                 }
                                 MediaOverflowText {
                                     objectName: "mediaTrackSubtitle"
-                                    text: mediaRow.modelData.subtitle || ""
-                                    visible: mediaText.trackQueue && text.length > 0
+                                    text: panel.trackQueue ? panel.queueSubtitle(mediaRow.modelData) : ""
+                                    visible: text.length > 0
                                     color: BrandTheme.colors.muted
                                     font.pixelSize: panel.compact ? 16 : 19
-                                    queueLabel: mediaText.trackQueue
-                                    inViewport: mediaText.onScreen
-                                    Layout.fillWidth: true
-                                }
-                                MediaOverflowText {
-                                    objectName: "mediaTrackAlbum"
-                                    text: mediaRow.modelData.album || ""
-                                    visible: mediaText.trackQueue && text.length > 0
-                                        && text !== (mediaRow.modelData.subtitle || "")
-                                    color: BrandTheme.colors.muted
-                                    font.pixelSize: panel.compact ? 14 : 16
-                                    queueLabel: mediaText.trackQueue
+                                    queueLabel: panel.trackQueue
                                     inViewport: mediaText.onScreen
                                     Layout.fillWidth: true
                                 }

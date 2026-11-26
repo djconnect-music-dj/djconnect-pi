@@ -219,10 +219,11 @@ def main():
             backend.hideToast()
             backend._demo_mode = True
             backend.cfg.paired, backend.cfg.device_token = False, ""
-        track = {"title": "Repeated track title with more detail " * 12, "uri": "spotify:track:fixture-a", "index": 4}
+        track = {"title": "Repeated track title with more detail " * 12, "uri": "spotify:track:fixture-a", "index": 4,
+                 "artist": "Fixture artist", "album": "Fixture album"}
         backend._queue_items = parse_queue_items({"queue": [
-            track, track, {"title": "Other track", "uri": "spotify:track:fixture-b", "index": 5},
-            {**track, "index": 6},
+            track, track, {"title": "Other track", "uri": "spotify:track:fixture-b", "index": 5, "album": "Album only"},
+            {**track, "index": 6, "album": "FIXTURE ARTIST"},
         ]})
         backend.mediaListsChanged.emit()
         window.setProperty("activeScreen", "queue")
@@ -231,6 +232,10 @@ def main():
         assert media_rows.property("count") == 3
         repeated_row = visual_item(media_rows, "mediaItemRow-2")
         assert repeated_row.property("text") == track["title"]
+        for index, subtitle in enumerate(("Fixture artist • Fixture album", "Album only", "Fixture artist")):
+            queue_row = visual_item(media_rows, f"mediaItemRow-{index}")
+            metadata = visual_item(queue_row, "mediaTrackSubtitle")
+            assert metadata.property("visible") and metadata.property("text") == subtitle
         payload = QQmlExpression(engine.rootContext(), repeated_row, "modelData.index")
         assert payload.evaluate()[0] == 6 and not payload.hasError()
         long_title = visual_item(repeated_row, "mediaTrackTitle")
@@ -262,6 +267,9 @@ def main():
         assert queue_panel.property("searching") and not queue_panel.property("keyboardOpen")
         search_input = visual_item(queue_panel, "mediaSearchInput")
         assert search_input.property("activeFocus")
+        search_input.setProperty("text", "artist • fixture album")
+        QTest.qWait(50)
+        assert media_rows.property("count") == 1
         search_input.setProperty("text", "Repeated")
         QTest.keyClick(window, find.key(), find.keyboardModifiers())
         assert search_input.property("text") == "Repeated"
