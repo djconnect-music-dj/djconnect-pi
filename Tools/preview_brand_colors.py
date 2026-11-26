@@ -485,8 +485,12 @@ def main():
         assert gate.property("visible") and not empty_feed.property("visible")
         backend._apply_music_dna_data({"success": True, "enabled": True})
         assert not gate.property("visible") and empty_feed.property("text") == backend.t("music_discovery_empty")
+        long_title = "Cached recommendation with a long title on this Discovery card"
         backend._apply_music_discovery_data({"success": True, "sections": [
-            {"id": "fixture-shelf", "items": [{"id": "fixture-track", "title": "Cached recommendation"}]},
+            {"id": "fixture-shelf", "items": [{
+                "id": "fixture-track", "kind": "track", "title": long_title, "subtitle": "Artist Name",
+                "reason": "A multi-line reason describes why this recommendation fits the listener's current profile.",
+            }]},
         ]})
         assert not empty_feed.property("visible")
         detail = window.findChild(QObject, "discoveryDetail")
@@ -499,6 +503,14 @@ def main():
         spinner = artwork.findChild(QObject, "discoveryArtworkSpinner")
         cover = artwork.findChild(QObject, "discoveryArtworkImage")
         assert fallback.property("visible") and not spinner.property("visible")
+        shelf = visual_item(window.contentItem(), "discoveryShelfItems")
+        recommendation = visual_item(shelf, "discoveryRecommendation")
+        kind_label = visual_item(recommendation, "discoveryCardKind")
+        assert kind_label.property("visible") and kind_label.property("text") == backend.t("music_discovery_kind_track")
+        content_height = recommendation.property("contentItem").implicitHeight()
+        assert recommendation.height() >= content_height, (width, recommendation.height(), content_height, shelf.height())
+        label_bottom = kind_label.mapToItem(shelf, QPointF(0, kind_label.height())).y()
+        assert label_bottom <= shelf.height(), (width, label_bottom, shelf.height())
         card = visual_item(window.contentItem(), "discoveryCardArtwork")
         card_spinner = card.findChild(QObject, "discoveryArtworkSpinner")
         backend._music_discovery_playing_id = "fixture-track"
@@ -524,7 +536,7 @@ def main():
         assert not detail.property("opened")
         backend._apply_music_discovery_data({"success": False, "error": "music_discovery_unavailable"})
         assert empty_feed.property("visible") and empty_feed.property("text") == backend.t("music_discovery_load_failed")
-        assert backend.musicDiscoveryItems[0]["title"] == "Cached recommendation"
+        assert backend.musicDiscoveryItems[0]["title"] == long_title
         backend._apply_music_discovery_data({"success": True, "sections": []})
         assert empty_feed.property("text") == backend.t("music_discovery_empty")
         with patch.object(backend, "_sync_config_from_disk"), patch.object(backend, "_run") as request:

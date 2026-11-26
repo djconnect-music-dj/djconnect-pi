@@ -3567,14 +3567,26 @@ BrandWindow {
                                         id: shelfItems
                                         objectName: "discoveryShelfItems"
                                         readonly property int tileWidth: root.wallProfile ? 192 : 142
+                                        readonly property int textSpacing: 4
                                         Layout.fillWidth: true
-                                        Layout.preferredHeight: tileWidth + 108
+                                        Layout.preferredHeight: tileWidth
+                                            + 2 * Math.ceil(Math.max(titleMetrics.height, titleMetrics.lineSpacing))
+                                            + 3 * Math.ceil(Math.max(captionMetrics.height, captionMetrics.lineSpacing))
+                                            + Math.ceil(kindMetrics.height) + 4 * textSpacing
                                         orientation: ListView.Horizontal
                                         boundsBehavior: Flickable.StopAtBounds
                                         clip: true
                                         spacing: 12
                                         model: shelf.modelData.items
                                         ScrollBar.horizontal: ScrollBar {}
+                                        FontMetrics { id: titleMetrics; font.pixelSize: 18; font.bold: true }
+                                        FontMetrics { id: captionMetrics; font.pixelSize: 15 }
+                                        FontMetrics {
+                                            id: kindMetrics
+                                            font.pixelSize: 14
+                                            font.bold: true
+                                            font.capitalization: Font.AllUppercase
+                                        }
 
                                         delegate: Button {
                                             id: recommendationCard
@@ -3589,7 +3601,7 @@ BrandWindow {
 
                                             contentItem: ColumnLayout {
                                                 id: recommendationContent
-                                                spacing: 4
+                                                spacing: shelfItems.textSpacing
                                                 DiscoveryArtwork {
                                                     objectName: "discoveryCardArtwork"
                                                     recommendation: recommendationCard.modelData
@@ -3602,8 +3614,7 @@ BrandWindow {
                                                     text: recommendationCard.modelData.title
                                                     textFormat: Text.PlainText
                                                     color: BrandTheme.colors.text
-                                                    font.pixelSize: 18
-                                                    font.bold: true
+                                                    font: titleMetrics.font
                                                     maximumLineCount: 2
                                                     wrapMode: Text.Wrap
                                                     elide: Text.ElideRight
@@ -3615,7 +3626,7 @@ BrandWindow {
                                                         && text.trim().toLowerCase() === "artist")
                                                     textFormat: Text.PlainText
                                                     color: BrandTheme.colors.muted
-                                                    font.pixelSize: 15
+                                                    font: captionMetrics.font
                                                     elide: Text.ElideRight
                                                     Layout.fillWidth: true
                                                 }
@@ -3624,20 +3635,20 @@ BrandWindow {
                                                     visible: text.length > 0
                                                     textFormat: Text.PlainText
                                                     color: BrandTheme.colors.muted
-                                                    font.pixelSize: 15
+                                                    font: captionMetrics.font
                                                     maximumLineCount: 2
                                                     wrapMode: Text.Wrap
                                                     elide: Text.ElideRight
                                                     Layout.fillWidth: true
                                                 }
                                                 Text {
+                                                    objectName: "discoveryCardKind"
                                                     text: musicDiscoveryPanel.kindLabel(recommendationCard.modelData.kind)
                                                     visible: text.length > 0 && recommendationCard.modelData.kind !== "artist"
                                                         && !(recommendationCard.modelData.sectionId === "rediscover"
                                                             && recommendationCard.modelData.kind === "track")
-                                                    color: BrandTheme.colors.muted
-                                                    font.pixelSize: 14
-                                                    font.bold: true
+                                                    color: BrandTheme.colors.text
+                                                    font: kindMetrics.font
                                                     Layout.fillWidth: true
                                                 }
                                             }
