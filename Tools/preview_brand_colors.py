@@ -9,7 +9,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-from PySide6.QtCore import Q_ARG, Q_RETURN_ARG, QMetaObject, QObject, QPointF, QTimer, qInstallMessageHandler
+from PySide6.QtCore import Q_ARG, Q_RETURN_ARG, QMetaObject, QObject, QPointF, Qt, QTimer, qInstallMessageHandler
 from PySide6.QtGui import QAccessible, QGuiApplication
 from PySide6.QtQml import QQmlApplicationEngine, QQmlExpression
 from PySide6.QtQuickControls2 import QQuickStyle
@@ -150,6 +150,11 @@ def main():
         search_input.setProperty("text", "fixture")
         count = visual_item(queue_panel, "mediaSearchMatchCount")
         next_match = visual_item(queue_panel, "mediaSearchNextMatch")
+        search_input.forceActiveFocus()
+        QTest.keyClick(window, Qt.Key.Key_Up)
+        assert count.property("text") == "30 / 30"
+        QTest.keyClick(window, Qt.Key.Key_Down)
+        assert count.property("text") == "1 / 30"
         for _ in range(16):
             QMetaObject.invokeMethod(next_match, "clicked")
         QTest.qWait(120)

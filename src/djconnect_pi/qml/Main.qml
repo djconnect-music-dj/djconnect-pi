@@ -983,9 +983,10 @@ BrandWindow {
             return String(value).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
         }
         function moveMatch(delta) {
-            if (!matches.length || !query) return
+            if (!matches.length || !query) return false
             selectedMatchIndex = (selectedMatchIndex + delta + matches.length) % matches.length
             centerMatch()
+            return true
         }
         function centerMatch() {
             if (!visible || !query || !matches.length) return
@@ -1126,6 +1127,8 @@ BrandWindow {
                             if (panel.keyboardOpen) panel.keyboardOpen = false
                             else panel.moveMatch(1)
                         }
+                        Keys.onUpPressed: function(event) { event.accepted = panel.moveMatch(-1) }
+                        Keys.onDownPressed: function(event) { event.accepted = panel.moveMatch(1) }
                         Keys.onEscapePressed: if (panel.keyboardOpen) panel.keyboardOpen = false; else panel.closeSearch()
                     }
                     Text {
