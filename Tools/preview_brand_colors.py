@@ -1087,9 +1087,14 @@ def main():
         backend.showLogs()
         capture("logs")
         logs = visual_item(window.contentItem(), "logsView")
+        search_toggle = visual_item(logs, "logsSearchOpen")
+        search_toggle_accessible = QAccessible.queryAccessibleInterface(search_toggle)
         for locale in ("en", "nl", "de", "fr", "es"):
             backend.setLanguage(locale)
-            QMetaObject.invokeMethod(visual_item(logs, "logsSearchOpen"), "clicked")
+            assert search_toggle_accessible.text(QAccessible.Text.Name) == backend.t("logs_search")
+            QMetaObject.invokeMethod(search_toggle, "clicked")
+            assert search_toggle.property("checked")
+            assert search_toggle_accessible.text(QAccessible.Text.Name) == backend.t("close_search")
             search_close = visual_item(logs, "logsSearchClose")
             assert search_close.property("visible") and search_close.property("iconName") == "close"
             assert QAccessible.queryAccessibleInterface(search_close).text(QAccessible.Text.Name) == backend.t("close_search")
@@ -1098,6 +1103,12 @@ def main():
             capture("logs-search-" + locale)
             QMetaObject.invokeMethod(search_close, "clicked")
             assert not logs.property("searching") and search_input.property("text") == ""
+            QMetaObject.invokeMethod(search_toggle, "clicked")
+            search_input.setProperty("text", "another sample")
+            QMetaObject.invokeMethod(search_toggle, "clicked")
+            assert not search_toggle.property("checked") and not logs.property("searching")
+            assert not logs.property("keyboardOpen") and search_input.property("text") == ""
+            assert search_toggle_accessible.text(QAccessible.Text.Name) == backend.t("logs_search")
         backend.hideLogs()
         backend.cfg.log_level = "OFF"
         backend.setLanguage("nl")

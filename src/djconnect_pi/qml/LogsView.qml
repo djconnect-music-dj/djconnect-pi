@@ -98,11 +98,11 @@ Item {
                     spacing: 0
                     LogAction {
                         objectName: "logsSearchOpen"
-                        iconName: "search"; Accessible.name: view.tr("logs_search")
+                        iconName: "search"; Accessible.name: view.tr(view.searching ? "close_search" : "logs_search")
                         checked: view.searching
                         background: Item {}
                         foregroundColor: checked ? BrandTheme.colors.actionAccent : BrandTheme.colors.text
-                        onClicked: view.showSearch()
+                        onClicked: view.searching ? view.closeSearch() : view.showSearch()
                     }
                     LogAction {
                         iconName: "refresh"; Accessible.name: view.tr("refresh")
