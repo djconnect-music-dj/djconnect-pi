@@ -204,6 +204,7 @@ class DJConnectBackend(QObject):
     _askDjReady = Signal(object)
     _musicDnaReady = Signal(object)
     _musicDiscoveryReady = Signal(object)
+    _musicDiscoveryFeedbackAccepted = Signal(object, str, str)
     _trackInsightReady = Signal(object)
 
     def __init__(self, config_path: Path) -> None:
@@ -332,6 +333,7 @@ class DJConnectBackend(QObject):
         self._askDjReady.connect(self._apply_ask_dj_data)
         self._musicDnaReady.connect(self._apply_music_dna_data)
         self._musicDiscoveryReady.connect(self._apply_music_discovery_data)
+        self._musicDiscoveryFeedbackAccepted.connect(self._remove_music_discovery_item)
         self._trackInsightReady.connect(self._apply_track_insight_data)
         self._sharedSettingsReady.connect(self._apply_shared_settings)
         self._shared_settings_timer = QTimer(self)
@@ -1786,8 +1788,10 @@ class DJConnectBackend(QObject):
 
     @Slot(str, str)
     def sendMusicDiscoveryFeedback(self, payload: str, feedback: str) -> None:
+        ticket = self._private_read_context()
         self._sync_config_from_disk()
-        if self._demo_mode or not self.paired or self._music_discovery_busy or not self._music_discovery_feedback_supported:
+        if (self._demo_mode or not self.paired or self._music_discovery_busy
+                or not self._music_discovery_feedback_supported or ticket != self._private_read_context()):
             return
         feedback_value = str(feedback or "").strip()
         if feedback_value not in {"not_for_me", "less_like_this", "hide_artist"}:
@@ -1799,10 +1803,13 @@ class DJConnectBackend(QObject):
             return
         if not isinstance(item, dict):
             return
+        if not str(item.get("discovery_item_id") or item.get("id") or "").strip():
+            return
+        self._music_discovery_error = ""
         self._set_music_discovery_busy(True)
         self._run(
             self.tr_key("music_discovery"),
-            lambda: self._music_discovery_feedback_worker(item, feedback_value),
+            lambda: self._music_discovery_feedback_worker(item, feedback_value, ticket=ticket),
             done=lambda: self._set_music_discovery_busy(False),
         )
 
@@ -2487,21 +2494,37 @@ class DJConnectBackend(QObject):
         self._toastReady.emit(self.tr_key("play"), 1800, "playback")
         self._music_discovery_feed_worker(ticket=ticket)
 
-    def _music_discovery_feedback_worker(self, item: dict[str, object], feedback: str) -> None:
-        ticket = self._private_read_context()
+    def _music_discovery_feedback_worker(self, item: dict[str, object], feedback: str, *, ticket) -> None:
+        if ticket != self._private_read_context():
+            return
         try:
-            self.client.music_discovery_feedback(item, feedback)
-            self._persist_backend_summary()
-            feed = self.client.music_discovery_feed()
-            if ticket != self._private_read_context():
-                return
-            self._apply_profile_context(feed)
-            ticket = self._private_read_context()
-            feed["_feedback_supported"] = self._supports_music_discovery_feedback()
-            self._persist_backend_summary()
-        except (DJConnectError, requests.RequestException) as exc:
-            raise BackendUnavailable("Music Discovery unavailable") from exc
-        self._musicDiscoveryReady.emit(self._profile_read_result(feed, ticket))
+            result = self.client.music_discovery_feedback(item, feedback)
+        except (AuthenticationError, ProtocolVersionMismatch):
+            if ticket == self._private_read_context():
+                raise
+            return
+        except (DJConnectError, requests.RequestException):
+            result = {}
+        if ticket != self._private_read_context():
+            return
+        if result.get("success") is not True:
+            error = {"success": False, "error": "music_discovery_feedback_failed"}
+            self._musicDiscoveryReady.emit(self._profile_read_result(error, ticket))
+            return
+        self._persist_backend_summary()
+        self._musicDiscoveryFeedbackAccepted.emit(
+            ticket, str(item.get("section_id") or ""), str(item.get("discovery_item_id") or item.get("id") or "").strip(),
+        )
+        self._music_discovery_feed_worker(ticket=ticket)
+
+    @Slot(object, str, str)
+    def _remove_music_discovery_item(self, ticket, section_id: str, item_id: str) -> None:
+        if self._shutting_down or ticket != self._private_read_context():
+            return
+        self._set_music_discovery_items([
+            item for item in self._music_discovery_items
+            if (item.get("sectionId"), item.get("discoveryItemId")) != (section_id, item_id)
+        ])
 
     def _supports_music_discovery_feedback(self) -> bool:
         try:
@@ -3068,8 +3091,8 @@ class DJConnectBackend(QObject):
         if not isinstance(data, dict):
             return
         error = str(data.get("error") or "")
-        if data.get("success") is False and error == "music_discovery_play_failed":
-            self._music_discovery_error = self.tr_key("music_discovery_play_failed")
+        if data.get("success") is False and error in {"music_discovery_play_failed", "music_discovery_feedback_failed"}:
+            self._music_discovery_error = self.tr_key(error)
             self.musicDiscoveryChanged.emit()
             return
         if data.get("success") is False and error == "music_discovery_unavailable":

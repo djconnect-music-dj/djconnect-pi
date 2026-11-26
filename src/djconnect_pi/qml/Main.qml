@@ -3782,10 +3782,8 @@ BrandWindow {
             }
 
             function sendFeedback(value) {
-                if (item && !actionBusy && djconnect.musicDiscoveryFeedbackSupported) {
+                if (item && !actionBusy && djconnect.musicDiscoveryFeedbackSupported)
                     djconnect.sendMusicDiscoveryFeedback(item.payload, value)
-                    close()
-                }
             }
         }
     }

@@ -1613,6 +1613,13 @@ _SESSION_COMPOSER_TRANSLATIONS = {
         "Impossible de lire cette recommandation.",
         "No se pudo reproducir esta recomendación.",
     ),
+    "music_discovery_feedback_failed": (
+        "Could not send your feedback.",
+        "Je feedback kon niet worden verstuurd.",
+        "Dein Feedback konnte nicht gesendet werden.",
+        "Impossible d’envoyer votre avis.",
+        "No se pudo enviar tu opinión.",
+    ),
     "session_question_sending": ("Sending…", "Wordt verstuurd…", "Wird gesendet…", "Envoi…", "Enviando…"),
     "session_question_accepted": ("Question sent", "Vraag verstuurd", "Frage gesendet", "Question envoyée", "Pregunta enviada"),
     "session_question_accepted_unavailable": ("Question accepted. The saved answer is not available yet.", "Vraag ontvangen. Het opgeslagen antwoord is nog niet beschikbaar.", "Frage angenommen. Die gespeicherte Antwort ist noch nicht verfügbar.", "Question reçue. La réponse enregistrée n’est pas encore disponible.", "Pregunta recibida. La respuesta guardada aún no está disponible."),
