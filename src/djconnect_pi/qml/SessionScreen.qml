@@ -1399,6 +1399,7 @@ Item {
                             }
                             ProgressBar {
                                 id: playbackProgress
+                                objectName: "sessionPlaybackBar"
                                 value: screen.state.playback.progress || 0; Layout.fillWidth: true
                                 Accessible.name: screen.tr("now_playing")
                                 background: Rectangle { implicitHeight: 6; radius: 3; color: BrandTheme.colors.text; opacity: 0.18 }
@@ -1407,7 +1408,26 @@ Item {
                                     Rectangle { width: playbackProgress.visualPosition * parent.width; height: parent.height; radius: 3; color: BrandTheme.colors.text }
                                 }
                             }
-                            Text { text: screen.state.playback.time_label || ""; textFormat: Text.PlainText; font.pixelSize: screen.compact ? 16 : 18; color: BrandTheme.colors.muted }
+                            Text {
+                                id: playbackTime
+                                objectName: "sessionPlaybackTime"
+                                text: screen.state.playback.time_label || ""
+                                textFormat: Text.PlainText
+                                font.pixelSize: screen.compact ? 16 : 18
+                                font.features: ({ "tnum": 1 })
+                                color: BrandTheme.colors.muted
+                                horizontalAlignment: Text.AlignRight
+                                Layout.preferredWidth: Math.max(implicitWidth, playbackTimeWidth.advanceWidth)
+
+                                TextMetrics {
+                                    id: playbackTimeWidth
+                                    font: playbackTime.font
+                                    text: {
+                                        const duration = playbackTime.text.split(" / ")[1]
+                                        return duration ? duration + " / " + duration : playbackTime.text
+                                    }
+                                }
+                            }
                         }
                     }
                     RowLayout {

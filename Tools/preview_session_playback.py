@@ -386,6 +386,24 @@ def main():
                     assert progress_origin.x() > artwork_right
                     assert progress_origin.y() < artwork_button.mapToItem(metadata, 0, artwork_button.height()).y()
                 capture('progress-layout')
+                original_session = owner._session
+                owner._session = deepcopy(original_session)
+                progress_playback = owner._session['broadcast']['playback']
+                progress_playback.update(duration_ms=720000, position_ms=599000)
+                owner.changed.emit()
+                QTest.qWait(60)
+                playback_time = window.findChild(QObject, 'sessionPlaybackTime')
+                playback_bar = window.findChild(QObject, 'sessionPlaybackBar')
+                assert playback_time.property('text') == '9:59 / 12:00'
+                bar_width = playback_bar.width()
+                progress_playback['position_ms'] = 600000
+                owner.changed.emit()
+                QTest.qWait(60)
+                assert playback_time.property('text') == '10:00 / 12:00'
+                assert abs(playback_bar.width() - bar_width) <= 1
+                owner._session = original_session
+                owner.changed.emit()
+                QTest.qWait(60)
                 output_panel = window.findChild(QObject, 'sessionOutputPanel')
                 def assert_popup_anchor(trigger, panel):
                     top = trigger.mapToItem(screen, 0, 0)
