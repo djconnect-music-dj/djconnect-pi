@@ -1498,6 +1498,14 @@ for _key, _values in _LOG_SEARCH_TRANSLATIONS.items():
 
 _KEYBOARD_TRANSLATIONS = {
     "ask_dj_search_history": ("Search Ask DJ history", "Zoek in Ask DJ", "Ask-DJ-Verlauf durchsuchen", "Rechercher dans Ask DJ", "Buscar en Ask DJ"),
+    "ask_dj_offline_title": ("Ask DJ is offline", "Ask DJ is offline", "Ask DJ ist offline", "Ask DJ est hors ligne", "Ask DJ está sin conexión"),
+    "ask_dj_offline_history": (
+        "Messages shown here may be out of date.",
+        "De getoonde berichten kunnen verouderd zijn.",
+        "Die angezeigten Nachrichten sind möglicherweise nicht aktuell.",
+        "Les messages affichés peuvent ne plus être à jour.",
+        "Los mensajes mostrados pueden estar desactualizados.",
+    ),
     "media_search_queue": ("Search queue", "Zoek in wachtrij", "Warteschlange durchsuchen", "Rechercher dans la file", "Buscar en la cola"),
     "media_search_playlists": ("Search playlists", "Zoek in afspeellijsten", "Playlists durchsuchen", "Rechercher dans les playlists", "Buscar en las listas"),
     "media_no_matches": ("No search results", "Geen zoekresultaten", "Keine Suchergebnisse", "Aucun résultat", "Sin resultados"),

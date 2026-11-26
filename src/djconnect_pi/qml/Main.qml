@@ -4384,6 +4384,8 @@ BrandWindow {
         objectName: "askDjPanel"
         color: "transparent"
         property bool chatKeyboardOpen: false
+        readonly property bool historyOffline: !djconnect.demoMode
+            && (!djconnect.paired || !djconnect.backendAvailable || djconnect.versionMismatchVisible)
 
         function clearChatDraft() {
             chatKeyboardOpen = false
@@ -5345,6 +5347,48 @@ BrandWindow {
                                 }
 
                             }
+                        }
+                    }
+                }
+            }
+
+            GlassSurface {
+                objectName: "askDjOfflineNotice"
+                visible: askDjPanel.historyOffline
+                Layout.fillWidth: true
+                implicitHeight: offlineNoticeContent.implicitHeight + 20
+                radius: 22
+
+                RowLayout {
+                    id: offlineNoticeContent
+                    anchors.fill: parent
+                    anchors.margins: 10
+                    spacing: 10
+
+                    FeatureIcon {
+                        iconName: "info"
+                        Layout.preferredWidth: 24
+                        Layout.preferredHeight: 24
+                    }
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 2
+                        Text {
+                            text: root.tr("ask_dj_offline_title")
+                            color: BrandTheme.colors.text
+                            font.pixelSize: 17
+                            font.bold: true
+                            wrapMode: Text.WordWrap
+                            Layout.fillWidth: true
+                        }
+                        Text {
+                            objectName: "askDjOfflineHistory"
+                            visible: djconnect.askDjMessages.length > 0
+                            text: root.tr("ask_dj_offline_history")
+                            color: BrandTheme.colors.muted
+                            font.pixelSize: 15
+                            wrapMode: Text.WordWrap
+                            Layout.fillWidth: true
                         }
                     }
                 }

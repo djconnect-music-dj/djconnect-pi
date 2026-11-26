@@ -741,6 +741,23 @@ def main():
         assert QAccessible.queryAccessibleInterface(ask_close).text(QAccessible.Text.Name) == backend.t("close_search")
         QMetaObject.invokeMethod(ask_close, "clicked")
         assert ask_toggle.property("activeFocus") and not ask_dj.property("searchOpen")
+        offline_notice = visual_item(ask_dj, "askDjOfflineNotice")
+        assert not offline_notice.property("visible")
+        backend.cfg.paired, backend.cfg.device_token = True, "synthetic-not-a-credential"
+        backend.pairedChanged.emit()
+        backend._demo_mode = False
+        backend.demoModeChanged.emit()
+        backend._set_backend_available(False)
+        offline_history = visual_item(ask_dj, "askDjOfflineHistory")
+        assert offline_notice.property("visible") and offline_history.property("visible")
+        assert offline_history.property("text") == backend.t("ask_dj_offline_history")
+        assert visual_item(ask_dj, "askDjMessagesView").property("count") == 4
+        backend._set_backend_available(True)
+        assert not offline_notice.property("visible")
+        backend._demo_mode = True
+        backend.demoModeChanged.emit()
+        backend.cfg.paired, backend.cfg.device_token = False, ""
+        backend.pairedChanged.emit()
         backend.setLanguage("nl")
         window.setProperty("activeScreen", "session")
         for runtime_state in ("opening", "ending"):
