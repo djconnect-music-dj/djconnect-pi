@@ -2867,6 +2867,36 @@ def test_backend_check_for_updates_triggers_updater_service(tmp_path: Path) -> N
     assert backend.statusText == backend.t("update_check_started")
 
 
+def test_about_music_availability_requires_current_paired_status(tmp_path):
+    ensure_app()
+    config_path = tmp_path / "config.json"
+    save_config(config_path, Config(paired=True, device_token="fixture", ha_url="http://fixture.invalid",
+                                   music_backend="spotify_direct", music_backend_available=True))
+    backend = DJConnectBackend(config_path)
+    backend.client.status = Mock(return_value={"success": True})
+    backend.client.playback_from_status = Mock(return_value=Playback(
+        output_device="Speaker", output_devices=("Speaker",)))
+    backend.client.command = Mock(side_effect=[
+        {"success": True, "music_backend_available": False},
+        {"success": True, "music_backend_available": True},
+        {"success": True, "music_backend_available": "false"},
+    ])
+
+    assert backend.aboutMusicAvailability == "unconfirmed"
+    backend._refresh_worker()
+    assert backend.aboutMusicAvailability == "unavailable"
+    backend._refresh_worker()
+    assert backend.aboutMusicAvailability == "available"
+    scope = backend._about_music_scope()
+    started = backend._about_music_request_time
+    backend._set_backend_available(False)
+    backend._set_backend_available(True)
+    backend._apply_about_music_availability(scope, True, started)
+    assert backend.aboutMusicAvailability == "unconfirmed"
+    backend._refresh_worker()
+    assert backend.aboutMusicAvailability == "unconfirmed"
+
+
 def test_backend_version_mismatch_blocks_ui_and_triggers_update(tmp_path: Path) -> None:
     ensure_app()
     backend = DJConnectBackend(tmp_path / "config.json")

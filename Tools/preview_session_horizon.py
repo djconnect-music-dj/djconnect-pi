@@ -27,7 +27,7 @@ from shiboken6 import delete
 from djconnect_pi.app import DJConnectBackend
 from djconnect_pi.brand_theme import apply_palette
 from djconnect_pi.config import Config, save_config
-from djconnect_pi.expiry_clock import ExpiryClock
+from djconnect_pi.expiry_clock import ExpiryClock, elapsed_time
 from djconnect_pi.i18n import TRANSLATIONS
 from djconnect_pi.session_history_view import presented_history
 from djconnect_pi.session_projection import history_page, timestamp
@@ -515,7 +515,10 @@ def main():
                         backend.cfg.music_backend_available = provider_ready
                         backend._set_backend_available(connection_ready)
                         backend.settingsChanged.emit()
-                        status_key = "music_backend_available_state" if identifier and provider_ready and connection_ready else "music_backend_unavailable_state"
+                        backend._apply_about_music_availability(
+                            backend._about_music_scope(), provider_ready if identifier else None, elapsed_time())
+                        state = ("available" if provider_ready else "unavailable") if identifier and connection_ready else "unconfirmed"
+                        status_key = f"music_backend_{state}_state"
                         assert backend_status.property("text") == TRANSLATIONS[language][status_key]
                     backend.cfg.music_backend, backend.cfg.music_backend_available, was_available = original_backend
                     backend._set_backend_available(was_available)

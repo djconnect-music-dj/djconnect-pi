@@ -162,6 +162,7 @@ class _TrackInsightResult(dict):
 class DJConnectBackend(QObject):
     statusTextChanged = Signal()
     backendAvailableChanged = Signal()
+    aboutMusicAvailabilityChanged = Signal()
     titleChanged = Signal()
     artistChanged = Signal()
     albumChanged = Signal()
@@ -231,6 +232,7 @@ class DJConnectBackend(QObject):
     _outputChoiceFinished = Signal(object, bool)
     _controlOutputsFinished = Signal(object, object, bool)
     _backendAvailableReady = Signal(bool)
+    _aboutMusicAvailabilityReady = Signal(object, object, float)
     _toastReady = Signal(str, int, str)
     _askDjReady = Signal(object)
     _askDjRefreshReady = Signal(object)
@@ -348,6 +350,8 @@ class DJConnectBackend(QObject):
         self._game_sound_objects: list[tuple[object, QBuffer]] = []
         self._status_text = self.tr_key("paired" if self.cfg.paired else "not_paired")
         self._backend_available = True
+        self._about_music_availability = None
+        self._about_music_request_time = 0.0
         self._busy = False
         self._executor = ThreadPoolExecutor(max_workers=UI_WORKER_COUNT, thread_name_prefix="djconnect")
         # Bounded independent lanes: slow text generation cannot occupy Session control.
@@ -387,6 +391,10 @@ class DJConnectBackend(QObject):
         self._outputChoiceFinished.connect(self._finish_output_choice)
         self._controlOutputsFinished.connect(self._finish_control_outputs)
         self._backendAvailableReady.connect(self._set_backend_available)
+        self._aboutMusicAvailabilityReady.connect(self._apply_about_music_availability)
+        for signal in (self.profileChanged, self.pairedChanged, self.demoModeChanged,
+                       self.versionMismatchChanged, self.backendAvailableChanged, self.settingsChanged):
+            signal.connect(self._reconcile_about_music_availability)
         self._toastReady.connect(self._show_toast)
         self._askDjReady.connect(self._apply_ask_dj_data)
         self._askDjRefreshReady.connect(self._apply_ask_dj_refresh_result)
@@ -929,6 +937,31 @@ class DJConnectBackend(QObject):
     @Property(bool, notify=settingsChanged)
     def musicBackendAvailable(self) -> bool:
         return self.cfg.music_backend_available
+
+    def _about_music_scope(self):
+        return (self._private_read_context(), self.cfg.music_backend, self.cfg.music_backend_revision)
+
+    @Property(str, notify=aboutMusicAvailabilityChanged)
+    def aboutMusicAvailability(self) -> str:
+        observation = self._about_music_availability
+        if (self._demo_mode or not self.paired or not self._backend_available or self._version_mismatch_visible
+                or observation is None or observation[0] != self._about_music_scope()):
+            return "unconfirmed"
+        return "available" if observation[1] else "unavailable"
+
+    def _reconcile_about_music_availability(self):
+        if self._about_music_availability is not None and self.aboutMusicAvailability == "unconfirmed":
+            self._about_music_availability = None
+        self.aboutMusicAvailabilityChanged.emit()
+
+    @Slot(object, object, float)
+    def _apply_about_music_availability(self, scope, available, started):
+        if (self._shutting_down or scope != self._about_music_scope() or started < self._about_music_request_time
+                or self._demo_mode or not self.paired or not self._backend_available or self._version_mismatch_visible):
+            return
+        self._about_music_request_time = started
+        self._about_music_availability = (scope, available) if type(available) is bool else None
+        self.aboutMusicAvailabilityChanged.emit()
 
     @Property(str, notify=settingsChanged)
     def musicTargetPlayerName(self) -> str:
@@ -2890,10 +2923,14 @@ class DJConnectBackend(QObject):
         if ticket is not None and ticket != self._private_read_context():
             return
         started = time.monotonic()
+        about_started = elapsed_time()
+        about_binding = self._private_read_context() if self.paired else None
         _LOGGER.debug("Refreshing playback status")
         data = self.client.command("status") if self.paired else self.client.status()
         if ticket is not None and ticket != self._private_read_context():
             return
+        about_scope = self._about_music_scope()
+        music_available = data.get("music_backend_available") if data.get("success") is not False else None
         self._persist_backend_summary()
         playback = self.client.playback_from_status(data)
         if self._pending_output_device and time.monotonic() < self._pending_output_until:
@@ -2928,6 +2965,8 @@ class DJConnectBackend(QObject):
         if ticket is not None and ticket != self._private_read_context():
             return
         self._playbackReady.emit(playback)
+        if about_binding is not None and about_binding == about_scope[0]:
+            self._aboutMusicAvailabilityReady.emit(about_scope, music_available, about_started)
         _LOGGER.info("Refresh completed in %.0fms", _elapsed_ms(started))
         if expected_output:
             return (data.get("success") is not False and data.get("backend_available") is not False
@@ -4264,6 +4303,8 @@ class DJConnectBackend(QObject):
     def _set_backend_available(self, value: bool) -> None:
         if self._backend_available == value:
             return
+        if not value:
+            self._about_music_request_time = elapsed_time()
         self._backend_available = value
         self.backendAvailableChanged.emit()
 

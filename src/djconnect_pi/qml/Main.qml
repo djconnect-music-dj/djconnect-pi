@@ -7490,11 +7490,11 @@ BrandWindow {
                     Text { text: root.tr("music_backend"); color: BrandTheme.colors.muted; font.pixelSize: 20; font.bold: true; horizontalAlignment: Text.AlignRight; Layout.preferredWidth: 190 }
                     Text {
                         objectName: "aboutMusicBackendStatus"
-                        readonly property bool available: djconnect.paired && djconnect.backendAvailable
-                            && djconnect.musicBackendId.length > 0 && djconnect.musicBackendAvailable
-                        text: root.tr(available ? "music_backend_available_state" : "music_backend_unavailable_state")
-                        color: available ? BrandTheme.colors.success : BrandTheme.colors.danger
-                        font.pixelSize: 20; font.bold: true; Layout.fillWidth: true
+                        readonly property string availability: djconnect.aboutMusicAvailability
+                        text: root.tr("music_backend_" + availability + "_state")
+                        color: availability === "available" ? BrandTheme.colors.success
+                            : availability === "unavailable" ? BrandTheme.colors.danger : BrandTheme.colors.muted
+                        font.pixelSize: 20; font.bold: true; Layout.fillWidth: true; wrapMode: Text.Wrap
                     }
                     Text { text: root.tr("backend_name"); color: BrandTheme.colors.muted; font.pixelSize: 20; font.bold: true; horizontalAlignment: Text.AlignRight; Layout.preferredWidth: 190 }
                     Text { text: djconnect.musicBackendName.length ? djconnect.musicBackendName : "-"; color: BrandTheme.colors.text; font.pixelSize: 18; Layout.fillWidth: true; elide: Text.ElideMiddle }
