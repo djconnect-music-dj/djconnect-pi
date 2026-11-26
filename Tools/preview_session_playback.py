@@ -17,11 +17,14 @@ from PySide6.QtCore import (
     QPointF,
     Qt,
     QTimer,
+    QUrl,
+    Slot,
     qInstallMessageHandler,
 )
 from PySide6.QtGui import (
     QAccessible,
     QAccessibleActionInterface,
+    QDesktopServices,
     QGuiApplication,
     QImage,
 )
@@ -44,6 +47,16 @@ from djconnect_pi.session_transport import (
 )
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+class RecordedUrls(QObject):
+    def __init__(self):
+        super().__init__()
+        self.urls = []
+
+    @Slot(QUrl)
+    def record(self, url):
+        self.urls.append(url.toString())
 
 
 def main():
@@ -292,8 +305,21 @@ def main():
                     end = button.mapToItem(card, QPointF(button.width(), button.height()))
                     assert start.x() >= 0 and start.y() >= 0 and end.x() <= card.width() and end.y() <= card.height()
                 source_link = visual(overlay, 'expandedTrackSource').property('spotifyFocusTarget')
-                if source_link.property('visible'):
-                    focus_order.append(source_link)
+                assert source_link.property('visible')
+                focus_order.append(source_link)
+                accessible_source = QAccessible.queryAccessibleInterface(source_link)
+                assert accessible_source.role() == QAccessible.Role.Link
+                assert accessible_source.text(QAccessible.Text.Name) == 'Spotify'
+                recorded = RecordedUrls()
+                QDesktopServices.setUrlHandler('https', recorded, 'record')
+                try:
+                    source_link.forceActiveFocus()
+                    QTest.keyClick(window, Qt.Key.Key_Space)
+                    QTest.keyClick(window, Qt.Key.Key_Return)
+                    accessible_source.actionInterface().doAction(QAccessibleActionInterface.pressAction())
+                    assert recorded.urls == [owner.state['playback']['source_url']] * 3
+                finally:
+                    QDesktopServices.unsetUrlHandler('https')
                 close_artwork.forceActiveFocus()
                 for control in focus_order[1:] + focus_order[:1]:
                     QTest.keyClick(window, Qt.Key.Key_Tab)

@@ -18,10 +18,25 @@ ColumnLayout {
         visible: attribution.requiresSpotify && attribution.spotifyURL.length > 0
         Layout.preferredWidth: 90; Layout.preferredHeight: 44
         fillMode: Image.PreserveAspectFit
+        Accessible.role: Accessible.Link
         Accessible.name: "Spotify"
+        Accessible.onPressAction: activate()
         activeFocusOnTab: visible && attribution.ready
-        Keys.onReturnPressed: Qt.openUrlExternally(attribution.spotifyURL)
-        TapHandler { enabled: attribution.ready; onTapped: Qt.openUrlExternally(attribution.spotifyURL) }
+        Keys.onReturnPressed: function(event) { if (!event.isAutoRepeat) activate() }
+        Keys.onSpacePressed: function(event) { if (!event.isAutoRepeat) activate() }
+        TapHandler { enabled: attribution.ready; onTapped: spotifyLogo.activate() }
+        Rectangle {
+            anchors.fill: parent
+            visible: spotifyLogo.activeFocus
+            color: "transparent"
+            radius: 6
+            border.width: 2
+            border.color: BrandTheme.colors.focus
+        }
+
+        function activate() {
+            if (visible && attribution.ready) Qt.openUrlExternally(attribution.spotifyURL)
+        }
     }
     Repeater {
         model: attribution.bulletinSources
