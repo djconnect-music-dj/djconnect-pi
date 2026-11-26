@@ -1138,12 +1138,10 @@ class SessionController(QObject):
 
     @Slot()
     @Slot(bool)
-    def refresh(self, manual=False):
+    def refresh(self, manual=False, *, playback_confirmation=False):
         background = self._loaded or bool(self._error)
-        if manual:
-            self._launch("refresh", background=background, manual_refresh=True)
-        else:
-            self._launch("refresh", background=background)
+        self._launch("refresh", background=background, manual_refresh=manual,
+                     playback_confirmation=playback_confirmation)
 
     @Slot()
     def poll(self):
@@ -1591,7 +1589,7 @@ class SessionController(QObject):
         self._view_epoch += 1
         self._launch("open_entry", {"session_id": session_id, "entry_id": entry_id})
 
-    def _launch(self, action, value="", *, background=False, manual_refresh=False):
+    def _launch(self, action, value="", *, background=False, manual_refresh=False, playback_confirmation=False):
         if not self._foreground or (action == "refresh" and not self._view_active):
             return
         if (self._artwork_prepare.running or self._playback_control.running or self._archive_delete.running or self._content_delete.running) and action != "end":
@@ -1688,6 +1686,8 @@ class SessionController(QObject):
             result = {"serial": serial, "binding": binding, "action": action, "view_epoch": view_epoch, "question_epoch": question_epoch, "raw_binding": raw_binding}
             if action == "refresh" and manual_refresh:
                 result["manual_runtime_refresh"] = True
+            if playback_confirmation:
+                result["playback_confirmation"] = True
             if manual_refresh and (action == "timeline_refresh" or (action == "timeline_extend" and value.get("revalidation"))):
                 result["manual_saved_refresh"] = True
             if action in {"history", "history_refresh"} and value.get("manual_refresh"):
@@ -2163,6 +2163,8 @@ class SessionController(QObject):
                         self.flowIdleHeaderAboutToChange.emit()
                 self._loaded = True
                 self._session = self._without_withdrawn_moments(incoming_session)
+                if result.get("playback_confirmation") and result["view_epoch"] == self._view_epoch:
+                    self._playback_control.hide(reset=True)
                 self._moments = live_presentations(self._session, now=self._clock.now())
                 self._caps = result.get("capabilities", self._caps)
                 self._forecast.receive(self._session, self._caps, self._clock.now())

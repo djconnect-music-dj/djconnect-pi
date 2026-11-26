@@ -409,6 +409,15 @@ def main():
                 assert refresh_status.property('visible') and not refresh_status.property('enabled')
                 assert spinner.property('visible') and spinner.property('running')
                 assert refresh_accessible.text(QAccessible.Text.Name) == backend.t('session_refreshing_playback_status')
+                owner.transport.active.side_effect = SessionError('unavailable')
+                drain()
+                capture('fullscreen-track-art-refresh-failed')
+                assert owner.state['playback_control']['status'] == 'uncertain'
+                assert refresh_status.property('visible') and refresh_status.property('enabled')
+                assert not spinner.property('running') and not visual(overlay, 'sessionPlaybackPrevious').property('enabled')
+                owner.transport.active.side_effect = None
+                click('trackArtworkPlaybackRefresh')
+                assert owner.refreshing and len(reads) == 1
                 drain()
                 assert not refresh_status.property('visible') and not spinner.property('running') and not intents
                 owner.transport.active.return_value = previous_active_result

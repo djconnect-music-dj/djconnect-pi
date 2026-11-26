@@ -183,6 +183,7 @@ def test_uncertain_command_never_replays_and_blocks_until_explicit_refresh(contr
     assert not owner.playbackCommand("synthetic-session", ITEM_ID, "next")
     owner.refreshPlayback()
     assert owner._running_action == "refresh" and len(backend.jobs) == 1
+    assert owner.state["playback_control"]["status"] == "uncertain"
     owner.transport.playback_command.assert_called_once()
 
 

@@ -530,20 +530,11 @@ class PlaybackControl(QObject):
             self.owner.refresh()
 
     def refresh(self):
-        if self.running or self.owner.busy:
+        if self.running or self.owner.busy or self.owner.refreshing:
             return
-        self.owner.refresh()
-        if self.owner._running_action == "refresh":
-            self.blocked = False
-            self.status = ""
-            self.request = None
-            self.volume = None
-            self.volume_status = ""
-            self._clear_volume_display()
-            self.favorite_state = None
-            self.favorite_status = ""
-            self.outputs = None
-            self.outputs_status = ""
+        self.owner.refresh(playback_confirmation=True)
+        if self.owner.refreshing:
+            self.hide()
             self.owner.changed.emit()
 
     def shutdown(self):
