@@ -3778,6 +3778,7 @@ BrandWindow {
             closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
             background: GlassSurface { popover: true; elevated: true }
             onItemChanged: if (!item) close()
+            onOpened: closeRecommendationButton.forceActiveFocus(Qt.PopupFocusReason)
             onClosed: selected = null
 
             function showRecommendation(recommendation) {
@@ -3845,6 +3846,7 @@ BrandWindow {
                             }
                         }
                         GlassButton {
+                            id: closeRecommendationButton
                             objectName: "closeDiscoveryDetail"
                             iconName: "close"
                             Accessible.name: root.tr("close")

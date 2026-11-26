@@ -701,16 +701,26 @@ def main():
                 {"id": "fixture-track", "kind": "track", "title": "Closeable recommendation"},
             ]},
         ]})
+        QTest.qWait(65)
         for locale in ("en", "nl", "de", "fr", "es"):
             backend.setLanguage(locale)
-            detail.setProperty("selected", {"sectionId": "fixture-shelf", "discoveryItemId": "fixture-track"})
-            QMetaObject.invokeMethod(detail, "open")
+            shelf = visual_item(window.contentItem(), "discoveryShelf-fixture-shelf")
+            recommendation = visual_item(shelf, "discoveryRecommendation")
+            recommendation.forceActiveFocus()
+            QTest.keyClick(window, Qt.Key.Key_Space)
             capture("discovery-detail-close-" + locale)
+            assert detail.property("opened")
             close_detail = visual_item(window.contentItem(), "closeDiscoveryDetail")
             assert close_detail.property("visible") and close_detail.property("iconName") == "close"
             assert QAccessible.queryAccessibleInterface(close_detail).text(QAccessible.Text.Name) == backend.t("close")
-            QMetaObject.invokeMethod(close_detail, "clicked")
+            assert close_detail.property("activeFocus")
+            QTest.keyClick(window, Qt.Key.Key_Space)
             assert not detail.property("opened") and window.property("activeScreen") == "discover"
+            assert recommendation.property("activeFocus")
+            QTest.keyClick(window, Qt.Key.Key_Space)
+            assert detail.property("opened")
+            QTest.keyClick(window, Qt.Key.Key_Escape)
+            assert not detail.property("opened") and recommendation.property("activeFocus")
         backend.setLanguage("nl")
         backend._demo_mode = True
         backend.demoModeChanged.emit()
