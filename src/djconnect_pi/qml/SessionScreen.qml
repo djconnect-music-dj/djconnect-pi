@@ -3592,10 +3592,14 @@ Item {
         function moveMatch(delta) {
             const count = matches.length
             if (!matchingQuery || !count) return false
+            if (delta > 0 && moreMatchesAvailable && selectedMatchIndex === count - 1) {
+                loadMoreMatches()
+                return true
+            }
             const index = selectedMatchIndex < 0 ? (delta < 0 ? count - 1 : 0)
                 : (selectedMatchIndex + delta + count) % count
             if (!revealMatch(index)) return false
-            if (delta > 0 && index === count - 1) loadMoreMatches()
+            if (delta > 0 && index >= count - 3) loadMoreMatches()
             return true
         }
         function loadMoreMatches() {
@@ -3603,8 +3607,9 @@ Item {
             screen.rememberSearch()
             screen.owner.moreSearch()
         }
-        readonly property bool canLoadMoreMatches: !screen.archiveSearchAvailable && matchingQuery
-            && !!result.next_cursor && !screen.state.search_limit_reached && !searchInProgress && !screen.owner.busy && !searchError
+        readonly property bool moreMatchesAvailable: !screen.archiveSearchAvailable && matchingQuery
+            && !!result.next_cursor && !screen.state.search_limit_reached && !searchError
+        readonly property bool canLoadMoreMatches: moreMatchesAvailable && !searchInProgress && !screen.owner.busy
         function restoreArchiveMatch() {
             if (!pendingArchiveMatch || !opened || !screen.archiveSearchAvailable || !hasSearchResults) return
             const index = findMatchIndex(pendingArchiveMatch.sessionId, pendingArchiveMatch.index)
