@@ -3845,7 +3845,8 @@ BrandWindow {
                             }
                         }
                         GlassButton {
-                            iconName: "end"
+                            objectName: "closeDiscoveryDetail"
+                            iconName: "close"
                             Accessible.name: root.tr("close")
                             Layout.alignment: Qt.AlignTop
                             onClicked: discoveryDetail.close()
