@@ -5146,6 +5146,7 @@ BrandWindow {
             if (!canRefreshHistory) return
             chatKeyboardOpen = false
             if (searchKeyboardOpen) dismissSearchKeyboard()
+            if (helpOpen) djconnect.openAskDjHelp()
             djconnect.refreshAskDjHistory()
         }
 
