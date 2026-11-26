@@ -1694,6 +1694,13 @@ _SESSION_COMPOSER_TRANSLATIONS = {
     "ha_transport_http": ("HTTP", "HTTP", "HTTP", "HTTP", "HTTP"),
     "ha_transport_https": ("HTTPS · TLS", "HTTPS · TLS", "HTTPS · TLS", "HTTPS · TLS", "HTTPS · TLS"),
     "privacy_full_statement": ("Full privacy statement", "Volledige privacyverklaring", "Vollständige Datenschutzerklärung", "Déclaration de confidentialité complète", "Declaración de privacidad completa"),
+    "privacy_choices_body": (
+        "Music DNA is optional. You can clear Music DNA and Ask DJ history separately in Home Assistant.",
+        "Music DNA is optioneel. Je kunt Music DNA en je Ask DJ-geschiedenis afzonderlijk wissen in Home Assistant.",
+        "Music DNA ist optional. Du kannst Music DNA und deinen Ask-DJ-Verlauf in Home Assistant getrennt löschen.",
+        "Music DNA est facultatif. Vous pouvez effacer séparément Music DNA et votre historique Ask DJ dans Home Assistant.",
+        "Music DNA es opcional. Puedes borrar Music DNA y tu historial de Ask DJ por separado en Home Assistant.",
+    ),
     "privacy_open_failed": ("Could not open the privacy statement.", "De privacyverklaring kon niet worden geopend.", "Die Datenschutzerklärung konnte nicht geöffnet werden.", "Impossible d’ouvrir la déclaration de confidentialité.", "No se pudo abrir la declaración de privacidad."),
     "session_connection_offline": ("DJ Session is offline", "DJ-sessie is offline", "DJ-Session ist offline", "Session DJ hors ligne", "Sesión DJ sin conexión"),
     "session_connection_retrying": ("Reconnecting to the DJ Session", "Opnieuw verbinden met de DJ-sessie", "Verbindung zur DJ-Session wird wiederhergestellt", "Reconnexion à la session DJ", "Reconectando con la sesión DJ"),
