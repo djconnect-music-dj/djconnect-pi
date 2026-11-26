@@ -60,8 +60,7 @@ Rectangle {
     }
     onRouteOpenChanged: {
         if (routeOpen || !gameCanvas) return
-        pauseRound()
-        resetGame()
+        resetRound()
     }
     onGameplayActiveChanged: {
         if (gameplayActive || !playing) return
@@ -73,6 +72,10 @@ Rectangle {
         flashTimer.stop()
         flash = false
         djconnect.stopGameSounds()
+    }
+    function resetRound() {
+        pauseRound()
+        resetGame()
     }
     Keys.onUpPressed: root.useDirection("up")
     Keys.onDownPressed: root.useDirection("down")
@@ -251,8 +254,7 @@ Rectangle {
 
     function selectGame(index) {
         gameIndex = index
-        playing = false
-        resetGame()
+        resetRound()
     }
 
     function move(direction) {
@@ -532,7 +534,7 @@ Rectangle {
                         implicitWidth: root.compact ? 48 : 64
                         implicitHeight: root.compact ? 46 : 58
                         padding: 9; background: Item {}
-                        onClicked: { root.playing = false; root.resetGame() }
+                        onClicked: root.resetRound()
                     }
                 }
             }
