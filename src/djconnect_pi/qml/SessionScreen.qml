@@ -1733,6 +1733,24 @@ Item {
                                 }
                             }
                         }
+                        Rectangle {
+                            objectName: "sessionArtworkResumeFeedback"
+                            anchors.centerIn: parent
+                            width: screen.compact ? 64 : 96
+                            height: width
+                            radius: width / 2
+                            color: "#73000000"
+                            visible: screen.liveViewOpen && screen.state.playback_control.status === "sending"
+                                && screen.state.playback_control.pending_command === "play"
+
+                            FeatureIcon {
+                                anchors.centerIn: parent
+                                width: parent.width * 0.56
+                                height: width
+                                iconName: "play"
+                                iconColor: "white"
+                            }
+                        }
                         SessionPlaybackShortcut {
                             objectName: "sessionArtworkResume"
                             anchors.right: parent.right
