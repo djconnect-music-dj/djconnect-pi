@@ -1018,7 +1018,11 @@ BrandWindow {
             if (!term) return source
             return source.filter(function(item) {
                 var values = [item.title, item.subtitle, item.artist, item.album, item.uri]
-                if (panel.trackQueue) values.push(panel.queueSubtitle(item))
+                if (panel.trackQueue) {
+                    var artist = (item.artist || item.subtitle || "").trim()
+                    if (item.title && artist) values.push(item.title + " - " + artist)
+                    values.push(panel.queueSubtitle(item))
+                }
                 return values.some(function(value) {
                     return searchText(value || "").indexOf(term) >= 0
                 })
