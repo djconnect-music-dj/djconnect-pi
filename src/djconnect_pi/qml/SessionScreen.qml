@@ -43,6 +43,10 @@ Item {
     property var state: owner.screenState
     readonly property var archiveSessions: visible && historical && !currentHistory && !state.timeline.session
         ? owner.archiveRows : []
+    readonly property bool archiveEmpty: historical && !currentHistory && !owner.busy && !state.error
+        && state.history_loaded && archiveSessions.length === 0 && !state.timeline.session
+    readonly property bool archiveHasOtherWindows: state.archive_older_window
+        || state.has_more_sessions || state.has_older_sessions
     readonly property bool sessionVoiceAvailable: backend.sessionVoiceAvailable
     onSessionVoiceAvailableChanged: if (!sessionVoiceAvailable && choices && choices.field === "voice") choices.close()
     readonly property var projectedFlow: visible && !historical ? owner.flowRows : []
@@ -1894,9 +1898,12 @@ Item {
             }
             Text {
                 objectName: "sessionArchiveEmpty"
-                visible: screen.historical && !screen.currentHistory && !screen.owner.busy && !screen.state.error
-                    && screen.state.history_loaded && screen.archiveSessions.length === 0 && !screen.state.timeline.session
-                text: screen.tr(screen.state.archive_older_window || screen.state.has_more_sessions || screen.state.has_older_sessions ? "session_archive_window_empty" : "session_history_empty"); color: BrandTheme.colors.muted; font.pixelSize: 22
+                visible: screen.archiveEmpty && screen.archiveHasOtherWindows
+                text: screen.tr("session_archive_window_empty")
+                textFormat: Text.PlainText
+                color: BrandTheme.colors.muted; font.pixelSize: 22
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
             }
             Text {
                 visible: screen.historical && !!screen.state.timeline.session
@@ -2024,6 +2031,32 @@ Item {
                 GlassButton { objectName: "sessionArchiveNewest"; text: screen.tr("session_archive_newest"); visible: screen.state.archive_older_window; enabled: !screen.owner.busy && !screen.archiveIntent; onClicked: screen.changeArchiveWindow("newest") }
             }
             BusyIndicator { visible: screen.owner.busy && !screen.owner.refreshing; running: visible; Layout.alignment: Qt.AlignHCenter }
+        }
+    }
+    ColumnLayout {
+        objectName: "sessionArchiveEmptyState"
+        anchors.centerIn: historyScroll
+        width: Math.max(0, Math.min(historyScroll.width - 48, 520))
+        visible: screen.archiveEmpty && !screen.archiveHasOtherWindows
+        spacing: 14
+        FeatureIcon {
+            objectName: "sessionArchiveEmptyIcon"
+            iconName: "history"
+            iconColor: BrandTheme.colors.muted
+            Accessible.ignored: true
+            Layout.alignment: Qt.AlignHCenter
+            Layout.preferredWidth: screen.compact ? 40 : 62
+            Layout.preferredHeight: Layout.preferredWidth
+        }
+        Text {
+            objectName: "sessionArchiveEmptyTitle"
+            text: screen.tr("session_history_empty")
+            textFormat: Text.PlainText
+            horizontalAlignment: Text.AlignHCenter
+            color: BrandTheme.colors.muted
+            font.pixelSize: screen.compact ? 20 : 24
+            wrapMode: Text.WordWrap
+            Layout.fillWidth: true
         }
     }
     GlassButton {

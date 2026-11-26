@@ -200,7 +200,7 @@ Canvas {
                 line(6, 10, 8, 12)
                 line(26, 10, 24, 12)
             } else if (iconName === "history") {
-                ctx.beginPath(); ctx.arc(px(16), py(16), 10, -Math.PI * 0.8, Math.PI * 0.8); ctx.stroke()
+                ctx.beginPath(); ctx.arc(px(16), py(16), 10 * s / 32, -Math.PI * 0.8, Math.PI * 0.8); ctx.stroke()
                 line(8, 5, 7, 12); line(7, 12, 13, 11)
                 line(16, 10, 16, 16); line(16, 16, 21, 19)
             } else if (iconName === "persona") {

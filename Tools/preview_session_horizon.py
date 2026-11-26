@@ -358,6 +358,32 @@ def main():
                     owner.invalidate()
                     QTest.qWait(65)
                     assert abs(forecast_flick.property("contentY") - forecast_flick.property("originY")) <= 1
+
+                window.setProperty("activeScreen", "history")
+                QTest.qWait(65)
+                archive_empty = one(screen, "sessionArchiveEmptyState")
+                archive_window_empty = one(screen, "sessionArchiveEmpty")
+                archive_title = one(screen, "sessionArchiveEmptyTitle")
+                assert not archive_empty.property("visible")
+                owner._set_running()
+                owner._history_loaded = True
+                owner.changed.emit()
+                archive_scroll = window.findChild(QObject, "sessionHistoryScroll")
+                for language in LANGUAGES:
+                    backend.setLanguage(language)
+                    QTest.qWait(65)
+                    assert archive_empty.property("visible") and not archive_window_empty.property("visible")
+                    assert archive_title.property("text") == TRANSLATIONS[language]["session_history_empty"]
+                    assert archive_title.property("contentWidth") <= archive_title.width() + 1
+                    assert one(screen, "sessionArchiveEmptyIcon").property("iconName") == "history"
+                    center = archive_empty.mapToItem(archive_scroll, archive_empty.width() / 2, archive_empty.height() / 2)
+                    assert abs(center.y() - archive_scroll.height() / 2) <= 1
+                owner._history_start = "fixture-older-window"
+                owner.changed.emit()
+                assert not archive_empty.property("visible") and archive_window_empty.property("visible")
+                owner._error = "unavailable"
+                owner.changed.emit()
+                assert not archive_empty.property("visible") and not archive_window_empty.property("visible")
                 backend.shutdown()
                 delete(window)
                 delete(engine)
