@@ -1679,27 +1679,38 @@ class DJConnectBackend(QObject):
         self._music_dna_request("profile", show_toast=True)
 
     @Slot(bool)
-    def setMusicDnaEnabled(self, enabled: bool) -> None:
-        self._music_dna_request("settings", enabled=bool(enabled))
+    @Slot(bool, int)
+    def setMusicDnaEnabled(self, enabled: bool, revision: int | None = None) -> None:
+        self._music_dna_request("settings", revision=revision, enabled=bool(enabled))
 
     @Slot()
-    def clearMusicDna(self) -> None:
-        self._music_dna_request("clear")
+    @Slot(int)
+    def clearMusicDna(self, revision: int | None = None) -> None:
+        self._music_dna_request("clear", revision=revision)
 
-    def _music_dna_request(self, action: str, show_toast: bool = False, **payload: object) -> None:
+    def _music_dna_request(
+        self, action: str, show_toast: bool = False, revision: int | None = None, **payload: object,
+    ) -> None:
+        if revision is not None and revision != self._music_dna_context_revision:
+            return
         if self._demo_mode:
             if action == "settings":
                 self._set_demo_music_dna(bool(payload["enabled"]))
             elif action == "clear":
                 self._set_demo_music_dna(False)
             return
+        confirmation_context = self._private_read_context() if revision is not None else None
         self._sync_config_from_disk()
         if self._demo_mode or not self.paired or self._music_dna_busy:
+            return
+        ticket = self._private_read_context()
+        if revision is not None and (
+            revision != self._music_dna_context_revision or confirmation_context != ticket
+        ):
             return
         self._set_music_dna_busy(True)
         if show_toast:
             self.showToastForContext(self.tr_key("refreshing"), "musicdna")
-        ticket = self._private_read_context()
         if action == "settings":
             def worker() -> None:
                 self._music_dna_settings_worker(ticket=ticket, **payload)

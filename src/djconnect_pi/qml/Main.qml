@@ -47,8 +47,13 @@ BrandWindow {
     }
     Connections {
         target: djconnect
-        function onProfileChanged() { root.trackArtworkOpen = false; root.syncVibeScape(); musicDnaOptIn.close(); root.closeDiscoveryDetail() }
-        function onPairedChanged() { root.trackArtworkOpen = false; root.syncVibeScape(); musicDnaOptIn.close(); root.closeDiscoveryDetail() }
+        function onProfileChanged() { root.trackArtworkOpen = false; root.syncVibeScape(); musicDnaOptIn.close(); root.closeMusicDnaConfirmation(); root.closeDiscoveryDetail() }
+        function onPairedChanged() { root.trackArtworkOpen = false; root.syncVibeScape(); musicDnaOptIn.close(); root.closeMusicDnaConfirmation(); root.closeDiscoveryDetail() }
+        function onDemoModeChanged() { root.closeMusicDnaConfirmation() }
+        function onMusicDnaChanged() {
+            if (root.musicDnaConfirmationRevision !== djconnect.musicDnaContextRevision)
+                root.closeMusicDnaConfirmation()
+        }
     }
     function openVibeScape(pickerTop) {
         if (!vibeScapeAllowed) return
@@ -177,6 +182,7 @@ BrandWindow {
     property bool askDjClearConfirmOpen: false
     property bool musicDnaDisableConfirmOpen: false
     property bool musicDnaClearConfirmOpen: false
+    property int musicDnaConfirmationRevision: -1
     property bool forceScreenAwake: false
     property bool forceBrightnessFull: false
     property bool suppressNextNowPanelTap: false
@@ -254,6 +260,11 @@ BrandWindow {
         musicDnaOptIn.discoveryConsent = discoveryConsent
         musicDnaOptIn.profileId = djconnect.activeProfileId
         musicDnaOptIn.open()
+    }
+
+    function closeMusicDnaConfirmation() {
+        root.musicDnaDisableConfirmOpen = false
+        root.musicDnaClearConfirmOpen = false
     }
 
     function tr(key) {
@@ -358,8 +369,7 @@ BrandWindow {
         root.clearLogsConfirmOpen = false
         root.askDjClearConfirmOpen = false
         if (askDjLoader.item) askDjLoader.item.closeSearch()
-        root.musicDnaDisableConfirmOpen = false
-        root.musicDnaClearConfirmOpen = false
+        root.closeMusicDnaConfirmation()
         root.closeDiscoveryDetail()
         musicDnaOptIn.close()
     }
@@ -1392,8 +1402,7 @@ BrandWindow {
             root.rebootConfirmOpen = false
             root.shutdownConfirmOpen = false
             root.askDjClearConfirmOpen = false
-            root.musicDnaDisableConfirmOpen = false
-            root.musicDnaClearConfirmOpen = false
+            root.closeMusicDnaConfirmation()
             if (screen === "logs") {
                 djconnect.showLogs()
                 return
@@ -2375,6 +2384,7 @@ BrandWindow {
                     Layout.preferredHeight: 52
                     onClicked: {
                         if (djconnect.musicDnaEnabled) {
+                            root.musicDnaConfirmationRevision = djconnect.musicDnaContextRevision
                             root.musicDnaDisableConfirmOpen = true
                         } else {
                             root.openMusicDnaPrompt(false)
@@ -2404,7 +2414,10 @@ BrandWindow {
                     font.pixelSize: 22
                     Layout.preferredWidth: 150
                     Layout.preferredHeight: 52
-                    onClicked: root.musicDnaClearConfirmOpen = true
+                    onClicked: {
+                        root.musicDnaConfirmationRevision = djconnect.musicDnaContextRevision
+                        root.musicDnaClearConfirmOpen = true
+                    }
                 }
             }
 
@@ -6071,11 +6084,12 @@ BrandWindow {
 
                 DangerButton {
                     text: root.tr("music_dna_clear")
+                    enabled: djconnect.musicDnaEnabled && !djconnect.musicDnaBusy
                     Layout.fillWidth: true
                     Layout.preferredHeight: 56
                     onClicked: {
                         root.musicDnaClearConfirmOpen = false
-                        djconnect.clearMusicDna()
+                        djconnect.clearMusicDna(root.musicDnaConfirmationRevision)
                     }
                 }
 
@@ -6130,11 +6144,12 @@ BrandWindow {
 
                 DangerButton {
                     text: root.tr("music_dna_disable")
+                    enabled: djconnect.musicDnaEnabled && !djconnect.musicDnaBusy
                     Layout.fillWidth: true
                     Layout.preferredHeight: 56
                     onClicked: {
                         root.musicDnaDisableConfirmOpen = false
-                        djconnect.setMusicDnaEnabled(false)
+                        djconnect.setMusicDnaEnabled(false, root.musicDnaConfirmationRevision)
                     }
                 }
 

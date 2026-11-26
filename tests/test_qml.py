@@ -197,14 +197,14 @@ def test_qml_has_touch_readable_glass_controls_and_scrollable_settings() -> None
     assert 'root.tr("music_dna_disable_confirm_title")' in main_qml
     assert 'root.tr("music_dna_disable_confirm_message")' in main_qml
     assert "visible: root.musicDnaDisableConfirmOpen" in main_qml
-    assert "djconnect.setMusicDnaEnabled(false)" in main_qml
+    assert "djconnect.setMusicDnaEnabled(false, root.musicDnaConfirmationRevision)" in main_qml
     assert "root.musicDnaClearConfirmOpen = true" in settings_block
     assert "djconnect.clearMusicDna()" not in settings_block
     assert "id: musicDnaClearConfirmPanel" in main_qml
     assert 'root.tr("music_dna_clear_confirm_title")' in main_qml
     assert 'root.tr("music_dna_clear_confirm_message")' in main_qml
     assert "visible: root.musicDnaClearConfirmOpen" in main_qml
-    assert "djconnect.clearMusicDna()" in main_qml
+    assert "djconnect.clearMusicDna(root.musicDnaConfirmationRevision)" in main_qml
     assert 'root.tr("view_logs")' not in settings_block
     assert 'root.tr("about")' not in settings_block
     assert "djconnect.showLogs()" not in settings_block

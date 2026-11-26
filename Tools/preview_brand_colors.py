@@ -436,6 +436,17 @@ def main():
             backend._apply_music_dna_data({"success": True, "enabled": False})
             assert status.property("text") == backend.t("music_dna_settings_disabled_description")
             assert toggle.property("enabled") and not clear.property("enabled")
+            backend._apply_music_dna_data({"success": True, "enabled": True})
+            QMetaObject.invokeMethod(toggle, "clicked")
+            assert window.property("musicDnaDisableConfirmOpen")
+            backend._clear_profile_scoped_caches(preserve_session=True)
+            assert not window.property("musicDnaDisableConfirmOpen")
+            backend._apply_music_dna_data({"success": True, "enabled": True})
+            QMetaObject.invokeMethod(clear, "clicked")
+            assert window.property("musicDnaClearConfirmOpen")
+            backend.pairedChanged.emit()
+            assert not window.property("musicDnaClearConfirmOpen")
+            request.assert_called_once()
             backend._demo_mode = True
             backend.demoModeChanged.emit()
             backend.cfg.paired, backend.cfg.device_token = False, ""

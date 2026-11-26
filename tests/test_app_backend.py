@@ -3621,6 +3621,30 @@ def test_queued_music_dna_action_does_not_cross_profile_switch(tmp_path, action,
         send.assert_not_called()
 
 
+@pytest.mark.parametrize("action", ["disable", "clear"])
+@pytest.mark.parametrize("transition", ["none", "revision", "disk"])
+def test_music_dna_confirmation_is_bound_to_original_profile(tmp_path, action, transition):
+    ensure_app()
+    backend = DJConnectBackend(tmp_path / "config.json")
+    backend.cfg.paired = True
+    backend.cfg.device_token = "fixture"
+    backend.cfg.active_profile_id = "profile-a"
+    revision = backend.musicDnaContextRevision
+    backend._sync_config_from_disk = Mock()
+    backend._run = Mock()
+    if transition == "revision":
+        backend._clear_profile_scoped_caches(preserve_session=True)
+    elif transition == "disk":
+        backend._sync_config_from_disk.side_effect = lambda: setattr(backend.cfg, "active_profile_id", "profile-b")
+
+    if action == "disable":
+        backend.setMusicDnaEnabled(False, revision)
+    else:
+        backend.clearMusicDna(revision)
+
+    assert backend._run.call_count == (1 if transition == "none" else 0)
+
+
 @pytest.mark.parametrize("transition", ["none", "speaker", "profile", "item", "foreground", "fresh_speaker"])
 def test_control_volume_rechecks_original_context_before_sending(tmp_path: Path, transition: str) -> None:
     ensure_app()
