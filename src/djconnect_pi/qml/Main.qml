@@ -7122,6 +7122,7 @@ BrandWindow {
                                 height: parent.height - 20
                                 active: root.trackArtworkCanControl && root.trackArtworkControlsOpen
                                 sourceComponent: sharedSessionScreen.artworkTransportControls
+                                onLoaded: item.refreshFocusFallback = artworkControlsToggle
                             }
                         }
 

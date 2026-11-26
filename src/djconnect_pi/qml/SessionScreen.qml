@@ -2565,6 +2565,7 @@ Item {
         id: transportControls
         required property real buttonSize
         property bool overArtwork: false
+        property Item refreshFocusFallback: null
         readonly property int optionsRow: overArtwork ? 0 : 2
         readonly property int seekRow: overArtwork ? 2 : 0
         readonly property var artworkFocusOrder: [repeatTransport, shuffleTransport, favoriteTransport,
@@ -2717,6 +2718,7 @@ Item {
             objectName: "trackArtworkPlaybackRefresh"
             property bool refreshingStatus: false
             property bool refreshFailed: false
+            property bool restoreFocusAfterRefresh: false
             visible: refreshingStatus || screen.state.playback_control.status === "uncertain"
             Layout.alignment: Qt.AlignHCenter
             Layout.maximumWidth: transportControls.width
@@ -2727,6 +2729,9 @@ Item {
             leftPadding: refreshingStatus ? 50 : padding
             implicitWidth: contentItem.implicitWidth + (refreshingStatus ? 72 : 36)
             onClicked: {
+                const fallback = transportControls.refreshFocusFallback
+                restoreFocusAfterRefresh = visualFocus && !!fallback
+                if (restoreFocusAfterRefresh) fallback.forceActiveFocus(Qt.TabFocusReason)
                 refreshingStatus = true
                 refreshFailed = false
                 screen.owner.refreshPlayback()
@@ -2736,11 +2741,16 @@ Item {
                 if (visible) return
                 refreshingStatus = false
                 refreshFailed = false
+                restoreFocusAfterRefresh = false
             }
             function finishRefresh() {
                 if (!refreshingStatus || screen.owner.refreshing) return
                 refreshFailed = screen.state.playback_control.status === "uncertain"
                 refreshingStatus = false
+                const fallback = transportControls.refreshFocusFallback
+                if (restoreFocusAfterRefresh && refreshFailed && visible && enabled && fallback && fallback.activeFocus)
+                    forceActiveFocus(Qt.TabFocusReason)
+                restoreFocusAfterRefresh = false
             }
             BusyIndicator {
                 objectName: "trackArtworkPlaybackRefreshSpinner"

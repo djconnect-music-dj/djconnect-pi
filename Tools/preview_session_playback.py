@@ -402,8 +402,11 @@ def main():
                 assert refresh_status.mapToItem(controls, refresh_status.width(), 0).x() <= controls.width() + 1
                 previous_active_result = owner.transport.active.return_value
                 owner.transport.active.return_value = {'success': True, 'session': deepcopy(owner._session)}
-                click('trackArtworkPlaybackRefresh')
+                QTest.keyClick(window, Qt.Key.Key_Tab)
+                assert refresh_status.property('activeFocus')
+                QTest.keyClick(window, Qt.Key.Key_Space)
                 assert owner.refreshing and len(reads) == 1 and not intents
+                assert artwork_controls.property('activeFocus')
                 spinner = visual(overlay, 'trackArtworkPlaybackRefreshSpinner')
                 capture('fullscreen-track-art-refreshing-playback-status')
                 assert refresh_status.property('visible') and not refresh_status.property('enabled')
@@ -418,7 +421,15 @@ def main():
                 assert command_status.property('visible') and command_status.property('text') == expected_error
                 assert QAccessible.queryAccessibleInterface(command_status).text(QAccessible.Text.Name) == expected_error
                 assert refresh_status.property('visible') and refresh_status.property('enabled')
+                assert refresh_status.property('activeFocus')
                 assert not spinner.property('running') and not visual(overlay, 'sessionPlaybackPrevious').property('enabled')
+                QTest.keyClick(window, Qt.Key.Key_Space)
+                assert owner.refreshing and artwork_controls.property('activeFocus')
+                QTest.keyClick(window, Qt.Key.Key_Backtab, Qt.KeyboardModifier.ShiftModifier)
+                close_artwork = visual(overlay, 'closeTrackArtwork')
+                assert close_artwork.property('activeFocus')
+                drain()
+                assert close_artwork.property('activeFocus') and refresh_status.property('enabled')
                 owner.transport.active.side_effect = None
                 click('trackArtworkPlaybackRefresh')
                 assert owner.refreshing and len(reads) == 1
