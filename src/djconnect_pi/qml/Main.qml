@@ -4605,7 +4605,10 @@ BrandWindow {
                     Text {
                         objectName: "askDjSearchCount"
                         visible: askDjSearchInput.text.trim().length > 0
-                        text: (askDjPanel.selectedMatch + 1) + "/" + askDjPanel.matches.length
+                        text: askDjPanel.matches.length === 0 ? "0"
+                            : (askDjPanel.selectedMatch + 1) + "/" + askDjPanel.matches.length
+                        Accessible.role: Accessible.StaticText
+                        Accessible.name: askDjPanel.matches.length === 0 ? root.tr("media_no_matches") : text
                         color: BrandTheme.colors.muted
                         font.pixelSize: root.width < 900 ? 14 : 18
                     }

@@ -727,6 +727,12 @@ def main():
         assert ask_count.property("text") == "1/3" and ask_dj.property("selectedMessageId") == "ask-first"
         QTest.keyClick(window, Qt.Key.Key_Return)
         assert ask_count.property("text") == "2/3" and ask_dj.property("selectedMessageId") == "ask-second"
+        find_input.setProperty("text", "No such message")
+        assert ask_count.property("visible") and ask_count.property("text") == "0"
+        assert QAccessible.queryAccessibleInterface(ask_count).text(QAccessible.Text.Name) == backend.t("media_no_matches")
+        assert not visual_item(ask_dj, "askDjPreviousMatch").property("enabled")
+        assert not visual_item(ask_dj, "askDjNextMatch").property("enabled")
+        assert visual_item(ask_dj, "askDjMessagesView").property("count") == 4
         QTest.keyClick(window, Qt.Key.Key_Escape)
         assert not ask_dj.property("searchOpen") and draft.property("text") == "Unsent draft"
         assert draft.property("activeFocus")
