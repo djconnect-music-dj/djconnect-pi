@@ -22,6 +22,7 @@ from djconnect_pi.app import (
     _ask_dj_display_time,
     _format_duration,
     _format_logs_for_display,
+    _read_music_dna_import,
     _read_tail_text,
     _track_insight_analysis,
     cached_image_url,
@@ -3160,6 +3161,64 @@ def test_backend_displays_package_version_separately_from_protocol_version(tmp_p
 
     assert backend.version == __version__
     assert backend.protocolVersion == "99.0.0"
+
+
+@pytest.mark.parametrize("envelope", [False, True])
+def test_read_music_dna_import_keeps_profile_data_separate_from_source_identity(tmp_path: Path, envelope: bool) -> None:
+    path = tmp_path / "music-dna.json"
+    profile = {"success": True, "enabled": True, "music_dna_key": "source-only",
+               "generation": 7, "profile": {"summary": "Test Music DNA"}}
+    document = {"success": True, "format": "djconnect.music_dna.export", "schema_version": 1,
+                "exported_at": "2026-10-19T14:10:00Z", "profile": profile} if envelope else profile
+    path.write_text(json.dumps(document))
+
+    payload, preview = _read_music_dna_import(path)
+
+    assert payload == {"success": True, "enabled": True, "profile": profile["profile"]}
+    assert preview["generation"] == 7 and preview["filename"] == path.name
+    assert ("updatedAt" in preview) is envelope
+
+
+def test_read_music_dna_import_rejects_unknown_format_and_nonfinite_json(tmp_path: Path) -> None:
+    path = tmp_path / "music-dna.json"
+    for document in (
+        {"format": "other", "success": True, "enabled": True, "profile": {}},
+        {"success": True, "enabled": True, "profile": {"value": float("nan")}},
+    ):
+        path.write_text(json.dumps(document))
+        with pytest.raises(ValueError):
+            _read_music_dna_import(path)
+
+
+@pytest.mark.parametrize("confirm_first", [False, True])
+def test_music_dna_import_does_not_upload_after_profile_changes(tmp_path: Path, confirm_first: bool) -> None:
+    ensure_app()
+    config_path = tmp_path / "config.json"
+    save_config(config_path, Config(paired=True, device_token="fixture-token", active_profile_id="original",
+                                    active_profile_type="personal", music_dna_key="profile:original"))
+    backend = DJConnectBackend(config_path)
+    backend._apply_music_dna_data({"success": True, "enabled": True, "profile": {"summary": "Original profile"}})
+    backend._executor.submit = Mock()
+    document = tmp_path / "music-dna.json"
+    document.write_text(json.dumps({"success": True, "enabled": True, "profile": {"summary": "Imported profile"}}))
+    backend.prepareMusicDnaImport(QUrl.fromLocalFile(str(document)), backend.musicDnaContextRevision)
+    backend._executor.submit.call_args.args[0]()
+    assert backend.musicDnaImportPreview["filename"] == document.name
+
+    with patch("djconnect_pi.app.HAClient.music_dna_import") as upload:
+        if confirm_first:
+            backend.confirmMusicDnaImport()
+            assert backend.musicDnaBusy
+        changed = load_config(config_path)
+        changed.active_profile_id = "another"
+        save_config(config_path, changed)
+        backend._sync_config_from_disk()
+        if confirm_first:
+            backend._executor.submit.call_args.args[0]()
+        else:
+            backend.confirmMusicDnaImport()
+        upload.assert_not_called()
+    assert not backend.musicDnaImportPreview
 
 
 def test_switching_logging_off_clears_app_logs_and_hides_the_open_view(tmp_path, monkeypatch):

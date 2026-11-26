@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import re
+import stat
 import subprocess
 import sys
 import time
@@ -91,6 +92,7 @@ LOG_DISPLAY_MAX_BYTES = 80_000
 GAME_SOUND_SAMPLE_RATE = 16_000
 DISPLAY_WAKE_DEBOUNCE_SECONDS = 0.8
 MEDIA_ARTWORK_CACHE_LIMIT = 6
+MUSIC_DNA_IMPORT_MAX_BYTES = 8 * 1024 * 1024
 QT_PIXMAP_CACHE_LIMIT_KB = 4096
 UI_WORKER_COUNT = 1
 TOAST_ICON_FALLBACK = "music"
@@ -227,6 +229,8 @@ class DJConnectBackend(QObject):
     _askDjRefreshReady = Signal(object)
     _askDjClearReady = Signal(object)
     _musicDnaReady = Signal(object)
+    _musicDnaImportPrepared = Signal(object, object, object)
+    _musicDnaImportFinished = Signal(object, object, str)
     _musicDiscoveryReady = Signal(object)
     _musicDiscoveryPlayConfirmed = Signal(object, str, str, object)
     _musicDiscoveryFeedbackAccepted = Signal(object, str, str)
@@ -282,6 +286,7 @@ class DJConnectBackend(QObject):
         self._music_dna_summary = ""
         self._music_dna_error = ""
         self._music_dna_needs_recovery = False
+        self._music_dna_import = None
         self._music_dna_sections: list[dict[str, object]] = []
         self._music_dna_busy = False
         self._music_discovery_items: list[dict[str, object]] = []
@@ -369,6 +374,8 @@ class DJConnectBackend(QObject):
         self._askDjRefreshReady.connect(self._apply_ask_dj_refresh_result)
         self._askDjClearReady.connect(self._apply_ask_dj_clear_result)
         self._musicDnaReady.connect(self._apply_music_dna_data)
+        self._musicDnaImportPrepared.connect(self._apply_music_dna_import)
+        self._musicDnaImportFinished.connect(self._finish_music_dna_import)
         self._musicDiscoveryReady.connect(self._apply_music_discovery_data)
         self._musicDiscoveryPlayConfirmed.connect(self._apply_music_discovery_play)
         self._musicDiscoveryFeedbackAccepted.connect(self._remove_music_discovery_item)
@@ -585,6 +592,11 @@ class DJConnectBackend(QObject):
     @Property(bool, notify=musicDnaChanged)
     def musicDnaNeedsRecovery(self) -> bool:
         return self._music_dna_needs_recovery
+
+    @Property("QVariantMap", notify=musicDnaChanged)
+    def musicDnaImportPreview(self) -> dict[str, object]:
+        request = self._music_dna_import
+        return dict(request["preview"]) if request and self._music_dna_import_current(request) else {}
 
     @Property(str, notify=musicDnaChanged)
     def musicDnaSummary(self) -> str:
@@ -2069,6 +2081,100 @@ class DJConnectBackend(QObject):
     def refreshMusicDna(self) -> None:
         self._music_dna_request("profile", show_toast=True)
 
+    def _music_dna_import_current(self, request: dict) -> bool:
+        return (self._music_dna_import is request and self._application_foreground and not self._shutting_down
+                and not self._demo_mode and self._music_dna_enabled
+                and request["ticket"] == self._private_read_context() and request["key"] == self.cfg.music_dna_key)
+
+    @Slot(QUrl, int)
+    def prepareMusicDnaImport(self, source: QUrl, revision: int) -> None:
+        ticket = self._private_read_context()
+        self._sync_config_from_disk()
+        if (revision != self._music_dna_context_revision or ticket != self._private_read_context()
+                or not source.isLocalFile() or not source.toLocalFile()
+                or not self.paired or self._demo_mode or not self.personalProfileExportAllowed
+                or not self.musicDnaLoaded or not self.musicDnaEnabled or not self.cfg.music_dna_key
+                or not self._backend_available or self._version_mismatch_visible or self._music_dna_busy
+                or not self._application_foreground or self._shutting_down):
+            return
+        request = {"ticket": ticket, "key": self.cfg.music_dna_key, "preview": {}}
+        self._music_dna_import = request
+        self._set_music_dna_busy(True)
+
+        def prepare() -> None:
+            if not self._music_dna_import_current(request):
+                return
+            try:
+                payload, preview = _read_music_dna_import(Path(source.toLocalFile()))
+            except (OSError, ValueError, RecursionError):
+                payload, preview = None, {}
+            self._musicDnaImportPrepared.emit(request, payload, preview)
+
+        self._run(self.tr_key("music_dna_import"), prepare,
+                  done=lambda: self._set_music_dna_busy(False), interactive=False)
+
+    @Slot(object, object, object)
+    def _apply_music_dna_import(self, request: dict, payload: dict | None, preview: dict) -> None:
+        if not self._music_dna_import_current(request):
+            return
+        if payload is None:
+            self.cancelMusicDnaImport()
+            self._show_toast(self.tr_key("music_dna_import_invalid"), 3500, "musicdna")
+            return
+        request["payload"] = payload
+        request["preview"] = preview
+        self.musicDnaChanged.emit()
+
+    @Slot()
+    def cancelMusicDnaImport(self) -> None:
+        if self._music_dna_import is not None:
+            self._music_dna_import = None
+            self.musicDnaChanged.emit()
+
+    @Slot()
+    def confirmMusicDnaImport(self) -> None:
+        self._sync_config_from_disk()
+        request = self._music_dna_import
+        if (not request or not self._music_dna_import_current(request) or self._music_dna_busy
+                or not self.personalProfileExportAllowed or not self._backend_available or self._version_mismatch_visible
+                or "payload" not in request):
+            return
+        payload = request.pop("payload")
+        config = deepcopy(self.cfg)
+        config.explicit_profile_id = session_profile_id(config)
+        client = HAClient(config)
+        self._set_music_dna_busy(True)
+
+        def upload() -> None:
+            data = None
+            notice = "music_dna_import_failed"
+            try:
+                if not self._music_dna_import_current(request):
+                    return
+                response = client.music_dna_import(payload)
+                if (response.get("success") is True and response.get("enabled") is True
+                        and response.get("music_dna_key") == request["key"] and isinstance(response.get("profile"), dict)):
+                    data = response
+                    notice = "music_dna_import_saved"
+            except requests.RequestException:
+                notice = "session_uncertain"
+            except DJConnectError:
+                pass
+            finally:
+                self._musicDnaImportFinished.emit(request, data, notice)
+
+        self._run(self.tr_key("music_dna_import"), upload,
+                  done=lambda: self._set_music_dna_busy(False), interactive=False)
+
+    @Slot(object, object, str)
+    def _finish_music_dna_import(self, request: dict, data: dict | None, notice: str) -> None:
+        if not self._music_dna_import_current(request):
+            return
+        self.cancelMusicDnaImport()
+        if data is not None:
+            self._apply_music_dna_data(self._profile_read_result(data, request["ticket"]))
+        self._show_toast(self.tr_key(notice), 3500, "musicdna")
+
     @Slot(bool)
     @Slot(bool, int)
     def setMusicDnaEnabled(self, enabled: bool, revision: int | None = None) -> None:
@@ -3542,6 +3648,7 @@ class DJConnectBackend(QObject):
         self._music_dna_summary = ""
         self._music_dna_error = ""
         self._music_dna_needs_recovery = False
+        self._music_dna_import = None
         self._music_dna_sections = []
         self._set_music_discovery_items([])
         self._music_discovery_empty_text = ""
@@ -5359,6 +5466,38 @@ def _first_dict(*values: object) -> dict[str, object]:
         if isinstance(value, dict):
             return value
     return {}
+
+
+def _read_music_dna_import(path: Path) -> tuple[dict[str, object], dict[str, object]]:
+    with os.fdopen(os.open(path, os.O_RDONLY | os.O_NONBLOCK), "rb") as source:
+        if not stat.S_ISREG(os.fstat(source.fileno()).st_mode):
+            raise ValueError("invalid_music_dna_import")
+        contents = source.read(MUSIC_DNA_IMPORT_MAX_BYTES + 1)
+    if len(contents) > MUSIC_DNA_IMPORT_MAX_BYTES:
+        raise ValueError("invalid_music_dna_import")
+    document = json.loads(contents)
+    if not isinstance(document, dict):
+        raise ValueError("invalid_music_dna_import")
+    envelope = document.get("format") == "djconnect.music_dna.export"
+    if "format" in document and not envelope:
+        raise ValueError("invalid_music_dna_import")
+    if envelope and (document.get("success") is not True or type(document.get("schema_version")) is not int
+                     or document["schema_version"] != 1):
+        raise ValueError("invalid_music_dna_import")
+    response = document.get("profile") if envelope else document
+    if (not isinstance(response, dict) or response.get("success") is not True
+            or type(response.get("enabled")) is not bool or not isinstance(response.get("profile"), dict)):
+        raise ValueError("invalid_music_dna_import")
+    profile = response["profile"]
+    json.dumps(profile, allow_nan=False)
+    preview = {"filename": path.name}
+    updated = response.get("updated_at") or profile.get("updated_at") or (document.get("exported_at") if envelope else "")
+    if isinstance(updated, str) and timestamp(updated) is not None:
+        preview["updatedAt"] = updated
+    generation = response.get("generation")
+    if type(generation) is int and 0 <= generation <= 2**53 - 1:
+        preview["generation"] = generation
+    return {"success": True, "enabled": response["enabled"], "profile": profile}, preview
 
 
 def parse_music_dna_profile(data: dict[str, object], *, ha_url: str = "") -> dict[str, object]:

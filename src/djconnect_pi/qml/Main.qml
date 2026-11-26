@@ -2313,6 +2313,9 @@ BrandWindow {
         color: "transparent"
         readonly property bool canChangeMusicDna: djconnect.musicDnaLoaded && !djconnect.musicDnaBusy
             && (djconnect.paired || djconnect.demoMode)
+        readonly property bool canTransferMusicDna: canChangeMusicDna && djconnect.musicDnaEnabled
+            && djconnect.paired && djconnect.personalProfileExportAllowed && djconnect.backendAvailable
+            && !djconnect.demoMode && !djconnect.versionMismatchVisible
 
         FileDialog {
             id: profileExportDialog
@@ -2330,6 +2333,81 @@ BrandWindow {
             }
         }
 
+        FileDialog {
+            id: musicDnaImportDialog
+            objectName: "musicDnaImportDialog"
+            property int profileRevision: 0
+            title: root.tr("music_dna_import")
+            options: FileDialog.DontUseNativeDialog
+            nameFilters: ["JSON (*.json)"]
+            onAccepted: djconnect.prepareMusicDnaImport(selectedFile, profileRevision)
+        }
+
+        GlassPopup {
+            objectName: "musicDnaImportPreview"
+            anchors.centerIn: parent
+            width: Math.min(parent.width - 40, 560)
+            padding: 24
+            modal: true
+            closePolicy: Popup.NoAutoClose
+            visible: settingsPanel.visible && !!djconnect.musicDnaImportPreview.filename
+            contentItem: ColumnLayout {
+                spacing: 16
+                Text {
+                    text: djconnect.musicDnaImportPreview.filename || ""
+                    textFormat: Text.PlainText
+                    color: BrandTheme.colors.text
+                    font.pixelSize: 24
+                    wrapMode: Text.Wrap
+                    Layout.fillWidth: true
+                }
+                Text {
+                    objectName: "musicDnaImportUpdatedAt"
+                    readonly property string updatedTime: {
+                        root.trVersion
+                        return djconnect.djSession.formatTimestamp(djconnect.musicDnaImportPreview.updatedAt || "", true)
+                    }
+                    visible: updatedTime.length > 0
+                    text: root.tr("music_dna_updated_at").replace("%1", updatedTime)
+                    textFormat: Text.PlainText
+                    color: BrandTheme.colors.muted
+                    font.pixelSize: 18
+                    Layout.fillWidth: true
+                }
+                Text {
+                    objectName: "musicDnaImportGeneration"
+                    readonly property var generation: djconnect.musicDnaImportPreview.generation
+                    visible: typeof generation === "number"
+                    text: root.tr("music_dna_import_generation").replace("%1", generation)
+                    textFormat: Text.PlainText
+                    color: BrandTheme.colors.muted
+                    font.pixelSize: 18
+                    Layout.fillWidth: true
+                }
+                Text {
+                    text: root.tr("music_dna_import_confirm")
+                    color: BrandTheme.colors.muted
+                    font.pixelSize: 20
+                    wrapMode: Text.WordWrap
+                    Layout.fillWidth: true
+                }
+                GlassButton {
+                    objectName: "musicDnaImportConfirm"
+                    text: root.tr("music_dna_import")
+                    primary: true
+                    enabled: settingsPanel.canTransferMusicDna
+                    Layout.fillWidth: true
+                    onClicked: djconnect.confirmMusicDnaImport()
+                }
+                GlassButton {
+                    text: root.tr("cancel")
+                    enabled: !djconnect.musicDnaBusy
+                    Layout.fillWidth: true
+                    onClicked: djconnect.cancelMusicDnaImport()
+                }
+            }
+        }
+
         ProfileReadOnOpen {
             surfaceVisible: settingsPanel.visible
             busy: djconnect.musicDnaBusy
@@ -2340,7 +2418,7 @@ BrandWindow {
         onVisibleChanged: {
             if (visible && settingsScroll.contentItem) {
                 settingsScroll.contentItem.contentY = 0
-            }
+            } else if (!visible) djconnect.cancelMusicDnaImport()
         }
 
         function languageIndex() {
@@ -2780,13 +2858,24 @@ BrandWindow {
                 font.pixelSize: 24
                 Layout.fillWidth: true
                 Layout.preferredHeight: 58
-                enabled: settingsPanel.canChangeMusicDna && djconnect.musicDnaEnabled
-                    && djconnect.paired && djconnect.personalProfileExportAllowed && djconnect.backendAvailable
-                    && !djconnect.demoMode && !djconnect.versionMismatchVisible
+                enabled: settingsPanel.canTransferMusicDna
                 onClicked: {
                     profileExportDialog.musicDna = true
                     profileExportDialog.profileRevision = djconnect.musicDnaContextRevision
                     profileExportDialog.open()
+                }
+            }
+
+            PurpleButton {
+                objectName: "musicDnaImportButton"
+                text: root.tr("music_dna_import")
+                font.pixelSize: 24
+                Layout.fillWidth: true
+                Layout.preferredHeight: 58
+                enabled: settingsPanel.canTransferMusicDna
+                onClicked: {
+                    musicDnaImportDialog.profileRevision = djconnect.musicDnaContextRevision
+                    musicDnaImportDialog.open()
                 }
             }
 
