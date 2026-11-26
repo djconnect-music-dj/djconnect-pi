@@ -695,7 +695,18 @@ def main():
                 backend._apply_playback(Playback(title="Qualified fixture", uri=recording, is_playing=True))
                 QTest.qWait(65)
                 assert request.call_count == 9
+                current.side_effect = None
+                current.return_value = {**response, "subject": {**response["subject"],
+                    "observation_id": "fixture-next", "expires_at": 110}}
+                request.call_args.args[1]()
                 request.call_args.kwargs["done"]()
+                assert backend.trackInsightTitle == "Qualified fixture"
+                with patch.object(owner, "track_insight_session_style", return_value=("fixture-session", "active", "energy", 1)):
+                    owner.changed.emit()
+                    assert not backend.trackInsightTitle
+                    QTest.qWait(65)
+                    assert request.call_count == 10
+                    request.call_args.kwargs["done"]()
             owner._caps = previous_caps
         backend.cfg.paired, backend.cfg.device_token = False, ""
         backend._demo_mode = True

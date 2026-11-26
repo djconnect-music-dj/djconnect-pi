@@ -3232,6 +3232,39 @@ def test_qualified_track_insight_clears_at_expiry_and_rejects_replayed_observati
     backend.client.track_insight.assert_not_called()
 
 
+def test_confirmed_session_style_changes_reject_a_late_track_insight_result(tmp_path: Path) -> None:
+    ensure_app()
+    backend = DJConnectBackend(tmp_path / "config.json")
+    owner = backend.djSession
+    owner._caps = {"capabilities": {"current_track_insight_subject_v1": True},
+                   "contract_versions": {"current_track_insight_subject": 1}}
+    owner._clock = Mock()
+    owner._clock.now.return_value = 100
+    original = {"session_id": "fixture-session", "runtime_state": "active", "selected_mood": "groove", "mood_revision": 1}
+    owner._session = original
+    owner.changed.emit()
+    recording = "spotify:track:" + "a" * 22
+    backend.playback = Playback(title="Track", uri=recording, is_playing=True)
+    backend._persist_backend_summary = Mock()
+    backend.client.current_track_insight = Mock(return_value={
+        "success": True, "track": {"title": "Track"}, "analysis": {"summary": "Old style"},
+        "subject": {"schema_version": 1, "mode": "current", "media_identity": recording,
+                    "observation_id": "original", "expires_in": 10, "expires_at": 110},
+    })
+    queued = []
+    backend._trackInsightReady.disconnect(backend._apply_track_insight_data)
+    backend._trackInsightReady.connect(queued.append)
+    backend._track_insight_worker(backend.playback, backend._track_insight_scope(), force_refresh=False)
+    assert len(queued) == 1
+    owner._session = {**original, "mood_revision": 2}
+    owner.changed.emit()
+    owner._session = original
+    owner.changed.emit()
+
+    backend._apply_track_insight_data(queued[0])
+    assert not backend.trackInsightTitle
+
+
 @pytest.mark.parametrize("confirm_first", [False, True])
 def test_music_dna_import_does_not_upload_after_profile_changes(tmp_path: Path, confirm_first: bool) -> None:
     ensure_app()

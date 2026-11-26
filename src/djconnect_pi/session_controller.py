@@ -1086,6 +1086,17 @@ class SessionController(QObject):
                 and type(versions.get("current_track_insight_subject")) is int
                 and versions["current_track_insight_subject"] == 1)
 
+    def track_insight_session_style(self) -> tuple:
+        session = self._session or {}
+        if not session.get("session_id"):
+            return ()
+        broadcast = session.get("broadcast") or {}
+        broadcast_session = broadcast.get("session") or {}
+        return tuple(session.get(key, broadcast_session.get(key)) for key in (
+            "session_id", "runtime_state", "selected_mood", "mood_revision",
+            "dj_persona", "persona_revision", "selected_presence", "presence_revision",
+        ))
+
     def _history_supported(self):
         if self._bootstrap_binding is not None and not private_scope_allowed(self):
             return False

@@ -389,6 +389,8 @@ class DJConnectBackend(QObject):
         self._track_insight_expiry_timer = QTimer(self)
         self._track_insight_expiry_timer.setSingleShot(True)
         self._track_insight_expiry_timer.timeout.connect(self._expire_track_insight)
+        self._track_insight_session_style = self._current_track_insight_session_style()
+        self._session_controller.changed.connect(self._observe_track_insight_session_style)
         self._sharedSettingsReady.connect(self._apply_shared_settings)
         self._shared_settings_timer = QTimer(self)
         self._shared_settings_timer.setInterval(15000)
@@ -3936,8 +3938,25 @@ class DJConnectBackend(QObject):
             self.cfg.music_backend_revision,
             self.cfg.music_target_player.get("id", ""),
             self._track_insight_output(self.playback),
-            self._uses_current_track_insight(),
+            self._current_track_insight_session_style(),
         )
+
+    def _current_track_insight_session_style(self) -> tuple:
+        if not self._uses_current_track_insight():
+            return ()
+        return (True, self._session_controller.track_insight_session_style())
+
+    @Slot()
+    def _observe_track_insight_session_style(self) -> None:
+        style = self._current_track_insight_session_style()
+        if style == self._track_insight_session_style:
+            return
+        self._track_insight_session_style = style
+        if self._demo_mode:
+            return
+        self._track_insight_revision += 1
+        self._clear_track_insight()
+        self.trackInsightObservationChanged.emit()
 
     def _uses_current_track_insight(self) -> bool:
         return (self.cfg.music_backend not in {"music_assistant", "later_manual"}
