@@ -44,9 +44,10 @@ Item {
             + '</font></b>' + escapeText(text.slice(hit.end))
     }
     function moveMatch(step) {
-        if (!matches.length) return
+        if (!matches.length) return false
         matchIndex = (matchIndex + step + matches.length) % matches.length
         logRows.positionViewAtIndex(currentMatch.row, ListView.Contain)
+        return true
     }
     function showSearch(showKeyboard) {
         searching = true
@@ -160,6 +161,8 @@ Item {
                         selectByMouse: true
                         TapHandler { onTapped: view.keyboardOpen = true }
                         Keys.onEscapePressed: if (view.keyboardOpen) view.submitSearch(); else view.closeSearch()
+                        Keys.onUpPressed: function(event) { event.accepted = view.moveMatch(-1) }
+                        Keys.onDownPressed: function(event) { event.accepted = view.moveMatch(1) }
                         onAccepted: {
                             if (view.keyboardOpen) view.submitSearch()
                             else view.moveMatch(1)

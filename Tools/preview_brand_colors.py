@@ -1085,6 +1085,8 @@ def main():
         window.setProperty("aboutOpen", False)
         backend.cfg.log_level = "INFO"
         backend.showLogs()
+        backend._logs_text = "sample first\nunrelated entry\nsample second\nsample third"
+        backend.logsChanged.emit()
         capture("logs")
         logs = visual_item(window.contentItem(), "logsView")
         search_toggle = visual_item(logs, "logsSearchOpen")
@@ -1115,6 +1117,16 @@ def main():
             search_input.setProperty("text", "keep query")
             QTest.keyClick(window, log_find.key(), log_find.keyboardModifiers())
             assert search_input.property("text") == "keep query" and not logs.property("keyboardOpen")
+            QTest.keyClick(window, Qt.Key.Key_Down)
+            assert logs.property("matchIndex") == -1
+            search_input.setProperty("text", "sample")
+            assert logs.property("matchIndex") == 0
+            QTest.keyClick(window, Qt.Key.Key_Up)
+            assert logs.property("matchIndex") == 2
+            QTest.keyClick(window, Qt.Key.Key_Down)
+            assert logs.property("matchIndex") == 0
+            QTest.keyClick(window, Qt.Key.Key_Down)
+            assert logs.property("matchIndex") == 1 and search_input.property("activeFocus")
             QTest.keyClick(window, Qt.Key.Key_Escape)
             assert not logs.property("searching") and search_input.property("text") == ""
         backend.hideLogs()
