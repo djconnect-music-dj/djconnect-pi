@@ -400,6 +400,14 @@ def main():
                 with patch.object(owner, "_launch") as verify:
                     QTest.keyClick(window, Qt.Key.Key_Return)
                     verify.assert_called_once_with("archive_search", "fixture")
+                owner._archive_search = {"query": "fixture", "error": "unavailable", "sessions": []}
+                owner.changed.emit()
+                QTest.qWait(65)
+                retry_search = window.findChild(QObject, "sessionSearchRetry")
+                assert retry_search.property("visible")
+                with patch.object(owner, "_launch") as verify:
+                    click(window, retry_search)
+                    verify.assert_called_once_with("archive_search", "fixture")
                 owner._archive_search = {"query": "fixture", "complete": True, "sessions": [
                     {"session_id": "hidden-on-current-page", "lifecycle_status": "ENDED",
                      "created_at": "2026-11-25T10:00:00Z", "_history_deadline": owner._clock.now() + 60},

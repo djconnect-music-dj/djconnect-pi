@@ -2995,12 +2995,27 @@ Item {
                 }
                 GlassButton { text: screen.tr("close_search"); onClicked: searchPanel.closeFromInput() }
             }
-            Text {
+            RowLayout {
                 Layout.leftMargin: searchPanel.bodyMargin; Layout.rightMargin: searchPanel.bodyMargin
+                Layout.fillWidth: true
                 visible: searchPanel.searchError.length > 0
-                text: screen.tr(screen.state.error === "uncertain" ? "session_uncertain" : (screen.state.error === "profile_unavailable" || screen.state.error === "profile_required") ? "session_profile_missing" : "session_error")
-                color: BrandTheme.colors.warning; font.pixelSize: 18
-                wrapMode: Text.WordWrap; Layout.fillWidth: true
+                spacing: 12
+                Text {
+                    text: screen.tr(searchPanel.searchError === "uncertain" ? "session_uncertain"
+                        : (searchPanel.searchError === "profile_unavailable" || searchPanel.searchError === "profile_required")
+                        ? "session_profile_missing" : "session_error")
+                    color: BrandTheme.colors.warning
+                    font.pixelSize: 18
+                    wrapMode: Text.WordWrap
+                    Layout.fillWidth: true
+                }
+                GlassButton {
+                    objectName: "sessionSearchRetry"
+                    text: screen.tr("track_insight_retry_action")
+                    visible: searchInput.text.trim().length > 0
+                    enabled: !screen.owner.busy
+                    onClicked: searchPanel.submitSearch()
+                }
             }
             Text {
                 Layout.leftMargin: searchPanel.bodyMargin; Layout.rightMargin: searchPanel.bodyMargin
