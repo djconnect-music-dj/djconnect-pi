@@ -634,6 +634,13 @@ def main():
                 assert alternative_output.property('enabled') and not alternative_output.property('checked')
                 assert QAccessible.queryAccessibleInterface(selected_output).state().selected
                 assert not QAccessible.queryAccessibleInterface(alternative_output).state().selected
+                QQmlExpression(engine.rootContext(), alternative_output, 'forceActiveFocus()').evaluate()
+                QTest.keyClick(window, Qt.Key.Key_Down)
+                assert tenth_output.property('activeFocus') and not intents
+                QTest.keyClick(window, Qt.Key.Key_Up)
+                assert alternative_output.property('activeFocus') and not intents
+                QTest.keyClick(window, Qt.Key.Key_Up)
+                assert alternative_output.property('activeFocus') and selected_output.property('checked') and not intents
                 for row, name, volume, active in (
                     (selected_output, speaker_name, '11%', True),
                     (alternative_output, 'Speaker 2', '–', False),

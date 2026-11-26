@@ -3022,9 +3022,23 @@ Item {
                 Layout.fillWidth: true
                 Layout.preferredHeight: Math.min(300 * screen.ipadScale, contentHeight)
                 clip: true; spacing: 8; model: outputsPanel.choices
+                keyNavigationEnabled: false
+                function focusChoiceFrom(index, step) {
+                    if (!screen.state.playback_control.enabled) return false
+                    for (let row = index + step; row >= 0 && row < count; row += step) {
+                        if (outputsPanel.choices[row].active) continue
+                        currentIndex = row
+                        positionViewAtIndex(row, ListView.Contain)
+                        if (!currentItem) return false
+                        currentItem.forceActiveFocus(Qt.TabFocusReason)
+                        return true
+                    }
+                    return false
+                }
                 ScrollBar.vertical: ScrollBar { }
                 delegate: GlassButton {
                     id: outputChoice
+                    required property int index
                     required property var modelData
                     objectName: "sessionOutputChoice-" + modelData.id
                     readonly property bool volumeKnown: typeof modelData.volume_percent === "number"
@@ -3038,6 +3052,8 @@ Item {
                     cornerRadius: 14
                     opacity: modelData.active ? 1 : (enabled ? 1 : 0.4)
                     enabled: !!screen.state.playback_control.enabled && !modelData.active
+                    Keys.onUpPressed: function(event) { event.accepted = outputChoices.focusChoiceFrom(index, -1) }
+                    Keys.onDownPressed: function(event) { event.accepted = outputChoices.focusChoiceFrom(index, 1) }
                     implicitHeight: Math.max(56, outputChoiceLabels.implicitHeight + 28)
                     contentItem: RowLayout {
                         spacing: 12
