@@ -4786,10 +4786,12 @@ BrandWindow {
                         Layout.fillWidth: true
                     }
 
-                    PurpleButton {
+                    GlassButton {
                         id: feedbackRecommendationButton
                         objectName: "discoveryDetailFeedback"
                         text: root.tr("feedback")
+                        iconName: "thumbs_down"
+                        cornerRadius: root.standardButtonRadius
                         visible: djconnect.musicDiscoveryFeedbackSupported
                         enabled: !discoveryDetail.actionBusy
                         font.pixelSize: 18
