@@ -1774,9 +1774,15 @@ class DJConnectBackend(QObject):
             self._play_demo_uri(item_id)
             self.musicDiscoveryPlayed.emit(str(item.get("section_id") or ""), item_id)
             return
+        ticket = self._private_read_context()
+        self._music_discovery_error = ""
         self._music_discovery_playing_id = item_id
         self.musicDiscoveryChanged.emit()
-        self._run(self.tr_key("music_discovery"), lambda: self._music_discovery_play_worker(item), done=lambda: self._clear_music_discovery_playing())
+        self._run(
+            self.tr_key("music_discovery"),
+            lambda: self._music_discovery_play_worker(item, ticket=ticket),
+            done=self._clear_music_discovery_playing,
+        )
 
     @Slot(str, str)
     def sendMusicDiscoveryFeedback(self, payload: str, feedback: str) -> None:
@@ -2453,33 +2459,33 @@ class DJConnectBackend(QObject):
             raise BackendUnavailable("Music Discovery unavailable") from exc
         self._musicDiscoveryReady.emit(self._profile_read_result(data, ticket))
 
-    def _music_discovery_play_worker(self, item: dict[str, object]) -> None:
-        ticket = self._private_read_context()
+    def _music_discovery_play_worker(self, item: dict[str, object], *, ticket) -> None:
+        if ticket != self._private_read_context():
+            return
         try:
             data = self.client.music_discovery_play(item)
-            if data.get("success") is False:
-                raise DJConnectError("Music Discovery playback rejected")
-            if ticket != self._private_read_context():
-                return
-            self._apply_profile_context(data)
-            ticket = self._private_read_context()
-            self._persist_backend_summary()
-            self.musicDiscoveryPlayed.emit(
-                str(item.get("section_id") or ""), str(item.get("discovery_item_id") or item.get("id") or "").strip(),
-            )
-            feed = self.client.music_discovery_feed()
-            if ticket != self._private_read_context():
-                return
-            self._apply_profile_context(feed)
-            ticket = self._private_read_context()
-            feed["_feedback_supported"] = self._supports_music_discovery_feedback()
-            self._persist_backend_summary()
-        except (DJConnectError, requests.RequestException) as exc:
-            raise BackendUnavailable("Music Discovery unavailable") from exc
+        except (AuthenticationError, ProtocolVersionMismatch):
+            if ticket == self._private_read_context():
+                raise
+            return
+        except (DJConnectError, requests.RequestException):
+            data = {}
+        if ticket != self._private_read_context():
+            return
+        if data.get("success") is not True:
+            error = {"success": False, "error": "music_discovery_play_failed"}
+            self._musicDiscoveryReady.emit(self._profile_read_result(error, ticket))
+            return
+        self._apply_profile_context(data)
+        ticket = self._private_read_context()
+        self._persist_backend_summary()
         if _contains_playback_payload(data):
             self._playbackReady.emit(self.client.playback_from_status(data))
-        self._musicDiscoveryReady.emit(self._profile_read_result(feed, ticket))
+        self.musicDiscoveryPlayed.emit(
+            str(item.get("section_id") or ""), str(item.get("discovery_item_id") or item.get("id") or "").strip(),
+        )
         self._toastReady.emit(self.tr_key("play"), 1800, "playback")
+        self._music_discovery_feed_worker(ticket=ticket)
 
     def _music_discovery_feedback_worker(self, item: dict[str, object], feedback: str) -> None:
         ticket = self._private_read_context()
@@ -3062,6 +3068,10 @@ class DJConnectBackend(QObject):
         if not isinstance(data, dict):
             return
         error = str(data.get("error") or "")
+        if data.get("success") is False and error == "music_discovery_play_failed":
+            self._music_discovery_error = self.tr_key("music_discovery_play_failed")
+            self.musicDiscoveryChanged.emit()
+            return
         if data.get("success") is False and error == "music_discovery_unavailable":
             self._music_discovery_error = self.tr_key("music_discovery_load_failed")
             self._set_backend_available(False)

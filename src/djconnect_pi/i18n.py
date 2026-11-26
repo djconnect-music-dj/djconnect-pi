@@ -1606,6 +1606,13 @@ _SESSION_COMPOSER_TRANSLATIONS = {
         "Impossible de charger les recommandations.",
         "No se pudieron cargar las recomendaciones.",
     ),
+    "music_discovery_play_failed": (
+        "Could not play this recommendation.",
+        "Deze aanbeveling kon niet worden afgespeeld.",
+        "Diese Empfehlung konnte nicht abgespielt werden.",
+        "Impossible de lire cette recommandation.",
+        "No se pudo reproducir esta recomendación.",
+    ),
     "session_question_sending": ("Sending…", "Wordt verstuurd…", "Wird gesendet…", "Envoi…", "Enviando…"),
     "session_question_accepted": ("Question sent", "Vraag verstuurd", "Frage gesendet", "Question envoyée", "Pregunta enviada"),
     "session_question_accepted_unavailable": ("Question accepted. The saved answer is not available yet.", "Vraag ontvangen. Het opgeslagen antwoord is nog niet beschikbaar.", "Frage angenommen. Die gespeicherte Antwort ist noch nicht verfügbar.", "Question reçue. La réponse enregistrée n’est pas encore disponible.", "Pregunta recibida. La respuesta guardada aún no está disponible."),

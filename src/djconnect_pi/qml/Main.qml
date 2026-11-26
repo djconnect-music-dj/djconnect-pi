@@ -3741,6 +3741,7 @@ BrandWindow {
                     }
 
                     Text {
+                        objectName: "discoveryDetailError"
                         visible: djconnect.musicDiscoveryError.length > 0
                         text: djconnect.musicDiscoveryError
                         textFormat: Text.PlainText

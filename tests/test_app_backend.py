@@ -290,13 +290,13 @@ def test_music_discovery_play_ignores_items_without_backend_id(tmp_path: Path) -
     backend.client.music_discovery_play.assert_not_called()
 
 
-@pytest.mark.parametrize("accepted", [True, False])
-def test_discovery_play_closes_only_on_acknowledged_playback(tmp_path: Path, accepted: bool) -> None:
+@pytest.mark.parametrize("response", [{"success": True}, {"success": False}, {}, {"success": "true"}])
+def test_discovery_play_closes_only_on_acknowledged_playback(tmp_path: Path, response: dict) -> None:
     ensure_app()
     config_path = tmp_path / "config.json"
     save_config(config_path, Config(paired=True, device_token="fixture", ha_url="http://fixture.invalid"))
     backend = DJConnectBackend(config_path)
-    backend.client.music_discovery_play = Mock(return_value={"success": accepted})
+    backend.client.music_discovery_play = Mock(return_value=response)
     backend.client.music_discovery_feed = Mock(side_effect=BackendUnavailable("fixture read error"))
     backend._executor.submit = Mock()
     completions = []
@@ -308,7 +308,10 @@ def test_discovery_play_closes_only_on_acknowledged_playback(tmp_path: Path, acc
     backend._executor.submit.assert_called_once()
     backend._executor.submit.call_args.args[0]()
 
+    accepted = response.get("success") is True
     assert completions == ([("rediscover", "recommendation")] if accepted else [])
+    if not accepted:
+        assert backend.musicDiscoveryError == backend.t("music_discovery_play_failed")
     assert backend.musicDiscoveryPlayingId == ""
     assert backend.client.music_discovery_feed.call_count == int(accepted)
 
