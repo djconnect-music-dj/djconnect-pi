@@ -1701,7 +1701,14 @@ Item {
                                 enabled: screen.trackArtworkAvailable
                                 onTapped: screen.expandTrackArtwork()
                             }
-                            Text { visible: playbackSources.ready && text.length > 0; text: screen.state.playback.title || ""; textFormat: Text.PlainText; font.pixelSize: screen.compact ? 24 : 30; font.bold: true; color: BrandTheme.colors.text; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+                            Text {
+                                objectName: "sessionPlaybackTitle"
+                                visible: playbackSources.ready && text.trim().length > 0
+                                text: screen.state.playback.title || ""; textFormat: Text.PlainText
+                                font.pixelSize: screen.compact ? 24 : 30; font.bold: true
+                                color: BrandTheme.colors.text; wrapMode: Text.Wrap
+                                Layout.fillWidth: true; Layout.minimumWidth: 0
+                            }
                             Text {
                                 objectName: "sessionPlaybackArtist"
                                 visible: playbackSources.ready && text.length > 0
