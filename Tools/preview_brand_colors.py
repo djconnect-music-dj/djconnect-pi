@@ -661,17 +661,6 @@ def main():
         assert detail_error.property("text") == backend.t("music_discovery_feedback_failed")
         backend.musicDiscoveryPlayed.emit("fixture-shelf", "fixture-track")
         assert not detail.property("opened")
-        for locale in ("en", "nl", "de", "fr", "es"):
-            backend.setLanguage(locale)
-            detail.setProperty("selected", {"sectionId": "fixture-shelf", "discoveryItemId": "fixture-track"})
-            QMetaObject.invokeMethod(detail, "open")
-            capture("discovery-detail-close-" + locale)
-            close_detail = visual_item(window.contentItem(), "closeDiscoveryDetail")
-            assert close_detail.property("visible") and close_detail.property("iconName") == "close"
-            assert QAccessible.queryAccessibleInterface(close_detail).text(QAccessible.Text.Name) == backend.t("close")
-            QMetaObject.invokeMethod(close_detail, "clicked")
-            assert not detail.property("opened") and window.property("activeScreen") == "discover"
-        backend.setLanguage("nl")
         backend._apply_music_discovery_data({"success": False, "error": "music_discovery_unavailable"})
         assert empty_feed.property("visible") and empty_feed.property("text") == backend.t("music_discovery_load_failed")
         assert backend.musicDiscoveryItems[0]["title"] == refreshed_title
@@ -707,6 +696,22 @@ def main():
             backend._set_music_discovery_busy(False)
             QTest.qWait(1150)
             assert request.call_count == 3
+        backend._apply_music_discovery_data({"success": True, "sections": [
+            {"id": "fixture-shelf", "title": "Recommendations", "items": [
+                {"id": "fixture-track", "kind": "track", "title": "Closeable recommendation"},
+            ]},
+        ]})
+        for locale in ("en", "nl", "de", "fr", "es"):
+            backend.setLanguage(locale)
+            detail.setProperty("selected", {"sectionId": "fixture-shelf", "discoveryItemId": "fixture-track"})
+            QMetaObject.invokeMethod(detail, "open")
+            capture("discovery-detail-close-" + locale)
+            close_detail = visual_item(window.contentItem(), "closeDiscoveryDetail")
+            assert close_detail.property("visible") and close_detail.property("iconName") == "close"
+            assert QAccessible.queryAccessibleInterface(close_detail).text(QAccessible.Text.Name) == backend.t("close")
+            QMetaObject.invokeMethod(close_detail, "clicked")
+            assert not detail.property("opened") and window.property("activeScreen") == "discover"
+        backend.setLanguage("nl")
         backend._demo_mode = True
         backend.demoModeChanged.emit()
         backend.cfg.paired, backend.cfg.device_token, backend.cfg.active_profile_id = False, "", ""
