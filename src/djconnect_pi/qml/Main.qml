@@ -3124,6 +3124,9 @@ BrandWindow {
         onCanChooseVisualMoodChanged: if (!canChooseVisualMood) trackInsightMoodPopup.close()
         readonly property bool autoInsightSurfaceActive: visible && root.active && !root.screenBlanked && !root.splashVisible
             && (djconnect.paired || djconnect.demoMode)
+        readonly property bool canShareInsight: autoInsightSurfaceActive && !djconnect.versionMismatchVisible
+            && (djconnect.demoMode || djconnect.backendAvailable) && !!djconnect.trackInsightShareText
+        onCanShareInsightChanged: if (!canShareInsight && insightSharePopup) insightSharePopup.close()
         readonly property bool canAutoRequestAnalysis: autoInsightSurfaceActive && !djconnect.askDjBusy
             && (djconnect.demoMode || (canRequestAnalysis && djconnect.playing
                 && djconnect.backendAvailable && djconnect.musicBackendAvailable))
@@ -3140,6 +3143,7 @@ BrandWindow {
         Component.onCompleted: Qt.callLater(requestInsightIfVisible)
         onCanAutoRequestAnalysisChanged: if (canAutoRequestAnalysis) Qt.callLater(requestInsightIfVisible)
         onAutoInsightKeyChanged: {
+            if (insightSharePopup) insightSharePopup.close()
             renewalDelay = 3000
             Qt.callLater(requestInsightIfVisible)
         }
@@ -3176,6 +3180,48 @@ BrandWindow {
         }
 
         ModalBlocker {}
+
+        GlassPopup {
+            id: insightSharePopup
+            objectName: "trackInsightSharePopup"
+            anchors.centerIn: Overlay.overlay
+            width: Math.min(trackInsightPanel.width - 40, 740)
+            modal: true
+            padding: 20
+            contentItem: ColumnLayout {
+                spacing: 12
+                Text {
+                    text: root.tr("track_insight_share")
+                    textFormat: Text.PlainText; color: BrandTheme.colors.text
+                    font.pixelSize: 24; font.bold: true
+                    Layout.fillWidth: true
+                }
+                ScrollView {
+                    id: insightShareScroll
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: Math.min(insightShareSummary.implicitHeight, 300)
+                    contentWidth: availableWidth; clip: true
+                    Text {
+                        id: insightShareSummary
+                        objectName: "trackInsightShareSummary"
+                        width: insightShareScroll.availableWidth
+                        text: trackInsightPanel.canShareInsight ? djconnect.trackInsightShareText : ""
+                        textFormat: Text.PlainText; wrapMode: Text.Wrap
+                        color: BrandTheme.colors.text; font.pixelSize: 20
+                    }
+                }
+                GlassButton {
+                    objectName: "trackInsightCopyShareText"
+                    text: root.tr("track_insight_copy_share_text"); iconName: "copy"
+                    Layout.fillWidth: true; enabled: trackInsightPanel.canShareInsight
+                    onClicked: djconnect.copyTrackInsight()
+                }
+                GlassButton {
+                    text: root.tr("close"); tertiary: true; Layout.fillWidth: true
+                    onClicked: insightSharePopup.close()
+                }
+            }
+        }
 
         ColumnLayout {
             anchors.fill: parent
@@ -3227,6 +3273,15 @@ BrandWindow {
                     loading: djconnect.askDjBusy
                     enabled: trackInsightPanel.canRequestAnalysis
                     onClicked: djconnect.refreshTrackInsight()
+                }
+                GlassButton {
+                    objectName: "trackInsightShareOpen"
+                    iconName: "share"; tertiary: true
+                    visible: trackInsightPanel.canShareInsight
+                    Accessible.name: root.tr("track_insight_share")
+                    ToolTip.text: Accessible.name
+                    ToolTip.visible: hovered
+                    onClicked: insightSharePopup.open()
                 }
             }
 

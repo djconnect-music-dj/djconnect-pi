@@ -3471,7 +3471,11 @@ def test_qualified_track_insight_clears_at_expiry_and_rejects_replayed_observati
     backend._persist_backend_summary = Mock()
     backend.client.track_insight = Mock()
     backend.client.current_track_insight = Mock(return_value={
-        "success": True, "track": {"title": "Track"}, "analysis": {"summary": "Qualified analysis"},
+        "success": True, "track": {"title": "Track"},
+        "analysis": {"summary": "Qualified analysis", "basis": "qualified_credit_and_interpretation_v1",
+                     "measured_audio": False, "verified_context": "Verified recording credit",
+                     "source_attribution": {"provider": "Fixture", "license": "CC0-1.0",
+                                            "url": "https://fixture.invalid/credit"}},
         "subject": {"schema_version": 1, "mode": "current", "media_identity": recording,
                     "observation_id": "original", "expires_in": 10, "expires_at": 120},
     })
@@ -3480,7 +3484,15 @@ def test_qualified_track_insight_clears_at_expiry_and_rejects_replayed_observati
     assert backend.trackInsightTitle == "Track" and backend.trackInsightText
     owner.transport.track_insight_capabilities.assert_called_once_with(owner.transport.binding())
 
-    owner._clock.now.return_value = 110
+    with patch("djconnect_pi.app.QGuiApplication.clipboard") as clipboard:
+        backend.copyTrackInsight()
+        shared = clipboard.return_value.setText.call_args.args[0]
+        assert all(part in shared for part in (
+            "Track", "Qualified analysis", "Verified recording credit", "CC0-1.0", "https://fixture.invalid/credit",
+        ))
+        owner._clock.now.return_value = 110
+        backend.copyTrackInsight()
+        clipboard.return_value.setText.assert_called_once()
     backend._expire_track_insight()
     assert backend.trackInsightText == ""
     backend._track_insight_worker(backend.playback, backend._track_insight_scope(), force_refresh=True)

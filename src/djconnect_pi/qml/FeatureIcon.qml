@@ -379,6 +379,13 @@ Canvas {
                 line(16, 7, 16, 25)
                 line(12, 7, 20, 7)
                 line(12, 25, 20, 25)
+            } else if (iconName === "share") {
+                ctx.beginPath()
+                ctx.moveTo(px(11), py(13)); ctx.lineTo(px(7), py(13)); ctx.lineTo(px(7), py(27))
+                ctx.lineTo(px(25), py(27)); ctx.lineTo(px(25), py(13)); ctx.lineTo(px(21), py(13))
+                ctx.stroke()
+                line(16, 18, 16, 5)
+                line(11, 10, 16, 5); line(16, 5, 21, 10)
             } else if (iconName === "document") {
                 roundRect(8, 4, 16, 24, 2)
                 line(12, 11, 20, 11); line(12, 16, 20, 16); line(12, 21, 17, 21)

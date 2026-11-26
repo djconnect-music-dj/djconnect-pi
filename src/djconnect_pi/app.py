@@ -781,6 +781,37 @@ class DJConnectBackend(QObject):
     def trackInsightText(self) -> str:
         return self._track_insight_text
 
+    @Property(str, notify=trackInsightChanged)
+    def trackInsightShareText(self) -> str:
+        if not self._track_insight_title or not self._track_insight_text:
+            return ""
+        if not self._demo_mode:
+            if (not self.paired or not self._backend_available or self._version_mismatch_visible
+                    or self._track_insight_result_scope != self._track_insight_scope()):
+                return ""
+            if (self._track_insight_deadline is not None
+                    and self._track_insight_deadline <= self._session_controller._clock.now()):
+                return ""
+        heading = " — ".join(value for value in (self._track_insight_title, self._track_insight_artist) if value)
+        parts = [heading, self._track_insight_text]
+        if self._demo_mode:
+            parts.insert(0, self.tr_key("demo_mode"))
+        credit = self._track_insight_verified_credit
+        if credit.get("context") and credit["context"] != self._track_insight_text:
+            parts.append(credit["context"])
+        if credit.get("url"):
+            parts.append("\n".join(credit[key] for key in ("provider", "license", "url") if credit.get(key)))
+        if self._track_insight_audio_notice:
+            parts.append(self.tr_key("track_insight_unmeasured_audio"))
+        return "\n\n".join(parts)
+
+    @Slot()
+    def copyTrackInsight(self) -> None:
+        text = self.trackInsightShareText if self._application_foreground else ""
+        if text:
+            QGuiApplication.clipboard().setText(text)
+            self.showToastForContext(self.tr_key("copied"), "trackinsight")
+
     @Property(bool, notify=trackInsightChanged)
     def trackInsightAudioNotice(self) -> bool:
         return self._track_insight_audio_notice
