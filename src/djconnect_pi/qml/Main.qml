@@ -953,8 +953,10 @@ BrandWindow {
         property bool searching: false
         property bool keyboardOpen: false
         property int pendingMediaIndex: -1
+        property int selectedMatchIndex: 0
         readonly property bool compact: width < 900
-        readonly property var matches: filterItems(items, searchInput.text)
+        readonly property string query: searchInput.text.trim()
+        readonly property var matches: filterItems(items, query)
         signal refreshRequested()
 
         function filterItems(source, query) {
@@ -970,9 +972,13 @@ BrandWindow {
             return String(value).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
         }
         function moveMatch(delta) {
-            if (!matches.length || !searchInput.text.trim()) return
-            mediaRows.currentIndex = (mediaRows.currentIndex + delta + matches.length) % matches.length
-            mediaRows.positionViewAtIndex(mediaRows.currentIndex, ListView.Contain)
+            if (!matches.length || !query) return
+            selectedMatchIndex = (selectedMatchIndex + delta + matches.length) % matches.length
+            centerMatch()
+        }
+        function centerMatch() {
+            if (!visible || !query || !matches.length) return
+            mediaRows.positionViewAtIndex(selectedMatchIndex, ListView.Center)
         }
         function closeSearch() {
             pendingMediaIndex = -1
@@ -1006,8 +1012,13 @@ BrandWindow {
         }
         onMatchesChanged: {
             pendingMediaIndex = -1
-            mediaRows.currentIndex = 0
-            mediaRows.positionViewAtBeginning()
+            selectedMatchIndex = Math.max(0, Math.min(selectedMatchIndex, matches.length - 1))
+            if (query) Qt.callLater(centerMatch)
+            else mediaRows.positionViewAtBeginning()
+        }
+        onQueryChanged: {
+            selectedMatchIndex = 0
+            if (query) Qt.callLater(centerMatch)
         }
         Connections {
             target: djconnect
@@ -1092,13 +1103,22 @@ BrandWindow {
                         }
                         Keys.onEscapePressed: if (panel.keyboardOpen) panel.keyboardOpen = false; else panel.closeSearch()
                     }
+                    Text {
+                        objectName: "mediaSearchMatchCount"
+                        visible: panel.query.length > 0 && panel.matches.length > 0
+                        text: (panel.selectedMatchIndex + 1) + " / " + panel.matches.length
+                        color: BrandTheme.colors.muted
+                        font.pixelSize: 16
+                    }
                     GlassButton {
+                        objectName: "mediaSearchPreviousMatch"
                         iconName: "arrow_up"; tertiary: true
                         Accessible.name: root.tr("logs_previous_match")
                         enabled: panel.matches.length > 0 && searchInput.text.trim().length > 0
                         onClicked: panel.moveMatch(-1)
                     }
                     GlassButton {
+                        objectName: "mediaSearchNextMatch"
                         iconName: "arrow_down"; tertiary: true
                         Accessible.name: root.tr("logs_next_match")
                         enabled: panel.matches.length > 0 && searchInput.text.trim().length > 0
@@ -1158,8 +1178,8 @@ BrandWindow {
                             introduction: true
                             radius: panel.compact ? 24 : 34
                             pressed: mediaRow.down
-                            focused: mediaRow.activeFocus || (searchInput.text.trim().length > 0
-                                && mediaRows.currentIndex === mediaRow.index)
+                            focused: mediaRow.activeFocus || (panel.query.length > 0
+                                && panel.selectedMatchIndex === mediaRow.index)
                         }
                         contentItem: RowLayout {
                             spacing: panel.compact ? 12 : 17

@@ -111,6 +111,30 @@ def main():
         label = visual_item(long_title, "mediaOverflowLabel")
         assert not long_title.property("scrolling") and long_title.property("shift") == 0
         assert label.property("lineCount") > 1 and not label.property("truncated")
+        queue_panel = visual_item(window.contentItem(), "queuePanel")
+        records = [{"title": f"Fixture {index:02d}", "uri": f"spotify:track:fixture-{index}", "index": index}
+                   for index in range(30)]
+        backend._queue_items = parse_queue_items({"queue": records})
+        backend.mediaListsChanged.emit()
+        queue_panel.setProperty("searching", True)
+        search_input = visual_item(queue_panel, "mediaSearchInput")
+        search_input.setProperty("text", "fixture")
+        count = visual_item(queue_panel, "mediaSearchMatchCount")
+        next_match = visual_item(queue_panel, "mediaSearchNextMatch")
+        for _ in range(16):
+            QMetaObject.invokeMethod(next_match, "clicked")
+        QTest.qWait(120)
+        assert count.property("text") == "17 / 30"
+        selected = visual_item(media_rows, "mediaItemRow-16")
+        center = selected.mapToItem(media_rows, 0, selected.height() / 2).y()
+        assert abs(center - media_rows.height() / 2) < selected.height()
+        backend._queue_items = parse_queue_items({"queue": records[:18]})
+        backend.mediaListsChanged.emit()
+        QTest.qWait(120)
+        assert count.property("text") == "17 / 18"
+        search_input.setProperty("text", "fixture 0")
+        QTest.qWait(80)
+        assert count.property("text") == "1 / 10"
         window.setProperty("activeScreen", "session")
         for runtime_state in ("opening", "ending"):
             backend.djSession._session["runtime_state"] = runtime_state
