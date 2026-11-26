@@ -5837,7 +5837,7 @@ def _music_dna_cards(profile: dict[str, object], ha_url: str) -> list[dict[str, 
         value = profile.get(key)
         return value if isinstance(value, dict) and value.get("eligible") is not False else {}
 
-    def rows(items, *, artwork=False, limit=5):
+    def rows(items, *, artwork=False, limit=5, title_fields=("title", "name", "track_name")):
         result = []
         for item in items[:limit] if isinstance(items, list) else []:
             if isinstance(item, str) and item.strip():
@@ -5845,7 +5845,7 @@ def _music_dna_cards(profile: dict[str, object], ha_url: str) -> list[dict[str, 
                 continue
             if not isinstance(item, dict):
                 continue
-            title = next((item[key].strip() for key in ("title", "name", "track_name")
+            title = next((item[key].strip() for key in title_fields
                           if isinstance(item.get(key), str) and item[key].strip()), "")
             if not title:
                 continue
@@ -5981,8 +5981,22 @@ def _music_dna_cards(profile: dict[str, object], ha_url: str) -> list[dict[str, 
                   for group in grouped(term, rows(ranges.get(term), artwork=True, limit=12 if shelf else 3), shelf=shelf)]
         card(key, icon, groups=groups)
     feedback = block("discovery_feedback")
-    card("feedback", "sparkles", groups=grouped("accepted", rows(feedback.get("accepted_items") or feedback.get("accepted")))
-         + grouped("feedback_hidden", rows(feedback.get("blocked_artists")) + rows(feedback.get("blocked_items"))))
+    accepted = feedback.get("accepted_recommendations") or feedback.get("accepted_items") or feedback.get("accepted")
+    groups = grouped("accepted", rows(accepted, title_fields=("title", "name", "track_name", "subtitle"), limit=3))
+    less_like_this = signal_rows(feedback.get("negative_signals"))
+    if less_like_this:
+        groups.append({"key": "music_discovery_less_like_this", "rows": less_like_this, "shelf": False})
+    hidden = rows(feedback.get("hidden_artists") or feedback.get("blocked_artists")) + rows(feedback.get("blocked_items"))
+    groups += grouped("feedback_hidden", hidden)
+    counts = feedback.get("counts")
+    counts = counts if isinstance(counts, dict) else {}
+    totals = [
+        ("music_dna_card_feedback_accepted_count", feedback.get("accepted_count")),
+        ("music_dna_card_feedback_negative_count", feedback.get("negative_count")),
+        *((f"music_discovery_{action}", counts.get(action)) for action in ("not_for_me", "less_like_this", "hide_artist")),
+    ]
+    card("feedback", "sparkles", groups=groups, entries=[
+        {"labelKey": label, "title": str(value)} for label, value in totals if type(value) is int and value >= 0])
     card("basis", "waveform", entries=signal_rows(profile.get("based_on"))
          or signal_rows(energy.get("recent_signals")) or signal_rows(profile.get("recommendation_signals")))
     return cards

@@ -697,6 +697,31 @@ def test_music_dna_keeps_each_playtime_ranking_in_producer_order():
     assert [(row["rank"], row["title"], row["value"]) for row in albums["rows"]] == [(1, "Album", "1h 54m")]
 
 
+def test_music_dna_shows_confirmed_discover_feedback_totals_and_details():
+    feedback = {
+        "accepted_recommendations": [{"subtitle": "Accepted album"}],
+        "negative_signals": [{"title": "Different direction", "count": 2}],
+        "hidden_artists": [{"name": "Hidden artist"}], "blocked_items": [{"name": "Hidden track"}],
+        "accepted_count": 0, "negative_count": 4,
+        "counts": {"not_for_me": 2, "less_like_this": True, "hide_artist": -1, "unsupported": 99},
+    }
+    payload = {"enabled": True, "profile": {"discovery_feedback": feedback}}
+    card, = parse_music_dna_profile(payload)["sections"]
+    assert card["key"] == "music_dna_card_feedback"
+    assert [(row["labelKey"], row["title"]) for row in card["rows"]] == [
+        ("music_dna_card_feedback_accepted_count", "0"),
+        ("music_dna_card_feedback_negative_count", "4"),
+        ("music_discovery_not_for_me", "2"),
+    ]
+    assert {group["key"]: [row["title"] for row in group["rows"]] for group in card["groups"]} == {
+        "music_dna_card_accepted": ["Accepted album"],
+        "music_discovery_less_like_this": ["Different direction"],
+        "music_dna_card_feedback_hidden": ["Hidden artist", "Hidden track"],
+    }
+    feedback["eligible"] = False
+    assert parse_music_dna_profile(payload)["sections"] == []
+
+
 def test_music_discovery_feed_renders_backend_sections_in_order_without_assumed_ids() -> None:
     parsed = parse_music_discovery_feed(
         {

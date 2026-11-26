@@ -1332,6 +1332,8 @@ _MUSIC_DNA_CARD_TRANSLATIONS = {
     "music_dna_card_top_artists": ('Top artists by period', 'Topartiesten per periode', 'Topkünstler nach Zeitraum', 'Artistes préférés par période', 'Artistas favoritos por período'),
     "music_dna_card_feedback": ('Discover feedback', 'Ontdek-feedback', 'Feedback zu Entdecken', 'Avis sur les découvertes', 'Opiniones sobre descubrimientos'),
     "music_dna_card_feedback_hidden": ('Hidden in Discover', 'Verborgen in Ontdek', 'In Entdecken ausgeblendet', 'Masqués dans Découvrir', 'Ocultos en Descubrir'),
+    "music_dna_card_feedback_accepted_count": ('Total accepted', 'Totaal geaccepteerd', 'Insgesamt angenommen', 'Total accepté', 'Total aceptadas'),
+    "music_dna_card_feedback_negative_count": ('Total negative feedback', 'Totaal negatieve feedback', 'Negatives Feedback gesamt', 'Total des avis négatifs', 'Total de opiniones negativas'),
     "music_dna_card_accepted": ('Accepted recommendations', 'Geaccepteerde aanbevelingen', 'Angenommene Empfehlungen', 'Recommandations acceptées', 'Recomendaciones aceptadas'),
     "music_dna_card_artists_by_time": ('Top artists by listening time', 'Topartiesten op luistertijd', 'Topkünstler nach Hörzeit', 'Artistes les plus écoutés', 'Artistas más escuchados'),
     "music_dna_card_albums_by_time": ('Top albums by listening time', 'Topalbums op luistertijd', 'Topalben nach Hörzeit', 'Albums les plus écoutés', 'Álbumes más escuchados'),
