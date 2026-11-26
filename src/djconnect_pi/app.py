@@ -264,7 +264,7 @@ class DJConnectBackend(QObject):
         self._music_discovery_dna_disabled = False
         self._music_discovery_loaded = False
         self._music_discovery_busy = False
-        self._music_discovery_playing_id = ""
+        self._music_discovery_playing: tuple[str, str] | None = None
         self._music_discovery_feedback_supported = False
         self._music_discovery_consent_rejected = False
         self._track_insight_title = ""
@@ -572,7 +572,11 @@ class DJConnectBackend(QObject):
 
     @Property(str, notify=musicDiscoveryChanged)
     def musicDiscoveryPlayingId(self) -> str:
-        return self._music_discovery_playing_id
+        return self._music_discovery_playing[1] if self._music_discovery_playing else ""
+
+    @Property(str, notify=musicDiscoveryChanged)
+    def musicDiscoveryPlayingSectionId(self) -> str:
+        return self._music_discovery_playing[0] if self._music_discovery_playing else ""
 
     @Property(bool, notify=musicDiscoveryChanged)
     def musicDiscoveryFeedbackSupported(self) -> bool:
@@ -1764,7 +1768,7 @@ class DJConnectBackend(QObject):
             self._sync_config_from_disk()
             if ticket != self._private_read_context():
                 return
-        if (not self._demo_mode and not self.paired) or self._music_discovery_busy or self._music_discovery_playing_id:
+        if (not self._demo_mode and not self.paired) or self._music_discovery_busy or self._music_discovery_playing:
             return
         try:
             item = json.loads(payload)
@@ -1777,17 +1781,19 @@ class DJConnectBackend(QObject):
             _LOGGER.info("Ignoring Music Discovery item without backend id")
             return
         item_id = str(item.get("discovery_item_id") or item.get("id") or "").strip()
+        section_id = str(item.get("section_id") or "").strip()
         if self._demo_mode:
             self._play_demo_uri(item_id)
-            self.musicDiscoveryPlayed.emit(str(item.get("section_id") or ""), item_id)
+            self.musicDiscoveryPlayed.emit(section_id, item_id)
             return
         self._music_discovery_error = ""
-        self._music_discovery_playing_id = item_id
+        playing = (section_id, item_id)
+        self._music_discovery_playing = playing
         self.musicDiscoveryChanged.emit()
         self._run(
             self.tr_key("music_discovery"),
             lambda: self._music_discovery_play_worker(item, ticket=ticket),
-            done=self._clear_music_discovery_playing,
+            done=lambda: self._clear_music_discovery_playing(playing),
         )
 
     @Slot(str, str)
@@ -3043,7 +3049,7 @@ class DJConnectBackend(QObject):
         self._music_discovery_error = ""
         self._music_discovery_dna_disabled = False
         self._music_discovery_loaded = False
-        self._music_discovery_playing_id = ""
+        self._music_discovery_playing = None
         self._music_discovery_feedback_supported = False
         self._music_discovery_consent_rejected = False
         self._track_insight_revision += 1
@@ -3080,8 +3086,10 @@ class DJConnectBackend(QObject):
             self._music_discovery_items = items
             self.musicDiscoveryItemsChanged.emit()
 
-    def _clear_music_discovery_playing(self) -> None:
-        self._music_discovery_playing_id = ""
+    def _clear_music_discovery_playing(self, expected: tuple[str, str]) -> None:
+        if self._music_discovery_playing is not expected:
+            return
+        self._music_discovery_playing = None
         self.musicDiscoveryChanged.emit()
 
     @Slot(object)

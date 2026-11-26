@@ -502,6 +502,9 @@ def main():
                     "has_artwork", "variant_title_penalty", "fixture_unknown", "{fixture_unknown}",
                 ],
             }, {"id": "new-kind", "kind": "other", "title": "Future recommendation"}]},
+            {"id": "other-shelf", "title": "Another section", "items": [
+                {"id": "fixture-track", "kind": "track", "title": "The same recommendation in another section"},
+            ]},
         ]})
         assert not empty_feed.property("visible")
         discovery_page = window.findChild(QObject, "musicDiscoveryPanel")
@@ -543,10 +546,15 @@ def main():
         assert quality_strip.property("contentX") > 0 and quality_strip.property("contentY") == 0
         card = visual_item(window.contentItem(), "discoveryCardArtwork")
         card_spinner = card.findChild(QObject, "discoveryArtworkSpinner")
-        backend._music_discovery_playing_id = "fixture-track"
+        other_shelf = visual_item(window.contentItem(), "discoveryShelf-other-shelf")
+        other_card = visual_item(other_shelf, "discoveryCardArtwork")
+        other_spinner = other_card.findChild(QObject, "discoveryArtworkSpinner")
+        playing = ("fixture-shelf", "fixture-track")
+        backend._music_discovery_playing = playing
         backend.musicDiscoveryChanged.emit()
-        assert card_spinner.property("visible") and not spinner.property("visible")
-        backend._clear_music_discovery_playing()
+        assert card_spinner.property("visible") and not other_spinner.property("visible")
+        assert not spinner.property("visible")
+        backend._clear_music_discovery_playing(playing)
         assert not card_spinner.property("visible")
         current_item, *other_items = backend.musicDiscoveryItems
         refreshed_title = "Updated recommendation title"

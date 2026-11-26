@@ -325,6 +325,29 @@ def test_discovery_play_closes_only_on_acknowledged_playback(tmp_path: Path, res
         assert backend.playback.title == "Confirmed track"
 
 
+def test_old_discovery_play_completion_leaves_current_spinner_active(tmp_path):
+    ensure_app()
+    config_path = tmp_path / "config.json"
+    save_config(config_path, Config(paired=True, device_token="fixture", ha_url="http://fixture.invalid"))
+    backend = DJConnectBackend(config_path)
+    backend._sync_config_from_disk = Mock()
+    backend._run = Mock()
+    payload = json.dumps({"section_id": "daily", "discovery_item_id": "suggestion"})
+
+    backend.playMusicDiscoveryItem(payload)
+    old_done = backend._run.call_args.kwargs["done"]
+    backend.cfg.active_profile_id = "profile-b"
+    backend._clear_profile_scoped_caches(preserve_session=True)
+    backend.playMusicDiscoveryItem(payload)
+    new_done = backend._run.call_args.kwargs["done"]
+
+    old_done()
+    assert backend.musicDiscoveryPlayingSectionId == "daily"
+    assert backend.musicDiscoveryPlayingId == "suggestion"
+    new_done()
+    assert backend.musicDiscoveryPlayingSectionId == backend.musicDiscoveryPlayingId == ""
+
+
 @pytest.mark.parametrize("stage", ["config", "request", "confirmation"])
 def test_discovery_play_ignores_results_when_profile_changes(tmp_path, stage):
     ensure_app()

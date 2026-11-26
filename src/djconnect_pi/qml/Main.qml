@@ -3557,7 +3557,7 @@ BrandWindow {
                             delegate: GlassSurface {
                                 id: shelf
                                 required property var modelData
-                                objectName: "discoveryShelf"
+                                objectName: "discoveryShelf-" + shelf.modelData.id
                                 Layout.fillWidth: true
                                 implicitHeight: shelfContent.implicitHeight + 2 * inset
                                 radius: root.standardButtonRadius
@@ -3626,6 +3626,7 @@ BrandWindow {
                                                     Layout.preferredHeight: shelfItems.tileWidth
                                                     playbackPending: djconnect.musicDiscoveryPlayingId.length > 0
                                                         && djconnect.musicDiscoveryPlayingId === recommendationCard.modelData.discoveryItemId
+                                                        && djconnect.musicDiscoveryPlayingSectionId === recommendationCard.modelData.sectionId
                                                 }
                                                 Text {
                                                     text: recommendationCard.modelData.title
