@@ -812,6 +812,22 @@ class DJConnectBackend(QObject):
             QGuiApplication.clipboard().setText(text)
             self.showToastForContext(self.tr_key("copied"), "trackinsight")
 
+    @Slot(QImage, QUrl, str)
+    def saveTrackInsightCard(self, image: QImage, destination: QUrl, expected_text: str) -> None:
+        if (not self._application_foreground or not expected_text or expected_text != self.trackInsightShareText):
+            return
+        path = destination.toLocalFile()
+        if (not path or Path(path).suffix.lower() != ".png" or image.width() != 1080
+                or image.height() not in {1080, 1920}):
+            self.showToastForContext(self.tr_key("track_insight_card_save_failed"), "trackinsight")
+            return
+        target = QSaveFile(path)
+        if target.open(QIODevice.OpenModeFlag.WriteOnly) and image.save(target, "PNG") and target.commit():
+            self.showToastForContext(self.tr_key("track_insight_card_saved"), "trackinsight")
+        else:
+            target.cancelWriting()
+            self.showToastForContext(self.tr_key("track_insight_card_save_failed"), "trackinsight")
+
     @Property(bool, notify=trackInsightChanged)
     def trackInsightAudioNotice(self) -> bool:
         return self._track_insight_audio_notice

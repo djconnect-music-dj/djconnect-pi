@@ -3124,7 +3124,8 @@ BrandWindow {
         onCanChooseVisualMoodChanged: if (!canChooseVisualMood) trackInsightMoodPopup.close()
         readonly property bool autoInsightSurfaceActive: visible && root.active && !root.screenBlanked && !root.splashVisible
             && (djconnect.paired || djconnect.demoMode)
-        readonly property bool canShareInsight: autoInsightSurfaceActive && !djconnect.versionMismatchVisible
+        readonly property bool canShareInsight: visible && (root.active || insightSaveDialog.visible)
+            && !root.screenBlanked && !root.splashVisible && !djconnect.versionMismatchVisible
             && (djconnect.demoMode || djconnect.backendAvailable) && !!djconnect.trackInsightShareText
         onCanShareInsightChanged: if (!canShareInsight && insightSharePopup) insightSharePopup.close()
         readonly property bool canAutoRequestAnalysis: autoInsightSurfaceActive && !djconnect.askDjBusy
@@ -3189,7 +3190,47 @@ BrandWindow {
             modal: true
             padding: 20
             property bool storyCard: true
+            property bool renderingCard: false
+            property int exportGeneration: 0
             onAboutToShow: storyCard = true
+            onClosed: {
+                exportGeneration += 1
+                renderingCard = false
+                if (insightSaveDialog.visible) insightSaveDialog.close()
+            }
+
+            function saveCard(destination) {
+                if (!trackInsightPanel.canShareInsight || renderingCard) return
+                const key = trackInsightPanel.autoInsightKey
+                const text = djconnect.trackInsightShareText
+                const story = storyCard
+                const popup = insightSharePopup
+                const generation = ++exportGeneration
+                renderingCard = true
+                const accepted = shareCard.grabToImage(function(result) {
+                    if (!popup || popup.exportGeneration !== generation) return
+                    popup.renderingCard = false
+                    if (popup.opened && trackInsightPanel.canShareInsight && popup.storyCard === story
+                            && trackInsightPanel.autoInsightKey === key)
+                        djconnect.saveTrackInsightCard(result.image, destination, text)
+                }, Qt.size(1080, story ? 1920 : 1080))
+                if (!accepted) {
+                    renderingCard = false
+                    djconnect.showToastForContext(root.tr("track_insight_card_save_failed"), "trackinsight")
+                }
+            }
+
+            FileDialog {
+                id: insightSaveDialog
+                objectName: "trackInsightSaveDialog"
+                title: root.tr("track_insight_save_card")
+                fileMode: FileDialog.SaveFile
+                defaultSuffix: "png"
+                nameFilters: [root.tr("track_insight_png_files") + " (*.png)"]
+                options: FileDialog.DontUseNativeDialog
+                onAccepted: insightSharePopup.saveCard(selectedFile)
+            }
+
             contentItem: ColumnLayout {
                 spacing: 12
                 Text {
@@ -3225,6 +3266,7 @@ BrandWindow {
                         width: insightShareScroll.availableWidth
                         spacing: 16
                         TrackInsightShareCard {
+                            id: shareCard
                             objectName: "trackInsightShareCard"
                             visible: trackInsightPanel.canShareInsight
                             story: insightSharePopup.storyCard
@@ -3249,11 +3291,21 @@ BrandWindow {
                         }
                     }
                 }
-                GlassButton {
-                    objectName: "trackInsightCopyShareText"
-                    text: root.tr("track_insight_copy_share_text"); iconName: "copy"
-                    Layout.fillWidth: true; enabled: trackInsightPanel.canShareInsight
-                    onClicked: djconnect.copyTrackInsight()
+                RowLayout {
+                    Layout.fillWidth: true
+                    GlassButton {
+                        objectName: "trackInsightCopyShareText"
+                        text: root.tr("track_insight_copy_share_text"); iconName: "copy"
+                        Layout.fillWidth: true; enabled: trackInsightPanel.canShareInsight
+                        onClicked: djconnect.copyTrackInsight()
+                    }
+                    GlassButton {
+                        objectName: "trackInsightSaveCard"
+                        text: root.tr("track_insight_save_card"); iconName: "document"
+                        Layout.fillWidth: true
+                        enabled: trackInsightPanel.canShareInsight && !insightSharePopup.renderingCard
+                        onClicked: insightSaveDialog.open()
+                    }
                 }
                 GlassButton {
                     text: root.tr("close"); tertiary: true; Layout.fillWidth: true
