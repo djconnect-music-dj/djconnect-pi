@@ -3449,8 +3449,8 @@ BrandWindow {
 
                         Text {
                             objectName: "discoveryEmptyFeedText"
-                            visible: musicDiscoveryPanel.showEmptyFeed && (!musicDiscoveryPanel.requiresMusicDna
-                                || djconnect.musicDiscoveryError.length > 0)
+                            visible: !djconnect.musicDiscoveryBusy && (djconnect.musicDiscoveryError.length > 0
+                                || (musicDiscoveryPanel.showEmptyFeed && !musicDiscoveryPanel.requiresMusicDna))
                             textFormat: Text.PlainText
                             text: {
                                 if (djconnect.musicDiscoveryError.length > 0) return djconnect.musicDiscoveryError

@@ -1599,6 +1599,13 @@ _SESSION_COMPOSER_TRANSLATIONS = {
     "session_archive_limit": ("More sessions are available on the server. This screen shows at most 100.", "Er staan meer sessies op de server. Dit scherm toont er maximaal 100.", "Weitere Sitzungen sind auf dem Server verfügbar. Dieser Bildschirm zeigt höchstens 100.", "D’autres sessions sont disponibles sur le serveur. Cet écran en affiche au maximum 100.", "Hay más sesiones disponibles en el servidor. Esta pantalla muestra como máximo 100."),
     "session_saved_reopen": ("Open again", "Opnieuw openen", "Erneut öffnen", "Ouvrir à nouveau", "Volver a abrir"),
     "session_archive_retry": ("Reload", "Opnieuw laden", "Erneut laden", "Recharger", "Volver a cargar"),
+    "music_discovery_load_failed": (
+        "Could not load recommendations.",
+        "Aanbevelingen konden niet worden geladen.",
+        "Empfehlungen konnten nicht geladen werden.",
+        "Impossible de charger les recommandations.",
+        "No se pudieron cargar las recomendaciones.",
+    ),
     "session_question_sending": ("Sending…", "Wordt verstuurd…", "Wird gesendet…", "Envoi…", "Enviando…"),
     "session_question_accepted": ("Question sent", "Vraag verstuurd", "Frage gesendet", "Question envoyée", "Pregunta enviada"),
     "session_question_accepted_unavailable": ("Question accepted. The saved answer is not available yet.", "Vraag ontvangen. Het opgeslagen antwoord is nog niet beschikbaar.", "Frage angenommen. Die gespeicherte Antwort ist noch nicht verfügbar.", "Question reçue. La réponse enregistrée n’est pas encore disponible.", "Pregunta recibida. La respuesta guardada aún no está disponible."),

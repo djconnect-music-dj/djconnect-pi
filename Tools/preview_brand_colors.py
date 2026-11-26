@@ -485,6 +485,15 @@ def main():
         assert gate.property("visible") and not empty_feed.property("visible")
         backend._apply_music_dna_data({"success": True, "enabled": True})
         assert not gate.property("visible") and empty_feed.property("text") == backend.t("music_discovery_empty")
+        backend._apply_music_discovery_data({"success": True, "sections": [
+            {"id": "fixture-shelf", "items": [{"id": "fixture-track", "title": "Cached recommendation"}]},
+        ]})
+        assert not empty_feed.property("visible")
+        backend._apply_music_discovery_data({"success": False, "error": "music_discovery_unavailable"})
+        assert empty_feed.property("visible") and empty_feed.property("text") == backend.t("music_discovery_load_failed")
+        assert backend.musicDiscoveryItems[0]["title"] == "Cached recommendation"
+        backend._apply_music_discovery_data({"success": True, "sections": []})
+        assert empty_feed.property("text") == backend.t("music_discovery_empty")
         backend._demo_mode = True
         backend.demoModeChanged.emit()
         backend.cfg.paired, backend.cfg.device_token = False, ""

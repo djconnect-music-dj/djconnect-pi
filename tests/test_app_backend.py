@@ -10,6 +10,7 @@ from types import ModuleType
 from unittest.mock import Mock, patch
 
 import pytest
+import requests
 from PySide6.QtCore import QCoreApplication
 from shiboken6 import delete, isValid
 
@@ -190,6 +191,31 @@ def test_music_discovery_disabled_backend_reason_shows_empty_state(tmp_path: Pat
     assert backend.musicDiscoveryEmptyText == "music_dna_disabled"
     backend._clear_profile_scoped_caches(preserve_session=True)
     assert not backend.musicDiscoveryDnaDisabled
+
+
+@pytest.mark.parametrize("action,method", [
+    ("loadMusicDiscovery", "music_discovery_feed"),
+    ("refreshMusicDiscovery", "music_discovery_refresh"),
+])
+def test_discovery_request_shows_scoped_transport_error_and_recovers(tmp_path, action, method):
+    ensure_app()
+    backend = DJConnectBackend(tmp_path / "config.json")
+    backend.cfg.paired = True
+    backend.cfg.device_token = "fixture"
+    backend._sync_config_from_disk = Mock()
+    backend._run = Mock()
+    backend._apply_music_discovery_data({"success": True, "sections": [
+        {"id": "shelf", "items": [{"id": "t1", "title": "Cached recommendation"}]},
+    ]})
+    with patch.object(backend.client, method, side_effect=requests.ConnectionError("private fixture URL")) as read:
+        getattr(backend, action)()
+        worker = backend._run.call_args.args[1]
+        worker()
+    read.assert_called_once()
+    assert backend.musicDiscoveryError == backend.t("music_discovery_load_failed")
+    assert backend.musicDiscoveryItems[0]["title"] == "Cached recommendation"
+    backend._apply_music_discovery_data({"success": True, "sections": []})
+    assert backend.musicDiscoveryError == "" and backend.musicDiscoveryItems == []
 
 
 def test_music_discovery_accept_enables_music_dna_and_loads_feed(tmp_path: Path) -> None:

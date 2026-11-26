@@ -1819,10 +1819,11 @@ class DJConnectBackend(QObject):
         if action == "accept":
             def worker() -> None:
                 self._music_discovery_accept_worker(ticket=ticket)
-        elif action == "refresh":
-            worker = self._music_discovery_refresh_worker
         else:
-            worker = self._music_discovery_feed_worker
+            read = self.client.music_discovery_refresh if action == "refresh" else self.client.music_discovery_feed
+
+            def worker() -> None:
+                self._music_discovery_feed_worker(read=read, ticket=ticket)
         _LOGGER.info("User requested Music Discovery %s", action)
         self._run(self.tr_key("music_discovery"), worker, done=lambda: self._set_music_discovery_busy(False))
 
@@ -2398,18 +2399,29 @@ class DJConnectBackend(QObject):
             return
         self._musicDnaReady.emit(self._profile_read_result(data, ticket))
 
-    def _music_discovery_feed_worker(self) -> None:
-        ticket = self._private_read_context()
+    def _music_discovery_feed_worker(self, *, read=None, ticket=None) -> None:
+        current = self._private_read_context()
+        if ticket is not None and ticket != current:
+            return
+        ticket = current
+        if read is None:
+            read = self.client.music_discovery_feed
         try:
-            data = self.client.music_discovery_feed()
+            data = read()
             if ticket != self._private_read_context():
                 return
             self._apply_profile_context(data)
             ticket = self._private_read_context()
             data["_feedback_supported"] = self._supports_music_discovery_feedback()
             self._persist_backend_summary()
-        except (DJConnectError, requests.RequestException) as exc:
-            raise BackendUnavailable("Music Discovery unavailable") from exc
+        except (AuthenticationError, ProtocolVersionMismatch):
+            if ticket == self._private_read_context():
+                raise
+            return
+        except ProfileContextError as exc:
+            data = {"success": False, "error": exc.code}
+        except (DJConnectError, requests.RequestException):
+            data = {"success": False, "error": "music_discovery_unavailable"}
         self._musicDiscoveryReady.emit(self._profile_read_result(data, ticket))
 
     def _music_discovery_accept_worker(self, *, ticket=None) -> None:
@@ -2426,20 +2438,6 @@ class DJConnectBackend(QObject):
             self._persist_backend_summary()
             self._musicDnaReady.emit(self._profile_read_result(profile, ticket))
             data = self.client.music_discovery_feed()
-            if ticket != self._private_read_context():
-                return
-            self._apply_profile_context(data)
-            ticket = self._private_read_context()
-            data["_feedback_supported"] = self._supports_music_discovery_feedback()
-            self._persist_backend_summary()
-        except (DJConnectError, requests.RequestException) as exc:
-            raise BackendUnavailable("Music Discovery unavailable") from exc
-        self._musicDiscoveryReady.emit(self._profile_read_result(data, ticket))
-
-    def _music_discovery_refresh_worker(self) -> None:
-        ticket = self._private_read_context()
-        try:
-            data = self.client.music_discovery_refresh()
             if ticket != self._private_read_context():
                 return
             self._apply_profile_context(data)
@@ -3058,6 +3056,11 @@ class DJConnectBackend(QObject):
         if not isinstance(data, dict):
             return
         error = str(data.get("error") or "")
+        if data.get("success") is False and error == "music_discovery_unavailable":
+            self._music_discovery_error = self.tr_key("music_discovery_load_failed")
+            self._set_backend_available(False)
+            self.musicDiscoveryChanged.emit()
+            return
         if data.get("success") is False and error != "music_dna_disabled":
             # Rejected feeds are not content or Profile authority. Never render
             # their machine error/message as user-facing recommendation text.
