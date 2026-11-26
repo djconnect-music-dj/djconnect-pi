@@ -808,6 +808,10 @@ Item {
         searchPanel.open()
         searchInput.forceActiveFocus()
     }
+    function restoreSearchControlFocus() {
+        if (historyViewOpen && !searchPanel.visible && toolbarSearch.visible && toolbarSearch.enabled)
+            toolbarSearch.forceActiveFocus()
+    }
     Shortcut {
         sequences: [StandardKey.Find]
         enabled: screen.historyViewOpen && screen.searchAvailable
@@ -1111,6 +1115,7 @@ Item {
                     onClicked: moreChoices.open()
                 }
                 GlassButton {
+                    id: toolbarSearch
                     objectName: "sessionToolbarSearch"
                     visible: (!screen.compact || !screen.sessionControlsVisible) && screen.searchAvailable
                     iconName: "search"; Accessible.name: screen.searchLabel
@@ -2860,6 +2865,7 @@ Item {
         objectName: "sessionSearchPanel"
         property bool keyboardVisible: false
         property bool openTouchKeyboard: true
+        property bool restoreControlFocus: false
         property string selectedMatchId: ""
         readonly property var result: screen.archiveSearchAvailable ? screen.owner.archiveSearchState : screen.state.search
         readonly property var matches: screen.archiveSearchAvailable ? (result.sessions || []) : (result.matches || [])
@@ -2909,6 +2915,10 @@ Item {
             }
             submitSearch()
         }
+        function closeFromInput() {
+            restoreControlFocus = true
+            close()
+        }
         onOpened: keyboardVisible = openTouchKeyboard && !searchInput.text.length
         onClosed: {
             keyboardVisible = false
@@ -2916,6 +2926,8 @@ Item {
             searchInput.clear()
             resetSearch()
             if (screen.pendingArchiveSearchReturn) Qt.callLater(screen.restoreArchiveSearch)
+            else if (restoreControlFocus) Qt.callLater(screen.restoreSearchControlFocus)
+            restoreControlFocus = false
         }
         x: keyboardVisible ? 0 : 16
         y: toolbar.y + toolbar.height + 8
@@ -2944,6 +2956,7 @@ Item {
                     onAccepted: searchPanel.acceptSearchInput()
                     Keys.onUpPressed: function(event) { event.accepted = searchPanel.moveMatch(-1) }
                     Keys.onDownPressed: function(event) { event.accepted = searchPanel.moveMatch(1) }
+                    Keys.onEscapePressed: searchPanel.closeFromInput()
                 }
                 GlassButton {
                     iconName: screen.owner.searchBusy ? "" : "search"
@@ -2980,7 +2993,7 @@ Item {
                     enabled: searchPanel.matches.length > 0
                     onClicked: searchPanel.moveMatch(1)
                 }
-                GlassButton { text: screen.tr("close"); onClicked: searchPanel.close() }
+                GlassButton { text: screen.tr("close_search"); onClicked: searchPanel.closeFromInput() }
             }
             Text {
                 Layout.leftMargin: searchPanel.bodyMargin; Layout.rightMargin: searchPanel.bodyMargin

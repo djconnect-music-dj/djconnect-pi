@@ -390,6 +390,11 @@ def main():
                 QTest.qWait(65)
                 assert archive_panel.property("visible") and archive_field.property("activeFocus")
                 assert not archive_panel.property("keyboardVisible")
+                QTest.keyClick(window, Qt.Key.Key_Escape)
+                QTest.qWait(65)
+                assert not archive_panel.property("visible") and archive_search.property("activeFocus")
+                QTest.keyClick(window, find.key(), find.keyboardModifiers())
+                QTest.qWait(65)
                 assert archive_field.property("placeholderText") == TRANSLATIONS[language]["session_archive_search"]
                 archive_field.setProperty("text", "fixture")
                 with patch.object(owner, "_launch") as verify:
