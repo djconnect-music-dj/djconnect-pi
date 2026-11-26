@@ -1117,6 +1117,12 @@ def main():
             search_input.setProperty("text", "keep query")
             QTest.keyClick(window, log_find.key(), log_find.keyboardModifiers())
             assert search_input.property("text") == "keep query" and not logs.property("keyboardOpen")
+            search_count = visual_item(logs, "logsSearchMatchCount")
+            accessible_count = QAccessible.queryAccessibleInterface(search_count)
+            assert search_count.property("visible") and search_count.property("text") == "0"
+            assert accessible_count.text(QAccessible.Text.Name) == backend.t("logs_no_matches")
+            capture("logs-search-no-results-" + locale)
+            empty_count_width = search_count.width()
             QTest.keyClick(window, Qt.Key.Key_Down)
             assert logs.property("matchIndex") == -1
             search_input.setProperty("text", "sample")
@@ -1127,9 +1133,10 @@ def main():
             assert logs.property("matchIndex") == 0
             QTest.keyClick(window, Qt.Key.Key_Down)
             assert logs.property("matchIndex") == 1 and search_input.property("activeFocus")
-            search_count = visual_item(logs, "logsSearchMatchCount")
             search_input.setProperty("text", "  sample  ")
-            assert logs.property("matchIndex") == 1 and search_count.property("text") == "2 / 3"
+            assert logs.property("matchIndex") == 1 and search_count.property("text") == "2/3"
+            assert accessible_count.text(QAccessible.Text.Name) == "2/3"
+            assert search_count.width() == empty_count_width
             assert search_input.property("text") == "  sample  " and search_count.property("visible")
             search_input.setProperty("text", "   ")
             assert logs.property("matchIndex") == -1 and not search_count.property("visible")

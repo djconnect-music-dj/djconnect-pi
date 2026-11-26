@@ -172,7 +172,11 @@ Item {
                     Text {
                         objectName: "logsSearchMatchCount"
                         visible: view.query.length > 0
-                        text: view.matches.length ? (view.matchIndex + 1) + " / " + view.matches.length : view.tr("logs_no_matches")
+                        text: view.matches.length ? (view.matchIndex + 1) + "/" + view.matches.length : "0"
+                        Layout.minimumWidth: 44
+                        horizontalAlignment: Text.AlignRight
+                        Accessible.role: Accessible.StaticText
+                        Accessible.name: view.matches.length ? text : view.tr("logs_no_matches")
                         color: BrandTheme.colors.muted; font.pixelSize: 15
                     }
                     LogAction {
