@@ -1274,6 +1274,17 @@ _SHARED_SETTINGS_TRANSLATIONS = {
 }
 _MUSIC_DNA_CARD_TRANSLATIONS = {
     "music_dna_card_summary": ('Summary', 'Samenvatting', 'Zusammenfassung', 'Résumé', 'Resumen'),
+    "music_dna_no_profile_yet": (
+        "No Music DNA profile yet", "Nog geen Music DNA-profiel", "Noch kein Music-DNA-Profil",
+        "Pas encore de profil Music DNA", "Aún no hay un perfil de Music DNA",
+    ),
+    "music_dna_building_profile": (
+        "Home Assistant builds your profile as you listen.",
+        "Home Assistant bouwt je profiel op terwijl je luistert.",
+        "Home Assistant baut dein Profil auf, während du Musik hörst.",
+        "Home Assistant construit votre profil au fil de vos écoutes.",
+        "Home Assistant crea tu perfil a medida que escuchas música.",
+    ),
     "music_dna_card_favorite_genres": ('Favorite genres', 'Favoriete genres', 'Lieblingsgenres', 'Genres favoris', 'Géneros favoritos'),
     "music_dna_card_favorite_artists": ('Favorite artists', 'Favoriete artiesten', 'Lieblingskünstler', 'Artistes favoris', 'Artistas favoritos'),
     "music_dna_card_artists": ('Artists', 'Artiesten', 'Künstler', 'Artistes', 'Artistas'),

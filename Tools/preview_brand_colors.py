@@ -332,6 +332,26 @@ def main():
         backend.demoModeChanged.emit()
         backend.hideToast()
         backend.setLanguage("nl")
+        window.setProperty("activeScreen", "musicdna")
+        backend._demo_mode = False
+        backend._apply_music_dna_data({"success": True, "enabled": True, "profile": {}})
+        backend._demo_mode = True
+        QTest.qWait(100)
+        no_profile = visual_item(window.contentItem(), "musicDnaNoProfile")
+        heading = visual_item(no_profile, "musicDnaNoProfileHeading")
+        detail = visual_item(no_profile, "musicDnaNoProfileDetail")
+        for language in ("en", "nl", "de", "fr", "es"):
+            backend.setLanguage(language)
+            QTest.qWait(35)
+            assert no_profile.property("visible")
+            assert heading.property("text") == backend.t("music_dna_no_profile_yet")
+            assert detail.property("text") == backend.t("music_dna_building_profile")
+            assert detail.property("contentWidth") <= detail.width() + 1
+        backend._set_demo_music_dna(False)
+        assert not no_profile.property("visible")
+        backend._set_demo_music_dna(True)
+        assert not no_profile.property("visible")
+        backend.setLanguage("nl")
         window.setProperty("activeScreen", "session")
         for runtime_state in ("opening", "ending"):
             backend.djSession._session["runtime_state"] = runtime_state

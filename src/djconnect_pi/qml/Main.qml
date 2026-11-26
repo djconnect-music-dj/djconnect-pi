@@ -3908,10 +3908,49 @@ BrandWindow {
                 }
 
                 GridLayout {
+                    id: musicDnaGrid
                     width: Math.max(0, musicDnaScroll.availableWidth)
                     columns: Math.max(1, Math.floor((width + columnSpacing) / (310 + columnSpacing)))
                     columnSpacing: 14
                     rowSpacing: 14
+
+                    GlassCard {
+                        objectName: "musicDnaNoProfile"
+                        visible: !djconnect.musicDnaBusy && djconnect.musicDnaSections.length === 0
+                            && djconnect.musicDnaSummary.length === 0
+                        Layout.columnSpan: musicDnaGrid.columns
+                        Layout.fillWidth: true
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 10
+                            FeatureIcon {
+                                iconName: "waveform"
+                                Layout.preferredWidth: 24
+                                Layout.preferredHeight: 24
+                                Accessible.ignored: true
+                            }
+                            Text {
+                                objectName: "musicDnaNoProfileHeading"
+                                text: root.tr("music_dna_no_profile_yet")
+                                textFormat: Text.PlainText
+                                color: BrandTheme.colors.text
+                                font.pixelSize: 22
+                                font.bold: true
+                                wrapMode: Text.WordWrap
+                                Accessible.role: Accessible.Heading
+                                Layout.fillWidth: true
+                            }
+                        }
+                        Text {
+                            objectName: "musicDnaNoProfileDetail"
+                            text: root.tr("music_dna_building_profile")
+                            textFormat: Text.PlainText
+                            color: BrandTheme.colors.muted
+                            font.pixelSize: 18
+                            wrapMode: Text.WordWrap
+                            Layout.fillWidth: true
+                        }
+                    }
 
                     Repeater {
                         model: djconnect.musicDnaSections.length ? djconnect.musicDnaSections
