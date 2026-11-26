@@ -242,6 +242,7 @@ class DJConnectBackend(QObject):
         self._toast_timer.setSingleShot(True)
         self._toast_timer.timeout.connect(self.hideToast)
         self._logs_text = ""
+        self._logs_read_error = ""
         self._logs_visible = False
         self._demo_mode = False
         self._demo_progress = QTimer(self)
@@ -963,6 +964,10 @@ class DJConnectBackend(QObject):
     @Property(str, notify=logsChanged)
     def logsText(self) -> str:
         return self._logs_text
+
+    @Property(str, notify=logsChanged)
+    def logsReadError(self) -> str:
+        return self._logs_read_error
 
     @Property(bool, notify=logsChanged)
     def logsVisible(self) -> bool:
@@ -2015,13 +2020,15 @@ class DJConnectBackend(QObject):
         _LOGGER.info("User opened logs view")
         self.showToastForContext(self.tr_key("logs"), "diagnostics")
         path = Path(self.cfg.log_file)
+        self._logs_read_error = ""
         try:
             data = _read_tail_text(path, LOG_DISPLAY_MAX_BYTES)
             self._logs_text = _format_logs_for_display(data)
         except FileNotFoundError:
             self._logs_text = ""
         except Exception as exc:  # noqa: BLE001 - log rendering must remain available when local diagnostics are unreadable
-            self._logs_text = self.tr_key("logs_failed", error=exc)
+            self._logs_text = ""
+            self._logs_read_error = str(exc)
         self._logs_visible = True
         self.logsChanged.emit()
 
@@ -2039,6 +2046,7 @@ class DJConnectBackend(QObject):
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text("", encoding="utf-8")
             self._logs_text = ""
+            self._logs_read_error = ""
             self.showToastForContext(self.tr_key("logs_cleared"), "diagnostics")
         except Exception as exc:  # noqa: BLE001 - log clearing must report all local filesystem failures to the UI
             self._logs_text = self.tr_key("logs_failed", error=exc)
@@ -2048,6 +2056,7 @@ class DJConnectBackend(QObject):
     def hideLogs(self) -> None:
         self._logs_visible = False
         self._logs_text = ""
+        self._logs_read_error = ""
         self.logsChanged.emit()
 
     @Slot(str)

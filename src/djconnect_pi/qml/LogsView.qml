@@ -292,18 +292,30 @@ Item {
                     width: Math.min(parent.width, 420)
                     spacing: 12
                     FeatureIcon {
-                        iconName: "logs"
+                        iconName: view.backend.logsReadError ? "info" : "logs"
+                        iconColor: view.backend.logsReadError ? BrandTheme.colors.warning : BrandTheme.colors.text
                         Layout.alignment: Qt.AlignHCenter
                         Layout.preferredWidth: 44
                         Layout.preferredHeight: 44
                     }
                     Text {
                         objectName: "logsEmptyMessage"
-                        text: view.tr("logs_empty")
+                        text: view.tr(view.backend.logsReadError ? "logs_read_unavailable" : "logs_empty")
                         color: BrandTheme.colors.muted
                         font.pixelSize: view.compact ? 19 : 23
                         horizontalAlignment: Text.AlignHCenter
                         wrapMode: Text.WordWrap
+                        Layout.fillWidth: true
+                    }
+                    Text {
+                        objectName: "logsReadErrorDetail"
+                        visible: text.length > 0
+                        text: view.backend.logsReadError
+                        textFormat: Text.PlainText
+                        color: BrandTheme.colors.muted
+                        font.pixelSize: view.compact ? 16 : 18
+                        horizontalAlignment: Text.AlignHCenter
+                        wrapMode: Text.Wrap
                         Layout.fillWidth: true
                     }
                 }
