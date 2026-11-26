@@ -30,6 +30,7 @@ from PySide6.QtCore import (
     QIODevice,
     QObject,
     QSaveFile,
+    QSettings,
     Qt,
     QTimer,
     QUrl,
@@ -222,6 +223,7 @@ class DJConnectBackend(QObject):
     profileChanged = Signal()
     djAnnouncementChanged = Signal()
     localAudioDevicesChanged = Signal()
+    gameHighScoresChanged = Signal()
     wakeScreenRequested = Signal()
     temporaryWakeRequested = Signal(int, bool)
     screenshotRequested = Signal()
@@ -358,6 +360,14 @@ class DJConnectBackend(QObject):
         self._control_outputs_status = ""
         self._last_display_wake_at = 0.0
         self._game_sound_objects: list[tuple[object, QBuffer]] = []
+        self._game_settings = QSettings(str(config_path.with_suffix(".games.ini")), QSettings.Format.IniFormat, self)
+        self._game_high_scores = {}
+        for game in ("pong", "asteroids", "fly", "pacman"):
+            try:
+                score = self._game_settings.value(f"highScores/{game}", 0, type=int)
+            except (TypeError, ValueError):
+                score = 0
+            self._game_high_scores[game] = score if type(score) is int and 0 <= score <= 2_147_483_647 else 0
         self._status_text = self.tr_key("paired" if self.cfg.paired else "not_paired")
         self._backend_available = True
         self._update_check_running = False
@@ -2965,6 +2975,19 @@ class DJConnectBackend(QObject):
     def showToastForContext(self, text: str, context: str) -> None:
         self._show_toast(text, 2000, context)
 
+    @Property("QVariantMap", notify=gameHighScoresChanged)
+    def gameHighScores(self) -> dict[str, int]:
+        return self._game_high_scores.copy()
+
+    @Slot(str, int)
+    def recordGameHighScore(self, game: str, score: int) -> None:
+        previous = self._game_high_scores.get(game)
+        if previous is None or score <= previous:
+            return
+        self._game_high_scores[game] = score
+        self._game_settings.setValue(f"highScores/{game}", score)
+        self.gameHighScoresChanged.emit()
+
     @Slot(str)
     def playGameSound(self, kind: str) -> None:
         if not self.localAudioOutputAvailable:
@@ -4582,6 +4605,7 @@ class DJConnectBackend(QObject):
     @Slot()
     def shutdown(self) -> None:
         self._shutting_down = True
+        self._game_settings.sync()
         self.closeAskDjHelp()
         self._edge_back_gesture.cancel()
         _LOGGER.info("Stopping DJConnect Pi client backend")

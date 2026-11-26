@@ -2000,6 +2000,23 @@ def test_demo_mode_uses_example_output_devices(tmp_path: Path) -> None:
     assert "True" not in backend.outputDevices
 
 
+def test_game_high_scores_survive_backend_restart_without_changing_client_config(tmp_path: Path) -> None:
+    ensure_app()
+    config_path = tmp_path / "config.json"
+    backend = DJConnectBackend(config_path)
+    original_config = config_path.read_bytes()
+    backend.recordGameHighScore("pong", 30)
+    backend.recordGameHighScore("pong", 10)
+    backend.recordGameHighScore("asteroids", 15)
+    backend.recordGameHighScore("unknown", 1000)
+    backend.shutdown()
+
+    restarted = DJConnectBackend(config_path)
+    assert restarted.gameHighScores == {"pong": 30, "asteroids": 15, "fly": 0, "pacman": 0}
+    assert config_path.read_bytes() == original_config
+    restarted.shutdown()
+
+
 def test_queue_parser_preserves_optional_context_and_episode_uri() -> None:
     queue = parse_queue_items(
         {

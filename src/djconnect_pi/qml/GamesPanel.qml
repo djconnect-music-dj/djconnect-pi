@@ -72,7 +72,6 @@ Rectangle {
     Keys.onEscapePressed: root.closeRequested()
     property bool playing: false
     property int score: 0
-    property var highScores: ({ pong: 0, asteroids: 0, fly: 0, pacman: 0 })
     property bool flash: false
     property int pauseTicks: 0
     property int hitPulseTicks: 0
@@ -121,15 +120,12 @@ Rectangle {
     property var pellets: []
 
     function highScore() {
-        return highScores[gameId] || 0
+        return djconnect.gameHighScores[gameId] || 0
     }
 
     function setScore(value) {
         score = value
-        if (value > highScore()) {
-            highScores[gameId] = value
-            highScoresChanged()
-        }
+        if (value > highScore()) djconnect.recordGameHighScore(gameId, value)
     }
 
     function startGame() {
@@ -558,6 +554,7 @@ Rectangle {
                     color: BrandTheme.colors.text; font.pixelSize: root.compact ? 16 : 20
                 }
                 Text {
+                    objectName: "gameHighScore"
                     text: root.tr("high") + " " + root.highScore()
                     color: BrandTheme.colors.muted; font.pixelSize: root.compact ? 16 : 20
                 }
