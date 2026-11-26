@@ -180,6 +180,20 @@ def main():
             backend._apply_playback(Playback(title="Confirmed playlist track", uri="fixture:started", is_playing=True))
             assert backend.title == "Confirmed playlist track" and window.property("activeScreen") == "playlists"
             assert not window.property("trackArtworkOpen")
+        with patch.object(backend, "_sync_config_from_disk"):
+            window.setProperty("activeScreen", "queue")
+            QTest.qWait(80)
+        with (patch.object(backend.client, "command", side_effect=[
+                  {"success": True}, {"queue": [{"title": "Next after selection", "uri": "fixture:next"}]},
+              ]), patch.object(backend, "_persist_backend_summary"), patch.object(backend, "_refresh_worker"),
+              patch.object(backend, "_cache_media_artwork_async")):
+            backend._play_media_item_worker("play_context_at", {"uri": "fixture:chosen"})
+            QTest.qWait(80)
+            row = visual_item(window.contentItem(), "mediaItemRow-0")
+            assert row.property("text") == "Next after selection" and window.property("activeScreen") == "queue"
+        window.setProperty("activeScreen", "playlists")
+        QTest.qWait(80)
+        playlist_panel = visual_item(window.contentItem(), "playlistsPanel")
         backend.cfg.music_backend_available = False
         backend.settingsChanged.emit()
         assert not visual_item(playlist_panel, "mediaItemRow-0").property("enabled")

@@ -3129,7 +3129,8 @@ def test_backend_queue_item_worker_sends_direct_uri_without_required_context(tmp
                 },
                 "play": True,
             },
-        )
+        ),
+        ("queue", {"limit": 100}),
     ]
 
 
@@ -3148,7 +3149,7 @@ def test_media_command_ack_waits_for_playback_status_without_clearing_current_tr
     assert backend.title == "Current track"
     backend.client.playback_from_status.assert_not_called()
     backend._refresh_worker.assert_called_once_with()
-    assert backend._load_queue_worker.call_count == int(command == "start_playlist")
+    backend._load_queue_worker.assert_called_once_with()
 
 
 def test_backend_queue_item_play_uses_play_context_at_command(tmp_path: Path) -> None:
@@ -3191,7 +3192,8 @@ def test_backend_queue_item_play_uses_play_context_at_command(tmp_path: Path) ->
                 },
                 "play": True,
             },
-        )
+        ),
+        ("queue", {"limit": 100}),
     ]
 
 
@@ -3279,6 +3281,18 @@ def test_backend_artwork_cache_is_limited_and_deduplicated(tmp_path: Path, monke
     assert len(submitted) == 1
     submitted[0]()
     assert processed_lengths == [6]
+
+
+def test_delayed_queue_artwork_cannot_replace_a_newer_queue_snapshot(tmp_path: Path) -> None:
+    ensure_app()
+    backend = DJConnectBackend(tmp_path / "config.json")
+    original = [{"title": "Earlier track"}]
+    backend._mediaListReady.emit("queue", original)
+    backend._mediaArtworkReady.emit("queue", original, [{"title": "Earlier track", "imageUrl": "file:///cached"}])
+    assert backend.queueItems[0]["imageUrl"] == "file:///cached"
+    backend._mediaListReady.emit("queue", [{"title": "Updated track"}])
+    backend._mediaArtworkReady.emit("queue", original, [{"title": "Earlier track", "imageUrl": "file:///cached"}])
+    assert backend.queueItems == [{"title": "Updated track"}]
 
 
 def test_backend_skips_duplicate_media_loads_while_in_flight(tmp_path: Path) -> None:

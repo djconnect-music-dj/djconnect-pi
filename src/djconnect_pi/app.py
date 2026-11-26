@@ -15,6 +15,7 @@ from copy import deepcopy
 from datetime import datetime
 from importlib.resources import files
 from pathlib import Path
+from threading import Lock
 from urllib.parse import urlencode, urlparse, urlsplit
 from uuid import uuid4
 
@@ -196,6 +197,7 @@ class DJConnectBackend(QObject):
     _busyReady = Signal(bool)
     _versionMismatchReady = Signal(str, str)
     _mediaListReady = Signal(str, object)
+    _mediaArtworkReady = Signal(str, object, object)
     _outputDeviceRejected = Signal(str, str)
     _backendAvailableReady = Signal(bool)
     _toastReady = Signal(str, int, str)
@@ -276,6 +278,7 @@ class DJConnectBackend(QObject):
         self._suppress_next_playback_navigation = False
         self._media_loads_in_flight: set[str] = set()
         self._media_playback_busy = False
+        self._queue_read_lock = Lock()
         self._media_artwork_cache_in_flight: set[str] = set()
         self._pending_output_device = ""
         self._pending_output_until = 0.0
@@ -313,6 +316,7 @@ class DJConnectBackend(QObject):
         self._busyReady.connect(self._set_busy)
         self._versionMismatchReady.connect(self._apply_version_mismatch)
         self._mediaListReady.connect(self._apply_media_list)
+        self._mediaArtworkReady.connect(self._apply_cached_media_list)
         self._mediaListFinished.connect(self._finish_media_list_load)
         self._mediaPlaybackFinished.connect(self._finish_media_playback)
         self._outputDeviceRejected.connect(self._apply_output_device_rejection)
@@ -2151,8 +2155,7 @@ class DJConnectBackend(QObject):
         has_playback = _contains_playback_payload(data)
         if has_playback:
             self._playbackReady.emit(self.client.playback_from_status(data))
-        if command == "start_playlist":
-            self._load_queue_worker()
+        self._load_queue_worker()
         if command == "play_context_at" or not has_playback:
             self._refresh_worker()
         _LOGGER.info("Media item command %s completed in %.0fms", command, _elapsed_ms(started))
@@ -2187,11 +2190,13 @@ class DJConnectBackend(QObject):
     def _load_queue_worker(self) -> None:
         started = time.monotonic()
         _LOGGER.info("Loading queue from Home Assistant")
-        data = self.client.command("queue", limit=100)
-        self._persist_backend_summary()
-        items = parse_queue_items(data)
-        _LOGGER.info("Loaded %s queue items from Home Assistant", len(items))
-        self._mediaListReady.emit("queue", items)
+        # An earlier manual read must publish before the post-selection queue.
+        with self._queue_read_lock:
+            data = self.client.command("queue", limit=100)
+            self._persist_backend_summary()
+            items = parse_queue_items(data)
+            _LOGGER.info("Loaded %s queue items from Home Assistant", len(items))
+            self._mediaListReady.emit("queue", items)
         _LOGGER.info("Queue list displayed in %.0fms", _elapsed_ms(started))
         self._cache_media_artwork_async("queue", items)
 
@@ -2479,7 +2484,7 @@ class DJConnectBackend(QObject):
                 for index, cached_item in enumerate(cached):
                     if index < len(merged):
                         merged[index] = cached_item
-                self._mediaListReady.emit(kind, merged)
+                self._mediaArtworkReady.emit(kind, items, merged)
             finally:
                 self._media_artwork_cache_in_flight.discard(kind)
 
@@ -2752,6 +2757,12 @@ class DJConnectBackend(QObject):
         else:
             return
         self.mediaListsChanged.emit()
+
+    @Slot(str, object, object)
+    def _apply_cached_media_list(self, kind: str, original: object, cached: object) -> None:
+        current = self._queue_items if kind == "queue" else self._playlist_items
+        if current is original:
+            self._apply_media_list(kind, cached)
 
     @Slot(object)
     def _apply_ask_dj_data(self, data: object) -> None:
