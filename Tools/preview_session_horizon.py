@@ -378,6 +378,36 @@ def main():
                     assert one(screen, "sessionArchiveEmptyIcon").property("iconName") == "history"
                     center = archive_empty.mapToItem(archive_scroll, archive_empty.width() / 2, archive_empty.height() / 2)
                     assert abs(center.y() - archive_scroll.height() / 2) <= 1
+                owner._caps = {"capabilities": {"session_conversation_history": True, "session_flow_text_search": True},
+                               "contract_versions": {"session_history_entries": 2, "session_flow_text_search": 1}}
+                owner.changed.emit()
+                archive_search = one(screen, "sessionToolbarSearch")
+                assert archive_search.property("visible")
+                click(window, archive_search)
+                archive_panel = window.findChild(QObject, "sessionSearchPanel")
+                archive_field = window.findChild(QObject, "sessionSearchInput")
+                assert archive_field.property("placeholderText") == TRANSLATIONS[language]["session_archive_search"]
+                archive_field.setProperty("text", "fixture")
+                submit = QQmlExpression(engine.rootContext(), archive_panel, "submitSearch()")
+                with patch.object(owner, "_launch") as verify:
+                    submit.evaluate()
+                    assert not submit.hasError()
+                    verify.assert_called_once_with("archive_search", "fixture")
+                owner._archive_search = {"query": "fixture", "complete": True, "sessions": [
+                    {"session_id": "hidden-on-current-page", "lifecycle_status": "ENDED",
+                     "created_at": "2026-11-25T10:00:00Z", "_history_deadline": owner._clock.now() + 60},
+                ]}
+                owner.changed.emit()
+                QTest.qWait(65)
+                search_result = one(archive_panel.property("contentItem"), "sessionArchiveSearchRow")
+                with patch.object(owner, "_launch") as verify:
+                    click(window, search_result)
+                    verify.assert_called_once_with("timeline", "hidden-on-current-page")
+                close_archive_search = QQmlExpression(engine.rootContext(), archive_panel, "close()")
+                close_archive_search.evaluate()
+                assert not close_archive_search.hasError()
+                QTest.qWait(300)
+                assert not owner.archiveSearchState
                 owner._history_start = "fixture-older-window"
                 owner.changed.emit()
                 assert not archive_empty.property("visible") and archive_window_empty.property("visible")

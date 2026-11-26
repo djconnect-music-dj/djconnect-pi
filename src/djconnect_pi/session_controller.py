@@ -4,6 +4,8 @@ from __future__ import annotations
 from copy import deepcopy
 from datetime import UTC, datetime
 from math import isfinite
+from time import monotonic
+from unicodedata import combining, normalize
 from uuid import uuid4
 
 from PySide6.QtCore import (
@@ -67,6 +69,10 @@ def _saved_end_timestamp(session):
     if not end_value and session.get("lifecycle_status") == "INTERRUPTED":
         end_value = session.get("interrupted_at")
     return timestamp(end_value)
+
+
+def _archive_search_text(value):
+    return "".join(char for char in normalize("NFKD", value.casefold()) if not combining(char))
 
 
 class SessionController(QObject):
@@ -159,6 +165,7 @@ class SessionController(QObject):
         self._history_trail = []
         self._history_reset = False
         self._search = {}
+        self._archive_search = {}
         self._view_epoch = getattr(self, "_view_epoch", 0) + 1
         self._forecast_images = ForecastImages(self)
         self._forecast_images.changed.connect(self.forecastImageChanged.emit)
@@ -249,6 +256,16 @@ class SessionController(QObject):
     def archiveRows(self):
         _, _, revoked = self._runtime_header()
         return [] if revoked else self._archive_view()
+
+    @Property("QVariantMap", notify=changed)
+    def archiveSearchState(self):
+        _, _, revoked = self._runtime_header()
+        if revoked or not self._archive_search:
+            return {}
+        query = self._archive_search["query"]
+        if self._archive_search_expired(self._clock.now()):
+            return {"query": query, "error": "unavailable"}
+        return deepcopy(self._archive_search)
 
     @Property("QVariantList", notify=flowRowsChanged)
     def flowRows(self):
@@ -603,6 +620,7 @@ class SessionController(QObject):
         self._saved_summary_binding = None
         self._archive_summary_binding = None
         self._search = {}
+        self._archive_search = {}
         self._timeline_trail = []
         self._view_epoch += 1
         if not self._selection_valid():
@@ -657,7 +675,7 @@ class SessionController(QObject):
 
     @Property(bool, notify=changed)
     def searchBusy(self):
-        return bool(self._running and self._running_action in {"search", "search_more", "search_refresh"})
+        return bool(self._running and self._running_action in {"search", "search_more", "search_refresh", "archive_search"})
 
     def _set_running(self, serial=0, action="", *, background=False):
         was_refreshing = self.refreshing
@@ -732,6 +750,7 @@ class SessionController(QObject):
         self._history_trail = []
         self._history_reset = False
         self._search = {}
+        self._archive_search = {}
         self._saved_open_retry = None
         self._view_epoch = getattr(self, "_view_epoch", 0) + 1
         self._error = ""
@@ -893,6 +912,9 @@ class SessionController(QObject):
                 self._search = {}
                 self._error = "unavailable"
                 changed = True
+        if self._archive_search_expired(now):
+            self._archive_search = {"query": self._archive_search["query"], "error": "unavailable"}
+            changed = True
         retained_flow = [row for row in self._retained_flow if (timestamp(row.get("retained_until")) or 0) > now]
         if retained_flow != self._retained_flow:
             self._retained_flow = retained_flow
@@ -1122,10 +1144,11 @@ class SessionController(QObject):
         self._clear_archive()
 
     def _clear_archive(self, *, notify=True):
-        had = bool(self._sessions or self._history_loaded or self._history_cursor or self._history_trail)
+        had = bool(self._sessions or self._history_loaded or self._history_cursor or self._history_trail or self._archive_search)
         self._view_epoch += 1
         self._saved_open_retry = None
         self._sessions = []
+        self._archive_search = {}
         self._archive_summary_binding = None
         self._history_loaded = False
         self._history_cursor = ""
@@ -1194,6 +1217,11 @@ class SessionController(QObject):
         self._view_epoch += 1
         self._search = {}
         self._launch("timeline", session_id)
+
+    @Slot(str)
+    def openArchiveSearchResult(self, session_id):
+        if any(row["session_id"] == session_id for row in self.archiveSearchState.get("sessions", [])):
+            self.openSaved(session_id)
 
     def _saved_open_target(self):
         if (not self._saved_open_retry or not self._foreground or not self._history_supported()
@@ -1348,6 +1376,24 @@ class SessionController(QObject):
         self._launch("search", {"session_id": session_id, "query": query, "cursor": ""})
 
     @Slot()
+    def clearArchiveSearch(self):
+        if not self._archive_search:
+            return
+        self._view_epoch += 1
+        self._archive_search = {}
+        self.changed.emit()
+
+    @Slot(str)
+    def searchArchive(self, query):
+        query = query.strip()
+        if (not self._foreground or self.busy or self.backend.demoMode or not self._search_supported()
+                or self._timeline.get("session") or not 1 <= len(query) <= 200):
+            return
+        self._view_epoch += 1
+        self._archive_search = {"query": query}
+        self._launch("archive_search", query)
+
+    @Slot()
     def moreSearch(self):
         if self._search.get("next_cursor") and self._search.get("_pages", 1) < 5:
             self._launch("search_more", {"session_id": self._search["session_id"],
@@ -1370,7 +1416,7 @@ class SessionController(QObject):
             fresh["_window_reset"] = True
             return fresh
 
-    def _read_history_window(self, binding, value, view_epoch):
+    def _read_history_window(self, binding, value, view_epoch, *, deadline=None):
         start = page_cursor(value.get("start"))
         cursor, rows, cursors, scope = start, [], {start} if start else set(), None
         previous = value.get("before")
@@ -1402,7 +1448,7 @@ class SessionController(QObject):
                 raise SessionError("invalid")
             if cursor:
                 cursors.add(cursor)
-            if not cursor:
+            if not cursor or (deadline is not None and monotonic() >= deadline):
                 break
         return {**page, "sessions": rows, "_pages": number + 1, "_start": start, "_scope": scope,
             "_trail": deepcopy(value.get("trail", [])), "_window_change": value.get("window_change", False),
@@ -1432,6 +1478,64 @@ class SessionController(QObject):
             if not cursor:
                 break
         return {**page, "matches": rows, "returned_count": len(rows), "_pages": number + 1}
+
+    def _read_archive_search(self, binding, query, view_epoch):
+        deadline = monotonic() + 15
+        history = self._read_history_window(binding, {"pages": 5}, view_epoch, deadline=deadline)
+        complete = not page_cursor(history.get("next_cursor"))
+        matches, requests_left = [], 40
+        needle = _archive_search_text(query)
+
+        def check_scope():
+            if not self._foreground or self._view_epoch != view_epoch or self.transport.binding() != binding:
+                raise SessionError("context_changed")
+
+        for session in history["sessions"]:
+            check_scope()
+            if session.get("read_only") is not True or session["lifecycle_status"] not in {"ENDED", "INTERRUPTED"}:
+                continue
+            if session["_history_deadline"] <= self._clock.now():
+                continue
+            title = self.formatArchiveTiming(session)
+            if session["lifecycle_status"] == "INTERRUPTED":
+                title += " " + translate(binding.language, "session_history_interrupted")
+            if needle and needle in _archive_search_text(title):
+                matches.append(session)
+                continue
+            sid = session["session_id"]
+            cursor, cursors, revision = "", set(), None
+            for _ in range(5):
+                check_scope()
+                if requests_left <= 0 or monotonic() >= deadline:
+                    complete = False
+                    break
+                requests_left -= 1
+                response = self.transport.search(binding, sid, query, cursor=cursor)
+                check_scope()
+                page = search_page(response, sid, query, now=self._clock.now())
+                if revision is not None and page["revision"] != revision:
+                    raise SessionError("conflict")
+                revision = page["revision"]
+                hits = [row for row in self._without_withdrawn_entries(page["matches"])
+                        if row.get("state") != "source_withdrawn" and row.get("highlighted_text")]
+                if hits:
+                    match_expiry = max(timestamp(hit["retained_until"]) for hit in hits)
+                    matches.append({**session, "_archive_search_deadline": match_expiry})
+                    break
+                cursor = page_cursor(page.get("next_cursor"))
+                if not cursor:
+                    break
+                if cursor in cursors:
+                    raise SessionError("invalid")
+                cursors.add(cursor)
+            else:
+                complete = False
+        check_scope()
+        return {"query": query, "sessions": matches, "complete": complete}
+
+    def _archive_search_expired(self, now):
+        return any(min(row["_history_deadline"], row.get("_archive_search_deadline", float("inf"))) <= now
+                   for row in self._archive_search.get("sessions", []))
 
     @Slot(str, str)
     def openEntry(self, session_id, entry_id):
@@ -1482,7 +1586,7 @@ class SessionController(QObject):
             return
         if action == "question" and not self._composer_supported():
             return
-        if action in {"search", "search_more", "search_refresh"} and not self._search_supported():
+        if action in {"search", "search_more", "search_refresh", "archive_search"} and not self._search_supported():
             self._error = "unsupported"
             self.changed.emit()
             return
@@ -1696,6 +1800,8 @@ class SessionController(QObject):
                     result["reading_anchor"] = value.get("entry_id", "")
                 elif action in {"search", "search_more", "search_refresh"}:
                     result["search"] = self._read_search(binding, value, view_epoch)
+                elif action == "archive_search":
+                    result["archive_search"] = self._read_archive_search(binding, value, view_epoch)
                 elif action == "open_entry":
                     sid, eid = value["session_id"], value["entry_id"]
                     opened_entry(self.transport.open_entry(binding, sid, eid), sid, eid, now=self._clock.now())
@@ -1848,6 +1954,17 @@ class SessionController(QObject):
                     self.questionConfirmed.emit(confirmed)
                 return
         history_action = result["action"] in {"history", "history_more", "history_refresh", "timeline", "timeline_refresh", "timeline_page", "timeline_previous", "timeline_extend", "search", "search_more", "search_refresh", "open_entry"}
+        if result["action"] == "archive_search":
+            if result.get("view_epoch") != self._view_epoch:
+                self.changed.emit()
+                return
+            if result.get("error") not in {"denied", "context_changed", "unpaired"}:
+                self._archive_search = result.get("archive_search") or {
+                    "query": self._archive_search["query"], "error": result["error"],
+                }
+                self._expire()
+                self.changed.emit()
+                return
         if history_action and result.get("view_epoch") != self._view_epoch:
             self.changed.emit()
             return
@@ -1927,6 +2044,7 @@ class SessionController(QObject):
                 self._question_status = question_status
             self._search = {}
             self._session = {}
+            self._archive_search = {}
             self._forecast.reset()
             self._moments = []
             self._conversation = []
@@ -2037,7 +2155,8 @@ class SessionController(QObject):
                         or "_page_cursor" not in incoming):
                     self._timeline_trail = []
                 sid = incoming.get("session", {}).get("session_id")
-                deadlines = [row["_history_deadline"] for row in self._sessions
+                headers = self._sessions + self._archive_search.get("sessions", [])
+                deadlines = [row["_history_deadline"] for row in headers
                     if row["session_id"] == sid and row.get("_history_deadline") is not None]
                 if self._timeline.get("session", {}).get("session_id") == sid and self._timeline.get("_session_deadline") is not None:
                     deadlines.append(self._timeline["_session_deadline"])

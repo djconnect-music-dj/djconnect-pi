@@ -1037,6 +1037,83 @@ def search_pages(count=2):
     return pages
 
 
+def test_archive_search_keeps_the_session_lookup_bounded_and_skips_live_headers(controller):
+    owner, _ = controller
+    clock_fixture(owner)
+    saved = {"session_id": "saved", "lifecycle_status": "ENDED", "read_only": True,
+             "created_at": "2026-10-19T00:00:00Z", "_history_deadline": owner._clock.now() + 60}
+    owner._read_history_window = Mock(return_value={
+        "sessions": [saved, {**saved, "session_id": "live", "lifecycle_status": "ACTIVE"}],
+        "next_cursor": None,
+    })
+    def page(binding, sid, query, *, cursor):
+        number = int(cursor) if cursor else 0
+        return {"success": True, "schema_version": 2, "history_contract_version": 2, "session_id": sid,
+                "query": query, "revision": "fixture-search", "complete": False, "next_cursor": str(number + 1),
+                "matches": [], "returned_count": 0}
+    owner.transport.search = Mock(side_effect=page)
+    binding = owner.transport.binding()
+    result = owner._read_archive_search(binding, "contribution", owner._view_epoch)
+    assert result == {"query": "contribution", "sessions": [], "complete": False}
+    assert owner.transport.search.call_count == 5
+    assert all(call.args[1] == "saved" for call in owner.transport.search.call_args_list)
+    with pytest.raises(SessionError, match="context_changed"):
+        owner._read_archive_search(binding, "contribution", owner._view_epoch - 1)
+
+
+def test_archive_search_publishes_read_only_headers_and_clears_on_navigation(controller):
+    owner, backend = controller
+    clock_fixture(owner)
+    enable_search(owner)
+    owner.transport.history = Mock(return_value={
+        "success": True, "schema_version": 2, "history_contract_version": 2, "revision": "archive",
+        "retention_days": 90, "retention_revision": 1, "next_cursor": None, "sessions": [{
+            "session_id": "saved", "revision": 1, "created_at": "2026-10-19T00:00:00Z",
+            "interrupted_at": "2026-10-19T01:00:00Z", "lifecycle_status": "INTERRUPTED", "read_only": True,
+        }],
+    })
+    owner.transport.search = Mock()
+    owner.searchArchive("onderbroken")
+    assert owner.searchBusy and owner.archiveSearchState == {"query": "onderbroken"}
+    backend.jobs.pop()()
+    result = owner.archiveSearchState
+    assert not owner.searchBusy and result["complete"]
+    assert [row["session_id"] for row in result["sessions"]] == ["saved"]
+    owner.transport.search.assert_not_called()
+    owner.searchArchive("nieuwe opdracht")
+    owner.clearArchiveSearch()
+    backend.jobs.pop()()
+    assert owner.archiveSearchState == {} and not owner.searchBusy
+    owner.transport.history.assert_called_once()
+
+
+def test_archive_search_admits_a_content_hit_only_until_its_retention_deadline(controller):
+    from test_session_history_view import search_fixture
+
+    owner, backend = controller
+    host = clock_fixture(owner)
+    enable_search(owner)
+    page = search_fixture()
+    page["matches"][0]["retained_until"] = "2026-10-20T00:00:10Z"
+    owner.transport.search = Mock(return_value=page)
+    owner.transport.history = Mock(return_value={
+        "success": True, "schema_version": 2, "history_contract_version": 2, "revision": "archive",
+        "retention_days": 90, "retention_revision": 1, "next_cursor": None, "sessions": [{
+            "session_id": page["session_id"], "revision": 1, "created_at": "2026-10-19T00:00:00Z",
+            "ended_at": "2026-10-19T01:00:00Z", "lifecycle_status": "ENDED", "read_only": True,
+        }],
+    })
+    owner.searchArchive(page["query"])
+    backend.jobs.pop()()
+    assert owner.archiveSearchState["sessions"][0]["session_id"] == page["session_id"]
+    assert "matches" not in owner.archiveSearchState
+    host.wall += 11
+    host.tick += 11
+    assert owner.archiveSearchState == {"query": page["query"], "error": "unavailable"}
+    owner.openArchiveSearchResult(page["session_id"])
+    assert not backend.jobs
+
+
 def test_search_more_revalidates_previous_pages_and_refresh_withdraws_old_body(controller):
     from copy import deepcopy
     owner, backend = controller

@@ -96,6 +96,68 @@ Item {
         wrapMode: Text.WordWrap
         Layout.fillWidth: true
     }
+    component ArchiveSessionRow: GlassButton {
+        required property var modelData
+        id: archiveRow
+        signal sessionRequested(string sessionId)
+        readonly property string lifecycleNote: modelData.lifecycle_status === "INTERRUPTED"
+            ? screen.tr("session_history_interrupted") : ""
+        Layout.fillWidth: true
+        implicitHeight: Math.max(78, contentItem.implicitHeight + topPadding + bottomPadding)
+        objectName: "sessionArchiveRow"
+        Accessible.description: lifecycleNote
+        contentItem: RowLayout {
+            spacing: 12
+            SavedMoodMark {
+                objectName: "sessionArchiveMoodMark"
+                metrics: archiveRow.modelData.summary_metrics || []
+            }
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: 4
+                Text {
+                    objectName: "sessionArchiveRowTitle"
+                    text: archiveRow.text
+                    font: archiveRow.font
+                    color: archiveRow.foregroundColor
+                    textFormat: Text.PlainText
+                    wrapMode: Text.WordWrap
+                    Layout.fillWidth: true
+                }
+                Text {
+                    objectName: "sessionArchiveRowStatus"
+                    text: archiveRow.lifecycleNote
+                    visible: text.length > 0
+                    textFormat: Text.PlainText
+                    wrapMode: Text.WordWrap
+                    color: BrandTheme.colors.muted
+                    font.pixelSize: 16
+                    Accessible.ignored: true
+                    Layout.fillWidth: true
+                }
+                Repeater {
+                    objectName: "sessionArchiveSummary"
+                    model: archiveRow.modelData.summary_metrics || []
+                    SessionSummaryMetric { compactMetric: true }
+                }
+            }
+            FeatureIcon {
+                objectName: "sessionArchiveRowChevron"
+                iconName: "chevron_right"
+                iconColor: BrandTheme.colors.muted
+                Accessible.ignored: true
+                Layout.preferredWidth: 22
+                Layout.preferredHeight: Layout.preferredWidth
+            }
+        }
+        enabled: !screen.owner.busy && !screen.archiveIntent
+        text: {
+            screen.backend.translationVersion
+            return screen.owner.formatArchiveTiming(modelData) || screen.tr("session_title")
+        }
+        onClicked: sessionRequested(modelData.session_id)
+    }
+
     component LiveMomentCard: GlassCard {
         id: liveCard
         objectName: "sessionLiveMomentCard"
@@ -352,6 +414,10 @@ Item {
     }
     property string proposedMood: "groove"
     readonly property string searchTarget: historical ? ((state.timeline.session || {}).session_id || "") : state.session_id
+    readonly property bool archiveSearchAvailable: historical && !currentHistory && !state.timeline.session
+        && state.search_available && backend.paired && !backend.demoMode
+    readonly property bool searchAvailable: archiveSearchAvailable || (state.search_available && searchTarget.length > 0)
+    readonly property string searchLabel: tr(archiveSearchAvailable ? "session_archive_search" : "session_search")
     property real readingOffset: 0
     function readingAnchor() {
         if (!historical || !historyRows) return ""
@@ -724,7 +790,11 @@ Item {
         }
     }
     Connections { target: searchScroll.contentItem; function onDraggingChanged() { if (searchScroll.contentItem.dragging) { searchPosition.stop(); screen.searchReturn = null } } }
-    function searchNow() { cancelSearchRead(); owner.search(searchTarget, searchInput.text) }
+    function searchNow() {
+        cancelSearchRead()
+        if (archiveSearchAvailable) owner.searchArchive(searchInput.text)
+        else owner.search(searchTarget, searchInput.text)
+    }
     function showSearch() { searchPanel.open(); searchInput.forceActiveFocus() }
     function closeTransient() {
         archiveDetailReturn = null
@@ -949,7 +1019,7 @@ Item {
             onClicked: screen.navigateBackFromHistory()
         }
         GlassSurface {
-            visible: screen.sessionControlsVisible || (screen.state.search_available && screen.searchTarget.length > 0)
+            visible: screen.sessionControlsVisible || screen.searchAvailable
             Layout.preferredWidth: toolbarButtons.implicitWidth + 18
             Layout.fillHeight: true
             radius: height / 2
@@ -964,8 +1034,9 @@ Item {
                     onClicked: moreChoices.open()
                 }
                 GlassButton {
-                    visible: (!screen.compact || !screen.sessionControlsVisible) && screen.state.search_available && screen.searchTarget.length > 0
-                    iconName: "search"; Accessible.name: screen.tr("session_search")
+                    objectName: "sessionToolbarSearch"
+                    visible: (!screen.compact || !screen.sessionControlsVisible) && screen.searchAvailable
+                    iconName: "search"; Accessible.name: screen.searchLabel
                     implicitWidth: 52; background: Item {}
                     onClicked: screen.showSearch()
                 }
@@ -1882,65 +1953,8 @@ Item {
                 id: archiveRows
                 objectName: "sessionArchiveRows"
                 model: screen.archiveSessions
-                GlassButton {
-                    required property var modelData
-                    id: archiveRow
-                    readonly property string lifecycleNote: modelData.lifecycle_status === "INTERRUPTED"
-                        ? screen.tr("session_history_interrupted") : ""
-                    Layout.fillWidth: true
-                    implicitHeight: Math.max(78, contentItem.implicitHeight + topPadding + bottomPadding)
-                    objectName: "sessionArchiveRow"
-                    Accessible.description: lifecycleNote
-                    contentItem: RowLayout {
-                        spacing: 12
-                        SavedMoodMark {
-                            objectName: "sessionArchiveMoodMark"
-                            metrics: archiveRow.modelData.summary_metrics || []
-                        }
-                        ColumnLayout {
-                            Layout.fillWidth: true
-                            spacing: 4
-                            Text {
-                                objectName: "sessionArchiveRowTitle"
-                                text: archiveRow.text
-                                font: archiveRow.font
-                                color: archiveRow.foregroundColor
-                                textFormat: Text.PlainText
-                                wrapMode: Text.WordWrap
-                                Layout.fillWidth: true
-                            }
-                            Text {
-                                objectName: "sessionArchiveRowStatus"
-                                text: archiveRow.lifecycleNote
-                                visible: text.length > 0
-                                textFormat: Text.PlainText
-                                wrapMode: Text.WordWrap
-                                color: BrandTheme.colors.muted
-                                font.pixelSize: 16
-                                Accessible.ignored: true
-                                Layout.fillWidth: true
-                            }
-                            Repeater {
-                                objectName: "sessionArchiveSummary"
-                                model: archiveRow.modelData.summary_metrics || []
-                                SessionSummaryMetric { compactMetric: true }
-                            }
-                        }
-                        FeatureIcon {
-                            objectName: "sessionArchiveRowChevron"
-                            iconName: "chevron_right"
-                            iconColor: BrandTheme.colors.muted
-                            Accessible.ignored: true
-                            Layout.preferredWidth: 22
-                            Layout.preferredHeight: Layout.preferredWidth
-                        }
-                    }
-                    enabled: !screen.owner.busy && !screen.archiveIntent
-                    text: {
-                        screen.backend.translationVersion
-                        return screen.owner.formatArchiveTiming(modelData) || screen.tr("session_title")
-                    }
-                    onClicked: screen.openArchiveSession(modelData.session_id)
+                ArchiveSessionRow {
+                    onSessionRequested: sessionId => screen.openArchiveSession(sessionId)
                 }
             }
             Text {
@@ -2769,28 +2783,32 @@ Item {
         objectName: "sessionSearchPanel"
         property bool keyboardVisible: false
         property string selectedMatchId: ""
-        readonly property var matches: screen.state.search.matches || []
-        readonly property int selectedMatchIndex: matches.findIndex(function(row) { return row.entry_id === selectedMatchId })
-        readonly property bool noMatches: !!screen.state.search.query
-            && screen.state.search.query === searchInput.text.trim()
-            && screen.state.search.session_id === screen.searchTarget && screen.state.search.complete
-            && matches.length === 0 && !screen.owner.busy && !screen.state.error
+        readonly property var result: screen.archiveSearchAvailable ? screen.owner.archiveSearchState : screen.state.search
+        readonly property var matches: screen.archiveSearchAvailable ? (result.sessions || []) : (result.matches || [])
+        readonly property string searchError: result.error || screen.state.error
+        readonly property bool matchingQuery: !!result.query && result.query === searchInput.text.trim()
+            && (screen.archiveSearchAvailable || result.session_id === screen.searchTarget)
+        readonly property int selectedMatchIndex: matches.findIndex(function(row) { return matchId(row) === selectedMatchId })
+        readonly property bool noMatches: matchingQuery && result.complete === true
+            && matches.length === 0 && !screen.owner.busy && !searchError
+        function matchId(row) { return screen.archiveSearchAvailable ? row.session_id : row.entry_id }
         onMatchesChanged: {
-            if (selectedMatchId && !matches.some(function(row) { return row.entry_id === selectedMatchId }))
+            if (selectedMatchId && selectedMatchIndex < 0)
                 selectedMatchId = ""
         }
         function resetSearch() {
             selectedMatchId = ""
             screen.owner.clearSearch()
+            screen.owner.clearArchiveSearch()
         }
         function moveMatch(delta) {
             var count = matches.length
             if (!count) return
             var index = selectedMatchIndex < 0 ? (delta < 0 ? count - 1 : 0)
                 : (selectedMatchIndex + delta + count) % count
-            var card = searchRows.itemAt(index)
+            var card = (screen.archiveSearchAvailable ? archiveSearchRows : searchRows).itemAt(index)
             if (!card) return
-            selectedMatchId = card.modelData.entry_id
+            selectedMatchId = matchId(card.modelData)
             var flick = searchScroll.contentItem
             flick.cancelFlick()
             searchPosition.stop()
@@ -2823,11 +2841,11 @@ Item {
                     id: searchInput
                     objectName: "sessionSearchInput"
                     onActiveFocusChanged: if (activeFocus) searchPanel.keyboardVisible = true
-                    placeholderText: screen.tr("session_search")
+                    placeholderText: screen.searchLabel
                     maximumLength: 200; font.pixelSize: 21
                     Layout.fillWidth: true; Layout.minimumHeight: 52
                     background: GlassSurface { radius: 20; interactive: true; focused: searchInput.activeFocus }
-                    Accessible.name: screen.tr("session_search")
+                    Accessible.name: screen.searchLabel
                     selectByMouse: true
                     onTextEdited: searchPanel.resetSearch()
                     TapHandler { onTapped: searchPanel.keyboardVisible = true }
@@ -2835,7 +2853,7 @@ Item {
                 }
                 GlassButton {
                     iconName: screen.owner.searchBusy ? "" : "search"
-                    Accessible.name: screen.tr("session_search")
+                    Accessible.name: screen.searchLabel
                     implicitWidth: 56
                     enabled: !screen.owner.busy && searchInput.text.trim().length > 0
                     onClicked: searchPanel.submitSearch()
@@ -2872,15 +2890,18 @@ Item {
             }
             Text {
                 Layout.leftMargin: searchPanel.bodyMargin; Layout.rightMargin: searchPanel.bodyMargin
-                visible: screen.state.error.length > 0
+                visible: searchPanel.searchError.length > 0
                 text: screen.tr(screen.state.error === "uncertain" ? "session_uncertain" : (screen.state.error === "profile_unavailable" || screen.state.error === "profile_required") ? "session_profile_missing" : "session_error")
                 color: BrandTheme.colors.warning; font.pixelSize: 18
                 wrapMode: Text.WordWrap; Layout.fillWidth: true
             }
             Text {
                 Layout.leftMargin: searchPanel.bodyMargin; Layout.rightMargin: searchPanel.bodyMargin
-                visible: !!screen.state.search.query && !searchPanel.noMatches && !screen.owner.busy && !screen.state.error
-                text: screen.tr(screen.state.search_limit_reached ? "session_search_limit" : screen.state.search.complete ? "session_search_complete" : "session_search_partial")
+                visible: searchPanel.matchingQuery && !searchPanel.noMatches && !screen.owner.busy && !searchPanel.searchError
+                    && (!screen.archiveSearchAvailable || searchPanel.result.complete === false)
+                text: screen.tr(screen.archiveSearchAvailable ? "session_archive_search_partial"
+                    : screen.state.search_limit_reached ? "session_search_limit"
+                    : searchPanel.result.complete ? "session_search_complete" : "session_search_partial")
                 color: BrandTheme.colors.muted; font.pixelSize: 18
                 wrapMode: Text.WordWrap; Layout.fillWidth: true
             }
@@ -2904,7 +2925,7 @@ Item {
                     }
                     Text {
                         objectName: "sessionSearchEmptyMessage"
-                        text: screen.tr("session_search_empty")
+                        text: screen.tr(screen.archiveSearchAvailable ? "session_archive_search_empty" : "session_search_empty")
                         textFormat: Text.PlainText
                         horizontalAlignment: Text.AlignHCenter
                         color: BrandTheme.colors.muted
@@ -2925,9 +2946,20 @@ Item {
                 ColumnLayout {
                     width: searchScroll.availableWidth; spacing: 14
                     Repeater {
+                        id: archiveSearchRows
+                        model: screen.archiveSearchAvailable ? searchPanel.matches : []
+                        ArchiveSessionRow {
+                            objectName: "sessionArchiveSearchRow"
+                            selectionFill: selected ? BrandTheme.colors.actionAccent : "transparent"
+                            readonly property bool selected: searchPanel.selectedMatchId === modelData.session_id
+                            Accessible.selected: selected
+                            onSessionRequested: sessionId => screen.owner.openArchiveSearchResult(sessionId)
+                        }
+                    }
+                    Repeater {
                         id: searchRows
                         objectName: "sessionSearchRows"
-                        model: searchPanel.matches
+                        model: screen.archiveSearchAvailable ? [] : searchPanel.matches
                         GlassCard {
                             id: searchMatch
                             required property var modelData

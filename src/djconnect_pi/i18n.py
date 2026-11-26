@@ -1375,6 +1375,21 @@ _HISTORY_SEARCH_TRANSLATIONS = {
     "session_search_limit": ("Refine your search to see more results.", "Verfijn je zoekopdracht om meer resultaten te zien.", "Verfeinere deine Suche, um weitere Ergebnisse zu sehen.", "Affinez votre recherche pour voir plus de résultats.", "Refina tu búsqueda para ver más resultados."),
     "session_search_partial": ("More saved entries remain. Load more to continue searching.", "Er zijn nog meer opgeslagen bijdragen. Laad meer om verder te zoeken.", "Weitere gespeicherte Beiträge sind verfügbar. Lade mehr, um weiterzusuchen.", "D’autres contributions enregistrées restent à rechercher. Chargez la suite.", "Quedan más entradas guardadas. Carga más para continuar buscando."),
     "session_search_empty": ("No matches in this session.", "Geen resultaten in deze sessie.", "Keine Treffer in dieser Session.", "Aucun résultat dans cette session.", "No hay resultados en esta sesión."),
+    "session_archive_search": (
+        "Search saved sessions", "Zoek in opgeslagen sessies", "Gespeicherte Sessions durchsuchen",
+        "Rechercher dans les sessions enregistrées", "Buscar en sesiones guardadas",
+    ),
+    "session_archive_search_empty": (
+        "No matches in saved sessions.", "Geen resultaten in opgeslagen sessies.", "Keine Treffer in gespeicherten Sessions.",
+        "Aucun résultat dans les sessions enregistrées.", "No hay resultados en las sesiones guardadas.",
+    ),
+    "session_archive_search_partial": (
+        "Only part of the archive was searched. Refine your query.",
+        "Een deel van het archief is doorzocht. Verfijn je zoekopdracht.",
+        "Nur ein Teil des Archivs wurde durchsucht. Verfeinere deine Suche.",
+        "La recherche couvre une partie des archives. Affinez votre recherche.",
+        "Se ha buscado en parte del archivo. Refina tu búsqueda.",
+    ),
     "session_duration_hours_minutes": ("%1 h %2 min", "%1 u %2 min", "%1 Std. %2 Min.", "%1 h %2 min", "%1 h %2 min"),
     "session_duration_hours": ("%1 h", "%1 u", "%1 Std.", "%1 h", "%1 h"),
     "session_duration_minutes": ("%1 min", "%1 min", "%1 Min.", "%1 min", "%1 min"),
