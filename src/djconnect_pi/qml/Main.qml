@@ -8081,16 +8081,29 @@ BrandWindow {
                         horizontalAlignment: Text.AlignRight
                         Layout.preferredWidth: 190
                     }
-                    GlassButton {
-                        objectName: "aboutCheckUpdates"
-                        text: djconnect.updateCheckRunning ? root.tr("checking_updates") : root.tr("check_updates")
-                        iconName: djconnect.updateCheckRunning ? "" : "refresh"
-                        wrapText: true
-                        textAlignment: Text.AlignLeft
+                    ColumnLayout {
                         Layout.fillWidth: true
                         Layout.maximumWidth: 390
-                        enabled: !djconnect.updateCheckRunning
-                        onClicked: djconnect.checkForUpdates()
+                        GlassButton {
+                            objectName: "aboutCheckUpdates"
+                            text: djconnect.updateCheckRunning ? root.tr("checking_updates") : root.tr("check_updates")
+                            iconName: djconnect.updateCheckRunning ? "" : "refresh"
+                            wrapText: true
+                            textAlignment: Text.AlignLeft
+                            Layout.fillWidth: true
+                            enabled: !djconnect.updateCheckRunning
+                            onClicked: djconnect.checkForUpdates()
+                        }
+                        Text {
+                            objectName: "aboutUpdateCheckStatus"
+                            visible: djconnect.updateCheckStatus.length > 0
+                            text: visible ? root.tr(djconnect.updateCheckStatus) : ""
+                            textFormat: Text.PlainText
+                            color: BrandTheme.colors.muted
+                            font.pixelSize: 17
+                            wrapMode: Text.WordWrap
+                            Layout.fillWidth: true
+                        }
                     }
                     Text { text: root.tr("web_address"); color: BrandTheme.colors.muted; font.pixelSize: 20; font.bold: true; horizontalAlignment: Text.AlignRight; Layout.preferredWidth: 190 }
                     Text { text: djconnect.webPortalUrl; color: BrandTheme.colors.text; font.pixelSize: 18; Layout.fillWidth: true; elide: Text.ElideMiddle }

@@ -378,6 +378,7 @@ class DJConnectBackend(QObject):
         self._status_text = self.tr_key("paired" if self.cfg.paired else "not_paired")
         self._backend_available = True
         self._update_check_running = False
+        self._update_check_status = ""
         self._about_music_availability = None
         self._about_connection_origin = None
         self._about_connection_request_time = 0.0
@@ -3034,6 +3035,7 @@ class DJConnectBackend(QObject):
         if self._update_check_running or self._shutting_down:
             return
         self._update_check_running = True
+        self._update_check_status = ""
         self.updateCheckChanged.emit()
         _LOGGER.info("User requested update check from touch UI")
         self._set_status_text(self.tr_key("checking_updates"))
@@ -3043,6 +3045,10 @@ class DJConnectBackend(QObject):
     @Property(bool, notify=updateCheckChanged)
     def updateCheckRunning(self) -> bool:
         return self._update_check_running
+
+    @Property(str, notify=updateCheckChanged)
+    def updateCheckStatus(self) -> str:
+        return self._update_check_status
 
     def _check_for_updates_worker(self) -> None:
         commands = (
@@ -3072,6 +3078,7 @@ class DJConnectBackend(QObject):
         if self._shutting_down:
             return
         self._update_check_running = False
+        self._update_check_status = "update_check_start_failed" if error else "update_check_started"
         self.updateCheckChanged.emit()
         message = self.tr_key("update_check_failed", error=error) if error else self.tr_key("update_check_started")
         self._set_status_text(message)
