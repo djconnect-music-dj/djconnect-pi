@@ -201,6 +201,7 @@ class DJConnectBackend(QObject):
     _mediaArtworkReady = Signal(str, object, object)
     _outputDeviceRejected = Signal(str, str)
     _outputChoiceFinished = Signal(object, bool)
+    _controlOutputsFinished = Signal(object, object)
     _backendAvailableReady = Signal(bool)
     _toastReady = Signal(str, int, str)
     _askDjReady = Signal(object)
@@ -298,6 +299,7 @@ class DJConnectBackend(QObject):
         self._pending_output_until = 0.0
         self._pending_output_choice = None
         self._unconfirmed_output_choice = ""
+        self._control_outputs_request = None
         self._last_display_wake_at = 0.0
         self._game_sound_objects: list[tuple[object, QBuffer]] = []
         self._status_text = self.tr_key("paired" if self.cfg.paired else "not_paired")
@@ -339,6 +341,7 @@ class DJConnectBackend(QObject):
         self._mediaPlaybackFinished.connect(self._finish_media_playback)
         self._outputDeviceRejected.connect(self._apply_output_device_rejection)
         self._outputChoiceFinished.connect(self._finish_output_choice)
+        self._controlOutputsFinished.connect(self._finish_control_outputs)
         self._backendAvailableReady.connect(self._set_backend_available)
         self._toastReady.connect(self._show_toast)
         self._askDjReady.connect(self._apply_ask_dj_data)
@@ -724,6 +727,10 @@ class DJConnectBackend(QObject):
     @Property(bool, notify=outputDeviceChanged)
     def outputChoiceUnconfirmed(self) -> bool:
         return bool(self._unconfirmed_output_choice)
+
+    @Property(bool, notify=outputDeviceChanged)
+    def controlOutputsRefreshing(self) -> bool:
+        return self._control_outputs_request is not None
 
     @Property("QVariantList", notify=outputDeviceChanged)
     def outputDevices(self) -> list[str]:
@@ -1646,6 +1653,50 @@ class DJConnectBackend(QObject):
             return
         self._select_output(value)
 
+    @Slot()
+    def refreshControlOutputs(self) -> None:
+        if self._demo_mode:
+            self.showToastForContext(self.tr_key("session_output_updated"), "playback")
+            return
+        if (not self.paired or not self.backendAvailable or self._pending_output_choice
+                or self._control_outputs_request is not None):
+            return
+        context = self._private_read_context()
+        self._control_outputs_request = context
+        self.outputDeviceChanged.emit()
+        observed = None
+
+        def worker() -> None:
+            nonlocal observed
+            if self._control_outputs_request is not context or context != self._private_read_context():
+                return
+            result = self.client.command("devices")
+            if result.get("success") is False:
+                return
+            playback = result.get("playback")
+            containers = (result, playback) if isinstance(playback, dict) else (result,)
+            rows = next((container[key] for container in containers
+                         for key in ("output_devices", "devices", "available_devices", "outputs")
+                         if isinstance(container.get(key), (list, dict))), None)
+            if rows is not None:
+                observed = self.client.playback_from_status({"output_devices": rows})
+
+        self._run(self.tr_key("session_output_refresh"), worker,
+                  done=lambda: self._controlOutputsFinished.emit(context, observed), interactive=False)
+
+    @Slot(object, object)
+    def _finish_control_outputs(self, context, observed: Playback | None) -> None:
+        if self._control_outputs_request is not context:
+            return
+        self._control_outputs_request = None
+        if context == self._private_read_context():
+            if observed is not None:
+                self.playback.output_devices = observed.output_devices
+                self.playback.output_device_details = observed.output_device_details
+            key = "session_output_updated" if observed is not None else "session_output_unavailable"
+            self.showToastForContext(self.tr_key(key), "playback")
+        self.outputDeviceChanged.emit()
+
     @Slot(str)
     def setOutputChoice(self, output_value: str) -> None:
         matches = [choice for choice in self.outputDeviceChoices if choice.get("value") == output_value]
@@ -1656,7 +1707,8 @@ class DJConnectBackend(QObject):
             self._select_output(name)
             return
         if (not self.paired or not self.backendAvailable or not self._session_controller._foreground
-                or self._pending_output_choice or output_value == self.playback.output_device_id):
+                or self._pending_output_choice or self.controlOutputsRefreshing
+                or output_value == self.playback.output_device_id):
             return
         context = self._private_read_context()
         request = (output_value, name, context)
@@ -3317,9 +3369,10 @@ class DJConnectBackend(QObject):
     def _clear_profile_scoped_caches(self, *, preserve_session=False) -> None:
         if not preserve_session and hasattr(self, "_session_controller"):
             self._session_controller.invalidate()
-        if self._pending_output_choice or self._unconfirmed_output_choice:
+        if self._pending_output_choice or self._unconfirmed_output_choice or self._control_outputs_request is not None:
             self._pending_output_choice = None
             self._unconfirmed_output_choice = ""
+            self._control_outputs_request = None
             self.controlVolumeChanged.emit()
             self.outputDeviceChanged.emit()
         self._shared_settings_epoch += 1

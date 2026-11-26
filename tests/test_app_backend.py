@@ -2795,6 +2795,29 @@ def test_backend_output_choice_sends_id_when_two_devices_have_the_same_name(tmp_
         assert not backend.outputChoiceUnconfirmed
 
 
+@pytest.mark.parametrize("outcome", ["success", "empty", "failed"])
+def test_compact_output_refresh_updates_inventory_without_changing_playback(tmp_path: Path, outcome: str) -> None:
+    ensure_app()
+    backend = DJConnectBackend(tmp_path / "config.json")
+    backend.cfg.paired = True
+    backend.cfg.device_token = "fixture"
+    backend._set_backend_available(True)
+    backend._run = Mock()
+    backend.playback = Playback(output_device="Active speaker", output_device_id="active", output_devices=("Old",))
+    devices = [{"id": "new", "name": "New"}] if outcome == "success" else []
+    backend.client.command = Mock(return_value={"success": outcome != "failed", "devices": devices})
+    backend.refreshControlOutputs()
+    backend.refreshControlOutputs()
+    assert backend.controlOutputsRefreshing
+    backend._run.assert_called_once()
+    backend._run.call_args.args[1]()
+    backend.client.command.assert_called_once_with("devices")
+    backend._run.call_args.kwargs["done"]()
+    assert not backend.controlOutputsRefreshing and backend.outputDeviceId == "active"
+    assert backend.outputDevice == "Active speaker"
+    assert backend.outputDevices == {"success": ["New"], "empty": [], "failed": ["Old"]}[outcome]
+
+
 def test_backend_manual_refresh_clears_pending_output_device(tmp_path: Path) -> None:
     ensure_app()
     backend = DJConnectBackend(tmp_path / "config.json")

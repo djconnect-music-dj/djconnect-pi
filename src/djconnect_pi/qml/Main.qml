@@ -2152,7 +2152,7 @@ BrandWindow {
                     model: deviceChoices
                     textRole: "name"
                     displayText: displayName(currentIndex)
-                    enabled: djconnect.pendingOutputChoiceName.length === 0
+                    enabled: djconnect.pendingOutputChoiceName.length === 0 && !djconnect.controlOutputsRefreshing
                     visible: count > 1 || djconnect.outputDevice.length === 0
                     currentIndex: selectedIndex()
                     font.pixelSize: 26
@@ -2178,6 +2178,23 @@ BrandWindow {
                     verticalAlignment: Text.AlignVCenter
                     Layout.fillWidth: true
                     Layout.fillHeight: true
+                }
+
+                GlassButton {
+                    id: controlRefreshOutputs
+                    objectName: "controlRefreshOutputs"
+                    iconName: djconnect.controlOutputsRefreshing ? "" : "refresh"
+                    Accessible.name: root.tr("session_output_refresh")
+                    enabled: (djconnect.demoMode || (djconnect.paired && djconnect.backendAvailable))
+                        && !djconnect.controlOutputsRefreshing && djconnect.pendingOutputChoiceName.length === 0
+                    opacity: enabled || djconnect.controlOutputsRefreshing ? 1 : 0.4
+                    onClicked: djconnect.refreshControlOutputs()
+                    BusyIndicator {
+                        anchors.centerIn: parent
+                        width: 26; height: 26
+                        visible: djconnect.controlOutputsRefreshing
+                        running: visible
+                    }
                 }
             }
 

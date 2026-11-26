@@ -159,6 +159,10 @@ def main():
             assert window.property("activeScreen") == "control" and backend.outputDevice == "Fixture output"
             QTest.qWait(80)
             outputs = visual_item(window.contentItem(), "controlOutputDeviceCombo")
+            refresh_outputs = visual_item(window.contentItem(), "controlRefreshOutputs")
+            refresh_center = refresh_outputs.mapToScene(QPointF(refresh_outputs.width() / 2, refresh_outputs.height() / 2))
+            QTest.mouseClick(window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, refresh_center.toPoint())
+            assert backend.toastText == backend.t("session_output_updated") and backend.outputDevice == "Fixture output"
             backend.playback.output_device_details = (
                 {"name": "Fixture output", "value": "speaker-a"}, {"name": "Fixture output", "value": "speaker-b"},
             )
