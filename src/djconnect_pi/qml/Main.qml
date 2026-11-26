@@ -7687,8 +7687,14 @@ BrandWindow {
                     Text { text: djconnect.musicBackendError; color: BrandTheme.colors.danger; font.pixelSize: 18; Layout.fillWidth: true; wrapMode: Text.Wrap; visible: djconnect.musicBackendError.length > 0 }
                     Text { text: root.tr("client_api_url_label"); color: BrandTheme.colors.muted; font.pixelSize: 20; font.bold: true; horizontalAlignment: Text.AlignRight; Layout.preferredWidth: 190 }
                     Text { text: djconnect.localApiUrl; color: BrandTheme.colors.text; font.pixelSize: 18; Layout.fillWidth: true; elide: Text.ElideMiddle }
-                    Text { text: root.tr("ha_local_url"); color: BrandTheme.colors.muted; font.pixelSize: 20; font.bold: true; horizontalAlignment: Text.AlignRight; Layout.preferredWidth: 190 }
-                    Text { text: djconnect.haUrl; color: BrandTheme.colors.text; font.pixelSize: 18; Layout.fillWidth: true; elide: Text.ElideMiddle }
+                    Text { text: root.tr("active_ha_address"); color: BrandTheme.colors.muted; font.pixelSize: 20; font.bold: true; horizontalAlignment: Text.AlignRight; Layout.preferredWidth: 190; wrapMode: Text.WordWrap }
+                    Text {
+                        objectName: "aboutActiveHaAddress"
+                        text: djconnect.aboutConnectionOrigin || root.tr(djconnect.demoMode || !djconnect.paired
+                            || !djconnect.backendAvailable ? "ha_address_inactive" : "ha_address_unconfirmed")
+                        textFormat: Text.PlainText
+                        color: BrandTheme.colors.text; font.pixelSize: 18; Layout.fillWidth: true; wrapMode: Text.Wrap
+                    }
                 }
                 }
 

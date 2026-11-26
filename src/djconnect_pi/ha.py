@@ -4,7 +4,7 @@ import logging
 import time
 from dataclasses import dataclass
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlsplit, urlunsplit
 
 import requests
 
@@ -135,6 +135,12 @@ class MusicBackendSummary:
     error: str = ""
 
 
+class StatusObservation(dict):
+    def __init__(self, data, authenticated_origin: str) -> None:
+        super().__init__(data)
+        self.authenticated_origin = authenticated_origin
+
+
 class HAClient:
     def __init__(self, cfg: Config, timeout: float = 4.0) -> None:
         self.cfg = cfg
@@ -204,10 +210,11 @@ class HAClient:
         url = self._djconnect_url("status")
         _LOGGER.debug("POST %s paired=%s playback_included=%s", url, self.cfg.paired, playback is not None)
         started = time.monotonic()
+        headers = self._headers()
         response = requests.post(
             url,
             json=payload,
-            headers=self._headers(),
+            headers=headers,
             timeout=self.timeout,
         )
         _LOGGER.debug("POST %s returned HTTP %s in %.0fms", url, response.status_code, _elapsed_ms(started))
@@ -215,7 +222,17 @@ class HAClient:
         self.apply_profile_context(data)
         self.update_backend_summary(data)
         self._validate_ha_version(data)
-        return data
+        authorization = headers.get("Authorization")
+        request = getattr(response, "request", None)
+        origin = ""
+        if (data.get("success") is True and authorization and isinstance(request, requests.PreparedRequest)
+                and not response.history and 200 <= response.status_code < 300
+                and request.method == "POST" and request.url == response.url
+                and request.headers.get("Authorization") == authorization):
+            parts = urlsplit(response.url)
+            if parts.scheme in {"http", "https"} and parts.hostname:
+                origin = urlunsplit((parts.scheme, parts.netloc.rsplit("@", 1)[-1], "", "", ""))
+        return StatusObservation(data, origin)
 
     def command(self, command: str, **payload: Any) -> dict[str, Any]:
         body = self._base_payload(command=command, request_source="device_command", **payload)

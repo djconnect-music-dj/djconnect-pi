@@ -70,6 +70,7 @@ from .ha import (
     ProfileContextError,
     ProtocolVersionMismatch,
     StaleBackendAction,
+    StatusObservation,
     UnsupportedBackendCapability,
 )
 from .i18n import LANGUAGES, normalize_language, translate
@@ -165,6 +166,7 @@ class DJConnectBackend(QObject):
     statusTextChanged = Signal()
     backendAvailableChanged = Signal()
     aboutMusicAvailabilityChanged = Signal()
+    aboutConnectionOriginChanged = Signal()
     titleChanged = Signal()
     artistChanged = Signal()
     albumChanged = Signal()
@@ -238,6 +240,7 @@ class DJConnectBackend(QObject):
     _controlOutputsFinished = Signal(object, object, bool)
     _backendAvailableReady = Signal(bool)
     _aboutMusicAvailabilityReady = Signal(object, object, float)
+    _aboutConnectionReady = Signal(object, str, float)
     _toastReady = Signal(str, int, str)
     _updateCheckFinished = Signal(str)
     _askDjReady = Signal(object)
@@ -359,6 +362,8 @@ class DJConnectBackend(QObject):
         self._backend_available = True
         self._update_check_running = False
         self._about_music_availability = None
+        self._about_connection_origin = None
+        self._about_connection_request_time = 0.0
         self._about_music_request_time = 0.0
         self._busy = False
         self._executor = ThreadPoolExecutor(max_workers=UI_WORKER_COUNT, thread_name_prefix="djconnect")
@@ -405,9 +410,10 @@ class DJConnectBackend(QObject):
         self._controlOutputsFinished.connect(self._finish_control_outputs)
         self._backendAvailableReady.connect(self._set_backend_available)
         self._aboutMusicAvailabilityReady.connect(self._apply_about_music_availability)
+        self._aboutConnectionReady.connect(self._apply_about_connection_origin)
         for signal in (self.profileChanged, self.pairedChanged, self.demoModeChanged,
                        self.versionMismatchChanged, self.backendAvailableChanged, self.settingsChanged):
-            signal.connect(self._reconcile_about_music_availability)
+            signal.connect(self._reconcile_about_status)
         self._toastReady.connect(self._show_toast)
         self._updateCheckFinished.connect(self._finish_update_check)
         self._askDjReady.connect(self._apply_ask_dj_data)
@@ -979,9 +985,12 @@ class DJConnectBackend(QObject):
             return "unconfirmed"
         return "available" if observation[1] else "unavailable"
 
-    def _reconcile_about_music_availability(self):
+    def _reconcile_about_status(self):
         if self._about_music_availability is not None and self.aboutMusicAvailability == "unconfirmed":
             self._about_music_availability = None
+        if self._about_connection_origin is not None and not self.aboutConnectionOrigin:
+            self._about_connection_origin = None
+            self.aboutConnectionOriginChanged.emit()
         self.aboutMusicAvailabilityChanged.emit()
 
     @Slot(object, object, float)
@@ -992,6 +1001,24 @@ class DJConnectBackend(QObject):
         self._about_music_request_time = started
         self._about_music_availability = (scope, available) if type(available) is bool else None
         self.aboutMusicAvailabilityChanged.emit()
+
+    @Property(str, notify=aboutConnectionOriginChanged)
+    def aboutConnectionOrigin(self) -> str:
+        observation = self._about_connection_origin
+        if (self._demo_mode or not self.paired or not self._backend_available or self._version_mismatch_visible
+                or observation is None or observation[0] != self._private_read_context()):
+            return ""
+        return observation[1]
+
+    @Slot(object, str, float)
+    def _apply_about_connection_origin(self, binding, origin: str, started: float) -> None:
+        if (self._shutting_down or started < self._about_connection_request_time
+                or binding != self._private_read_context() or self._demo_mode
+                or not self.paired or not self._backend_available or self._version_mismatch_visible):
+            return
+        self._about_connection_request_time = started
+        self._about_connection_origin = (binding, origin) if origin else None
+        self.aboutConnectionOriginChanged.emit()
 
     @Property(str, notify=settingsChanged)
     def musicTargetPlayerName(self) -> str:
@@ -3081,6 +3108,7 @@ class DJConnectBackend(QObject):
         if ticket is not None and ticket != self._private_read_context():
             return
         about_scope = self._about_music_scope()
+        active_origin = ""
         music_available = data.get("music_backend_available") if data.get("success") is not False else None
         self._persist_backend_summary()
         playback = self.client.playback_from_status(data)
@@ -3109,7 +3137,9 @@ class DJConnectBackend(QObject):
         if self.paired:
             if ticket is not None and ticket != self._private_read_context():
                 return
-            self.client.status(playback, queue_items=self._queue_items)
+            status = self.client.status(playback, queue_items=self._queue_items)
+            if isinstance(status, StatusObservation):
+                active_origin = status.authenticated_origin
             self._persist_backend_summary()
         if playback.image_url:
             playback.image_url = cached_image_url(playback.image_url, timeout_seconds=3)
@@ -3117,6 +3147,7 @@ class DJConnectBackend(QObject):
             return
         self._playbackReady.emit(playback)
         if about_binding is not None and about_binding == about_scope[0]:
+            self._aboutConnectionReady.emit(about_binding, active_origin, about_started)
             self._aboutMusicAvailabilityReady.emit(about_scope, music_available, about_started)
         _LOGGER.info("Refresh completed in %.0fms", _elapsed_ms(started))
         if expected_output:
@@ -4480,6 +4511,7 @@ class DJConnectBackend(QObject):
             return
         if not value:
             self._about_music_request_time = elapsed_time()
+            self._about_connection_request_time = self._about_music_request_time
         self._backend_available = value
         self.backendAvailableChanged.emit()
 

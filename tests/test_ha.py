@@ -9,6 +9,7 @@ from typing import Any
 from unittest.mock import patch
 
 import pytest
+import requests
 
 from djconnect_pi.config import Config
 from djconnect_pi.ha import (
@@ -185,13 +186,18 @@ def test_status_uses_bearer_token_and_playback_fields() -> None:
     )
     client = HAClient(cfg)
     captured: dict[str, Any] = {}
+    redirected = False
 
     def fake_post(url: str, **kwargs: Any) -> FakeResponse:
         captured.update(kwargs)
-        return FakeResponse(200, {"success": True})
+        response = FakeResponse(200, {"success": True})
+        response.request = requests.Request("POST", url + "?fixture=redacted", headers=kwargs["headers"]).prepare()
+        response.url = response.request.url
+        response.history = [FakeResponse(307)] if redirected else []
+        return response
 
     with patch("djconnect_pi.ha.requests.post", side_effect=fake_post):
-        client.status(
+        status = client.status(
             Playback(
                 title="Alive",
                 artist="Pearl Jam",
@@ -205,6 +211,7 @@ def test_status_uses_bearer_token_and_playback_fields() -> None:
             queue_items=[{"title": "Next up"}],
         )
 
+    assert status.authenticated_origin == "http://ha"
     assert captured["headers"]["Authorization"] == "Bearer token-1"
     assert captured["headers"]["X-DJConnect-Device-ID"] == "djconnect-raspberry-pi-ABCDEF123456"
     assert captured["json"]["last_track"] == "Alive"
@@ -229,6 +236,10 @@ def test_status_uses_bearer_token_and_playback_fields() -> None:
     assert captured["json"]["queue"] == {"items": [{"title": "Next up"}]}
     for esp_only in ("battery", "wifi_rssi", "screen_state", "led_state", "screen_brightness", "screen_timeout", "speaker_volume"):
         assert esp_only not in captured["json"]
+
+    redirected = True
+    with patch("djconnect_pi.ha.requests.post", side_effect=fake_post):
+        assert client.status().authenticated_origin == ""
 
 
 def test_playback_from_status_reads_current_track_favorite_aliases() -> None:
