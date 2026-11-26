@@ -4151,6 +4151,15 @@ BrandWindow {
                     spacing: 10
                     cacheBuffer: root.lowMemoryProfile ? 160 : 320
 
+                    PullToRefresh {
+                        objectName: "askDjPullToRefresh"
+                        flickable: askDjMessagesView
+                        canRefresh: askDjPanel.visible && root.active && !root.screenBlanked
+                            && djconnect.paired && !djconnect.demoMode && !djconnect.askDjBusy
+                            && djconnect.askDjMessages.length > 0 && !askDjPanel.searchOpen && !askDjPanel.chatKeyboardOpen
+                        onRefreshRequested: djconnect.refreshAskDjHistory()
+                    }
+
                     header: ColumnLayout {
                         width: askDjMessagesView.width
                         spacing: 10
