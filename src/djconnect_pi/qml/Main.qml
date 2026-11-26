@@ -3286,24 +3286,38 @@ BrandWindow {
         }
     }
 
-    component DiscoveryChips: RowLayout {
-        id: chips
+    component DiscoveryChipStrip: Flickable {
+        id: strip
         property var values: []
-        spacing: 6
-        Repeater {
-            model: chips.values
-            delegate: GlassSurface {
-                required property string modelData
-                radius: 14
-                implicitWidth: chipText.implicitWidth + 16
-                implicitHeight: chipText.implicitHeight + 10
-                Text {
-                    id: chipText
-                    anchors.centerIn: parent
-                    text: parent.modelData.replace(/_/g, " ")
-                    textFormat: Text.PlainText
-                    color: BrandTheme.colors.muted
-                    font.pixelSize: 15
+        visible: values.length > 0
+        implicitHeight: chips.implicitHeight + 8
+        contentWidth: chips.implicitWidth
+        contentHeight: height
+        flickableDirection: Flickable.HorizontalFlick
+        boundsBehavior: Flickable.StopAtBounds
+        clip: true
+
+        RowLayout {
+            id: chips
+            y: 4
+            width: implicitWidth
+            height: implicitHeight
+            spacing: 6
+            Repeater {
+                model: strip.values
+                delegate: GlassSurface {
+                    required property string modelData
+                    radius: 14
+                    implicitWidth: chipText.implicitWidth + 16
+                    implicitHeight: chipText.implicitHeight + 10
+                    Text {
+                        id: chipText
+                        anchors.centerIn: parent
+                        text: parent.modelData.replace(/_/g, " ")
+                        textFormat: Text.PlainText
+                        color: BrandTheme.colors.muted
+                        font.pixelSize: 15
+                    }
                 }
             }
         }
@@ -3772,24 +3786,15 @@ BrandWindow {
                         Layout.fillWidth: true
                     }
 
-                    ScrollView {
-                        visible: discoveryDetail.qualityChips.length > 0
+                    DiscoveryChipStrip {
+                        objectName: "discoveryQualityStrip"
+                        values: discoveryDetail.qualityChips
                         Layout.fillWidth: true
-                        Layout.preferredHeight: qualityRow.implicitHeight + 8
-                        contentHeight: qualityRow.implicitHeight
-                        clip: true
-                        ScrollBar.vertical.policy: ScrollBar.AlwaysOff
-                        DiscoveryChips { id: qualityRow; values: discoveryDetail.qualityChips }
                     }
 
-                    ScrollView {
-                        visible: !!discoveryDetail.item && sourceRow.values.length > 0
+                    DiscoveryChipStrip {
+                        values: discoveryDetail.item ? discoveryDetail.item.reasonSources || [] : []
                         Layout.fillWidth: true
-                        Layout.preferredHeight: sourceRow.implicitHeight + 8
-                        contentHeight: sourceRow.implicitHeight
-                        clip: true
-                        ScrollBar.vertical.policy: ScrollBar.AlwaysOff
-                        DiscoveryChips { id: sourceRow; values: discoveryDetail.item ? discoveryDetail.item.reasonSources || [] : [] }
                     }
 
                     GlassButton {

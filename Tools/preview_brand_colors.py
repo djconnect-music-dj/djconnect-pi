@@ -490,6 +490,9 @@ def main():
             {"id": "fixture-shelf", "items": [{
                 "id": "fixture-track", "kind": "track", "title": long_title, "subtitle": "Artist Name",
                 "reason": "A multi-line reason describes why this recommendation fits the listener's current profile.",
+                "quality_score": 74, "quality_factors": [
+                    "spotify_recommendation", "fresh_candidate", "favorite_artist_match", "top_artist_match", "has_artwork",
+                ],
             }]},
         ]})
         assert not empty_feed.property("visible")
@@ -511,6 +514,15 @@ def main():
         assert recommendation.height() >= content_height, (width, recommendation.height(), content_height, shelf.height())
         label_bottom = kind_label.mapToItem(shelf, QPointF(0, kind_label.height())).y()
         assert label_bottom <= shelf.height(), (width, label_bottom, shelf.height())
+        quality_strip = window.findChild(QObject, "discoveryQualityStrip")
+        assert quality_strip.property("visible") and quality_strip.property("contentWidth") > quality_strip.width()
+        strip_values = quality_strip.property("values").toVariant()
+        assert strip_values[0] == "74/100" and strip_values[-1] == "has_artwork"
+        flick = QQmlExpression(engine.rootContext(), quality_strip, "flick(-1200, 0)")
+        flick.evaluate()
+        assert not flick.hasError(), flick.error().toString()
+        QTest.qWait(150)
+        assert quality_strip.property("contentX") > 0 and quality_strip.property("contentY") == 0
         card = visual_item(window.contentItem(), "discoveryCardArtwork")
         card_spinner = card.findChild(QObject, "discoveryArtworkSpinner")
         backend._music_discovery_playing_id = "fixture-track"
