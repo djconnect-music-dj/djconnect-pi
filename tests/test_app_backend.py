@@ -631,6 +631,7 @@ def test_music_dna_parser_renders_optional_blocks_and_hides_empty_cards() -> Non
                 "explicit_positives": {"eligible": True, "items": ["Saved favorites"]},
                 "taste_anchors": {"eligible": True, "items": ["Nordic pop"]},
                 "top_tracks_by_range": {"short_term": [{"title": "A", "artist": "B"}]},
+                "top_artists_by_range": {"medium_term": [{"name": "Robyn"}]},
                 "snapshot_history": [{"title": "July", "favorite_genres": ["house"]}],
                 "discovery_feedback": {"accepted": [{"title": "Accepted"}], "negative": [{"title": "Skipped"}]},
                 "privacy_dashboard": {"stores_raw_audio": False, "stores_oauth_tokens": False, "raw_counts": {"tracks": 12}, "bearer_token": "secret"},
@@ -642,13 +643,16 @@ def test_music_dna_parser_renders_optional_blocks_and_hides_empty_cards() -> Non
     cards = {card["key"].removeprefix("music_dna_card_"): card for card in parsed["sections"]}
     assert set(cards) == {
         "summary", "favorite_genres", "recent_favorites", "playtime", "repeat",
-        "positives", "anchors", "top_tracks", "feedback", "rhythm", "mood_mix",
+        "positives", "anchors", "top_tracks", "top_artists", "feedback", "rhythm", "mood_mix",
     }
     assert cards["playtime"]["value"] == "1h 1m"
     assert cards["rhythm"]["rows"][0]["labelKey"] == "music_dna_card_evening"
     assert cards["mood_mix"]["rows"][0]["percent"] == 25
     assert cards["top_tracks"]["groups"][0]["key"] == "music_dna_card_short_term"
     assert cards["top_tracks"]["groups"][0]["rows"][0]["subtitle"] == "B"
+    assert [(group["key"], [row["title"] for row in group["rows"]]) for group in cards["top_artists"]["groups"]] == [
+        ("music_dna_card_long_term", []), ("music_dna_card_medium_term", ["Robyn"]), ("music_dna_card_short_term", []),
+    ]
     assert "secret" not in repr(cards)
 
 

@@ -6431,12 +6431,17 @@ def _music_dna_cards(profile: dict[str, object], ha_url: str) -> list[dict[str, 
     card("anchors", "sparkles", entries=rows(block("taste_anchors").get("items")))
     card("recent_tracks", "history", entries=rows(tracks, artwork=True, limit=3))
     card("recent_favorites", "heart", entries=rows(profile.get("recent_favorite_tracks"), artwork=True, limit=3))
-    for key, icon, shelf in (("top_tracks", "music", False), ("top_artists", "session_persona", True)):
-        ranges = block(key + "_by_range")
-        terms = ("long_term", "medium_term", "short_term") if shelf else ("short_term", "medium_term", "long_term")
-        groups = [group for term in terms
-                  for group in grouped(term, rows(ranges.get(term), artwork=True, limit=12 if shelf else 3), shelf=shelf)]
-        card(key, icon, groups=groups)
+    top_tracks = block("top_tracks_by_range")
+    track_groups = [group for term in ("short_term", "medium_term", "long_term")
+                    for group in grouped(term, rows(top_tracks.get(term), artwork=True, limit=3))]
+    card("top_tracks", "music", groups=track_groups)
+    top_artists = block("top_artists_by_range")
+    artist_groups = [
+        {"key": "music_dna_card_" + term, "rows": rows(top_artists.get(term), artwork=True, limit=12), "shelf": True}
+        for term in ("long_term", "medium_term", "short_term")
+    ]
+    if any(group["rows"] for group in artist_groups):
+        card("top_artists", "session_persona", groups=artist_groups)
     feedback = block("discovery_feedback")
     accepted = feedback.get("accepted_recommendations") or feedback.get("accepted_items") or feedback.get("accepted")
     groups = grouped("accepted", rows(accepted, title_fields=("title", "name", "track_name", "subtitle"), limit=3))

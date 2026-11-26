@@ -1354,6 +1354,10 @@ _MUSIC_DNA_CARD_TRANSLATIONS = {
     "music_dna_card_short_term": ('Short term', 'Korte termijn', 'Kurzfristig', 'Court terme', 'Corto plazo'),
     "music_dna_card_medium_term": ('Medium term', 'Middellange termijn', 'Mittelfristig', 'Moyen terme', 'Medio plazo'),
     "music_dna_card_long_term": ('Long term', 'Lange termijn', 'Langfristig', 'Long terme', 'Largo plazo'),
+    "music_dna_not_enough_signals": (
+        "Not enough signals", "Nog te weinig luisterdata. Speel een paar nummers met Music DNA aan.",
+        "Noch nicht genug Signale", "Pas encore assez de signaux", "Aún no hay señales suficientes",
+    ),
     "music_dna_card_weekdays": ('Days of the week', 'Dagen van de week', 'Wochentage', 'Jours de la semaine', 'Días de la semana'),
     "music_dna_card_morning": ('Morning', 'Ochtend', 'Morgen', 'Matin', 'Mañana'),
     "music_dna_card_afternoon": ('Afternoon', 'Middag', 'Nachmittag', 'Après-midi', 'Tarde'),

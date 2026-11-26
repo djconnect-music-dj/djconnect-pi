@@ -5293,7 +5293,7 @@ BrandWindow {
                                         wrapMode: Text.Wrap
                                     }
                                     ListView {
-                                        visible: dnaGroup.modelData.shelf
+                                        visible: dnaGroup.modelData.shelf && dnaGroup.modelData.rows.length > 0
                                         Layout.fillWidth: true
                                         Layout.preferredHeight: 118
                                         orientation: ListView.Horizontal
@@ -5322,6 +5322,16 @@ BrandWindow {
                                                 elide: Text.ElideRight; Layout.fillWidth: true
                                             }
                                         }
+                                    }
+                                    Text {
+                                        objectName: "musicDnaArtistPeriodEmpty"
+                                        visible: dnaGroup.modelData.shelf && dnaGroup.modelData.rows.length === 0
+                                        text: visible ? root.tr("music_dna_not_enough_signals") : ""
+                                        textFormat: Text.PlainText
+                                        color: BrandTheme.colors.muted
+                                        font.pixelSize: 16
+                                        Layout.fillWidth: true
+                                        wrapMode: Text.WordWrap
                                     }
                                     Repeater {
                                         model: dnaGroup.modelData.shelf ? [] : dnaGroup.modelData.rows
