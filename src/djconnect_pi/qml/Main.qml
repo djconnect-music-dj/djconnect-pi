@@ -1827,6 +1827,19 @@ BrandWindow {
                 onClicked: root.activeScreen = "control"
             }
 
+            Text {
+                objectName: "nowOutputSwitching"
+                visible: djconnect.pendingOutputChoiceName.length > 0
+                Layout.alignment: Qt.AlignHCenter
+                Layout.maximumWidth: parent.width
+                text: root.tr("session_output_switching").replace("%1", () => djconnect.pendingOutputChoiceName)
+                textFormat: Text.PlainText
+                color: BrandTheme.colors.muted
+                font.pixelSize: 17
+                wrapMode: Text.Wrap
+                horizontalAlignment: Text.AlignHCenter
+            }
+
         }
 
     }
@@ -2138,6 +2151,7 @@ BrandWindow {
                     model: deviceChoices
                     textRole: "name"
                     displayText: displayName(currentIndex)
+                    enabled: djconnect.pendingOutputChoiceName.length === 0
                     visible: count > 1 || djconnect.outputDevice.length === 0
                     currentIndex: selectedIndex()
                     font.pixelSize: 26
@@ -2164,6 +2178,18 @@ BrandWindow {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                 }
+            }
+
+            Text {
+                objectName: "controlOutputSwitching"
+                visible: djconnect.pendingOutputChoiceName.length > 0
+                Layout.fillWidth: true
+                text: root.tr("session_output_switching").replace("%1", () => djconnect.pendingOutputChoiceName)
+                textFormat: Text.PlainText
+                color: BrandTheme.colors.muted
+                horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.Wrap
+                font.pixelSize: 17
             }
 
             RowLayout {

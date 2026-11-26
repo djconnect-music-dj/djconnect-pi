@@ -2769,15 +2769,25 @@ def test_backend_cached_output_device_remains_selectable(tmp_path: Path) -> None
 def test_backend_output_choice_sends_id_when_two_devices_have_the_same_name(tmp_path: Path) -> None:
     ensure_app()
     backend = DJConnectBackend(tmp_path / "config.json")
+    backend.cfg.paired = True
+    backend.cfg.device_token = "fixture"
+    backend._set_backend_available(True)
     backend._run = Mock()
-    backend.playback = Playback(output_device="Speaker", output_devices=("Speaker", "Speaker"), output_device_details=(
+    backend.playback = Playback(output_device="Other speaker", output_devices=("Speaker", "Speaker"), output_device_details=(
         {"name": "Speaker", "value": "speaker-a"}, {"name": "Speaker", "value": "speaker-b"},
     ))
     backend.client.command = Mock(return_value={"success": True})
-    backend._persist_backend_summary = Mock()
+    backend._refresh_worker = Mock()
     backend.setOutputChoice("speaker-b")
+    assert backend.pendingOutputChoiceName == "Speaker" and backend.outputDevice == "Other speaker"
+    backend.setOutputChoice("speaker-a")
+    backend._run.assert_called_once()
     backend._run.call_args.args[1]()
     backend.client.command.assert_called_once_with("set_output", value="speaker-b")
+    backend._refresh_worker.assert_called_once()
+    assert backend.outputDevice == "Other speaker"
+    backend._run.call_args.kwargs["done"]()
+    assert not backend.pendingOutputChoiceName
 
 
 def test_backend_manual_refresh_clears_pending_output_device(tmp_path: Path) -> None:

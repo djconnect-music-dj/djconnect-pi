@@ -165,6 +165,16 @@ def main():
             backend.playback.output_device_id = "speaker-b"
             backend.outputDeviceChanged.emit()
             assert outputs.property("currentIndex") == 2 and outputs.property("displayText") == "Fixture output (2)"
+            backend._pending_output_choice = ("speaker-a", "New fixture output")
+            backend.outputDeviceChanged.emit()
+            switching = visual_item(window.contentItem(), "controlOutputSwitching")
+            assert switching.property("visible") and not outputs.property("enabled")
+            assert "New fixture output" in switching.property("text") and outputs.property("currentIndex") == 2
+            window.setProperty("activeScreen", "now")
+            capture("now-output-switching")
+            assert visual_item(window.contentItem(), "nowPlaybackOutput").property("text") == "Fixture output"
+            assert visual_item(window.contentItem(), "nowOutputSwitching").property("visible")
+            backend._pending_output_choice = None
             backend.playback.output_device_details = ()
             backend.playback.output_device_id = ""
             backend.playback.output_device = ""
