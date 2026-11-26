@@ -1248,9 +1248,9 @@ BrandWindow {
                     id: mediaRows
                     objectName: "mediaRows"
                     anchors.fill: parent
-                    visible: !panel.searching || panel.matches.length > 0
                     model: panel.matches
                     clip: true
+                    flickableDirection: Flickable.VerticalFlick
                     spacing: panel.compact ? 10 : 14
                     ScrollBar.vertical: ScrollBar {}
 
@@ -1258,7 +1258,7 @@ BrandWindow {
                         objectName: "mediaPullToRefresh"
                         flickable: mediaRows
                         canRefresh: panel.visible && root.active && !root.screenBlanked
-                            && panel.refreshAvailable && !djconnect.demoMode && !panel.searching
+                            && panel.refreshAvailable && !djconnect.demoMode
                         onRefreshRequested: if (canRefresh) panel.refreshList()
                     }
 
