@@ -7135,9 +7135,13 @@ BrandWindow {
 
                         RowLayout {
                             id: expandedCredits
-                            width: parent.width
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            width: expandedArtist.visible ? parent.width : expandedSource.implicitWidth
                             visible: expandedArtist.text.length > 0 || expandedSource.visible
-                            Item { Layout.preferredWidth: expandedSource.visible ? expandedSource.implicitWidth : 0 }
+                            Item {
+                                visible: expandedArtist.visible && expandedSource.visible
+                                Layout.preferredWidth: expandedSource.implicitWidth
+                            }
                             Text {
                                 id: expandedArtist
                                 objectName: "expandedTrackArtist"

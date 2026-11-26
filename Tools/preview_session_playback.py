@@ -365,10 +365,16 @@ def main():
                 for key, label in [('title', title), ('artist', artist)]:
                     assert label.property('text') == current_playback[key] and label.property('lineCount') == 2, key
                     assert label.mapToItem(layout, label.width(), label.height()).y() <= layout.height() + 1
-                if owner.state['playback']['requires_spotify_attribution']:
-                    assert source.property('visible') and source.mapToItem(layout, source.width(), 0).x() <= layout.width() + 1
+                assert owner.state['playback']['requires_spotify_attribution']
+                assert source.property('visible') and source.mapToItem(layout, source.width(), 0).x() <= layout.width() + 1
+                assert abs(artist.mapToItem(layout, artist.width() / 2, 0).x() - layout.width() / 2) < 1
                 assert artwork_card.width() == artwork_card.height() and artwork_card.width() > width * 0.55
                 assert layout.height() <= layout.parentItem().height() + 1
+                current_playback['artist'] = ''
+                owner.changed.emit()
+                capture('fullscreen-track-art-spotify-without-artist')
+                assert not artist.property('visible') and source.property('visible')
+                assert abs(source.mapToItem(layout, source.width() / 2, 0).x() - layout.width() / 2) < 1
                 QTest.keyClick(window, Qt.Key.Key_Space)
                 QTest.qWait(60)
                 assert not window.property('trackArtworkOpen') and artwork_button.property('activeFocus')
