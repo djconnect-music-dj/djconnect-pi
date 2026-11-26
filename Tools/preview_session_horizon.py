@@ -479,6 +479,17 @@ def main():
                     QTest.qWait(65)
                     assert archive_panel.property("selectedMatchId") == "hidden-on-current-page"
                     assert archive_panel.property("selectedMatchIndex") == 1
+                with patch.object(owner, "_launch") as verify:
+                    pull_down(window, search_scroll, touch, 230)
+                    verify.assert_called_once_with("archive_search", "fixture")
+                owner.changed.emit()
+                QTest.qWait(65)
+                assert archive_panel.property("matches").toVariant() == []
+                owner._archive_search = {**cached_results, "sessions": cached_results["sessions"][1:]}
+                owner.changed.emit()
+                QTest.qWait(300)
+                assert archive_panel.property("selectedMatchId") == "second-archive-match"
+                assert archive_panel.property("selectedMatchIndex") == 0
                 close_archive_search.evaluate()
                 QTest.qWait(300)
                 owner._history_start = "fixture-older-window"

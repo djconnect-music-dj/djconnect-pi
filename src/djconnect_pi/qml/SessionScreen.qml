@@ -760,7 +760,7 @@ Item {
             var y = card.mapToItem(searchScroll.contentItem, 0, 0).y
             if (y + card.height > 0 && y < searchScroll.contentItem.height && isFinite(y) && Math.abs(y) <= 1000000) {
                 searchReturn = {id: searchPanel.matchId(card.modelData), offset: y,
-                    selectedId: searchPanel.selectedMatchId}
+                    selectedId: searchPanel.selectedMatchId, selectedIndex: searchPanel.selectedMatchIndex}
                 return
             }
         }
@@ -793,14 +793,25 @@ Item {
             var flick = searchScroll.contentItem
             if (!searchPanel.opened || flick.dragging) return
             const rows = screen.archiveSearchAvailable ? archiveSearchRows : searchRows
-            if (saved && saved.selectedId && searchPanel.matches.some(row => searchPanel.matchId(row) === saved.selectedId))
-                searchPanel.selectedMatchId = saved.selectedId
+            let selectedIndex = -1
+            if (saved && saved.selectedId) {
+                const matches = searchPanel.matches
+                selectedIndex = matches.findIndex(row => searchPanel.matchId(row) === saved.selectedId)
+                if (selectedIndex < 0 && screen.archiveSearchAvailable && saved.selectedIndex >= 0)
+                    selectedIndex = Math.min(saved.selectedIndex, matches.length - 1)
+                if (selectedIndex >= 0)
+                    searchPanel.selectedMatchId = searchPanel.matchId(matches[selectedIndex])
+            }
             for (var i = 0; saved && i < rows.count; i++) {
                 var card = rows.itemAt(i)
                 if (card && searchPanel.matchId(card.modelData) === saved.id) {
                     flick.contentY = Math.max(0, Math.min(flick.contentY + card.mapToItem(flick, 0, 0).y - saved.offset, Math.max(0, flick.contentHeight - flick.height)))
                     return
                 }
+            }
+            if (screen.archiveSearchAvailable && selectedIndex >= 0 && searchPanel.revealMatch(selectedIndex)) {
+                screen.searchReturn = null
+                return
             }
             flick.contentY = 0
         }
