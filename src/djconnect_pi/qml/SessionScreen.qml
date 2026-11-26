@@ -2737,12 +2737,26 @@ Item {
     }
     component AnchoredPlaybackPopup: GlassPopup {
         property rect sourceRect: Qt.rect(0, 0, 0, 0)
+        property Item openingControl: null
+        property string openingScope: ""
         readonly property bool anchored: sourceRect.width > 0
         readonly property real edgeMargin: 16
-        function captureSource(source) {
+        function openFromControl(source, prepare) {
             var top = source.mapToItem(screen, 0, 0)
             var bottom = source.mapToItem(screen, source.width, source.height)
             sourceRect = Qt.rect(top.x, top.y, bottom.x - top.x, bottom.y - top.y)
+            if (prepare && !prepare()) return
+            openingControl = source
+            openingScope = screen.playbackMenuScope
+            open()
+        }
+        onClosed: {
+            const source = openingControl
+            const sameScope = openingScope === screen.playbackMenuScope
+            openingControl = null
+            openingScope = ""
+            if (sameScope && screen.liveViewOpen && !screen.showForecast && source && source.visible && source.enabled)
+                source.forceActiveFocus(Qt.PopupFocusReason)
         }
         x: anchored
             ? Math.max(edgeMargin, Math.min(sourceRect.x + (sourceRect.width - width) / 2, screen.width - width - edgeMargin))
@@ -2759,32 +2773,15 @@ Item {
         property int compactWidth: 520
         property int wideWidth: 380
         width: Math.min(screen.width - 32, screen.compact ? compactWidth : Math.round(wideWidth * screen.ipadScale))
-        padding: 20; modal: true; dim: false
+        padding: 20; modal: true; dim: false; focus: true
     }
     AnchoredPlaybackPopup {
         id: transportPanel
         objectName: "sessionTransportPanel"
         compactWidth: 320
         wideWidth: 320
-        focus: true
-        property Item openingControl: null
-        property string openingScope: ""
-        function openFromControl(source) {
-            openingControl = source
-            openingScope = screen.playbackMenuScope
-            captureSource(source)
-            open()
-        }
         onOpened: if (transportLoader.item) transportLoader.item.focusFirstControl()
         onAboutToHide: if (screen.owner) screen.owner.cancelPlaybackIntent()
-        onClosed: {
-            const source = openingControl
-            const sameScope = openingScope === screen.playbackMenuScope
-            openingControl = null
-            openingScope = ""
-            if (sameScope && screen.liveViewOpen && !screen.showForecast && source && source.visible && source.enabled)
-                source.forceActiveFocus(Qt.PopupFocusReason)
-        }
         background: GlassSurface { elevated: true; popover: !screen.compact }
         contentItem: Loader {
             id: transportLoader
@@ -2799,8 +2796,7 @@ Item {
         objectName: "sessionVolumePanel"
         wideWidth: 320
         function openForCurrentItem(source) {
-            captureSource(source)
-            if (screen.owner.readPlaybackVolume(screen.state.session_id, screen.state.playback.item_id)) open()
+            openFromControl(source, () => screen.owner.readPlaybackVolume(screen.state.session_id, screen.state.playback.item_id))
         }
         onAboutToHide: if (screen.owner) screen.owner.dismissPlaybackVolume()
         background: GlassSurface { elevated: true; popover: !screen.compact }
@@ -2961,8 +2957,7 @@ Item {
         property bool manualRefreshPending: false
         property string pendingOutputName: ""
         function openForCurrentItem(source) {
-            captureSource(source)
-            if (screen.owner.readPlaybackOutputs(screen.state.session_id, screen.state.playback.item_id)) open()
+            openFromControl(source, () => screen.owner.readPlaybackOutputs(screen.state.session_id, screen.state.playback.item_id))
         }
         function finishManualRefresh() {
             const control = screen.state.playback_control

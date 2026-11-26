@@ -590,7 +590,9 @@ def main():
                 QTest.qWait(80)
                 owner.transport.playback_outputs.assert_called_once()
                 assert visual(window.contentItem(), 'sessionOutputChoice-synthetic-output').property('checked')
-                QQmlExpression(engine.rootContext(), output_panel, 'close()').evaluate()
+                QTest.keyClick(window, Qt.Key.Key_Escape)
+                QTest.qWait(65)
+                assert not output_panel.property('opened') and output_shortcut.property('activeFocus')
                 owner.transport.playback_outputs.reset_mock()
                 owner._session['broadcast']['playback']['target_name'] = speaker_name
                 owner.changed.emit()
@@ -710,6 +712,7 @@ def main():
                 zero_width = volume_shortcut.width()
                 click('sessionVolumeClose')
                 QTest.qWait(120)
+                assert volume_shortcut.property('activeFocus')
                 assert volume_shortcut.property('text') == '0%'
                 assert not owner.state['playback_control']['volume']
                 observed['playback']['volume_percent'] = 11
