@@ -341,6 +341,22 @@ def main():
                     assert visual(window.contentItem(), 'closeTrackArtwork').property('iconName') == 'close'
                     click('closeTrackArtwork')
                     assert not window.property('trackArtworkOpen')
+                click('sessionTrackArtwork')
+                overlay = visual(window.contentItem(), 'trackArtworkOverlay')
+                focused_transport = visual(overlay, 'sessionPlaybackPrevious')
+                focused_transport.forceActiveFocus()
+                assert focused_transport.property('activeFocus')
+                backend.cfg.music_backend_available = False
+                owner.changed.emit()
+                capture('fullscreen-track-art-without-controls')
+                close_artwork = visual(overlay, 'closeTrackArtwork')
+                assert window.property('trackArtworkOpen') and close_artwork.property('activeFocus')
+                assert not window.property('trackArtworkControlsOpen') and not window.property('trackArtworkCanControl')
+                QTest.keyClick(window, Qt.Key.Key_Space)
+                QTest.qWait(60)
+                assert not window.property('trackArtworkOpen') and artwork_button.property('activeFocus')
+                backend.cfg.music_backend_available = True
+                owner.changed.emit()
                 current_playback['item_id'] = 'synthetic-cover-replacement'
                 current_playback['artwork_url'] = art_path[:-1] + 'b'
                 owner.changed.emit()

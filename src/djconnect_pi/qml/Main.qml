@@ -6941,10 +6941,22 @@ BrandWindow {
         focus: active
         onLoaded: item.focusOverlay()
         sourceComponent: FocusScope {
+            id: artworkOverlay
             objectName: "trackArtworkOverlay"
             function focusOverlay() {
                 if (root.trackArtworkOpeningControl) closeArtworkButton.forceActiveFocus(Qt.PopupFocusReason)
                 else forceActiveFocus()
+            }
+            function focusAfterControlsLost() {
+                if (!root.trackArtworkOpen || root.trackArtworkCanControl || !visible) return
+                if (!closeArtworkButton.activeFocus && !expandedSource.spotifyFocusTarget.activeFocus)
+                    closeArtworkButton.forceActiveFocus(Qt.PopupFocusReason)
+            }
+            Connections {
+                target: root
+                function onTrackArtworkCanControlChanged() {
+                    if (!root.trackArtworkCanControl) Qt.callLater(artworkOverlay.focusAfterControlsLost)
+                }
             }
             function moveControlFocus(backward) {
                 const playback = artworkTransportLoader.item
