@@ -1319,14 +1319,14 @@ Item {
                                 visible: playbackSources.ready && text.length > 0
                                 text: screen.state.playback.artist || ""
                                 textFormat: Text.PlainText; font.pixelSize: screen.compact ? 22 : 26
-                                color: BrandTheme.colors.muted; elide: Text.ElideRight; Layout.fillWidth: true
+                                color: BrandTheme.colors.muted; wrapMode: Text.Wrap; Layout.fillWidth: true
                             }
                             Text {
                                 objectName: "sessionPlaybackAlbum"
                                 visible: playbackSources.ready && text.length > 0
                                 text: screen.state.playback.album || ""
                                 textFormat: Text.PlainText; font.pixelSize: screen.compact ? 21 : 23
-                                color: BrandTheme.colors.muted; elide: Text.ElideRight; Layout.fillWidth: true
+                                color: BrandTheme.colors.muted; wrapMode: Text.Wrap; Layout.fillWidth: true
                             }
                         }
                     }

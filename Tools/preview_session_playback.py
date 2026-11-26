@@ -209,6 +209,19 @@ def main():
                 owner._playback_artwork.executor = SimpleNamespace(submit=art_jobs.append, shutdown=lambda **kw: None)
                 cover = visual(window.contentItem(), 'sessionTrackArtwork')
                 current_playback = owner._session['broadcast']['playback']
+                original_metadata = {key: current_playback[key] for key in ('artist', 'album')}
+                current_playback.update(
+                    artist='Nora Vale and the Midnight House Orchestra with the East Coast Quartet',
+                    album='Live at the Independent Listening Room and Other Recordings from the Summer Tour',
+                )
+                owner.changed.emit()
+                QTest.qWait(60)
+                for key, label in [('artist', artist), ('album', album)]:
+                    assert label.property('text') == current_playback[key]
+                    assert label.property('lineCount') > 1 and not label.property('truncated')
+                    assert label.mapToItem(metadata, label.width(), 0).x() <= metadata.width()
+                capture('wrapped-track-metadata')
+                current_playback.update(original_metadata)
                 original_item = current_playback['item_id']
                 current_playback['artwork_url'] = art_path
                 owner.changed.emit()
