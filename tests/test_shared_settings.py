@@ -71,6 +71,21 @@ def test_uuid7_and_owner_read_have_exact_closed_identity(owner):
     assert cfg.mood == 99
 
 
+def test_track_insight_style_changes_on_confirmed_profile_revision_only(owner):
+    client, _, get = owner
+    original = client.read()
+    new_choices = fixture()
+    new_choices["writable_fields"] = []
+    get.return_value = response(new_choices)
+    choices = client.read()
+    assert choices["edit_token"] != original["edit_token"]
+    assert choices["track_insight_style"] == original["track_insight_style"]
+
+    new_choices["snapshot"]["defaults_revision"] += 1
+    get.return_value = response(new_choices)
+    assert client.read()["track_insight_style"] != choices["track_insight_style"]
+
+
 def test_legacy_unknown_mood_stays_a_proposal_and_requires_six_explicit_choices(
     owner, monkeypatch
 ):

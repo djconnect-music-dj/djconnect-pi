@@ -706,7 +706,17 @@ def main():
                     assert not backend.trackInsightTitle
                     QTest.qWait(65)
                     assert request.call_count == 10
+                    request.call_args.args[1]()
                     request.call_args.kwargs["done"]()
+                    assert backend.trackInsightTitle == "Qualified fixture"
+                    shared_state = backend._shared_settings_state
+                    backend._shared_settings_state = {**shared_state, "track_insight_style": "confirmed-profile-revision"}
+                    backend.sharedSettingsChanged.emit()
+                    assert not backend.trackInsightTitle
+                    QTest.qWait(65)
+                    assert request.call_count == 11
+                    request.call_args.kwargs["done"]()
+                    backend._shared_settings_state = shared_state
             owner._caps = previous_caps
         backend.cfg.paired, backend.cfg.device_token = False, ""
         backend._demo_mode = True

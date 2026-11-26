@@ -249,19 +249,12 @@ class SharedSettingsClient:
             raise SettingsError("uncertain")
 
     def edit_token(self) -> str:
+        return self._snapshot_token(("binding", "snapshot", "voice_revision", "allowed_values", "writable_fields"))
+
+    def _snapshot_token(self, fields: tuple[str, ...]) -> str:
         return hashlib.sha256(
             json.dumps(
-                {
-                    k: self._snapshot[k]
-                    for k in (
-                        "binding",
-                        "snapshot",
-                        "voice_revision",
-                        "allowed_values",
-                        "writable_fields",
-                    )
-                    if k in self._snapshot
-                },
+                {key: self._snapshot[key] for key in fields if key in self._snapshot},
                 sort_keys=True,
             ).encode()
         ).hexdigest()
@@ -361,6 +354,7 @@ class SharedSettingsClient:
         options["voice"] = voices
         return {
             "edit_token": self.edit_token(),
+            "track_insight_style": self._snapshot_token(("binding", "snapshot", "voice_revision")),
             "operation_pending": self._pending is not None,
             "operation_unknown": self._unknown,
             "values": deepcopy((session or {}).get("settings") or snap["defaults"]),
