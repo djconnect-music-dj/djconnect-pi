@@ -334,6 +334,17 @@ def main():
         backend.setLanguage("nl")
         window.setProperty("activeScreen", "musicdna")
         backend._demo_mode = False
+        backend._music_dna_loaded = False
+        backend._music_dna_enabled = False
+        backend._set_music_dna_busy(True)
+        QTest.qWait(100)
+        loading = visual_item(window.contentItem(), "musicDnaLoadingCard")
+        opt_in = visual_item(window.contentItem(), "musicDnaOptInHero")
+        assert loading.property("visible") and not opt_in.property("visible")
+        assert visual_item(loading, "musicDnaLoadingText").property("text") == backend.t("music_dna_loading_profile")
+        backend._apply_music_dna_data({"success": True, "enabled": False, "profile": {}})
+        backend._set_music_dna_busy(False)
+        assert not loading.property("visible") and opt_in.property("visible")
         backend._apply_music_dna_data({"success": True, "enabled": True, "profile": {}})
         backend._demo_mode = True
         QTest.qWait(100)

@@ -249,6 +249,7 @@ class DJConnectBackend(QObject):
         self._ask_dj_clear_revision = 0
         self._ask_dj_busy = False
         self._music_dna_enabled = False
+        self._music_dna_loaded = False
         self._music_dna_summary = ""
         self._music_dna_error = ""
         self._music_dna_sections: list[dict[str, object]] = []
@@ -508,6 +509,10 @@ class DJConnectBackend(QObject):
     @Property(bool, notify=musicDnaChanged)
     def musicDnaEnabled(self) -> bool:
         return self._music_dna_enabled
+
+    @Property(bool, notify=musicDnaChanged)
+    def musicDnaLoaded(self) -> bool:
+        return self._music_dna_loaded
 
     @Property(bool, notify=musicDnaChanged)
     def musicDnaBusy(self) -> bool:
@@ -2616,6 +2621,7 @@ class DJConnectBackend(QObject):
 
     def _set_demo_music_dna(self, enabled: bool) -> None:
         self._music_dna_enabled = enabled
+        self._music_dna_loaded = True
         self._music_discovery_consent_rejected = False
         self._music_dna_summary = self.tr_key("demo_dna_summary") if enabled else ""
         tracks = demo_queue_items()
@@ -2906,6 +2912,7 @@ class DJConnectBackend(QObject):
         self.sharedSettingsChanged.emit()
         self._clear_ask_dj_cache()
         self._music_dna_enabled = False
+        self._music_dna_loaded = False
         self._music_dna_summary = ""
         self._music_dna_error = ""
         self._music_dna_sections = []
@@ -2973,6 +2980,7 @@ class DJConnectBackend(QObject):
         self._apply_profile_context(data)
         parsed = parse_music_dna_profile(data, ha_url=self.cfg.ha_url)
         self._music_dna_enabled = bool(parsed["enabled"])
+        self._music_dna_loaded = isinstance(data.get("enabled"), bool)
         self._music_dna_summary = str(parsed["summary"])
         self._music_dna_sections = list(parsed["sections"])
         self._set_backend_available(True)

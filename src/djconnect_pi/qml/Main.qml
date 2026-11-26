@@ -3869,13 +3869,38 @@ BrandWindow {
                 }
             }
 
+            GlassCard {
+                objectName: "musicDnaLoadingCard"
+                visible: !djconnect.musicDnaLoaded && djconnect.musicDnaBusy && djconnect.musicDnaError.length === 0
+                Layout.fillWidth: true
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 12
+                    BusyIndicator {
+                        running: visible
+                        Layout.preferredWidth: 36
+                        Layout.preferredHeight: 36
+                        Accessible.ignored: true
+                    }
+                    Text {
+                        objectName: "musicDnaLoadingText"
+                        text: root.tr("music_dna_loading_profile")
+                        textFormat: Text.PlainText
+                        color: BrandTheme.colors.text
+                        font.pixelSize: 20
+                        wrapMode: Text.WordWrap
+                        Layout.fillWidth: true
+                    }
+                }
+            }
+
             IntroductionCard {
                 objectName: "musicDnaOptInHero"
                 compact: root.width < 900
                 iconName: "heart"
                 title: root.tr("music_dna")
                 message: root.tr("music_dna_opt_in")
-                visible: !djconnect.musicDnaEnabled && djconnect.musicDnaError.length === 0
+                visible: !djconnect.musicDnaEnabled && djconnect.musicDnaLoaded && djconnect.musicDnaError.length === 0
 
                 PurpleButton {
                     text: root.tr("music_dna_enable")
@@ -3891,7 +3916,7 @@ BrandWindow {
             ScrollView {
                 id: musicDnaScroll
                 objectName: "musicDnaScroll"
-                visible: djconnect.musicDnaError.length === 0 && djconnect.musicDnaEnabled
+                visible: djconnect.musicDnaLoaded && djconnect.musicDnaError.length === 0 && djconnect.musicDnaEnabled
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 clip: true

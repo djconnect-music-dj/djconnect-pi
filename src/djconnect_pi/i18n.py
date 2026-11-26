@@ -1274,6 +1274,11 @@ _SHARED_SETTINGS_TRANSLATIONS = {
 }
 _MUSIC_DNA_CARD_TRANSLATIONS = {
     "music_dna_card_summary": ('Summary', 'Samenvatting', 'Zusammenfassung', 'Résumé', 'Resumen'),
+    "music_dna_loading_profile": (
+        "Loading Music DNA from Home Assistant…", "Music DNA ophalen uit Home Assistant…",
+        "Music DNA wird aus Home Assistant geladen…", "Chargement de Music DNA depuis Home Assistant…",
+        "Cargando Music DNA desde Home Assistant…",
+    ),
     "music_dna_no_profile_yet": (
         "No Music DNA profile yet", "Nog geen Music DNA-profiel", "Noch kein Music-DNA-Profil",
         "Pas encore de profil Music DNA", "Aún no hay un perfil de Music DNA",
