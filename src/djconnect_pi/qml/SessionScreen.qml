@@ -848,6 +848,7 @@ Item {
         searchPanel.open()
         searchPanel.keyboardVisible = false
         searchInput.text = pending.query
+        searchPanel.pendingArchiveMatchId = pending.sessionId
         owner.searchArchive(pending.query)
     }
     function openArchiveMatch(sessionId) {
@@ -2877,6 +2878,7 @@ Item {
         property bool keyboardDismissalDrag: false
         property bool restoreControlFocus: false
         property string selectedMatchId: ""
+        property string pendingArchiveMatchId: ""
         readonly property var result: screen.archiveSearchAvailable ? screen.owner.archiveSearchState : screen.state.search
         readonly property var matches: screen.archiveSearchAvailable ? (result.sessions || []) : (result.matches || [])
         readonly property string searchError: result.error || screen.state.error
@@ -2889,9 +2891,12 @@ Item {
         onMatchesChanged: {
             if (selectedMatchId && selectedMatchIndex < 0)
                 selectedMatchId = ""
+            if (pendingArchiveMatchId) Qt.callLater(restoreArchiveMatch)
         }
+        onMatchingQueryChanged: if (pendingArchiveMatchId) Qt.callLater(restoreArchiveMatch)
         function resetSearch() {
             selectedMatchId = ""
+            pendingArchiveMatchId = ""
             screen.archiveSearchHandoff = null
             screen.owner.clearSearch()
             screen.owner.clearArchiveSearch()
@@ -2901,6 +2906,15 @@ Item {
             if (!matchingQuery || !count) return false
             const index = selectedMatchIndex < 0 ? (delta < 0 ? count - 1 : 0)
                 : (selectedMatchIndex + delta + count) % count
+            return revealMatch(index)
+        }
+        function restoreArchiveMatch() {
+            if (!pendingArchiveMatchId || !opened || !screen.archiveSearchAvailable || !matchingQuery) return
+            const index = matches.findIndex(row => row.session_id === pendingArchiveMatchId)
+            if (index >= 0 && revealMatch(index)) pendingArchiveMatchId = ""
+            else if (index < 0 && result.complete === true) pendingArchiveMatchId = ""
+        }
+        function revealMatch(index) {
             const card = (screen.archiveSearchAvailable ? archiveSearchRows : searchRows).itemAt(index)
             if (!card) return false
             selectedMatchId = matchId(card.modelData)

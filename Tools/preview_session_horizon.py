@@ -470,6 +470,11 @@ def main():
                     assert not owner.state["timeline"]
                     assert archive_panel.property("opened") and archive_field.property("text") == "fixture"
                     assert not archive_panel.property("keyboardVisible")
+                    owner._archive_search = {**cached_results, "sessions": list(reversed(cached_results["sessions"]))}
+                    owner.changed.emit()
+                    QTest.qWait(65)
+                    assert archive_panel.property("selectedMatchId") == "hidden-on-current-page"
+                    assert archive_panel.property("selectedMatchIndex") == 1
                 close_archive_search.evaluate()
                 QTest.qWait(300)
                 owner._history_start = "fixture-older-window"
