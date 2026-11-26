@@ -587,6 +587,7 @@ def main():
                 QTest.qWait(80)
                 assert output_refresh.property('iconName') == 'refresh' and not output_spinner.property('visible')
                 assert output_refresh.size() == refresh_size and output_refresh.property('enabled')
+                assert not backend.toastVisible
                 output_choices = window.findChild(QObject, 'sessionOutputChoices')
                 assert output_refresh.mapToScene(QPointF(0, output_refresh.height())).y() <= output_choices.mapToScene(QPointF()).y()
                 output_shortcut = window.findChild(QObject, 'sessionCurrentOutput')
@@ -630,8 +631,21 @@ def main():
                 intents.pop()()
                 QTest.qWait(80)
                 assert owner.transport.playback_outputs.call_count == 2 and not output_spinner.property('visible')
+                assert backend.toastText == TRANSLATIONS[language]['session_output_updated']
+                owner.transport.playback_outputs.side_effect = SessionError('unavailable')
+                click('sessionOutputRead')
+                assert len(intents) == 1
+                intents.pop()()
+                QTest.qWait(80)
+                assert backend.toastText == TRANSLATIONS[language]['session_output_unavailable']
+                owner.transport.playback_outputs.side_effect = None
+                backend.hideToast()
+                click('sessionOutputRead')
+                assert len(intents) == 1
                 click('sessionOutputClose')
+                intents.pop()()
                 QTest.qWait(120)
+                assert not backend.toastVisible
                 observed['playback']['volume_percent'] = 0
                 click('sessionCurrentVolume')
                 assert len(intents) == 1

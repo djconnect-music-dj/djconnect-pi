@@ -2876,11 +2876,30 @@ Item {
         padding: screen.compact ? 20 : 16
         readonly property var observation: screen.state.playback_control.outputs || ({})
         readonly property var choices: observation.choices || []
+        property bool manualRefreshPending: false
         function openForCurrentItem(source) {
             captureSource(source)
             if (screen.owner.readPlaybackOutputs(screen.state.session_id, screen.state.playback.item_id)) open()
         }
-        onAboutToHide: if (screen.owner) screen.owner.cancelPlaybackIntent()
+        function finishManualRefresh() {
+            const control = screen.state.playback_control
+            if (!manualRefreshPending || !opened || control.reading_outputs) return
+            manualRefreshPending = false
+            if (observation.lease !== undefined)
+                screen.backend.showToastForContext(screen.tr("session_output_updated"), "refresh")
+            else if (control.outputs_status === "unavailable")
+                screen.backend.showToastForContext(screen.tr("session_output_unavailable"), "refresh")
+        }
+        Connections {
+            target: screen.owner
+            function onChanged() {
+                if (outputsPanel.manualRefreshPending) Qt.callLater(outputsPanel.finishManualRefresh)
+            }
+        }
+        onAboutToHide: {
+            manualRefreshPending = false
+            if (screen.owner) screen.owner.cancelPlaybackIntent()
+        }
         background: GlassSurface { elevated: true; popover: !screen.compact }
         contentItem: ColumnLayout {
             spacing: 16
@@ -2899,7 +2918,8 @@ Item {
                     opacity: enabled || reading ? 1 : 0.4
                     onClicked: {
                         if (screen.state.playback_control.status === "uncertain") screen.owner.refreshPlayback()
-                        else screen.owner.readPlaybackOutputs(screen.state.session_id, screen.state.playback.item_id)
+                        else outputsPanel.manualRefreshPending = screen.owner.readPlaybackOutputs(
+                            screen.state.session_id, screen.state.playback.item_id)
                     }
                     BusyIndicator {
                         objectName: "sessionOutputReadSpinner"
