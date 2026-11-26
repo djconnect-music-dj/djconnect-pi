@@ -9,6 +9,8 @@ Item {
     id: screen
     objectName: "djSessionScreen"
     property bool pollingAllowed: true
+    property Item trackInsightMoodSurface: null
+    onTrackInsightMoodSurfaceChanged: if (!trackInsightMoodSurface && choices && choices.fromTrackInsight) choices.close()
     readonly property bool liveViewOpen: visible && !historical && pollingAllowed
     readonly property bool historyViewOpen: visible && historical && pollingAllowed
     onLiveViewOpenChanged: syncSessionVisibility()
@@ -735,14 +737,17 @@ Item {
         if (field === "presence") return ["music_only", "occasional", "balanced", "talkative", "presenter"].indexOf(value) >= 0 ? "presence_" + value : "chat"
         return ["home_dj", "radio_dj", "club_dj", "festival_dj"].indexOf(value) >= 0 ? "persona_" + value : "session_persona"
     }
-    function openChoice(field, button) {
-        if (!sessionControlsVisible || (field === "voice" && !sessionVoiceAvailable)) return
+    function openChoice(field, button, surface) {
+        if (!sessionControlsVisible || (field === "voice" && !sessionVoiceAvailable)
+                || (surface && (field !== "mood" || surface !== trackInsightMoodSurface))) return
+        choices.fromTrackInsight = !!surface
         choices.sessionId = state.session_id
         choices.profileId = scopeProfileId
         choices.field = field
         choices.editToken = backend.sharedSettings.edit_token || ""
-        const anchor = button.mapToItem(screen, button.width / 2, 0).x
-        choices.x = Math.max(12, Math.min(anchor - choices.width / 2, width - choices.width - 12))
+        const anchor = button.mapToItem(choices.parent, button.width / 2, button.height)
+        choices.x = Math.max(12, Math.min(anchor.x - choices.width / 2, choices.parent.width - choices.width - 12))
+        choices.trackInsightTop = anchor.y + 8
         choices.open()
     }
     Timer {
@@ -2682,6 +2687,9 @@ Item {
     GlassPopup {
         id: choices
         objectName: "sessionToolbarChoice"
+        property bool fromTrackInsight: false
+        property real trackInsightTop: 0
+        parent: fromTrackInsight && screen.trackInsightMoodSurface ? screen.trackInsightMoodSurface : screen
         property string sessionId: ""
         property string profileId: ""
         property string field: "mood"
@@ -2709,13 +2717,15 @@ Item {
         readonly property bool canSubmit: choices.visible && screen.state.runtime_state === "active"
             && screen.sessionControlsVisible && choices.sessionId === screen.state.session_id
             && choices.profileId === screen.scopeProfileId
+            && (!choices.fromTrackInsight || !!screen.trackInsightMoodSurface)
             && (screen.backend.demoMode ? (screen.owner.demoOptions[choices.field] || []).length > 0
                 : ((choices.field !== "voice" || screen.sessionVoiceAvailable)
                     && choices.editToken === (screen.backend.sharedSettings.edit_token || "")
                     && !!screen.backend.sharedSettings.available && !screen.backend.sharedSettingsBusy
                     && !screen.backend.sharedSettings.selection_required && choices.editToken.length > 0
                     && !screen.backend.sharedSettings.operation_pending))
-        y: toolbar.y + toolbar.height + 8; width: Math.min(screen.width - 24, 560); padding: 22
+        y: fromTrackInsight ? trackInsightTop : toolbar.y + toolbar.height + 8
+        width: Math.min(screen.width - 24, 560); padding: 22
         modal: true; dim: false
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
         background: GlassSurface { radius: 28; elevated: true }

@@ -2469,6 +2469,11 @@ BrandWindow {
         readonly property alias artworkTint: trackInsightArtworkFrame.artworkTint
         readonly property bool hasLiveSession: root.trackInsightHasLiveSession
         readonly property bool canChooseVisualMood: visible && root.active && !root.screenBlanked && !hasLiveSession
+        readonly property bool canChooseSessionMood: visible && root.active && !root.screenBlanked
+            && !root.splashVisible && !djconnect.logsVisible && !djconnect.versionMismatchVisible
+            && root.sessionHeader.runtime_state === "active" && !!root.sessionHeader.session_id
+            && (djconnect.demoMode || (djconnect.paired && !root.sessionHeader.profile_confirmation_required
+                && !root.sessionHeader.owner_read_only))
         onCanChooseVisualMoodChanged: if (!canChooseVisualMood) trackInsightMoodPopup.close()
         property bool autoInsightRequested: false
         color: "transparent"
@@ -2496,18 +2501,25 @@ BrandWindow {
 
             PageToolbar {
                 title: root.tr("track_insight")
-                showLeading: !trackInsightPanel.hasLiveSession
+                showLeading: !trackInsightPanel.hasLiveSession || trackInsightPanel.canChooseSessionMood
                 leading: [
                     GlassButton {
                         id: trackInsightMoodButton
-                        objectName: "trackInsightVisualMoodToggle"
-                        iconName: "mood_" + trackInsightPanel.visualMood
+                        objectName: trackInsightPanel.hasLiveSession ? "trackInsightSessionMoodToggle" : "trackInsightVisualMoodToggle"
+                        iconName: trackInsightPanel.hasLiveSession ? sharedSessionScreen.toolbarIcon("mood")
+                            : "mood_" + trackInsightPanel.visualMood
                         tertiary: true
                         implicitWidth: 52
-                        enabled: trackInsightPanel.canChooseVisualMood
-                        Accessible.name: root.tr("shared_field_mood")
-                        Accessible.description: root.tr("shared_mood_" + trackInsightPanel.visualMood)
+                        enabled: trackInsightPanel.canChooseVisualMood || trackInsightPanel.canChooseSessionMood
+                        Accessible.name: trackInsightPanel.hasLiveSession ? sharedSessionScreen.toolbarChoiceLabel("mood")
+                            : root.tr("shared_field_mood")
+                        Accessible.description: trackInsightPanel.hasLiveSession ? ""
+                            : root.tr("shared_mood_" + trackInsightPanel.visualMood)
                         onClicked: {
+                            if (trackInsightPanel.canChooseSessionMood) {
+                                sharedSessionScreen.openChoice("mood", trackInsightMoodButton, trackInsightPanel)
+                                return
+                            }
                             if (!trackInsightPanel.canChooseVisualMood)
                                 return
                             const anchor = trackInsightMoodButton.mapToItem(trackInsightPanel, 0, trackInsightMoodButton.height)
@@ -4810,6 +4822,8 @@ BrandWindow {
             id: sharedSessionScreen
             anchors.fill: parent
             backend: djconnect
+            trackInsightMoodSurface: trackInsightLoader.item && trackInsightLoader.item.canChooseSessionMood
+                ? trackInsightLoader.item : null
             pollingAllowed: root.active && !root.screenBlanked && !root.splashVisible && !vibeScapeLoader.active
                 && !djconnect.logsVisible && !djconnect.versionMismatchVisible
             historical: root.activeScreen === "history" || root.activeScreen === "session-history"
