@@ -3938,6 +3938,8 @@ def _track_insight_music_dna_match(data: dict[str, object]) -> str:
 
 def _track_insight_visualizer(data: dict[str, object], items: list[dict[str, object]], sections: list[dict[str, object]]) -> dict[str, object]:
     analysis = data.get("analysis") if isinstance(data.get("analysis"), dict) else {}
+    if _track_insight_unmeasured(analysis):
+        return {}
     track = data.get("track") if isinstance(data.get("track"), dict) else {}
     visualizer = data.get("visualizer") if isinstance(data.get("visualizer"), dict) else {}
     colors = _track_visualizer_colors(visualizer, data)

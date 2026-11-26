@@ -869,7 +869,7 @@ def test_track_insight_direct_and_wrapped_response_decode_same_contract() -> Non
 def test_track_insight_uses_explicit_unmeasured_basis_without_inventing_metrics(tmp_path: Path) -> None:
     ensure_app()
     backend = DJConnectBackend(tmp_path / "config.json")
-    payload = {"track": {"title": "Fixture"}, "analysis": {
+    payload = {"track": {"title": "Fixture"}, "visualisation": {"bars": [0.2, 0.7]}, "analysis": {
         "basis": "qualified_credit_and_interpretation_v1", "measured_audio": False,
         "summary": "Interpretation", "full_text": "Interpretation", "energy": 0.4, "danceability": 0.2,
         "verified_context": "Synthetic credit",
@@ -879,6 +879,7 @@ def test_track_insight_uses_explicit_unmeasured_basis_without_inventing_metrics(
     backend._apply_track_insight_data(payload)
     assert backend.trackInsightAudioNotice and backend.trackInsightText == "Interpretation"
     assert not backend.trackInsightItems
+    assert not backend.trackInsightVisualizer
     assert backend.trackInsightVerifiedCredit["context"] == "Synthetic credit"
     payload["analysis"]["source_attribution"]["url"] = "https://user@musicbrainz.org/recording/fixture"
     backend._apply_track_insight_data(payload)
@@ -886,6 +887,7 @@ def test_track_insight_uses_explicit_unmeasured_basis_without_inventing_metrics(
     payload["analysis"]["basis"] = "unmeasured_metadata_only_v1"
     backend._apply_track_insight_data(payload)
     assert not backend.trackInsightAudioNotice and not backend.trackInsightSections
+    assert not backend.trackInsightVisualizer
     backend._clear_track_insight()
     assert not backend.trackInsightAudioNotice
 

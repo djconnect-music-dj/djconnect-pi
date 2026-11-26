@@ -2783,6 +2783,7 @@ BrandWindow {
                     GlassSurface {
                         border.color: root.moodColor("focus")
                         id: trackInsightVisualizer
+                        objectName: "trackInsightVisualizer"
                         visible: djconnect.trackInsightVisualizer.available === true
                         Layout.fillWidth: true
                         Layout.preferredHeight: 164

@@ -259,6 +259,20 @@ def main():
         assert credit_card.property("visible") and not analysis_heading.property("visible")
         assert not notice.property("visible")
         backend.setLanguage("nl")
+        backend._demo_mode = False
+        backend._apply_track_insight_data({
+            "track": {"title": "Fixture metadata"},
+            "analysis": {"basis": "unmeasured_metadata_only_v1", "measured_audio": False,
+                         "summary": "Geen audioanalyse beschikbaar."},
+            "visualisation": {"bars": [0.3, 0.7]},
+        })
+        backend._demo_mode = True
+        QTest.qWait(65)
+        visualizer = visual_item(window.contentItem(), "trackInsightVisualizer")
+        assert not visualizer.property("visible")
+        analysis_text = visual_item(window.contentItem(), "trackInsightAnalysisText")
+        assert analysis_text.property("visible") and analysis_text.property("text") == "Geen audioanalyse beschikbaar."
+        assert not credit_card.property("visible") and not notice.property("visible")
         window.setProperty("activeScreen", "session")
         for runtime_state in ("opening", "ending"):
             backend.djSession._session["runtime_state"] = runtime_state
