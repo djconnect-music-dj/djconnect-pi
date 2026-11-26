@@ -2976,6 +2976,8 @@ Item {
         readonly property string searchError: result.error || screen.state.error
         readonly property bool matchingQuery: !!result.query && result.query === searchInput.text.trim()
             && (screen.archiveSearchAvailable || result.session_id === screen.searchTarget)
+        readonly property bool hasArchiveResults: screen.archiveSearchAvailable && matchingQuery
+            && "sessions" in result && !searchError
         readonly property int selectedMatchIndex: matches.findIndex(function(row) { return matchId(row) === selectedMatchId })
         readonly property bool noMatches: matchingQuery && result.complete === true
             && matches.length === 0 && !screen.owner.busy && !searchError
@@ -2994,7 +2996,7 @@ Item {
                 selectedMatchId = matchId(matches[0])
         }
         onResultChanged: if (pendingArchiveMatch) Qt.callLater(restoreArchiveMatch)
-        onMatchingQueryChanged: if (pendingArchiveMatch) Qt.callLater(restoreArchiveMatch)
+        onHasArchiveResultsChanged: if (pendingArchiveMatch && hasArchiveResults) Qt.callLater(restoreArchiveMatch)
         function resetSearch() {
             cancelTypedArchiveSearch()
             selectedMatchId = ""
@@ -3037,10 +3039,9 @@ Item {
             return revealMatch(index)
         }
         function restoreArchiveMatch() {
-            if (!pendingArchiveMatch || !opened || !screen.archiveSearchAvailable || !matchingQuery) return
-            const complete = result.complete === true
-            const index = findMatchIndex(pendingArchiveMatch.sessionId, complete ? pendingArchiveMatch.index : -1)
-            if (index >= 0 ? revealMatch(index) : complete) pendingArchiveMatch = null
+            if (!pendingArchiveMatch || !opened || !hasArchiveResults) return
+            const index = findMatchIndex(pendingArchiveMatch.sessionId, pendingArchiveMatch.index)
+            if (index < 0 || revealMatch(index)) pendingArchiveMatch = null
         }
         function revealMatch(index) {
             const card = (screen.archiveSearchAvailable ? archiveSearchRows : searchRows).itemAt(index)
@@ -3116,10 +3117,8 @@ Item {
                 }
                 GlassButton {
                     objectName: "sessionSearchSubmit"
-                    readonly property bool refreshesArchiveResults: screen.archiveSearchAvailable
-                        && searchPanel.matchingQuery && "sessions" in searchPanel.result && !searchPanel.searchError
-                    iconName: screen.owner.searchBusy ? "" : refreshesArchiveResults ? "refresh" : "search"
-                    Accessible.name: refreshesArchiveResults ? screen.tr("session_archive_refresh_search") : screen.searchLabel
+                    iconName: screen.owner.searchBusy ? "" : searchPanel.hasArchiveResults ? "refresh" : "search"
+                    Accessible.name: searchPanel.hasArchiveResults ? screen.tr("session_archive_refresh_search") : screen.searchLabel
                     implicitWidth: 56
                     enabled: !screen.owner.busy && searchInput.text.trim().length > 0
                     onClicked: searchPanel.submitSearch()
@@ -3177,6 +3176,7 @@ Item {
                 }
             }
             Text {
+                objectName: "sessionSearchCoverage"
                 Layout.leftMargin: searchPanel.bodyMargin; Layout.rightMargin: searchPanel.bodyMargin
                 visible: searchPanel.matchingQuery && !searchPanel.noMatches && !screen.owner.busy && !searchPanel.searchError
                     && (!screen.archiveSearchAvailable || searchPanel.result.complete === false)

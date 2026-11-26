@@ -542,11 +542,14 @@ def main():
                     click(window, back)
                     QTest.qWait(200)
                     verify.assert_called_once_with("archive_search", "fixture")
-                    owner._archive_search = {**cached_results, "sessions": cached_results["sessions"][:1]}
+                    owner._archive_search = {**cached_results, "complete": False, "sessions": cached_results["sessions"][:1]}
                     owner.changed.emit()
                     QTest.qWait(65)
                     assert archive_panel.property("selectedMatchId") == "hidden-on-current-page"
                     assert archive_panel.property("selectedMatchIndex") == 0
+                    coverage = window.findChild(QObject, "sessionSearchCoverage")
+                    assert coverage.property("visible")
+                    assert coverage.property("text") == TRANSLATIONS[language]["session_archive_search_partial"]
                 close_archive_search.evaluate()
                 QTest.qWait(300)
                 owner._history_start = "fixture-older-window"
