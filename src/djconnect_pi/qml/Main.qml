@@ -3092,6 +3092,14 @@ BrandWindow {
         onAutoInsightKeyChanged: Qt.callLater(requestInsightIfVisible)
         onAutoInsightSurfaceActiveChanged: if (!autoInsightSurfaceActive) requestedInsightKey = ""
 
+        Connections {
+            target: djconnect
+            function onTrackInsightObservationChanged() {
+                trackInsightPanel.requestedInsightKey = ""
+                Qt.callLater(trackInsightPanel.requestInsightIfVisible)
+            }
+        }
+
         function requestInsightIfVisible() {
             if (!canAutoRequestAnalysis || !autoInsightKey || autoInsightKey === requestedInsightKey) return
             requestedInsightKey = autoInsightKey

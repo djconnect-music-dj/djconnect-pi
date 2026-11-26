@@ -350,6 +350,22 @@ class HAClient:
         self._validate_ha_version(data)
         return data
 
+    def current_track_insight(self, *, force_refresh: bool = False) -> dict[str, Any]:
+        body = self._base_payload(
+            track_insight_subject={"schema_version": 1, "mode": "current"},
+            force_refresh=force_refresh,
+            include_visual_profile=True,
+            include_raw_response=True,
+            request_source="track_insight",
+        )
+        if self.cfg.music_dna_key:
+            body["music_dna_key"] = self.cfg.music_dna_key
+        response = requests.post(self._djconnect_url("track_insight"), json=body, headers=self._headers(),
+                                 timeout=max(self.timeout, 10.0))
+        data = self._json(response)
+        self._validate_ha_version(data)
+        return data
+
     def music_dna_profile(self) -> dict[str, Any]:
         self._refresh_websocket_capabilities()
         return self._music_dna_request("djconnect/music_dna/profile", "music_dna/profile", self._base_payload(request_source="music_dna"))
@@ -890,7 +906,13 @@ def _response_json_data(response: requests.Response) -> dict[str, Any]:
 def _http_error_response(response: requests.Response, data: dict[str, Any]) -> dict[str, Any]:
     error = str(data.get("error") or data.get("message") or response.text or f"HTTP {response.status_code}")
     _LOGGER.warning("Home Assistant returned HTTP %s: %s", response.status_code, error)
-    if (response.status_code, error) in {(404, "no_track_playing"), (429, "rate_limited")}:
+    if (response.status_code, error) in {
+        (404, "no_track_playing"),
+        (429, "rate_limited"),
+        (404, "current_track_unavailable"),
+        (503, "current_track_unavailable"),
+        (409, "track_insight_context_changed"),
+    }:
         return {**data, "success": False, "error": error}
     if error in PROFILE_ERROR_CODES | {"music_dna_context_changed"}:
         message = str(data.get("message") or error)

@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 import logging
+import math
 import os
 import re
 import stat
@@ -148,9 +149,10 @@ class _DiscoveryRefreshResult(_ProfileReadResult):
 class _TrackInsightResult(dict):
     """Track Insight delivery scope captured before dispatch, outside the wire payload."""
 
-    def __init__(self, data, scope):
+    def __init__(self, data, scope, proof=None):
         super().__init__(data)
         self.scope = scope
+        self.proof = proof
 
 
 class DJConnectBackend(QObject):
@@ -192,6 +194,7 @@ class DJConnectBackend(QObject):
     musicDiscoveryPlayed = Signal(str, str)
     trackInsightChanged = Signal()
     trackInsightPlaybackItemChanged = Signal()
+    trackInsightObservationChanged = Signal()
     demoModeChanged = Signal()
     glassChanged = Signal()
     screenTimeoutChanged = Signal()
@@ -312,6 +315,8 @@ class DJConnectBackend(QObject):
         self._application_foreground = True
         self._track_insight_revision = 0
         self._track_insight_result_scope = None
+        self._track_insight_last_proof = None
+        self._track_insight_deadline = None
         self._ask_dj_unavailable_until = 0.0
         self._ask_dj_poll_error_count = 0
         self._ask_dj_poll_in_flight = False
@@ -380,6 +385,9 @@ class DJConnectBackend(QObject):
         self._musicDiscoveryPlayConfirmed.connect(self._apply_music_discovery_play)
         self._musicDiscoveryFeedbackAccepted.connect(self._remove_music_discovery_item)
         self._trackInsightReady.connect(self._apply_track_insight_data)
+        self._track_insight_expiry_timer = QTimer(self)
+        self._track_insight_expiry_timer.setSingleShot(True)
+        self._track_insight_expiry_timer.timeout.connect(self._expire_track_insight)
         self._sharedSettingsReady.connect(self._apply_shared_settings)
         self._shared_settings_timer = QTimer(self)
         self._shared_settings_timer.setInterval(15000)
@@ -2935,8 +2943,23 @@ class DJConnectBackend(QObject):
     def _track_insight_worker(self, playback: Playback, scope: tuple, *, force_refresh: bool) -> None:
         if not self._application_foreground or scope != self._track_insight_scope():
             return
+        proof = None
         try:
-            data = self.client.track_insight(playback, force_refresh=force_refresh)
+            if self._uses_current_track_insight():
+                if not re.fullmatch(r"spotify:track:[A-Za-z0-9]{22}", playback.uri):
+                    data = {"success": False, "error": "current_track_unavailable"}
+                else:
+                    clock = self._session_controller._clock
+                    requested_at = clock.now()
+                    data = self.client.current_track_insight(force_refresh=force_refresh)
+                    if data.get("success") is False:
+                        data = {"success": False, "error": data.get("error") or "current_track_unavailable"}
+                    else:
+                        proof = _current_track_insight_proof(data.get("subject"), playback.uri, requested_at, clock.now())
+                        if proof is None:
+                            data = {"success": False, "error": "track_insight_context_changed"}
+            else:
+                data = self.client.track_insight(playback, force_refresh=force_refresh)
             if scope != self._track_insight_scope():
                 return
             self._apply_profile_context(data)
@@ -2946,7 +2969,7 @@ class DJConnectBackend(QObject):
         except (DJConnectError, requests.RequestException) as exc:
             _LOGGER.warning("Track Insight unavailable; showing retry state: %s", exc.__class__.__name__)
             data = {"success": False, "error": "transient"}
-        self._trackInsightReady.emit(_TrackInsightResult(data, scope))
+        self._trackInsightReady.emit(_TrackInsightResult(data, scope, proof))
 
     def _music_dna_profile_worker(self, *, ticket=None, manual: bool = False) -> None:
         current = self._private_read_context()
@@ -3440,12 +3463,19 @@ class DJConnectBackend(QObject):
         if old_volume_context != self._control_volume_context(playback):
             self.cancelControlVolume()
         track_changed = old.title != playback.title or old.artist != playback.artist or old.image_url != playback.image_url or old.uri != playback.uri
+        observation_changed = (self._uses_current_track_insight()
+                               and (old.is_playing != playback.is_playing
+                                    or old.position_seconds - playback.position_seconds > 5))
         if (self._track_insight_subject(old) != self._track_insight_subject(playback)
-                or self._track_insight_output(old) != self._track_insight_output(playback)):
+                or self._track_insight_output(old) != self._track_insight_output(playback)
+                or observation_changed):
             self._track_insight_revision += 1
             self._clear_track_insight()
+            if observation_changed:
+                self.trackInsightObservationChanged.emit()
         elif self._track_insight_result_scope is not None and self._track_insight_result_scope != self._track_insight_scope():
             self._clear_track_insight()
+            self.trackInsightObservationChanged.emit()
         resumed_playback = not old.is_playing and playback.is_playing
         if old.title != playback.title:
             self.titleChanged.emit()
@@ -3814,7 +3844,7 @@ class DJConnectBackend(QObject):
         if not isinstance(data, dict):
             return
         error = str(data.get("error") or "").strip()
-        if error == "no_track_playing":
+        if error in ("no_track_playing", "current_track_unavailable"):
             self._clear_track_insight(error=self.tr_key("track_insight_no_track"))
             return
         if error == "rate_limited":
@@ -3823,6 +3853,17 @@ class DJConnectBackend(QObject):
         if error:
             self._clear_track_insight(error=self.tr_key("track_insight_retry"))
             return
+        proof = data.proof if isinstance(data, _TrackInsightResult) else None
+        deadline = None
+        if proof is not None:
+            observation, deadline = proof
+            previous = self._track_insight_last_proof
+            if previous and previous[:2] == (scope, observation):
+                deadline = min(deadline, previous[2])
+            if deadline <= self._session_controller._clock.now():
+                self._expire_track_insight()
+                return
+            self._track_insight_last_proof = (scope, observation, deadline)
         messages = parse_ask_dj_messages(data)
         message = next((item for item in messages if item.get("trackInsight")), None)
         if not isinstance(message, dict):
@@ -3846,6 +3887,8 @@ class DJConnectBackend(QObject):
         self._track_insight_verified_credit = track.get("verifiedCredit", {}) if isinstance(track, dict) else {}
         self._track_insight_visualizer = _track_insight_visualizer(track, self._track_insight_items, self._track_insight_sections) if isinstance(track, dict) else {}
         self._track_insight_result_scope = scope
+        self._track_insight_deadline = deadline
+        self._schedule_track_insight_expiry()
         self._set_backend_available(True)
         self.trackInsightChanged.emit()
 
@@ -3881,7 +3924,27 @@ class DJConnectBackend(QObject):
             self.cfg.music_backend_revision,
             self.cfg.music_target_player.get("id", ""),
             self._track_insight_output(self.playback),
+            self._uses_current_track_insight(),
         )
+
+    def _uses_current_track_insight(self) -> bool:
+        return (self.cfg.music_backend not in {"music_assistant", "later_manual"}
+                and self._session_controller.supports_current_track_insight())
+
+    def _schedule_track_insight_expiry(self) -> None:
+        self._track_insight_expiry_timer.stop()
+        if self._track_insight_deadline is not None:
+            remaining_ms = 1000 * (self._track_insight_deadline - self._session_controller._clock.now())
+            self._track_insight_expiry_timer.start(max(1, math.ceil(remaining_ms)))
+
+    def _expire_track_insight(self) -> None:
+        if self._track_insight_deadline is None:
+            return
+        if self._track_insight_deadline <= self._session_controller._clock.now():
+            self._clear_track_insight()
+            self.trackInsightObservationChanged.emit()
+        else:
+            self._schedule_track_insight_expiry()
 
     def _invalidate_track_insight_language(self) -> None:
         self._track_insight_revision += 1
@@ -3920,6 +3983,8 @@ class DJConnectBackend(QObject):
         self._track_insight_sections = []
         self._track_insight_visualizer = {}
         self._track_insight_result_scope = None
+        self._track_insight_deadline = None
+        self._track_insight_expiry_timer.stop()
         if changed or error:
             self.trackInsightChanged.emit()
 
@@ -4020,6 +4085,7 @@ class DJConnectBackend(QObject):
         self._startup_settings_timer.stop()
         self._startup_refresh_timer.stop()
         self._settings_reconcile_timer.stop()
+        self._track_insight_expiry_timer.stop()
         self._session_controller.setForeground(False)
         self._session_controller.shutdownImages()
         self._session_executor.shutdown(wait=False, cancel_futures=True)
@@ -4617,6 +4683,27 @@ def _is_track_insight(item: dict[str, object]) -> bool:
         or isinstance(item.get("track_insight"), dict)
         or (isinstance(item.get("track"), dict) and isinstance(item.get("analysis"), dict))
     )
+
+
+def _current_track_insight_proof(subject: object, recording: str, requested_at: float, now: float) -> tuple[str, float] | None:
+    if (not isinstance(subject, dict) or type(subject.get("schema_version")) is not int
+            or subject["schema_version"] != 1 or subject.get("mode") != "current"
+            or not re.fullmatch(r"spotify:track:[A-Za-z0-9]{22}", recording)
+            or subject.get("media_identity") != recording or now < requested_at):
+        return None
+    observation = subject.get("observation_id")
+    expires_in, expires_at = subject.get("expires_in"), subject.get("expires_at")
+    if (not isinstance(observation, str) or not observation or len(observation) > 512
+            or type(expires_in) not in (int, float) or not 0 < expires_in <= 30
+            or type(expires_at) not in (int, float)):
+        return None
+    try:
+        if len(observation.encode("utf-8")) > 512 or not math.isfinite(expires_at):
+            return None
+    except (UnicodeEncodeError, OverflowError):
+        return None
+    deadline = min(requested_at + expires_in, expires_at)
+    return (observation, deadline) if deadline > now else None
 
 
 def _track_insight_payload(item: dict[str, object]) -> dict[str, object]:

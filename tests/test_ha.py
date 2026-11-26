@@ -517,6 +517,34 @@ def test_track_insight_no_track_and_rate_limit_are_retryable_states() -> None:
     assert limited["error"] == "rate_limited"
 
 
+def test_current_track_insight_posts_closed_selector_without_catalog_or_provider_hints() -> None:
+    cfg = Config(ha_url="http://ha.local:8123", device_id="fixture", device_token="fixture-token",
+                 music_backend="spotify", music_target_player={"id": "fixture-player"}, music_dna_key="dna-fixture")
+    client = HAClient(cfg)
+    response = {"success": True, "subject": {"schema_version": 1, "mode": "current"}}
+
+    with patch("djconnect_pi.ha.requests.post", return_value=FakeResponse(200, response)) as post:
+        assert client.current_track_insight(force_refresh=True) == response
+
+    assert post.call_args.args == ("http://ha.local:8123/api/djconnect/v1/track_insight",)
+    body = post.call_args.kwargs["json"]
+    assert body["track_insight_subject"] == {"schema_version": 1, "mode": "current"}
+    assert body["force_refresh"] is True and body["music_dna_key"] == "dna-fixture"
+    assert not {"track", "title", "artist", "album", "uri", "player_id", "music_backend"} & body.keys()
+
+
+@pytest.mark.parametrize(("status", "code"), [
+    (404, "current_track_unavailable"),
+    (503, "current_track_unavailable"),
+    (409, "track_insight_context_changed"),
+])
+def test_current_track_insight_preserves_typed_unavailable_result(status: int, code: str) -> None:
+    client = HAClient(Config(ha_url="http://ha.local:8123", device_token="fixture-token", paired=True))
+    data = {"success": False, "error": code}
+    with patch("djconnect_pi.ha.requests.post", return_value=FakeResponse(status, data)):
+        assert client.current_track_insight() == data
+
+
 def test_track_insight_logging_omits_tokens_and_temporary_urls(caplog) -> None:
     cfg = Config(ha_url="http://ha", device_id="djconnect-raspberry-pi-ABCDEF123456", device_token="secret-token")
     client = HAClient(cfg)

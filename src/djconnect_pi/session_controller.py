@@ -1078,6 +1078,14 @@ class SessionController(QObject):
                 and type(versions.get("session_flow_text_search")) is int
                 and versions["session_flow_text_search"] == 1)
 
+    def supports_current_track_insight(self) -> bool:
+        features = self._caps.get("capabilities", {})
+        versions = self._caps.get("contract_versions", {})
+        return (isinstance(features, dict) and isinstance(versions, dict)
+                and features.get("current_track_insight_subject_v1") is True
+                and type(versions.get("current_track_insight_subject")) is int
+                and versions["current_track_insight_subject"] == 1)
+
     def _history_supported(self):
         if self._bootstrap_binding is not None and not private_scope_allowed(self):
             return False

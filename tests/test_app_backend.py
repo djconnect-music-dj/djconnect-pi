@@ -20,6 +20,7 @@ from djconnect_pi.app import (
     SaveCurrentTrackError,
     _ask_dj_actions,
     _ask_dj_display_time,
+    _current_track_insight_proof,
     _format_duration,
     _format_logs_for_display,
     _read_music_dna_import,
@@ -3188,6 +3189,47 @@ def test_read_music_dna_import_rejects_unknown_format_and_nonfinite_json(tmp_pat
         path.write_text(json.dumps(document))
         with pytest.raises(ValueError):
             _read_music_dna_import(path)
+
+
+def test_current_track_insight_proof_uses_exact_recording_and_the_original_shorter_expiry() -> None:
+    recording = "spotify:track:" + "a" * 22
+    subject = {"schema_version": 1, "mode": "current", "media_identity": recording,
+               "observation_id": "fixture-epoch", "expires_in": 24, "expires_at": 120}
+    assert _current_track_insight_proof(subject, recording, 100, 115) == ("fixture-epoch", 120)
+    assert _current_track_insight_proof({**subject, "expires_at": 140}, recording, 100, 115) == ("fixture-epoch", 124)
+    assert _current_track_insight_proof(subject, recording, 100, 120) is None
+    assert _current_track_insight_proof(subject, recording[:-1] + "b", 100, 115) is None
+    for invalid in ({"schema_version": True}, {"expires_in": 31}, {"expires_at": float("inf")}, {"observation_id": ""}):
+        assert _current_track_insight_proof({**subject, **invalid}, recording, 100, 115) is None
+
+
+def test_qualified_track_insight_clears_at_expiry_and_rejects_replayed_observation(tmp_path: Path) -> None:
+    ensure_app()
+    backend = DJConnectBackend(tmp_path / "config.json")
+    owner = backend.djSession
+    owner._caps = {"capabilities": {"current_track_insight_subject_v1": True},
+                   "contract_versions": {"current_track_insight_subject": 1}}
+    owner._clock = Mock()
+    owner._clock.now.return_value = 100
+    recording = "spotify:track:" + "a" * 22
+    backend.playback = Playback(title="Track", uri=recording, is_playing=True)
+    backend._persist_backend_summary = Mock()
+    backend.client.track_insight = Mock()
+    backend.client.current_track_insight = Mock(return_value={
+        "success": True, "track": {"title": "Track"}, "analysis": {"summary": "Qualified analysis"},
+        "subject": {"schema_version": 1, "mode": "current", "media_identity": recording,
+                    "observation_id": "original", "expires_in": 10, "expires_at": 120},
+    })
+
+    backend._track_insight_worker(backend.playback, backend._track_insight_scope(), force_refresh=False)
+    assert backend.trackInsightTitle == "Track" and backend.trackInsightText
+
+    owner._clock.now.return_value = 110
+    backend._expire_track_insight()
+    assert backend.trackInsightText == ""
+    backend._track_insight_worker(backend.playback, backend._track_insight_scope(), force_refresh=True)
+    assert backend.trackInsightText == ""
+    backend.client.track_insight.assert_not_called()
 
 
 @pytest.mark.parametrize("confirm_first", [False, True])

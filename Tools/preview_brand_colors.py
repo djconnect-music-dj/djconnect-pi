@@ -652,6 +652,41 @@ def main():
             backend._apply_playback(second_output_renamed)
             QTest.qWait(65)
             assert request.call_count == 5
+            owner = backend.djSession
+            previous_caps = owner._caps
+            owner._caps = {"capabilities": {"current_track_insight_subject_v1": True},
+                           "contract_versions": {"current_track_insight_subject": 1}}
+            recording = "spotify:track:" + "a" * 22
+            response = {"success": True, "track": {"title": "Qualified fixture"},
+                        "analysis": {"summary": "Fixture analysis"}, "subject": {
+                            "schema_version": 1, "mode": "current", "media_identity": recording,
+                            "observation_id": "fixture-current", "expires_in": 5, "expires_at": 105,
+                        }}
+            with (patch.object(owner._clock, "now", return_value=100) as clock,
+                  patch.object(backend.client, "current_track_insight", return_value=response) as current,
+                  patch.object(backend, "_persist_backend_summary")):
+                backend._apply_playback(Playback(title="Qualified fixture", uri=recording, is_playing=True))
+                QTest.qWait(65)
+                assert request.call_count == 6
+                request.call_args.args[1]()
+                request.call_args.kwargs["done"]()
+                assert backend.trackInsightTitle == "Qualified fixture"
+                current.assert_called_once_with(force_refresh=False)
+                clock.return_value = 105
+                backend._expire_track_insight()
+                QTest.qWait(65)
+                assert not backend.trackInsightTitle and request.call_count == 7
+                request.call_args.kwargs["done"]()
+                paused = deepcopy(backend.playback)
+                paused.is_playing = False
+                backend._apply_playback(paused)
+                QTest.qWait(65)
+                assert request.call_count == 7
+                backend._apply_playback(Playback(title="Qualified fixture", uri=recording, is_playing=True))
+                QTest.qWait(65)
+                assert request.call_count == 8
+                request.call_args.kwargs["done"]()
+            owner._caps = previous_caps
         backend.cfg.paired, backend.cfg.device_token = False, ""
         backend._demo_mode = True
         backend.pairedChanged.emit()
