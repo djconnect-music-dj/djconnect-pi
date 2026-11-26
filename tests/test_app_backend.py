@@ -35,6 +35,7 @@ from djconnect_pi.app import (
     parse_queue_items,
     prepare_media_artwork,
 )
+from djconnect_pi.ask_dj_help import CATALOGUE_ID, CATALOGUE_REVISION, CATALOGUE_SHA256, HelpObservation
 from djconnect_pi.config import Config, load_config, save_config
 from djconnect_pi.ha import (
     AuthenticationError,
@@ -451,6 +452,42 @@ def test_ask_dj_distinguishes_missing_answer_from_unconfirmed_delivery(tmp_path,
     key = "session_question_accepted_unavailable" if accepted else "session_question_uncertain"
     assert backend.toastText == backend.t(key)
     assert not backend.askDjBusy and backend.askDjMessages == []
+
+
+@pytest.mark.parametrize("available_on_selection", [True, False])
+def test_ask_dj_help_selects_only_a_freshly_confirmed_example(tmp_path, available_on_selection):
+    ensure_app()
+    config_path = tmp_path / "config.json"
+    save_config(config_path, Config(paired=True, device_token="fixture", ha_url="http://fixture.invalid",
+                                   active_profile_id="fixture-owner", language="en",
+                                   music_backend="spotify_direct", music_backend_capabilities={"supports_search": True}))
+    backend = DJConnectBackend(config_path)
+    backend._executor.submit = Mock()
+    transport = backend.djSession.transport
+    transport.capabilities = Mock(return_value={
+        "success": True, "capabilities": {"ask_dj_examples": True},
+        "contract_versions": {"ask_dj_examples": 1},
+        "ask_dj_examples": {"schema_version": 1, "catalogue_id": CATALOGUE_ID,
+                           "revision": CATALOGUE_REVISION, "sha256": CATALOGUE_SHA256, "qualified": True},
+    })
+    transport.ask_dj_help = Mock(side_effect=[
+        HelpObservation(True, None, ("play.artist",)),
+        HelpObservation(True, None, ("play.artist",) if available_on_selection else ()),
+    ])
+    selected = Mock()
+    backend.askDjHelpSelected.connect(selected)
+
+    backend.openAskDjHelp()
+    backend._executor.submit.call_args.args[0]()
+    backend.selectAskDjHelp("play.artist", 7)
+    backend.selectAskDjHelp("play.artist", 8)
+    backend._executor.submit.call_args.args[0]()
+
+    assert transport.ask_dj_help.call_count == 2
+    if available_on_selection:
+        selected.assert_called_once_with("Play [artist]", "[artist]", 7)
+    else:
+        selected.assert_not_called()
 
 
 def test_log_display_uses_compact_touch_prefix() -> None:

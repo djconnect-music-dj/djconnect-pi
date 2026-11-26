@@ -235,7 +235,8 @@ class DJConnectBackend(QObject):
     _askDjRefreshReady = Signal(object)
     _askDjClearReady = Signal(object)
     askDjHelpChanged = Signal()
-    _askDjHelpReady = Signal(object, object)
+    askDjHelpSelected = Signal(str, str, int)
+    _askDjHelpReady = Signal(object, object, object)
     _musicDnaReady = Signal(object)
     _musicDnaImportPrepared = Signal(object, object, object)
     _musicDnaImportFinished = Signal(object, object, str)
@@ -1959,10 +1960,23 @@ class DJConnectBackend(QObject):
 
     @Slot()
     def openAskDjHelp(self) -> None:
+        self._read_ask_dj_help()
+
+    @Slot(str, int)
+    def selectAskDjHelp(self, entry_id, edit_revision):
+        if self._ask_dj_help_busy or self._ask_dj_busy:
+            return
+        for section in self.askDjHelpSections:
+            for entry in section["examples"]:
+                if entry["id"] == entry_id:
+                    self._read_ask_dj_help((edit_revision, entry), self._ask_dj_help_request[0])
+                    return
+
+    def _read_ask_dj_help(self, selection=None, expected_context=None):
         self.closeAskDjHelp()
         self._sync_config_from_disk()
         context = self._ask_dj_help_context()
-        if context is None:
+        if context is None or (expected_context is not None and context != expected_context):
             return
         transport = self._session_controller.transport
         try:
@@ -1989,16 +2003,21 @@ class DJConnectBackend(QObject):
                                                             music_backend, supported_features)
             except (SessionError, OSError, ValueError):
                 pass
-            self._askDjHelpReady.emit(request, sections)
+            self._askDjHelpReady.emit(request, sections, selection)
 
         self._executor.submit(read)
 
-    @Slot(object, object)
-    def _apply_ask_dj_help(self, request, sections):
-        if self._ask_dj_help_is_current(request):
-            self._ask_dj_help_busy = False
-            self._ask_dj_help_sections = sections
-            self.askDjHelpChanged.emit()
+    @Slot(object, object, object)
+    def _apply_ask_dj_help(self, request, sections, selection):
+        if not self._ask_dj_help_is_current(request):
+            return
+        self._ask_dj_help_busy = False
+        self._ask_dj_help_sections = sections
+        self.askDjHelpChanged.emit()
+        if selection is not None and not self._ask_dj_busy and self._ask_dj_help_is_current(request):
+            edit_revision, entry = selection
+            if any(entry in section["examples"] for section in sections):
+                self.askDjHelpSelected.emit(entry["text"], entry["placeholder"], edit_revision)
 
     @Slot()
     def closeAskDjHelp(self) -> None:

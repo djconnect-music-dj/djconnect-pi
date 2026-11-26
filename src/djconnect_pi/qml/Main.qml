@@ -4936,6 +4936,7 @@ BrandWindow {
         color: "transparent"
         property bool chatKeyboardOpen: false
         property bool helpOpen: false
+        property int draftEditRevision: 0
         property string pendingQuestionText: ""
         readonly property int profileContextRevision: djconnect.musicDnaContextRevision
         onProfileContextRevisionChanged: clearQuestionUi(false)
@@ -4981,6 +4982,20 @@ BrandWindow {
             function onAskDjChanged() {
                 askDjPanel.updateMessages()
                 if (!djconnect.askDjBusy) askDjPanel.pendingQuestionText = ""
+            }
+            function onAskDjHelpSelected(text, placeholder, revision) {
+                if (!askDjPanel.helpOpen || revision !== askDjPanel.draftEditRevision
+                        || askDjChatInput.text !== "" || !askDjChatInput.enabled) return
+                askDjPanel.closeHelp()
+                askDjChatInput.text = text
+                if (!placeholder) {
+                    askDjPanel.sendQuestion()
+                    return
+                }
+                const start = text.indexOf(placeholder)
+                askDjPanel.chatKeyboardOpen = true
+                askDjChatInput.forceActiveFocus()
+                askDjChatInput.select(start, start + placeholder.length)
             }
         }
         Connections {
@@ -6148,15 +6163,21 @@ BrandWindow {
                                     }
                                     Repeater {
                                         model: modelData.examples
-                                        delegate: Text {
+                                        delegate: GlassButton {
                                             required property var modelData
                                             objectName: "askDjHelpExample"
                                             text: modelData.text
-                                            textFormat: Text.PlainText
-                                            color: BrandTheme.colors.muted
-                                            wrapMode: Text.WordWrap
+                                            iconName: modelData.placeholder ? "" : "send"
+                                            tertiary: true
+                                            wrapText: true
+                                            textAlignment: Text.AlignLeft
+                                            font.bold: false
                                             font.pixelSize: 16
+                                            cornerRadius: 14
                                             Layout.fillWidth: true
+                                            enabled: !djconnect.askDjHelpBusy && askDjChatInput.enabled
+                                                && askDjChatInput.text === ""
+                                            onClicked: djconnect.selectAskDjHelp(modelData.id, askDjPanel.draftEditRevision)
                                         }
                                     }
                                 }
@@ -6181,7 +6202,11 @@ BrandWindow {
                         objectName: "askDjChatInput"
                         property bool draftReady: false
                         text: root.askDjDraft
-                        onTextChanged: if (draftReady && text !== root.askDjDraft) root.askDjDraft = text
+                        onTextChanged: {
+                            if (!draftReady) return
+                            askDjPanel.draftEditRevision += 1
+                            if (text !== root.askDjDraft) root.askDjDraft = text
+                        }
                         Component.onCompleted: draftReady = true
                         Layout.fillWidth: true; Layout.fillHeight: true
                         enabled: (djconnect.paired || djconnect.demoMode) && !djconnect.askDjBusy

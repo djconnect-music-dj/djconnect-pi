@@ -69,9 +69,13 @@ def global_help_sections(language, eligible_ids, music_backend, supported_featur
                 or entry["qualification"][language]["state"] != "qualified_owner_route"):
             continue
         text = entry["templates"][language]
+        placeholder = ""
         for slot in entry["slots"]:
-            text = text.replace("{" + slot + "}", catalogue["slot_labels"][slot][language])
-        prompts.setdefault(entry["group"], []).append({"text": text})
+            label = catalogue["slot_labels"][slot][language]
+            text = text.replace("{" + slot + "}", label)
+            if not placeholder or text.index(label) < text.index(placeholder):
+                placeholder = label
+        prompts.setdefault(entry["group"], []).append({"id": entry["id"], "text": text, "placeholder": placeholder})
     return [{"title": group["labels"][language], "examples": prompts[group["id"]]}
             for group in catalogue["groups"] if group["id"] in prompts]
 
