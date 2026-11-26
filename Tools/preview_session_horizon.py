@@ -311,6 +311,32 @@ def main():
                             refresh.assert_called_once_with("refresh", background=True)
                     click(window, flow)
                     sid = session["session_id"]
+                    if language == "nl":
+                        owner._caps = {
+                            "capabilities": {**caps["capabilities"], "session_conversation_history": True, "session_flow_text_search": True},
+                            "contract_versions": {**caps["contract_versions"], "session_history_entries": 2, "session_flow_text_search": 1},
+                        }
+                        owner.changed.emit()
+                        assert screen.property("searchAvailable")
+                        open_flow_search = QQmlExpression(engine.rootContext(), screen, "showSearch()")
+                        open_flow_search.evaluate()
+                        QTest.qWait(65)
+                        flow_search_panel = window.findChild(QObject, "sessionSearchPanel")
+                        flow_search_input = window.findChild(QObject, "sessionSearchInput")
+                        assert flow_search_panel.property("opened") and flow_search_input.property("activeFocus")
+                        with QSignalBlocker(poll_timer), patch.object(owner, "_launch") as read:
+                            QTest.keyClick(window, Qt.Key.Key_F)
+                            screen.setProperty("forecastMode", True)
+                            QTest.qWait(375)
+                            read.assert_not_called()
+                        assert not flow_search_panel.property("visible") and flow_search_input.property("text") == ""
+                        assert screen.property("showForecast") and not screen.property("searchAvailable")
+                        open_flow_search.evaluate()
+                        assert not flow_search_panel.property("visible")
+                        click(window, flow)
+                        assert screen.property("searchAvailable")
+                        owner._caps = caps
+                        owner.changed.emit()
                     row = {
                         "entry_id": "fixture-withdrawn", "session_id": sid, "order": 1,
                         "occurred_at": forecast["issued_at"], "retained_until": forecast["valid_until"],

@@ -375,8 +375,10 @@ Item {
         syncMediaVisibility()
     }
     onShowForecastChanged: {
-        if (showForecast) closePlaybackPanels()
-        else if (forecastScroll && forecastScroll.contentItem) forecastScroll.contentItem.cancelFlick()
+        if (showForecast) {
+            closePlaybackPanels()
+            if (searchPanel && searchPanel.visible) searchPanel.close()
+        } else if (forecastScroll && forecastScroll.contentItem) forecastScroll.contentItem.cancelFlick()
         syncMediaVisibility()
     }
     onStateChanged: {
@@ -421,7 +423,8 @@ Item {
     readonly property string searchTarget: historical ? ((state.timeline.session || {}).session_id || "") : state.session_id
     readonly property bool archiveSearchAvailable: historical && !currentHistory && !state.timeline.session
         && state.search_available && backend.paired && !backend.demoMode
-    readonly property bool searchAvailable: archiveSearchAvailable || (state.search_available && searchTarget.length > 0)
+    readonly property bool searchAvailable: !showForecast
+        && (archiveSearchAvailable || (state.search_available && searchTarget.length > 0))
     readonly property string searchLabel: tr(archiveSearchAvailable ? "session_archive_search" : "session_search")
     property real readingOffset: 0
     function readingAnchor() {
@@ -867,6 +870,7 @@ Item {
         } else owner.search(searchTarget, searchInput.text)
     }
     function showSearch() {
+        if (!searchAvailable) return
         searchPanel.openTouchKeyboard = true
         searchPanel.keyboardVisible = !searchInput.text.length
         searchPanel.open()
@@ -3360,7 +3364,7 @@ Item {
         contentItem: ColumnLayout {
             spacing: 10
             GlassButton {
-                visible: screen.state.search_available && screen.searchTarget.length > 0
+                visible: screen.searchAvailable
                 text: screen.tr("session_search"); iconName: "search"
                 Layout.fillWidth: true
                 onClicked: { moreChoices.close(); screen.showSearch() }
