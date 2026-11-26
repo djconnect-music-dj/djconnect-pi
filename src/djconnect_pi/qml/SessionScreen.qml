@@ -2236,13 +2236,15 @@ Item {
                 Layout.fillWidth: true; wrapMode: Text.WordWrap
             }
             ColumnLayout {
+                id: volumeControls
                 objectName: "sessionVolumeControls"
                 Layout.fillWidth: true; spacing: 8
                 readonly property var observation: screen.state.playback_control.volume || ({})
                 readonly property bool known: typeof observation.percent === "number"
+                readonly property var displayPercent: volumePointer.intentLease >= 0 ? volumePointer.draft : observation.percent
                 Text {
                     objectName: "sessionVolumeObserved"
-                    text: parent.known ? screen.tr("volume") + ": " + parent.observation.percent + "%" : screen.tr(screen.state.playback_control.volume_status === "unavailable" ? "session_volume_unavailable" : "session_volume_unknown")
+                    text: parent.known ? screen.tr("volume") + ": " + parent.displayPercent + "%" : screen.tr(screen.state.playback_control.volume_status === "unavailable" ? "session_volume_unavailable" : "session_volume_unknown")
                     textFormat: Text.PlainText; color: BrandTheme.colors.text
                     font.pixelSize: 19; font.features: ({ "tnum": 1 }); Layout.fillWidth: true; wrapMode: Text.WordWrap
                 }
@@ -2288,8 +2290,8 @@ Item {
 
                         onPressed: function(mouse) {
                             sessionVolumeSlider.forceActiveFocus(Qt.MouseFocusReason)
-                            intentLease = sessionVolumeSlider.observationLease
                             draft = valueAt(mouse.x)
+                            intentLease = sessionVolumeSlider.observationLease
                         }
                         onPositionChanged: function(mouse) {
                             if (pressed && intentLease >= 0) draft = valueAt(mouse.x)
@@ -2306,8 +2308,7 @@ Item {
                     }
                     Binding {
                         target: sessionVolumeSlider; property: "value"
-                        value: volumePointer.intentLease >= 0 ? volumePointer.draft
-                            : (sessionVolumeSlider.parent.known ? sessionVolumeSlider.parent.observation.percent : 0)
+                        value: volumeControls.known ? volumeControls.displayPercent : 0
                         restoreMode: Binding.RestoreNone
                     }
                 }

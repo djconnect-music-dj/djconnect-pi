@@ -593,6 +593,23 @@ def main():
                 assert volume_shortcut.property('text') == '11%' and volume_shortcut.property('iconName') == 'voice'
                 assert abs(volume_shortcut.width() - zero_width) <= 1
                 assert_popup_anchor(volume_shortcut, popup)
+                volume_pointer = window.findChild(QObject, 'sessionVolumePointer')
+                volume_readout = window.findChild(QObject, 'sessionVolumeObserved')
+                original_readout = volume_readout.property('text')
+                start = volume_pointer.mapToScene(QPointF(volume_pointer.width() * 0.25, volume_pointer.height() / 2))
+                end = volume_pointer.mapToScene(QPointF(volume_pointer.width() * 0.75, volume_pointer.height() / 2))
+                start_point = QPoint(round(start.x()), round(start.y()))
+                end_point = QPoint(round(end.x()), round(end.y()))
+                QTest.mousePress(window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, start_point)
+                QTest.mouseMove(window, end_point)
+                assert volume_pointer.property('draft') > 11
+                expected_draft = f"{TRANSLATIONS[language]['volume']}: {volume_pointer.property('draft')}%"
+                assert volume_readout.property('text') == expected_draft
+                assert volume_shortcut.property('text') == '11%' and not intents
+                volume_pointer.ungrabMouse()
+                QTest.mouseRelease(window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, end_point)
+                QTest.qWait(60)
+                assert volume_readout.property('text') == original_readout and not intents
                 capture('direct-volume-observed')
                 popup_position = (popup.property('x'), popup.property('y'))
                 owner._session['broadcast']['playback']['position_ms'] += 750
