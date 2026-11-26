@@ -3881,15 +3881,16 @@ BrandWindow {
         readonly property bool showEmptyFeed: sections.length === 0 && !djconnect.musicDiscoveryBusy
         readonly property int profileRevision: djconnect.musicDnaContextRevision
         property var shelfReading: new Map()
+        property var feedReading: null
         onProfileRevisionChanged: {
             closeDetail()
             renewedArtworkThrough = 0
-            shelfReading.clear()
+            clearDiscoveryReading()
         }
-        onRequiresMusicDnaChanged: if (requiresMusicDna) shelfReading.clear()
+        onRequiresMusicDnaChanged: if (requiresMusicDna) clearDiscoveryReading()
         Connections {
             target: djconnect
-            function onDemoModeChanged() { musicDiscoveryPanel.shelfReading.clear() }
+            function onDemoModeChanged() { musicDiscoveryPanel.clearDiscoveryReading() }
         }
         readonly property bool canRenewArtwork: visible && root.active && !root.screenBlanked
             && !root.splashVisible && djconnect.paired && !djconnect.demoMode
@@ -3956,6 +3957,44 @@ BrandWindow {
             const visibleIds = new Set(sections.map(section => section.id))
             for (const id of shelfReading.keys())
                 if (!visibleIds.has(id)) shelfReading.delete(id)
+            if (feedReading && feedReadingRestore) feedReadingRestore.restart()
+        }
+
+        function clearDiscoveryReading() {
+            shelfReading.clear()
+            feedReading = null
+            if (feedReadingRestore) feedReadingRestore.stop()
+            if (discoveryFlick) discoveryFlick.contentY = discoveryFlick.originY
+        }
+
+        function rememberFeedReading() {
+            if (!visible || !discoveryShelves || !feedReadingRestore || feedReadingRestore.running) return
+            const y = discoveryFlick.contentY
+            feedReading = null
+            if (y <= discoveryFlick.originY + 1) return
+            for (let index = 0; index < discoveryShelves.count; ++index) {
+                const row = discoveryShelves.itemAt(index)
+                if (row && row.y + row.height > y && row.y < y + discoveryFlick.height) {
+                    feedReading = {id: row.modelData.id, offset: y - row.y, index: index}
+                    return
+                }
+            }
+        }
+
+        Timer {
+            id: feedReadingRestore
+            interval: 32
+            onTriggered: {
+                const anchor = musicDiscoveryPanel.feedReading
+                if (!anchor || !musicDiscoveryPanel.visible || discoveryFlick.moving || !discoveryShelves.count) return
+                discoveryContent.ensurePolished()
+                const found = musicDiscoveryPanel.sections.findIndex(section => section.id === anchor.id)
+                const index = found >= 0 ? found : Math.min(anchor.index, discoveryShelves.count - 1)
+                const row = discoveryShelves.itemAt(index)
+                const origin = discoveryFlick.originY
+                if (row) discoveryFlick.contentY = Math.max(origin,
+                    Math.min(row.y + anchor.offset, origin + Math.max(0, discoveryFlick.contentHeight - discoveryFlick.height)))
+            }
         }
 
         function rememberShelfReading(view, sectionId, userMovement) {
@@ -4036,6 +4075,7 @@ BrandWindow {
                     contentHeight: discoveryContent.implicitHeight
                     boundsBehavior: Flickable.DragOverBounds
                     flickableDirection: Flickable.VerticalFlick
+                    onContentYChanged: musicDiscoveryPanel.rememberFeedReading()
 
                     PullToRefresh {
                         objectName: "discoveryPullToRefresh"
@@ -4123,6 +4163,7 @@ BrandWindow {
                         }
 
                         Repeater {
+                            id: discoveryShelves
                             model: musicDiscoveryPanel.sections
 
                             delegate: GlassSurface {
