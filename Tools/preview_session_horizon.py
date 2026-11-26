@@ -384,11 +384,21 @@ def main():
                 archive_flick = archive_scroll.property("contentItem")
                 archive_flick.setProperty("contentY", archive_flick.property("originY"))
                 expected_window = owner._archive_request()
-                with patch.object(owner, "_launch") as archive_read:
+                pull_spinner = one(screen, "sessionPullRefreshSpinner")
+                def start_history_read(action, _):
+                    owner._set_running(1, action)
+                    owner.changed.emit()
+                with patch.object(owner, "_launch", side_effect=start_history_read) as archive_read:
                     pull_down(window, archive_scroll, touch, 24)
                     archive_read.assert_not_called()
+                    assert not pull_spinner.property("visible")
                     pull_down(window, archive_scroll, touch, 230)
                     archive_read.assert_called_once_with("history_refresh", expected_window)
+                    assert pull_spinner.property("visible")
+                    assert pull_spinner.y() == archive_scroll.y() + 8
+                owner._set_running()
+                owner.changed.emit()
+                assert not pull_spinner.property("visible")
                 assert owner._history_start == expected_window["start"]
                 owner._error = "unavailable"
                 owner.changed.emit()
@@ -450,12 +460,18 @@ def main():
                 owner.changed.emit()
                 archive_flick.setProperty("contentY", archive_flick.property("originY"))
                 QTest.qWait(65)
-                with patch.object(owner, "_launch") as saved_read:
+                with patch.object(owner, "_launch", side_effect=start_history_read) as saved_read:
                     pull_down(window, archive_scroll, touch, 230)
                     saved_read.assert_called_once_with("timeline_refresh", {
                         "session_id": saved["session_id"], "entry_id": entry["entry_id"],
                         "page_cursor": "fixture-detail-page",
                     })
+                    assert pull_spinner.property("visible")
+                owner._timeline = {}
+                owner.changed.emit()
+                assert not pull_spinner.property("visible")
+                owner._set_running()
+                owner.changed.emit()
                 backend.shutdown()
                 delete(window)
                 delete(engine)

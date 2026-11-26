@@ -274,9 +274,21 @@ Item {
     property bool forecastMode: false
     readonly property bool showForecast: !historical && state.forecast_supported && forecastMode
     property Item pullRefreshView: null
+    property bool historyPullRefreshing: false
+    readonly property bool historyReadOutstanding: !!archiveIntent || historyReadPending || owner.busy
+    readonly property string historyPullScope: JSON.stringify([
+        scopeProfileId, currentHistory, (state.timeline.session || {}).session_id || ""
+    ])
+    onHistoryReadOutstandingChanged: if (!historyReadOutstanding) historyPullRefreshing = false
+    onHistoryPullScopeChanged: historyPullRefreshing = false
+    onHistoryViewOpenChanged: if (!historyViewOpen) historyPullRefreshing = false
     function refreshFromPull(view) {
         owner.refresh()
         if (owner.refreshing) pullRefreshView = view
+    }
+    function refreshHistoryFromPull() {
+        refreshHistory()
+        historyPullRefreshing = historyReadOutstanding
     }
 
     function syncMediaVisibility() {
@@ -1072,15 +1084,17 @@ Item {
         onVibeScapeRequested: screen.openVibeScape(modeSwitch.mapToItem(null, 0, 0).y)
     }
     BusyIndicator {
+        id: pullRefreshSpinner
         objectName: "sessionPullRefreshSpinner"
+        readonly property Item activeView: screen.historyViewOpen && screen.historyPullRefreshing
+            ? historyScroll : screen.liveViewOpen ? screen.pullRefreshView : null
         anchors.horizontalCenter: parent.horizontalCenter
-        y: screen.pullRefreshView ? screen.pullRefreshView.y + 8 : 0
+        y: activeView ? activeView.y + 8 : 0
         z: 1
         width: 40
         height: width
         padding: 7
-        visible: screen.liveViewOpen && screen.pullRefreshView !== null
-            && screen.pullRefreshView.visible && !searchPanel.visible
+        visible: activeView !== null && activeView.visible && !searchPanel.visible
         running: visible
         Accessible.name: screen.tr("loading")
         background: GlassSurface { elevated: true; radius: width / 2 }
@@ -1260,7 +1274,7 @@ Item {
                 && !screen.backend.demoMode && !screen.owner.busy && !screen.owner.refreshing
                 && !searchPanel.visible && !screen.searchRefreshPending
             onRefreshRequested: {
-                if (historyRefreshAllowed) screen.refreshHistory()
+                if (historyRefreshAllowed) screen.refreshHistoryFromPull()
                 else screen.refreshFromPull(historyScroll)
             }
         }
@@ -2102,7 +2116,12 @@ Item {
                 GlassButton { objectName: "sessionArchiveOlder"; text: screen.tr("session_archive_older"); visible: screen.state.has_older_sessions; enabled: !screen.owner.busy && !screen.archiveIntent; onClicked: screen.changeArchiveWindow("older") }
                 GlassButton { objectName: "sessionArchiveNewest"; text: screen.tr("session_archive_newest"); visible: screen.state.archive_older_window; enabled: !screen.owner.busy && !screen.archiveIntent; onClicked: screen.changeArchiveWindow("newest") }
             }
-            BusyIndicator { visible: screen.owner.busy && !screen.owner.refreshing; running: visible; Layout.alignment: Qt.AlignHCenter }
+            BusyIndicator {
+                visible: screen.owner.busy && !screen.owner.refreshing
+                    && !(screen.historical && pullRefreshSpinner.visible)
+                running: visible
+                Layout.alignment: Qt.AlignHCenter
+            }
         }
     }
     ColumnLayout {
