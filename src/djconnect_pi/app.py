@@ -2552,7 +2552,14 @@ class DJConnectBackend(QObject):
     def _play_media_item_worker(self, command: str, payload: dict[str, object]) -> None:
         started = time.monotonic()
         _LOGGER.info("Sending media item command: %s", command)
-        data = self.client.command(command, **payload)
+        try:
+            data = self.client.command(command, **payload)
+        except requests.RequestException as exc:
+            _LOGGER.warning("Media item command %s was not confirmed: %s", command, type(exc).__name__)
+            self._backendAvailableReady.emit(False)
+            self._statusReady.emit(self.tr_key("backend_unavailable"))
+            self._toastReady.emit(self.tr_key("session_uncertain"), 5000, "connectivity")
+            return
         self._persist_backend_summary()
         if data.get("success") is False:
             failure_key = "media_playlist_start_failed" if command == "start_playlist" else "media_track_start_failed"

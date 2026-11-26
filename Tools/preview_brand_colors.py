@@ -9,6 +9,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
+import requests
 from PySide6.QtCore import Q_ARG, Q_RETURN_ARG, QMetaObject, QObject, QPointF, Qt, QTimer, qInstallMessageHandler
 from PySide6.QtGui import QAccessible, QGuiApplication, QKeySequence
 from PySide6.QtQml import QQmlApplicationEngine, QQmlExpression
@@ -436,6 +437,16 @@ def main():
             assert backend.toastText == backend.t("media_playlist_start_failed")
             load_queue.assert_not_called()
             refresh.assert_not_called()
+        with (patch.object(backend.client, "command", side_effect=requests.ReadTimeout) as start_command,
+              patch.object(backend, "_refresh_worker") as refresh,
+              patch.object(backend._executor, "submit") as submit):
+            QMetaObject.invokeMethod(visual_item(playlist_panel, "mediaItemRow-0"), "clicked")
+            submit.call_args.args[0]()
+            assert not backend.mediaPlaybackBusy and backend.title == previous_title
+            assert not backend.backendAvailable and backend.toastText == backend.t("session_uncertain")
+            start_command.assert_called_once()
+            refresh.assert_not_called()
+        backend._set_backend_available(True)
         backend.playback = Playback(title="Confirmed previous track", uri="fixture:previous")
         with (patch.object(backend.client, "command", return_value={"success": True}),
               patch.object(backend, "_persist_backend_summary"),
