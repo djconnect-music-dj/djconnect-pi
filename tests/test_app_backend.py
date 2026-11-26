@@ -325,6 +325,42 @@ def test_discovery_play_closes_only_on_acknowledged_playback(tmp_path: Path, res
         assert backend.playback.title == "Confirmed track"
 
 
+@pytest.mark.parametrize("stage", ["config", "request", "confirmation"])
+def test_discovery_play_ignores_results_when_profile_changes(tmp_path, stage):
+    ensure_app()
+    config_path = tmp_path / "config.json"
+    save_config(config_path, Config(paired=True, device_token="fixture", ha_url="http://fixture.invalid"))
+    backend = DJConnectBackend(config_path)
+    backend.cfg.active_profile_id = "profile-a"
+    backend._sync_config_from_disk = Mock()
+    backend.client.music_discovery_play = Mock(return_value={"success": True})
+    backend._executor.submit = Mock()
+    confirmed = Mock()
+    backend.musicDiscoveryPlayed.connect(confirmed)
+    payload = json.dumps({"section_id": "daily", "discovery_item_id": "suggestion"})
+
+    if stage == "config":
+        backend._sync_config_from_disk.side_effect = lambda: setattr(backend.cfg, "active_profile_id", "profile-b")
+        backend.playMusicDiscoveryItem(payload)
+        backend._executor.submit.assert_not_called()
+    elif stage == "request":
+        def respond(_item):
+            backend.cfg.active_profile_id = "profile-b"
+            return {"success": True, "playback": {"title": "Previous profile"}}
+
+        backend.client.music_discovery_play.side_effect = respond
+        backend.playMusicDiscoveryItem(payload)
+        backend._executor.submit.call_args.args[0]()
+        backend.client.music_discovery_play.assert_called_once()
+    else:
+        ticket = backend._private_read_context()
+        backend.cfg.active_profile_id = "profile-b"
+        backend._musicDiscoveryPlayConfirmed.emit(ticket, "daily", "suggestion", Playback(title="Previous profile"))
+
+    confirmed.assert_not_called()
+    assert backend.playback.title == ""
+
+
 @pytest.mark.parametrize("success", [True, False, None])
 def test_discovery_feedback_removes_only_acknowledged_recommendation(tmp_path, success):
     ensure_app()
