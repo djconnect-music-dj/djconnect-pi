@@ -2523,14 +2523,9 @@ BrandWindow {
                 connectionText: djconnect.connectionType
                 Layout.fillWidth: true
 
-                LoadingSpinner {
-                    visible: djconnect.askDjBusy
-                    running: visible
-                    Layout.preferredWidth: 38
-                    Layout.preferredHeight: 38
-                }
-
                 RefreshIconButton {
+                    objectName: "trackInsightRefresh"
+                    loading: djconnect.askDjBusy
                     enabled: djconnect.paired && !djconnect.askDjBusy
                     onClicked: djconnect.refreshTrackInsight()
                 }

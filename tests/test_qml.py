@@ -500,6 +500,9 @@ def test_qml_track_insight_panel_renders_contract_fields() -> None:
     assert 'columns: root.wallProfile ? 1 : 2' in panel
     assert 'width: Math.max(0, trackInsightScroll.availableWidth)' in panel
     assert "Layout.fillHeight: true" in panel
+    assert 'objectName: "trackInsightRefresh"' in panel
+    assert "loading: djconnect.askDjBusy" in panel
+    assert "LoadingSpinner {" not in panel
     assert "djconnect.refreshTrackInsight()" in panel
     assert 'root.tr("track_insight_empty")' in panel
     assert "djconnect.trackInsightError" in panel
