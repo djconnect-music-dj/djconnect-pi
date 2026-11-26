@@ -3345,6 +3345,11 @@ BrandWindow {
         }
     }
 
+    component DiscoveryFeedbackOption: MenuItem {
+        implicitHeight: Math.max(48, implicitBackgroundHeight + topInset + bottomInset,
+                                 implicitContentHeight + topPadding + bottomPadding)
+    }
+
     component DiscoveryChipStrip: Flickable {
         id: strip
         property var values: []
@@ -3970,16 +3975,17 @@ BrandWindow {
                                     ? button.height : -implicitHeight
                             }
                             onOpened: currentIndex = 0
-                            MenuItem {
+                            DiscoveryFeedbackOption {
                                 objectName: "discoveryFeedbackFirstOption"
                                 text: root.tr("music_discovery_not_for_me")
                                 onTriggered: discoveryDetail.sendFeedback("not_for_me")
                             }
-                            MenuItem {
+                            DiscoveryFeedbackOption {
+                                objectName: "discoveryFeedbackMiddleOption"
                                 text: root.tr("music_discovery_less_like_this")
                                 onTriggered: discoveryDetail.sendFeedback("less_like_this")
                             }
-                            MenuItem {
+                            DiscoveryFeedbackOption {
                                 objectName: "discoveryFeedbackLastOption"
                                 text: root.tr("music_discovery_hide_artist")
                                 onTriggered: discoveryDetail.sendFeedback("hide_artist")

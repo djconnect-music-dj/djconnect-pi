@@ -748,7 +748,11 @@ def main():
                 QTest.qWait(180)
                 assert feedback_menu.property("opened") and feedback_menu.property("currentIndex") == 0
                 first_option = visual_item(window.contentItem(), "discoveryFeedbackFirstOption")
+                middle_option = visual_item(window.contentItem(), "discoveryFeedbackMiddleOption")
                 last_option = visual_item(window.contentItem(), "discoveryFeedbackLastOption")
+                for option, key in zip((first_option, middle_option, last_option),
+                                       ("music_discovery_not_for_me", "music_discovery_less_like_this", "music_discovery_hide_artist")):
+                    assert option.height() >= 48 and option.property("text") == backend.t(key)
                 button_top = feedback.mapToScene(QPointF()).y()
                 menu_top_left = first_option.mapToScene(QPointF())
                 menu_end = last_option.mapToScene(QPointF(last_option.width(), last_option.height()))
