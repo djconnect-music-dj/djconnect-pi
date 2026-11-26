@@ -1085,7 +1085,7 @@ def main():
         window.setProperty("aboutOpen", False)
         backend.cfg.log_level = "INFO"
         backend.showLogs()
-        backend._logs_text = "sample first\n<repeat> & repeat\nsample second\nsample third"
+        backend._logs_text = "sample first\n<repeat> & repeat\nsample second\nsample third\n♪ café and cafe\u0301 and cafe!"
         backend.logsChanged.emit()
         capture("logs")
         logs = visual_item(window.contentItem(), "logsView")
@@ -1147,6 +1147,13 @@ def main():
             QTest.keyClick(window, Qt.Key.Key_Down)
             highlighted = same_line.evaluate()[0]
             assert highlighted.count("</font>") == 2 and "&amp; <b>" in highlighted
+            accent_line = QQmlExpression(engine.rootContext(), logs, "lineText(4, lines[4])")
+            for accent_query in ("cafe", "CAFÉ"):
+                search_input.setProperty("text", accent_query)
+                assert search_count.property("text") == "1/3"
+                highlighted = accent_line.evaluate()[0]
+                assert not accent_line.hasError() and highlighted.startswith("♪ <b>")
+                assert "café</font>" in highlighted and "cafe\u0301</font>" in highlighted and "cafe</font>!" in highlighted
             search_input.setProperty("text", "   ")
             assert logs.property("matchIndex") == -1 and not search_count.property("visible")
             QTest.keyClick(window, Qt.Key.Key_Escape)

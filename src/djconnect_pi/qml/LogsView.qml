@@ -23,15 +23,40 @@ Item {
     readonly property var currentMatch: matches[matchIndex] || null
 
     function tr(key) { backend.translationVersion; return backend.t(key) }
+    function foldAccents(text) {
+        const decomposed = text.normalize("NFD")
+        const plain = decomposed.replace(/[\u0300-\u036f]/g, "")
+        return plain === decomposed ? text : plain.normalize("NFC")
+    }
+    function searchableLine(line) {
+        if (foldAccents(line) === line) return {text: line, offsets: null}
+        // Keep offsets into the original text, including combining accents.
+        const clusters = /[\s\S][\u0300-\u036f]*/gu
+        const offsets = []
+        var text = ""
+        var cluster
+        while ((cluster = clusters.exec(line)) !== null) {
+            const folded = foldAccents(cluster[0])
+            for (var offset = 0; offset < folded.length; offset++)
+                offsets.push({start: cluster.index, end: clusters.lastIndex})
+            text += folded
+        }
+        return {text: text, offsets: offsets}
+    }
     function findMatches(rows, query) {
         const result = {ordered: [], byRow: {}}
-        if (!query) return result
-        var pattern = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "giu")
+        const needle = searchableLine(query).text
+        if (!needle) return result
+        const pattern = new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "giu")
         for (var row = 0; row < rows.length; row++) {
+            const line = searchableLine(rows[row])
             pattern.lastIndex = 0
             var hit
-            while ((hit = pattern.exec(rows[row])) !== null) {
-                const match = {row: row, start: hit.index, end: hit.index + hit[0].length}
+            while ((hit = pattern.exec(line.text)) !== null) {
+                const end = pattern.lastIndex
+                const match = {row: row,
+                    start: line.offsets ? line.offsets[hit.index].start : hit.index,
+                    end: line.offsets ? line.offsets[end - 1].end : end}
                 result.ordered.push(match)
                 if (!result.byRow[row]) result.byRow[row] = []
                 result.byRow[row].push(match)
