@@ -1317,6 +1317,7 @@ _MUSIC_DNA_CARD_TRANSLATIONS = {
     "music_dna_card_favorite_artists": ('Favorite artists', 'Favoriete artiesten', 'Lieblingskünstler', 'Artistes favoris', 'Artistas favoritos'),
     "music_dna_card_artists": ('Artists', 'Artiesten', 'Künstler', 'Artistes', 'Artistas'),
     "music_dna_card_energy": ('Taste profile', 'Smaakrichting', 'Geschmacksprofil', 'Profil musical', 'Perfil musical'),
+    "music_dna_card_profile_mood": ('Profile mood', 'Profielstemming', 'Profilstimmung', 'Ambiance du profil', 'Estado de ánimo del perfil'),
     "music_dna_card_rhythm": ('Listening rhythm', 'Luisterritme', 'Hörrhythmus', 'Rythme d’écoute', 'Ritmo de escucha'),
     "music_dna_card_mood_mix": ('Mood mix', 'Mood mix', 'Stimmungsmix', 'Mélange d’ambiances', 'Mezcla de ambientes'),
     "music_dna_card_playtime": ('Listening time', 'Luistertijd', 'Hörzeit', 'Temps d’écoute', 'Tiempo de escucha'),

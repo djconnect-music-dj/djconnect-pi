@@ -649,6 +649,26 @@ def test_music_dna_shows_signals_from_the_first_available_source(based_on, energ
     assert parse_music_dna_profile({"enabled": False, "profile": profile})["sections"] == []
 
 
+def test_music_dna_shows_profile_mood_separately_from_energy():
+    profile = {"mood": {"value": 28, "zone": "chill", "average": 57, "average_zone": "groove", "sample_count": 6},
+               "energy_profile": {"energy_percent": 82}}
+    cards = {card["key"]: card for card in parse_music_dna_profile({"enabled": True, "profile": profile})["sections"]}
+    mood = cards["music_dna_card_profile_mood"]
+    assert mood["metric"] == 57 and mood["count"] == 6
+    assert mood["rows"] == [{"valueKey": "mood_groove"}]
+    assert cards["music_dna_card_summary"]["rows"] == [
+        {"labelKey": "music_dna_card_profile_mood", "valueKey": "mood_groove"}]
+    assert cards["music_dna_card_energy"]["metric"] == 82
+
+    profile["mood"] = {"value": 0, "zone": "chill", "average": True, "sample_count": -1}
+    cards = {card["key"]: card for card in parse_music_dna_profile({"enabled": True, "profile": profile})["sections"]}
+    assert cards["music_dna_card_profile_mood"]["metric"] == 0
+    assert cards["music_dna_card_profile_mood"]["count"] is None
+    profile["mood"] = {"value": -1}
+    assert all(card["key"] != "music_dna_card_profile_mood"
+               for card in parse_music_dna_profile({"enabled": True, "profile": profile})["sections"])
+
+
 def test_music_discovery_feed_renders_backend_sections_in_order_without_assumed_ids() -> None:
     parsed = parse_music_discovery_feed(
         {

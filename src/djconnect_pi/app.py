@@ -5916,17 +5916,26 @@ def _music_dna_cards(profile: dict[str, object], ha_url: str) -> list[dict[str, 
     tracks = profile.get("recent_tracks")
     artists = profile.get("favorite_artists")
     mood = block("mood")
+    mood_average = mood.get("average")
+    has_mood_average = type(mood_average) in (int, float) and 0 <= mood_average <= 100
+    mood_percent = mood_average if has_mood_average else mood.get("value")
+    zone = (mood.get("average_zone") if has_mood_average else None) or mood.get("zone") or mood.get("average_zone")
+    mood_zone_key = zones.get(zone.lower(), "") if isinstance(zone, str) else ""
     summary = [{"labelKey": "music_dna_card_" + key, "title": str(value)}
                for key, value in (("playtime", duration),
                                   ("recent_tracks", len(tracks) if isinstance(tracks, list) else None),
                                   ("artists", len(artists) if isinstance(artists, list) else None),
                                   ("favorite_genres", genres)) if value is not None and value != ""]
-    zone = mood.get("zone") or mood.get("average_zone")
-    if isinstance(zone, str) and zone.lower() in zones:
-        summary.append({"labelKey": "music_dna_card_energy", "valueKey": zones[zone.lower()]})
+    if mood_zone_key:
+        summary.append({"labelKey": "music_dna_card_profile_mood", "valueKey": mood_zone_key})
     card("summary", "waveform", entries=summary)
     card("favorite_genres", "music", value=genres)
     card("favorite_artists", "session_persona", groups=grouped("", rows(artists, artwork=True, limit=12), shelf=True))
+    if type(mood_percent) in (int, float) and 0 <= mood_percent <= 100:
+        sample_count = mood.get("sample_count")
+        card("profile_mood", mood_zone_key or "waveform", metric=mood_percent,
+             count=sample_count if type(sample_count) is int and sample_count >= 0 else None,
+             entries=[{"valueKey": mood_zone_key}] if mood_zone_key else [])
     energy = block("energy_profile")
     percent = energy.get("energy_percent")
     energy_zone = energy.get("zone")
