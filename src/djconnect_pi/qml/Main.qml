@@ -7441,6 +7441,23 @@ BrandWindow {
                         Layout.alignment: Qt.AlignLeft
                         onClicked: Qt.openUrlExternally(text)
                     }
+                    Text {
+                        text: root.tr("updates")
+                        color: BrandTheme.colors.muted
+                        font.pixelSize: 20; font.bold: true
+                        horizontalAlignment: Text.AlignRight
+                        Layout.preferredWidth: 190
+                    }
+                    GlassButton {
+                        objectName: "aboutCheckUpdates"
+                        text: root.tr("check_updates")
+                        iconName: "refresh"
+                        wrapText: true
+                        textAlignment: Text.AlignLeft
+                        Layout.fillWidth: true
+                        Layout.maximumWidth: 390
+                        onClicked: djconnect.checkForUpdates()
+                    }
                     Text { text: root.tr("web_address"); color: BrandTheme.colors.muted; font.pixelSize: 20; font.bold: true; horizontalAlignment: Text.AlignRight; Layout.preferredWidth: 190 }
                     Text { text: djconnect.webPortalUrl; color: BrandTheme.colors.text; font.pixelSize: 18; Layout.fillWidth: true; elide: Text.ElideMiddle }
                     Text { text: root.tr("device_id"); color: BrandTheme.colors.muted; font.pixelSize: 20; font.bold: true; horizontalAlignment: Text.AlignRight; Layout.preferredWidth: 190 }

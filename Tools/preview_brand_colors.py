@@ -1641,6 +1641,18 @@ def main():
             assert recorded.urls == ["https://djconnect.dev"], (width, point, recorded.urls)
         finally:
             QDesktopServices.unsetUrlHandler("https")
+        updates = visual_item(window.contentItem(), "aboutCheckUpdates")
+        assert updates.property("visible") and updates.property("enabled")
+        assert updates.property("text") == backend.t("check_updates")
+        position = updates.mapToScene(updates.boundingRect().center()).toPoint()
+        with patch("djconnect_pi.app.subprocess.run") as update_service:
+            QTest.mouseClick(window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, position)
+            update_service.assert_called_once_with(
+                ["sudo", "-n", "/usr/bin/systemctl", "start", "djconnect-updater.service"],
+                check=True, timeout=8, capture_output=True, text=True,
+            )
+        assert backend.toastText == backend.t("update_check_started")
+        backend.hideToast()
         window.setProperty("aboutOpen", False)
         backend.cfg.log_level = "INFO"
         log_path = Path(backend.cfg.log_file)
