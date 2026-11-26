@@ -2545,11 +2545,32 @@ BrandWindow {
 
             ScrollView {
                 id: trackInsightScroll
+                objectName: "trackInsightScroll"
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 clip: true
                 ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
                 contentWidth: availableWidth
+                readonly property bool canPullToRefresh: trackInsightPanel.visible && root.active && !root.screenBlanked
+                    && djconnect.paired && !djconnect.demoMode && !djconnect.askDjBusy && djconnect.hasTrackTitle
+                    && (trackInsightSubject.visible || djconnect.trackInsightText.length > 0
+                        || djconnect.trackInsightItems.length > 0 || djconnect.trackInsightSections.length > 0)
+                property bool refreshArmed: false
+                onCanPullToRefreshChanged: if (!canPullToRefresh) refreshArmed = false
+
+                Connections {
+                    target: trackInsightScroll.contentItem
+                    function onDragStarted() { trackInsightScroll.refreshArmed = false }
+                    function onVerticalOvershootChanged() {
+                        if (target.dragging && target.verticalOvershoot < -64 && trackInsightScroll.canPullToRefresh)
+                            trackInsightScroll.refreshArmed = true
+                    }
+                    function onDragEnded() {
+                        const refresh = trackInsightScroll.refreshArmed && trackInsightScroll.canPullToRefresh
+                        trackInsightScroll.refreshArmed = false
+                        if (refresh) djconnect.refreshTrackInsight()
+                    }
+                }
 
                 ColumnLayout {
                     width: Math.max(0, trackInsightScroll.availableWidth)
