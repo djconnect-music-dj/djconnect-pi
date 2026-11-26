@@ -4214,6 +4214,8 @@ def test_backend_shuffle_and_repeat_dispatch_commands(tmp_path: Path) -> None:
     backend.toggleShuffle()
     backend.cycleRepeat()
     backend.cycleRepeat()
+    backend.setPlaybackRepeatMode("unknown")
+    assert backend.repeat == "track"
 
     assert calls == [
         ("set_shuffle", {"value": True}),

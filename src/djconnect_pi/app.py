@@ -824,6 +824,10 @@ class DJConnectBackend(QObject):
     def musicBackendSupportsShuffle(self) -> bool:
         return self.cfg.music_backend_capabilities.get("supports_shuffle") is True
 
+    @Property(bool, notify=settingsChanged)
+    def musicBackendSupportsRepeat(self) -> bool:
+        return self.cfg.music_backend_capabilities.get("supports_repeat") is True
+
     @Property(bool, notify=outputDeviceChanged)
     def playbackSeekOutputKnown(self) -> bool:
         return bool(output_id(self.playback.output_device_id))
@@ -1795,13 +1799,19 @@ class DJConnectBackend(QObject):
     @Slot()
     def cycleRepeat(self) -> None:
         next_value = {"off": "context", "context": "track", "track": "off"}.get(self.playback.repeat, "off")
-        self.playback.repeat = next_value
+        self.setPlaybackRepeatMode(next_value)
+
+    @Slot(str)
+    def setPlaybackRepeatMode(self, value: str) -> None:
+        if value not in {"off", "track", "context"}:
+            return
+        self.playback.repeat = value
         self.repeatChanged.emit()
-        _LOGGER.info("User changed repeat mode to %s", next_value)
+        _LOGGER.info("User changed repeat mode to %s", value)
         self.showToastForContext(self.tr_key("repeat"), "playback")
         if self._demo_mode:
             return
-        self.command("set_repeat", value=next_value)
+        self.command("set_repeat", value=value)
 
     @Slot(str)
     def setOutputDevice(self, value: str) -> None:

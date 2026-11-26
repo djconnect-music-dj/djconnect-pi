@@ -114,13 +114,19 @@ Canvas {
             } else if (iconName === "next") {
                 transportTriangle(1, 0.05); transportTriangle(1, -0.17)
                 ctx.fillRect(px(16) + s * 0.23, py(16) - s * 0.24, s * 0.07, s * 0.48)
-            } else if (iconName === "repeat") {
+            } else if (iconName === "repeat" || iconName === "repeat_one") {
                 line(6, 10, 26, 10)
                 line(22, 6, 26, 10)
                 line(22, 14, 26, 10)
                 line(26, 22, 6, 22)
                 line(10, 18, 6, 22)
                 line(10, 26, 6, 22)
+                if (iconName === "repeat_one") {
+                    ctx.font = "bold " + Math.max(8, s * 0.29) + "px sans-serif"
+                    ctx.textAlign = "center"
+                    ctx.textBaseline = "middle"
+                    ctx.fillText("1", px(16), py(16))
+                }
             } else if (iconName === "shuffle") {
                 line(5, 9, 10, 9)
                 line(10, 9, 23, 23)

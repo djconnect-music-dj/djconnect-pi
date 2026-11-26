@@ -1694,6 +1694,7 @@ _SESSION_COMPOSER_TRANSLATIONS = {
     "shuffle": ("Shuffle", "Shuffle", "Zufallswiedergabe", "Lecture aléatoire", "Modo aleatorio"),
     "shuffle_on": ("Shuffle on", "Shuffle aan", "Zufallswiedergabe ein", "Lecture aléatoire activée", "Modo aleatorio activado"),
     "shuffle_off": ("Shuffle off", "Shuffle uit", "Zufallswiedergabe aus", "Lecture aléatoire désactivée", "Modo aleatorio desactivado"),
+    "repeat_context": ("Repeat all", "Herhaal alles", "Alles wiederholen", "Tout répéter", "Repetir todo"),
     "music_backend_retry_notice": ("DJConnect checks again automatically.", "DJConnect controleert dit automatisch opnieuw.", "DJConnect prüft dies automatisch erneut.", "DJConnect vérifie à nouveau automatiquement.", "DJConnect vuelve a comprobarlo automáticamente."),
     "session_archive_refresh_search": ("Refresh search results", "Zoekresultaten verversen", "Suchergebnisse aktualisieren", "Actualiser les résultats de recherche", "Actualizar los resultados de búsqueda"),
     "music_discovery_load_failed": (

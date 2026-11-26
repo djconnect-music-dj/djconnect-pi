@@ -1846,11 +1846,12 @@ BrandWindow {
 
             RowLayout {
                 Layout.alignment: Qt.AlignHCenter
-                visible: djconnect.demoMode || djconnect.musicBackendSupportsShuffle
+                visible: djconnect.demoMode || djconnect.musicBackendSupportsShuffle || djconnect.musicBackendSupportsRepeat
                 GlassButton {
                     objectName: "nowShuffle"
                     readonly property string modeLabel: root.tr(djconnect.shuffle ? "shuffle_on" : "shuffle_off")
                     iconName: "shuffle"
+                    visible: djconnect.demoMode || djconnect.musicBackendSupportsShuffle
                     checked: djconnect.shuffle
                     enabled: nowPanel.playbackActionsAvailable && !djconnect.busy
                         && (djconnect.demoMode || djconnect.musicBackendAvailable)
@@ -1859,6 +1860,22 @@ BrandWindow {
                     ToolTip.text: modeLabel
                     ToolTip.visible: hovered
                     onClicked: djconnect.toggleShuffle()
+                }
+                GlassButton {
+                    objectName: "nowRepeat"
+                    readonly property string modeLabel: root.tr(djconnect.repeat === "track" ? "repeat_one"
+                        : djconnect.repeat === "context" ? "repeat_context" : "repeat_off")
+                    iconName: djconnect.repeat === "track" ? "repeat_one" : "repeat"
+                    visible: djconnect.demoMode || djconnect.musicBackendSupportsRepeat
+                    checked: djconnect.repeat !== "off"
+                    enabled: nowPanel.playbackActionsAvailable && !djconnect.busy
+                        && (djconnect.demoMode || djconnect.musicBackendAvailable)
+                    Accessible.name: root.tr("repeat")
+                    Accessible.description: modeLabel
+                    ToolTip.text: modeLabel
+                    ToolTip.visible: hovered
+                    onClicked: djconnect.setPlaybackRepeatMode(djconnect.repeat === "off" ? "track"
+                        : djconnect.repeat === "track" ? "context" : "off")
                 }
             }
 
