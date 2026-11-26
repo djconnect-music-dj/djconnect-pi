@@ -1717,6 +1717,8 @@ _SESSION_COMPOSER_TRANSLATIONS = {
     "track_insight_share_story": ("Story", "Story", "Story", "Story", "Historia"),
     "track_insight_share_square": ("Square", "Vierkant", "Quadrat", "Carré", "Cuadrado"),
     "track_insight_share_animate": ("Animate preview", "Bewegend voorbeeld", "Vorschau animieren", "Animer l’aperçu", "Animar la vista previa"),
+    "track_insight_share_image_type": ("Image (PNG)", "Afbeelding (PNG)", "Bild (PNG)", "Image (PNG)", "Imagen (PNG)"),
+    "track_insight_share_clip_type": ("Clip (MP4)", "Clip (MP4)", "Clip (MP4)", "Clip (MP4)", "Clip (MP4)"),
     "track_insight_save_card": ("Save card as PNG", "Kaart bewaren als PNG", "Karte als PNG speichern", "Enregistrer la carte en PNG", "Guardar tarjeta como PNG"),
     "track_insight_save_clip": ("Save clip as MP4", "Clip bewaren als MP4", "Clip als MP4 speichern", "Enregistrer le clip en MP4", "Guardar clip como MP4"),
     "track_insight_mp4_files": ("MP4 videos", "MP4-video’s", "MP4-Videos", "Vidéos MP4", "Vídeos MP4"),

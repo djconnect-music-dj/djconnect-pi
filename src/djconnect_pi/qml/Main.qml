@@ -3191,14 +3191,16 @@ BrandWindow {
             padding: 20
             property bool storyCard: true
             property bool animatedPreview: false
+            property bool clipSelected: false
             property bool renderingCard: false
             readonly property bool clipRunning: djconnect.trackInsightClipRunning
-            readonly property bool exportClip: animatedPreview && djconnect.trackInsightClipSupported
+            readonly property bool exportClip: clipSelected && djconnect.trackInsightClipSupported
             property real clipProgress: 0
             property int exportGeneration: 0
             onAboutToShow: {
                 storyCard = true
                 animatedPreview = false
+                clipSelected = false
             }
             onClosed: {
                 exportGeneration += 1
@@ -3290,19 +3292,41 @@ BrandWindow {
                         Layout.fillWidth: true; Layout.preferredWidth: 1
                         onClicked: insightSharePopup.storyCard = false
                     }
+                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    visible: djconnect.trackInsightClipSupported
                     GlassButton {
-                        objectName: "trackInsightShareAnimate"
-                        text: root.tr("track_insight_share_animate")
-                        checked: insightSharePopup.animatedPreview
-                        enabled: !GlassStyle.reduceMotion && !insightSharePopup.clipRunning
+                        objectName: "trackInsightShareImage"
+                        text: root.tr("track_insight_share_image_type")
+                        checked: !insightSharePopup.exportClip
+                        enabled: !insightSharePopup.clipRunning && !insightSharePopup.renderingCard
                         Layout.fillWidth: true; Layout.preferredWidth: 1
-                        onClicked: insightSharePopup.animatedPreview = !insightSharePopup.animatedPreview
+                        onClicked: insightSharePopup.clipSelected = false
                     }
+                    GlassButton {
+                        objectName: "trackInsightShareClip"
+                        text: root.tr("track_insight_share_clip_type")
+                        checked: insightSharePopup.exportClip
+                        enabled: !insightSharePopup.clipRunning && !insightSharePopup.renderingCard
+                        Layout.fillWidth: true; Layout.preferredWidth: 1
+                        onClicked: insightSharePopup.clipSelected = true
+                    }
+                }
+                GlassButton {
+                    objectName: "trackInsightShareAnimate"
+                    text: root.tr("track_insight_share_animate")
+                    checked: insightSharePopup.animatedPreview
+                    visible: !djconnect.trackInsightClipSupported
+                    enabled: !GlassStyle.reduceMotion && !insightSharePopup.renderingCard
+                    Layout.fillWidth: true
+                    onClicked: insightSharePopup.animatedPreview = !insightSharePopup.animatedPreview
                 }
                 ScrollView {
                     id: insightShareScroll
                     Layout.fillWidth: true
-                    Layout.preferredHeight: Math.min(insightShareContent.implicitHeight, 380)
+                    Layout.preferredHeight: Math.min(insightShareContent.implicitHeight, trackInsightPanel.height <= 760
+                        ? (insightSharePopup.clipRunning ? 250 : 320) : 380)
                     contentWidth: availableWidth; clip: true
                     ColumnLayout {
                         id: insightShareContent
@@ -3313,7 +3337,7 @@ BrandWindow {
                             objectName: "trackInsightShareCard"
                             visible: trackInsightPanel.canShareInsight
                             story: insightSharePopup.storyCard
-                            animate: visible && insightSharePopup.animatedPreview && insightSharePopup.opened
+                            animate: visible && (insightSharePopup.animatedPreview || insightSharePopup.exportClip) && insightSharePopup.opened
                                 && root.active && GlassStyle.awake && !GlassStyle.reduceMotion
                                 && !insightSharePopup.renderingCard && !insightSharePopup.clipRunning && !insightSaveDialog.visible
                             Layout.alignment: Qt.AlignHCenter
