@@ -2763,11 +2763,23 @@ Item {
                 readonly property var observation: screen.state.playback_control.volume || ({})
                 readonly property bool known: typeof observation.percent === "number"
                 readonly property var displayPercent: volumePointer.intentLease >= 0 ? volumePointer.draft : observation.percent
-                Text {
-                    objectName: "sessionVolumeObserved"
-                    text: parent.known ? screen.tr("volume") + ": " + parent.displayPercent + "%" : screen.tr(screen.state.playback_control.volume_status === "unavailable" ? "session_volume_unavailable" : "session_volume_unknown")
-                    textFormat: Text.PlainText; color: BrandTheme.colors.text
-                    font.pixelSize: 19; font.features: ({ "tnum": 1 }); Layout.fillWidth: true; wrapMode: Text.WordWrap
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 8
+                    FeatureIcon {
+                        objectName: "sessionVolumeObservedIcon"
+                        visible: volumeControls.known
+                        iconName: volumeControls.displayPercent === 0 ? "voice_muted" : "voice"
+                        Layout.preferredWidth: 24; Layout.preferredHeight: 24
+                        Accessible.ignored: true
+                    }
+                    Text {
+                        objectName: "sessionVolumeObserved"
+                        text: volumeControls.known ? screen.tr("volume") + ": " + volumeControls.displayPercent + "%"
+                            : screen.tr(screen.state.playback_control.volume_status === "unavailable" ? "session_volume_unavailable" : "session_volume_unknown")
+                        textFormat: Text.PlainText; color: BrandTheme.colors.text
+                        font.pixelSize: 19; font.features: ({ "tnum": 1 }); Layout.fillWidth: true; wrapMode: Text.WordWrap
+                    }
                 }
                 Text {
                     text: parent.observation.output_name || screen.state.playback.target_name || ""

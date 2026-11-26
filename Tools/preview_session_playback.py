@@ -666,10 +666,13 @@ def main():
                 observed['playback']['volume_percent'] = 0
                 click('sessionCurrentVolume')
                 assert len(intents) == 1
+                volume_icon = window.findChild(QObject, 'sessionVolumeObservedIcon')
+                assert not volume_icon.property('visible')
                 intents.pop()()
                 QTest.qWait(80)
                 volume_shortcut = window.findChild(QObject, 'sessionCurrentVolume')
                 assert volume_shortcut.property('text') == '0%' and volume_shortcut.property('iconName') == 'voice_muted'
+                assert volume_icon.property('visible') and volume_icon.property('iconName') == 'voice_muted'
                 zero_width = volume_shortcut.width()
                 click('sessionVolumeClose')
                 QTest.qWait(120)
@@ -683,6 +686,7 @@ def main():
                 slider = window.findChild(QObject, 'sessionVolumeSlider')
                 assert slider.property('visible') and slider.property('value') == 11
                 assert volume_shortcut.property('text') == '11%' and volume_shortcut.property('iconName') == 'voice'
+                assert volume_icon.property('visible') and volume_icon.property('iconName') == 'voice'
                 assert abs(volume_shortcut.width() - zero_width) <= 1
                 assert_popup_anchor(volume_shortcut, popup)
                 volume_pointer = window.findChild(QObject, 'sessionVolumePointer')
