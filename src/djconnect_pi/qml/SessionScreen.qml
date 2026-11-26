@@ -1067,6 +1067,13 @@ Item {
         anchors.margins: 20; anchors.bottomMargin: composerDock.visible ? composerDock.height + 144 : 132
         clip: true; contentWidth: availableWidth
         ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+        PullToRefresh {
+            objectName: "sessionForecastPullToRefresh"
+            flickable: forecastScroll.contentItem
+            canRefresh: forecastScroll.visible && screen.liveViewOpen && screen.backend.paired
+                && !screen.backend.demoMode && !screen.owner.busy && !screen.owner.refreshing
+            onRefreshRequested: screen.owner.refresh()
+        }
         ColumnLayout {
             width: parent.width; spacing: 16
             Rectangle {

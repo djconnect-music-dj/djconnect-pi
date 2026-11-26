@@ -9,7 +9,15 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from PySide6.QtCore import QObject, Qt, QTimer, qInstallMessageHandler
+from PySide6.QtCore import (
+    QObject,
+    QPoint,
+    QPointF,
+    QSignalBlocker,
+    Qt,
+    QTimer,
+    qInstallMessageHandler,
+)
 from PySide6.QtGui import QColor, QGuiApplication
 from PySide6.QtQml import QQmlApplicationEngine, QQmlEngine, QQmlExpression
 from PySide6.QtQuickControls2 import QQuickStyle
@@ -58,6 +66,17 @@ def click(window, button):
     QTest.qWait(65)
 
 
+def pull_down(window, scroll, touch, distance):
+    start = scroll.mapToScene(QPointF(scroll.width() / 2, 100)).toPoint()
+    QTest.touchEvent(window, touch).press(0, start, window).commit()
+    for step in range(1, 6):
+        point = start + QPoint(0, round(step * distance / 5))
+        QTest.touchEvent(window, touch).move(0, point, window).commit()
+        QTest.qWait(20)
+    QTest.touchEvent(window, touch).release(0, start + QPoint(0, distance), window).commit()
+    QTest.qWait(380)
+
+
 def capture(window, output, captures, label):
     target = output / f"{label}-{window.width()}x{window.height()}.png"
     assert window.grabWindow().save(str(target))
@@ -89,6 +108,7 @@ def main():
     QQuickStyle.setStyle("Basic")
     app = QGuiApplication([])
     apply_palette(app)
+    touch = QTest.createTouchDevice()
     fixtures = json.loads((ROOT / "tests/fixtures/session_core/forecast-transport-v1.json").read_text())
     captures = []
     track_names = [
@@ -226,6 +246,17 @@ def main():
                             click(window, flow)
                             click(window, horizon)
                             assert abs(scroll.property("contentY") - scroll.property("originY") - offset) <= 1
+                            if language == "nl":
+                                forecast_scroll = window.findChild(QObject, "sessionForecastScroll")
+                                poll_timer = screen.findChild(QObject, "sessionRuntimePollTimer")
+                                assert poll_timer is not None
+                                scroll.setProperty("contentY", scroll.property("originY"))
+                                QTest.qWait(65)
+                                with QSignalBlocker(poll_timer), patch.object(owner, "_launch") as refresh:
+                                    pull_down(window, forecast_scroll, touch, 24)
+                                    refresh.assert_not_called()
+                                    pull_down(window, forecast_scroll, touch, 230)
+                                    refresh.assert_called_once_with("refresh", background=True)
                             click(window, flow)
 
                     # Ordinary prose and a malformed six-track lookalike stay verbatim.
