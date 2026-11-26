@@ -1249,16 +1249,18 @@ Item {
         ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
         PullToRefresh {
             objectName: "sessionFlowPullToRefresh"
-            readonly property bool archiveList: screen.historyViewOpen && !screen.currentHistory
-                && !screen.state.timeline.session && !screen.state.saved_open_retry
+            readonly property string savedSessionId: (screen.state.timeline.session || {}).session_id || ""
+            readonly property bool historyRefreshAllowed: screen.historyViewOpen
+                && (savedSessionId.length > 0 || !screen.currentHistory) && !screen.state.saved_open_retry
                 && !screen.historyReadPending && !screen.archiveIntent && !screen.archiveReadActive
-            onArchiveListChanged: armed = false
+            onHistoryRefreshAllowedChanged: armed = false
+            onSavedSessionIdChanged: armed = false
             flickable: historyScroll.contentItem
-            canRefresh: historyScroll.visible && (screen.liveViewOpen || archiveList) && screen.backend.paired
+            canRefresh: historyScroll.visible && (screen.liveViewOpen || historyRefreshAllowed) && screen.backend.paired
                 && !screen.backend.demoMode && !screen.owner.busy && !screen.owner.refreshing
                 && !searchPanel.visible && !screen.searchRefreshPending
             onRefreshRequested: {
-                if (archiveList) screen.refreshHistory()
+                if (historyRefreshAllowed) screen.refreshHistory()
                 else screen.refreshFromPull(historyScroll)
             }
         }

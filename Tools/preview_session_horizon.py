@@ -435,6 +435,27 @@ def main():
                         assert label.property("visible") and label.property("text") == template.replace("%1", timing[kind])
                         assert label.property("contentWidth") <= label.width() + 1
                     assert end_time.mapToItem(start_time, 0, 0).y() >= start_time.height()
+                entry = {
+                    "entry_id": "archived-contribution", "session_id": saved["session_id"], "order": 1,
+                    "kind": "conversation_dj", "role": "assistant", "turn_id": "archived-turn",
+                    "input_type": "text", "text": "Fixture saved contribution",
+                    "occurred_at": saved["interrupted_at"], "retained_until": "2099-01-01T00:00:00Z",
+                    "historical_view_only": True, "current_display_allowed": False,
+                }
+                saved_page = history_page({
+                    "success": True, "schema_version": 2, "history_contract_version": 2,
+                    "session": saved, "revision": "fixture-saved", "entries": [entry], "next_cursor": None,
+                }, session_id=saved["session_id"], now=owner._clock.now())
+                owner._timeline = {**presented_history(saved_page), "_page_cursor": "fixture-detail-page"}
+                owner.changed.emit()
+                archive_flick.setProperty("contentY", archive_flick.property("originY"))
+                QTest.qWait(65)
+                with patch.object(owner, "_launch") as saved_read:
+                    pull_down(window, archive_scroll, touch, 230)
+                    saved_read.assert_called_once_with("timeline_refresh", {
+                        "session_id": saved["session_id"], "entry_id": entry["entry_id"],
+                        "page_cursor": "fixture-detail-page",
+                    })
                 backend.shutdown()
                 delete(window)
                 delete(engine)
