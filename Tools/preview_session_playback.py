@@ -462,6 +462,16 @@ def main():
                 assert subtitle_accessible.text(QAccessible.Text.Name) == f'{TRANSLATIONS[language]["output_device"]}: {target}'
                 displayed_playback['artist'] = artist
                 owner.changed.emit()
+                title_accessible = QAccessible.queryAccessibleInterface(transport_title)
+                assert title_accessible.role() == QAccessible.Role.Heading
+                title = displayed_playback['title']
+                displayed_playback['title'] = ' '
+                owner.changed.emit()
+                assert transport_title.property('text') == TRANSLATIONS[language]['session_track_title_unknown']
+                assert title_accessible.text(QAccessible.Text.Name) == TRANSLATIONS[language]['session_track_title_unknown']
+                assert transport_subtitle.property('text') == artist
+                displayed_playback['title'] = title
+                owner.changed.emit()
                 transport_position = visual(transport_panel.property('contentItem'), 'sessionTransportPosition')
                 transport_progress = visual(transport_panel.property('contentItem'), 'sessionTransportProgress')
                 assert transport_position.property('visible') and transport_position.property('text') == owner.state['playback']['time_label']

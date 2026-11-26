@@ -1836,6 +1836,7 @@ _PLAYBACK_CONTROL_TRANSLATIONS = {
     "session_output_refresh": ("Refresh output devices", "Uitvoerapparaten verversen", "Ausgabegeräte aktualisieren", "Actualiser les sorties audio", "Actualizar los dispositivos de salida"),
     "session_output_updated": ("Output devices updated", "Uitvoerapparaten vernieuwd", "Ausgabegeräte aktualisiert", "Sorties audio actualisées", "Dispositivos de salida actualizados"),
     "session_output_switching": ("Switching output to %1…", "Uitvoer overschakelen naar %1…", "Ausgabe wird auf %1 umgestellt…", "Changement de sortie vers %1…", "Cambiando la salida a %1…"),
+    "session_track_title_unknown": ("Unknown title", "Titel onbekend", "Unbekannter Titel", "Titre inconnu", "Título desconocido"),
     "session_output_current": ("Current", "Huidig", "Aktuell", "Actuelle", "Actual"),
     "session_output_unavailable": ("Available outputs could not be confirmed.", "De beschikbare uitvoer kon niet worden bevestigd.", "Verfügbare Ausgaben konnten nicht bestätigt werden.", "Les sorties disponibles n’ont pas pu être confirmées.", "No se pudieron confirmar las salidas disponibles."),
     "session_output_empty": ("No other outputs are available.", "Er zijn geen andere uitvoerapparaten beschikbaar.", "Keine weiteren Ausgaben verfügbar.", "Aucune autre sortie disponible.", "No hay otras salidas disponibles."),

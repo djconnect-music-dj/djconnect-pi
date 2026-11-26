@@ -2567,8 +2567,11 @@ Item {
         Item { visible: transportControls.overArtwork; Layout.fillHeight: true }
         Text {
             objectName: "sessionTransportTrackTitle"
-            visible: !transportControls.overArtwork && playbackSources.ready && text.length > 0
-            text: screen.state.playback.title || ""; textFormat: Text.PlainText
+            visible: !transportControls.overArtwork && playbackSources.ready && !!screen.state.playback.item_id
+            text: (screen.state.playback.title || "").trim() || screen.tr("session_track_title_unknown")
+            textFormat: Text.PlainText
+            Accessible.role: Accessible.Heading
+            Accessible.name: text
             color: BrandTheme.colors.text; font.pixelSize: 24; font.bold: true
             wrapMode: Text.Wrap; maximumLineCount: 2; elide: Text.ElideRight
             Layout.fillWidth: true
