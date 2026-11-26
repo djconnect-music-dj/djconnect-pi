@@ -274,6 +274,8 @@ def main():
         assert analysis_text.property("visible") and analysis_text.property("text") == "Geen audioanalyse beschikbaar."
         assert not credit_card.property("visible") and not notice.property("visible")
         backend._demo_mode = False
+        backend.playback.is_playing = False
+        backend.playingChanged.emit()
         backend.demoModeChanged.emit()
         backend.cfg.paired, backend.cfg.device_token = True, "synthetic-not-a-credential"
         backend.pairedChanged.emit()
@@ -299,6 +301,21 @@ def main():
             assert visual_item(subject, "trackInsightSubjectMetadata").property("text") == "Fixture artist"
             assert not analysis_text.property("visible")
         backend._set_ask_dj_busy(False)
+        with (patch.object(backend, "_sync_config_from_disk"), patch.object(backend, "_run") as request,
+              patch("djconnect_pi.app.subprocess.run")):
+            backend._apply_playback(Playback(title="Playing fixture", uri="fixture:auto-first", is_playing=True))
+            QTest.qWait(65)
+            request.assert_called_once()
+            backend._apply_playback(Playback(title="Following fixture", uri="fixture:auto-next", is_playing=True))
+            QTest.qWait(65)
+            request.assert_called_once()
+            backend._set_ask_dj_busy(False)
+            QTest.qWait(65)
+            assert request.call_count == 2
+            backend._set_ask_dj_busy(False)
+            backend._apply_playback(Playback(title="Following fixture, corrected", uri="fixture:auto-next", is_playing=True))
+            QTest.qWait(65)
+            assert request.call_count == 2
         backend.cfg.paired, backend.cfg.device_token = False, ""
         backend._demo_mode = True
         backend.pairedChanged.emit()

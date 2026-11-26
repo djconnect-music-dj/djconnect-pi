@@ -2589,18 +2589,25 @@ BrandWindow {
             && (djconnect.demoMode || (djconnect.paired && !root.sessionHeader.profile_confirmation_required
                 && !root.sessionHeader.owner_read_only))
         onCanChooseVisualMoodChanged: if (!canChooseVisualMood) trackInsightMoodPopup.close()
-        property bool autoInsightRequested: false
+        readonly property bool autoInsightSurfaceActive: visible && root.active && !root.screenBlanked && !root.splashVisible
+            && (djconnect.paired || djconnect.demoMode)
+        readonly property bool canAutoRequestAnalysis: autoInsightSurfaceActive && !djconnect.askDjBusy
+            && (djconnect.demoMode || (canRequestAnalysis && djconnect.playing
+                && djconnect.backendAvailable && djconnect.musicBackendAvailable))
+        readonly property string autoInsightKey: djconnect.hasTrackTitle
+            ? JSON.stringify([djconnect.activeProfileId,
+                djconnect.trackInsightPlaybackItemId || [djconnect.title, djconnect.artist]]) : ""
+        property string requestedInsightKey: ""
         color: "transparent"
-        Component.onCompleted: requestInsightIfVisible()
-        onVisibleChanged: requestInsightIfVisible()
+        Component.onCompleted: Qt.callLater(requestInsightIfVisible)
+        onCanAutoRequestAnalysisChanged: if (canAutoRequestAnalysis) Qt.callLater(requestInsightIfVisible)
+        onAutoInsightKeyChanged: Qt.callLater(requestInsightIfVisible)
+        onAutoInsightSurfaceActiveChanged: if (!autoInsightSurfaceActive) requestedInsightKey = ""
 
         function requestInsightIfVisible() {
-            if (visible && !autoInsightRequested && (djconnect.playing || djconnect.demoMode)) {
-                autoInsightRequested = true
-                djconnect.openTrackInsight()
-            } else if (!visible) {
-                autoInsightRequested = false
-            }
+            if (!canAutoRequestAnalysis || !autoInsightKey || autoInsightKey === requestedInsightKey) return
+            requestedInsightKey = autoInsightKey
+            djconnect.openTrackInsight()
         }
 
         ModalBlocker {}

@@ -483,9 +483,10 @@ def test_qml_track_insight_panel_renders_contract_fields() -> None:
     panel = main_qml[main_qml.index("id: trackInsightPanel") : main_qml.index("id: musicDiscoveryPanel")]
 
     assert 'visible: root.activeScreen === "trackinsight"' in main_qml
-    assert "property bool autoInsightRequested: false" in panel
-    assert "onVisibleChanged:" in panel
-    assert "visible && !autoInsightRequested && (djconnect.playing || djconnect.demoMode)" in panel
+    assert 'property string requestedInsightKey: ""' in panel
+    assert "onAutoInsightKeyChanged: Qt.callLater(requestInsightIfVisible)" in panel
+    assert "onAutoInsightSurfaceActiveChanged: if (!autoInsightSurfaceActive) requestedInsightKey" in panel
+    assert "autoInsightKey === requestedInsightKey" in panel
     assert "djconnect.openTrackInsight()" in panel
     assert "function trackInsightLabel(value)" in main_qml
     assert '"summary": "track_insight_summary"' in main_qml

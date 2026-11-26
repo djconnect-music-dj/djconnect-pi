@@ -2591,6 +2591,7 @@ class DJConnectBackend(QObject):
         self.progressChanged.emit()
         self.djSession.demo_playback_changed()
         if previous_uri != self.playback.uri:
+            self.trackInsightPlaybackItemChanged.emit()
             self.playbackTrackChanged.emit()
 
     def _show_demo_track_insight(self) -> None:
