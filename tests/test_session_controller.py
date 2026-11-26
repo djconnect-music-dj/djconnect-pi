@@ -272,8 +272,10 @@ def test_temporary_poll_failure_keeps_confirmed_session_until_recovery(controlle
         ("s1", False, False), ("s1", False, failed_offline), ("s1", failed_offline, False), ("", False, False),
     ):
         owner.poll()
+        assert owner.connectionReadInFlight
         assert owner.state["connection_offline"] == was_offline
         backend.jobs.pop()()
+        assert not owner.connectionReadInFlight
         assert owner.state["session_id"] == expected_session
         assert owner.state["error"] == ""
         assert owner.state["connection_offline"] == remains_offline

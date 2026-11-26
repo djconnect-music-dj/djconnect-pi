@@ -478,6 +478,13 @@ def main():
                     assert connection_accessible.text(QAccessible.Text.Description) == expected_offline
                     assert connection_type.property("text") == expected_offline
                     assert not connection_transport.property("visible")
+                    owner._set_running(1, "history_refresh")
+                    expected_retry = TRANSLATIONS[language]["session_connection_retrying"]
+                    assert connection.property("iconName") == "refresh" and connection_type.property("text") == expected_retry
+                    assert connection_accessible.text(QAccessible.Text.Description) == expected_retry
+                    owner._set_running(1, "start")
+                    assert connection.property("iconName") == "info" and connection_type.property("text") == expected_offline
+                    owner._set_running()
                     backend.cfg.music_backend, backend.cfg.music_backend_available, was_available = original_backend
                     backend._set_backend_available(was_available)
                     backend.settingsChanged.emit()

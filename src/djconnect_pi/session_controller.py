@@ -64,6 +64,13 @@ from .session_vibecast import VibeCastSender
 from .shared_settings import CHOICES
 
 
+_HISTORY_READ_ACTIONS = frozenset({
+    "history", "history_more", "history_refresh", "timeline", "timeline_refresh", "timeline_page",
+    "timeline_previous", "timeline_extend", "search", "search_more", "search_refresh", "open_entry",
+})
+_CONNECTION_READ_ACTIONS = _HISTORY_READ_ACTIONS | {"refresh", "archive_search"}
+
+
 def _saved_end_timestamp(session):
     end_value = session.get("ended_at")
     if not end_value and session.get("lifecycle_status") == "INTERRUPTED":
@@ -78,6 +85,7 @@ def _archive_search_text(value):
 class SessionController(QObject):
     changed = Signal()
     refreshingChanged = Signal()
+    connectionReadChanged = Signal()
     playbackArtworkChanged = Signal()
     forecastImageChanged = Signal()
     forecastImageAboutToChange = Signal()
@@ -682,17 +690,24 @@ class SessionController(QObject):
     def refreshing(self):
         return bool(self._running and self._running_action == "refresh")
 
+    @Property(bool, notify=connectionReadChanged)
+    def connectionReadInFlight(self):
+        return bool(self._running and self._running_action in _CONNECTION_READ_ACTIONS)
+
     @Property(bool, notify=changed)
     def searchBusy(self):
         return bool(self._running and self._running_action in {"search", "search_more", "search_refresh", "archive_search"})
 
     def _set_running(self, serial=0, action="", *, background=False):
         was_refreshing = self.refreshing
+        was_reading_connection = self.connectionReadInFlight
         self._running = serial
         self._running_action = action
         self._background_refresh = background
         if was_refreshing != self.refreshing:
             self.refreshingChanged.emit()
+        if was_reading_connection != self.connectionReadInFlight:
+            self.connectionReadChanged.emit()
 
     @Property(bool, notify=changed)
     def lifecycleBusy(self):
@@ -1992,8 +2007,8 @@ class SessionController(QObject):
                 if confirmed:
                     self.questionConfirmed.emit(confirmed)
                 return
-        history_action = result["action"] in {"history", "history_more", "history_refresh", "timeline", "timeline_refresh", "timeline_page", "timeline_previous", "timeline_extend", "search", "search_more", "search_refresh", "open_entry"}
-        if ((history_action or result["action"] in {"refresh", "archive_search"})
+        history_action = result["action"] in _HISTORY_READ_ACTIONS
+        if (result["action"] in _CONNECTION_READ_ACTIONS
                 and result.get("view_epoch") == self._view_epoch):
             if result.get("error") == "offline":
                 self._connection_offline = True
