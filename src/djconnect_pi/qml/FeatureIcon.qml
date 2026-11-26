@@ -211,11 +211,15 @@ Canvas {
                 ctx.beginPath(); ctx.arc(px(24), py(28), 6 * s / 32, -2.45, -0.69); ctx.stroke()
                 ctx.beginPath(); ctx.arc(px(24), py(28), 3 * s / 32, -2.35, -0.79); ctx.stroke()
                 circle(24, 28, 1, true)
-            } else if (iconName === "voice") {
+            } else if (iconName === "voice" || iconName === "voice_muted") {
                 line(6, 13, 11, 13); line(11, 13, 17, 8); line(17, 8, 17, 24)
                 line(17, 24, 11, 19); line(11, 19, 6, 19); line(6, 19, 6, 13)
-                ctx.beginPath(); ctx.arc(px(18), py(16), 6 * s / 32, -1, 1); ctx.stroke()
-                ctx.beginPath(); ctx.arc(px(18), py(16), 10 * s / 32, -1, 1); ctx.stroke()
+                if (iconName === "voice_muted") {
+                    line(21, 13, 27, 19); line(27, 13, 21, 19)
+                } else {
+                    ctx.beginPath(); ctx.arc(px(18), py(16), 6 * s / 32, -1, 1); ctx.stroke()
+                    ctx.beginPath(); ctx.arc(px(18), py(16), 10 * s / 32, -1, 1); ctx.stroke()
+                }
             } else if (iconName === "music") {
                 line(13, 10, 13, 23)
                 line(13, 10, 22, 7)

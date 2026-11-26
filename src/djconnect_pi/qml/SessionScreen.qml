@@ -1493,15 +1493,20 @@ Item {
                             id: volumeShortcut
                             objectName: "sessionCurrentVolume"
                             readonly property var observation: screen.state.playback_control.volume || ({})
+                            readonly property bool known: typeof observation.percent === "number"
                             visible: !!screen.state.playback_control.available && !!screen.state.playback_control.volume_supported
                             enabled: !!screen.state.playback_control.enabled
-                            iconName: "voice"
-                            text: typeof observation.percent === "number" ? observation.percent + "%" : screen.tr("volume")
-                            Accessible.name: screen.tr("volume") + (typeof observation.percent === "number" ? " " + text : "")
+                            iconName: observation.percent === 0 ? "voice_muted" : "voice"
+                            text: known ? observation.percent + "%" : screen.tr("volume")
+                            font.features: ({ "tnum": 1 })
+                            textAlignment: Text.AlignRight
+                            Layout.preferredWidth: known ? Math.ceil(volumeLabelWidth.advanceWidth) + 44 : implicitWidth
+                            Accessible.name: screen.tr("volume") + (known ? " " + text : "")
                             padding: 4
                             implicitHeight: 44
                             background: Item {}
                             onCurrentTrackClicked: volumePanel.openForCurrentItem(volumeShortcut)
+                            TextMetrics { id: volumeLabelWidth; font: volumeShortcut.font; text: "100%" }
                         }
                     }
                 }
@@ -2237,7 +2242,7 @@ Item {
                     objectName: "sessionVolumeObserved"
                     text: parent.known ? screen.tr("volume") + ": " + parent.observation.percent + "%" : screen.tr(screen.state.playback_control.volume_status === "unavailable" ? "session_volume_unavailable" : "session_volume_unknown")
                     textFormat: Text.PlainText; color: BrandTheme.colors.text
-                    font.pixelSize: 19; Layout.fillWidth: true; wrapMode: Text.WordWrap
+                    font.pixelSize: 19; font.features: ({ "tnum": 1 }); Layout.fillWidth: true; wrapMode: Text.WordWrap
                 }
                 Text {
                     text: parent.observation.output_name || screen.state.playback.target_name || ""

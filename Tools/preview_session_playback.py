@@ -571,14 +571,26 @@ def main():
                 assert owner.transport.playback_outputs.call_count == 2 and not output_spinner.property('visible')
                 click('sessionOutputClose')
                 QTest.qWait(120)
+                observed['playback']['volume_percent'] = 0
+                click('sessionCurrentVolume')
+                assert len(intents) == 1
+                intents.pop()()
+                QTest.qWait(80)
+                volume_shortcut = window.findChild(QObject, 'sessionCurrentVolume')
+                assert volume_shortcut.property('text') == '0%' and volume_shortcut.property('iconName') == 'voice_muted'
+                zero_width = volume_shortcut.width()
+                click('sessionVolumeClose')
+                QTest.qWait(120)
+                observed['playback']['volume_percent'] = 11
                 click('sessionCurrentVolume')
                 assert popup.property('opened') and not output_panel.property('opened') and len(intents) == 1
                 intents.pop()()
                 QTest.qWait(80)
                 slider = window.findChild(QObject, 'sessionVolumeSlider')
                 assert slider.property('visible') and slider.property('value') == 11
-                assert window.findChild(QObject, 'sessionCurrentVolume').property('text') == '11%'
-                assert_popup_anchor(window.findChild(QObject, 'sessionCurrentVolume'), popup)
+                assert volume_shortcut.property('text') == '11%' and volume_shortcut.property('iconName') == 'voice'
+                assert abs(volume_shortcut.width() - zero_width) <= 1
+                assert_popup_anchor(volume_shortcut, popup)
                 capture('direct-volume-observed')
                 popup_position = (popup.property('x'), popup.property('y'))
                 owner._session['broadcast']['playback']['position_ms'] += 750
