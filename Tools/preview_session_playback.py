@@ -575,6 +575,8 @@ def main():
                     {'id': 'synthetic-output', 'name': speaker_name, 'active': True, 'cached': False, 'is_restricted': False,
                      'supports_volume': True, 'volume_percent': 11},
                     {'id': 'synthetic-alternative', 'name': 'Speaker 2', 'active': False, 'cached': False, 'is_restricted': False},
+                    *[{'id': f'fixture-output-{i}', 'name': f'Speaker {i}', 'active': False, 'cached': False, 'is_restricted': False}
+                      for i in range(20, 31)],
                 ]})
                 owner._session['broadcast']['playback']['target_name'] = ''
                 owner.changed.emit()
@@ -654,6 +656,13 @@ def main():
                     assert row_volume.property('text') == volume and check.property('visible') == active
                     assert row_name.mapToItem(row, 0, 0).x() == row_volume.mapToItem(row, 0, 0).x()
                 capture('direct-output-inventory')
+                output_choices.setProperty('contentY', output_choices.property('originY') + 250)
+                QTest.qWait(65)
+                output_anchor = QQmlExpression(engine.rootContext(), output_choices, 'rememberPosition()')
+                old_anchor = output_anchor.evaluate()[0].toVariant()
+                assert old_anchor and output_choices.property('contentY') > output_choices.property('originY')
+                owner.transport.playback_outputs.return_value['devices'].append(
+                    {'id': 'fixture-new-output', 'name': 'A new speaker', 'active': False, 'cached': False, 'is_restricted': False})
                 click('sessionOutputRead')
                 assert len(intents) == 1 and output_spinner.property('visible')
                 point = output_refresh.mapToScene(QPointF(output_refresh.width()/2, output_refresh.height()/2))
@@ -663,6 +672,8 @@ def main():
                 intents.pop()()
                 QTest.qWait(80)
                 assert owner.transport.playback_outputs.call_count == 2 and not output_spinner.property('visible')
+                restored_anchor = output_anchor.evaluate()[0].toVariant()
+                assert restored_anchor['id'] == old_anchor['id'] and abs(restored_anchor['offset'] - old_anchor['offset']) <= 1
                 assert backend.toastText == TRANSLATIONS[language]['session_output_updated']
                 owner.transport.playback_outputs.side_effect = SessionError('unavailable')
                 click('sessionOutputRead')

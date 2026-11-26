@@ -2955,6 +2955,7 @@ Item {
         readonly property var observation: screen.state.playback_control.outputs || ({})
         readonly property var choices: observation.choices || []
         property bool manualRefreshPending: false
+        property var refreshAnchor: null
         property string pendingOutputName: ""
         function openForCurrentItem(source) {
             openFromControl(source, () => screen.owner.readPlaybackOutputs(screen.state.session_id, screen.state.playback.item_id))
@@ -2963,9 +2964,12 @@ Item {
             const control = screen.state.playback_control
             if (!manualRefreshPending || !opened || control.reading_outputs) return
             manualRefreshPending = false
-            if (observation.lease !== undefined)
+            const anchor = refreshAnchor
+            refreshAnchor = null
+            if (observation.lease !== undefined) {
+                outputChoices.restorePosition(anchor)
                 screen.backend.showToastForContext(screen.tr("session_output_updated"), "refresh")
-            else if (control.outputs_status === "unavailable")
+            } else if (control.outputs_status === "unavailable")
                 screen.backend.showToastForContext(screen.tr("session_output_unavailable"), "refresh")
         }
         function chooseOutput(id, name) {
@@ -2981,6 +2985,7 @@ Item {
         }
         onAboutToHide: {
             manualRefreshPending = false
+            refreshAnchor = null
             pendingOutputName = ""
             if (screen.owner) screen.owner.cancelPlaybackIntent()
         }
@@ -3002,8 +3007,12 @@ Item {
                     opacity: enabled || reading ? 1 : 0.4
                     onClicked: {
                         if (screen.state.playback_control.status === "uncertain") screen.owner.refreshPlayback()
-                        else outputsPanel.manualRefreshPending = screen.owner.readPlaybackOutputs(
-                            screen.state.session_id, screen.state.playback.item_id)
+                        else {
+                            outputsPanel.refreshAnchor = outputChoices.rememberPosition()
+                            outputsPanel.manualRefreshPending = screen.owner.readPlaybackOutputs(
+                                screen.state.session_id, screen.state.playback.item_id)
+                            if (!outputsPanel.manualRefreshPending) outputsPanel.refreshAnchor = null
+                        }
                     }
                     BusyIndicator {
                         objectName: "sessionOutputReadSpinner"
@@ -3023,6 +3032,24 @@ Item {
                 Layout.preferredHeight: Math.min(300 * screen.ipadScale, contentHeight)
                 clip: true; spacing: 8; model: outputsPanel.choices
                 keyNavigationEnabled: false
+                function rememberPosition() {
+                    if (moving) return null
+                    for (let index = 0; index < count; index++) {
+                        const row = itemAtIndex(index)
+                        if (row && row.y + row.height > contentY && row.y < contentY + height)
+                            return {id: outputsPanel.choices[index].id, offset: row.y - contentY}
+                    }
+                    return null
+                }
+                function restorePosition(anchor) {
+                    if (!anchor || moving) return
+                    const index = outputsPanel.choices.findIndex(row => row.id === anchor.id)
+                    if (index < 0) return
+                    forceLayout()
+                    positionViewAtIndex(index, ListView.Beginning)
+                    const row = itemAtIndex(index)
+                    if (row) contentY = Math.max(originY, Math.min(row.y - anchor.offset, originY + contentHeight - height))
+                }
                 function focusChoiceFrom(index, step) {
                     if (!screen.state.playback_control.enabled) return false
                     for (let row = index + step; row >= 0 && row < count; row += step) {
