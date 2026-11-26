@@ -216,6 +216,8 @@ def main():
         backend.hideToast()
         backend.setLanguage("nl")
         window.setProperty("activeScreen", "trackinsight")
+        backend._track_insight_text = "Fixture interpretation"
+        backend._track_insight_audio_notice = True
         backend._track_insight_sections = [
             {"title": "Production", "body": "Fixture analysis", "source": "Fixture <source>"},
             {"title": "Genre", "body": "Fixture description"},
@@ -229,6 +231,15 @@ def main():
         assert not visual_item(unsourced, "trackInsightSectionSource").property("visible")
         plain = QQmlExpression(engine.rootContext(), label, "textFormat === 0")
         assert plain.evaluate()[0] and not plain.hasError()
+        notice = visual_item(window.contentItem(), "trackInsightUnmeasuredNotice")
+        for language in ("en", "nl", "de", "fr", "es"):
+            backend.setLanguage(language)
+            QTest.qWait(35)
+            assert notice.property("visible") and notice.property("text") == backend.t("track_insight_unmeasured_audio")
+        backend._track_insight_audio_notice = False
+        backend.trackInsightChanged.emit()
+        assert not notice.property("visible")
+        backend.setLanguage("nl")
         window.setProperty("activeScreen", "session")
         for runtime_state in ("opening", "ending"):
             backend.djSession._session["runtime_state"] = runtime_state

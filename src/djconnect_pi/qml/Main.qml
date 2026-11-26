@@ -2922,6 +2922,16 @@ BrandWindow {
                             wrapMode: Text.Wrap
                             Layout.fillWidth: true
                         }
+                        Text {
+                            objectName: "trackInsightUnmeasuredNotice"
+                            visible: djconnect.trackInsightAudioNotice
+                            text: root.tr("track_insight_unmeasured_audio")
+                            textFormat: Text.PlainText
+                            color: BrandTheme.colors.muted
+                            font.pixelSize: 17
+                            wrapMode: Text.WordWrap
+                            Layout.fillWidth: true
+                        }
                     }
 
                     GridLayout {

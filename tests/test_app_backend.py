@@ -866,6 +866,23 @@ def test_track_insight_direct_and_wrapped_response_decode_same_contract() -> Non
         assert "Mood context" in titles
 
 
+def test_track_insight_uses_explicit_unmeasured_basis_without_inventing_metrics(tmp_path: Path) -> None:
+    ensure_app()
+    backend = DJConnectBackend(tmp_path / "config.json")
+    payload = {"track": {"title": "Fixture"}, "analysis": {
+        "basis": "qualified_credit_and_interpretation_v1", "measured_audio": False,
+        "summary": "Interpretation", "full_text": "Interpretation", "energy": 0.4, "danceability": 0.2,
+    }}
+    backend._apply_track_insight_data(payload)
+    assert backend.trackInsightAudioNotice and backend.trackInsightText == "Interpretation"
+    assert not backend.trackInsightItems
+    payload["analysis"]["basis"] = "unmeasured_metadata_only_v1"
+    backend._apply_track_insight_data(payload)
+    assert not backend.trackInsightAudioNotice and not backend.trackInsightSections
+    backend._clear_track_insight()
+    assert not backend.trackInsightAudioNotice
+
+
 def test_track_insight_visualizer_decodes_backend_visualisation_payload(tmp_path: Path, monkeypatch) -> None:
     ensure_app()
     monkeypatch.setattr("djconnect_pi.app.cached_image_url", lambda url: f"file:///cache/{url.rsplit('/', 1)[-1]}")

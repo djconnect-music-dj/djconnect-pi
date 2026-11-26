@@ -261,6 +261,7 @@ class DJConnectBackend(QObject):
         self._music_discovery_feedback_supported = False
         self._music_discovery_consent_rejected = False
         self._track_insight_title = ""
+        self._track_insight_audio_notice = False
         self._track_insight_artist = ""
         self._track_insight_album = ""
         self._track_insight_image_url = ""
@@ -582,6 +583,10 @@ class DJConnectBackend(QObject):
     @Property(str, notify=trackInsightChanged)
     def trackInsightText(self) -> str:
         return self._track_insight_text
+
+    @Property(bool, notify=trackInsightChanged)
+    def trackInsightAudioNotice(self) -> bool:
+        return self._track_insight_audio_notice
 
     @Property(str, notify=trackInsightChanged)
     def trackInsightError(self) -> str:
@@ -3039,6 +3044,9 @@ class DJConnectBackend(QObject):
         self._track_insight_error = ""
         self._track_insight_items = list(message.get("items")) if isinstance(message.get("items"), list) else []
         self._track_insight_sections = list(analysis.get("sections")) if isinstance(analysis.get("sections"), list) else []
+        raw_analysis = track.get("analysis", {}) if isinstance(track, dict) else {}
+        self._track_insight_audio_notice = (_track_insight_unmeasured(raw_analysis)
+                                            and raw_analysis.get("basis") != "unmeasured_metadata_only_v1")
         self._track_insight_visualizer = _track_insight_visualizer(track, self._track_insight_items, self._track_insight_sections) if isinstance(track, dict) else {}
         self._track_insight_result_scope = scope
         self._set_backend_available(True)
@@ -3087,6 +3095,7 @@ class DJConnectBackend(QObject):
                 self._track_insight_image_url,
                 self._track_insight_text,
                 self._track_insight_error,
+                self._track_insight_audio_notice,
                 self._track_insight_items,
                 self._track_insight_sections,
                 self._track_insight_visualizer,
@@ -3099,6 +3108,7 @@ class DJConnectBackend(QObject):
         self._track_insight_image_url = ""
         self._track_insight_text = ""
         self._track_insight_error = error
+        self._track_insight_audio_notice = False
         self._track_insight_items = []
         self._track_insight_sections = []
         self._track_insight_visualizer = {}
@@ -3814,6 +3824,11 @@ def _track_insight_text(item: dict[str, object]) -> str:
         return "Er speelt nu geen track."
     if error == "rate_limited":
         return "Track Insight is even beperkt. Probeer het zo opnieuw."
+    analysis = payload.get("analysis")
+    if isinstance(analysis, dict) and _track_insight_unmeasured(analysis):
+        explanation = analysis.get("full_text") or analysis.get("summary")
+        if isinstance(explanation, str) and explanation.strip():
+            return explanation.strip()
     track = payload.get("track")
     if isinstance(track, dict):
         title = str(track.get("title") or track.get("name") or "").strip()
@@ -3865,6 +3880,8 @@ def _track_insight_allowed_analysis(analysis: dict[str, object]) -> dict[str, ob
         "danceability",
         "intensity",
         "confidence",
+        "basis",
+        "measured_audio",
         "production_notes",
         "instrumentation",
         "arrangement_notes",
@@ -3876,6 +3893,12 @@ def _track_insight_allowed_analysis(analysis: dict[str, object]) -> dict[str, ob
         "sections",
     }
     return {key: value for key, value in analysis.items() if key in allowed}
+
+
+def _track_insight_unmeasured(analysis: dict[str, object]) -> bool:
+    return (analysis.get("measured_audio") is False or analysis.get("basis") in (
+        "unmeasured_metadata_only_v1", "qualified_credit_and_interpretation_v1",
+    ))
 
 
 def _track_insight_music_dna_match(data: dict[str, object]) -> str:
@@ -4029,7 +4052,7 @@ def _track_insight_analysis(data: dict[str, object]) -> dict[str, object]:
     analysis = data.get("analysis")
     music_dna = data.get("music_dna")
     sections: list[dict[str, object]] = []
-    if isinstance(analysis, dict):
+    if isinstance(analysis, dict) and analysis.get("basis") != "unmeasured_metadata_only_v1":
         sections.extend(_track_insight_analysis_sections(analysis, data.get("track")))
     sections.extend(_track_insight_context_sections(data.get("mood_context"), music_dna))
     return {
@@ -4266,7 +4289,7 @@ def _track_insight_items(data: dict[str, object]) -> list[dict[str, object]]:
                 "musicDna": True,
             }
         )
-    if isinstance(analysis, dict):
+    if isinstance(analysis, dict) and not _track_insight_unmeasured(analysis):
         for key, title in (("energy", "Energy"), ("danceability", "Danceability"), ("intensity", "Intensity"), ("confidence", "Confidence")):
             raw = analysis.get(key)
             if raw not in (None, ""):
