@@ -435,7 +435,7 @@ Item {
     readonly property string searchTarget: historical ? ((state.timeline.session || {}).session_id || "") : state.session_id
     property string appliedSearchTarget: ""
     readonly property bool archiveSearchAvailable: historical && !currentHistory && !state.timeline.session
-        && state.search_available && backend.paired && !backend.demoMode
+        && (backend.demoMode || (state.search_available && backend.paired))
     readonly property bool searchAvailable: !flowSearchBlocked
         && (archiveSearchAvailable || (state.search_available && searchTarget.length > 0))
     readonly property string searchLabel: tr(archiveSearchAvailable ? "session_archive_search" : "session_search")

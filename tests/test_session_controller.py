@@ -355,6 +355,17 @@ def test_demo_session_never_uses_server_or_survives_demo_exit(controller):
     assert not owner.state["flow_rows"] and not owner.sendQuestion("No session")
     assert not owner.state["started_at"]
     assert owner.state["loaded"] and not owner.state["session_id"]
+    owner.loadHistory()
+    assert len(owner.archiveRows) == 1
+    owner.searchArchive("something absent from the session")
+    assert owner.archiveSearchState["sessions"] == []
+    owner.searchArchive("LISTEN TO NEXT")
+    found = owner.archiveSearchState["sessions"]
+    assert found == owner.archiveRows and found[0]["read_only"]
+    owner.openArchiveSearchResult(found[0]["session_id"])
+    assert owner.state["timeline"]["session"] == found[0]
+    assert any(row["text"] == "What should I listen to next?" for row in owner.state["timeline"]["entries"])
+    owner.closeSaved()
     owner.start("party")
     assert owner.state["mood"] == "party"
     assert not backend.jobs
@@ -362,6 +373,7 @@ def test_demo_session_never_uses_server_or_survives_demo_exit(controller):
     backend.demoMode = False
     backend.demoModeChanged.emit()
     assert not owner.state["session_id"] and not owner.state["loaded"]
+    assert not owner.archiveRows and not owner.archiveSearchState
 
 
 def enable_search(owner):

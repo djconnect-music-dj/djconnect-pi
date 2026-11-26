@@ -136,6 +136,7 @@ class SessionController(QObject):
         self._flow_window = None
         self._incomplete_flow_limit = 0
         self._demo_flow = []
+        self._demo_archives = {}
         self._flow_notification = None
         self._pending_question = {}
         self._pending_question_binding = None
@@ -756,6 +757,7 @@ class SessionController(QObject):
         self._flow_window = None
         self._incomplete_flow_limit = 0
         self._demo_flow = []
+        self._demo_archives = {}
         self._selection = {}
         self._selection_source = "timeline"
         self._question_status = ""
@@ -847,10 +849,25 @@ class SessionController(QObject):
                              "dj_persona": self._demo_preferences["persona"]}
             self._append_demo_entry("dj_moment", translate(self.backend.cfg.language, "demo_session_welcome"))
         elif action == "end":
+            if self._session:
+                sid = "demo-archive-" + uuid4().hex
+                header = {
+                    "session_id": sid, "started_at": self._session["started_at"],
+                    "created_at": self._session["started_at"], "ended_at": datetime.now(UTC).isoformat(),
+                    "lifecycle_status": "ENDED", "read_only": True,
+                }
+                self._demo_archives[sid] = {"session": header,
+                    "entries": [{**row, "session_id": sid} for row in self._demo_flow]}
+                if len(self._demo_archives) > 20:
+                    del self._demo_archives[next(iter(self._demo_archives))]
+                self._archive_search = {}
             self._session = {}
             self._demo_flow = []
         elif action in {"history", "history_more", "history_refresh"}:
+            self._sessions = [record["session"] for record in reversed(self._demo_archives.values())]
             self._history_loaded = True
+        elif action == "timeline" and value in self._demo_archives:
+            self._timeline = deepcopy(self._demo_archives[value])
         self._loaded = True
         self.changed.emit()
 
@@ -1478,8 +1495,21 @@ class SessionController(QObject):
     @Slot(str)
     def searchArchive(self, query):
         query = query.strip()
-        if (not self._foreground or self.busy or self.backend.demoMode or not self._search_supported()
-                or self._timeline.get("session") or not 1 <= len(query) <= 200):
+        if (not self._foreground or self.busy or self._timeline.get("session")
+                or not 1 <= len(query) <= 200):
+            return
+        if self.backend.demoMode:
+            needle = _archive_search_text(query)
+            matches = []
+            for record in reversed(self._demo_archives.values()):
+                header = record["session"]
+                if (needle in _archive_search_text(self.formatArchiveTiming(header))
+                        or any(needle in _archive_search_text(row["text"]) for row in record["entries"])):
+                    matches.append(header)
+            self._archive_search = {"query": query, "sessions": matches, "complete": True}
+            self.changed.emit()
+            return
+        if not self._search_supported():
             return
         self._view_epoch += 1
         self._archive_search = {"query": query}
@@ -1626,6 +1656,8 @@ class SessionController(QObject):
         return {"query": query, "sessions": matches, "complete": complete}
 
     def _archive_search_expired(self, now):
+        if self.backend.demoMode:
+            return False
         return any(min(row["_history_deadline"], row.get("_archive_search_deadline", float("inf"))) <= now
                    for row in self._archive_search.get("sessions", []))
 
