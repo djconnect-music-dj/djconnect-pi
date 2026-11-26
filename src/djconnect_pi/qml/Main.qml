@@ -1481,11 +1481,12 @@ BrandWindow {
                     }
 
                     Rectangle {
+                        objectName: "nowPlaybackTextBackdrop"
                         anchors.left: parent.left
                         anchors.right: parent.right
                         anchors.bottom: parent.bottom
                         z: 2
-                        height: Math.max(112, parent.height * 0.34)
+                        height: Math.min(parent.height, Math.max(112, parent.height * 0.34, nowPlaybackText.implicitHeight + 48))
                         gradient: Gradient {
                             orientation: Gradient.Vertical
                             GradientStop { position: 0.0; color: "#00000000" }
@@ -1495,6 +1496,7 @@ BrandWindow {
                     }
 
                     ColumnLayout {
+                        id: nowPlaybackText
                         anchors.left: parent.left
                         anchors.right: parent.right
                         anchors.bottom: parent.bottom
@@ -1503,25 +1505,31 @@ BrandWindow {
                         spacing: 4
 
                         Text {
+                            objectName: "nowPlaybackTitle"
                             text: djconnect.title
+                            textFormat: Text.PlainText
                             color: BrandTheme.colors.text
                             font.pixelSize: 34
                             font.bold: true
                             horizontalAlignment: Text.AlignHCenter
                             elide: Text.ElideRight
-                            maximumLineCount: 1
+                            maximumLineCount: 2
+                            wrapMode: Text.Wrap
                             style: Text.Raised
                             styleColor: "#aa000000"
                             Layout.fillWidth: true
                         }
 
                         Text {
+                            objectName: "nowPlaybackArtist"
                             text: djconnect.artist
+                            textFormat: Text.PlainText
                             color: BrandTheme.colors.muted
                             font.pixelSize: 24
                             horizontalAlignment: Text.AlignHCenter
                             elide: Text.ElideRight
-                            maximumLineCount: 1
+                            maximumLineCount: 2
+                            wrapMode: Text.Wrap
                             style: Text.Raised
                             styleColor: "#aa000000"
                             Layout.fillWidth: true
