@@ -3038,8 +3038,17 @@ Item {
             if (!matchingQuery || !count) return false
             const index = selectedMatchIndex < 0 ? (delta < 0 ? count - 1 : 0)
                 : (selectedMatchIndex + delta + count) % count
-            return revealMatch(index)
+            if (!revealMatch(index)) return false
+            if (delta > 0 && index === count - 1) loadMoreMatches()
+            return true
         }
+        function loadMoreMatches() {
+            if (!canLoadMoreMatches) return
+            screen.rememberSearch()
+            screen.owner.moreSearch()
+        }
+        readonly property bool canLoadMoreMatches: !screen.archiveSearchAvailable && matchingQuery
+            && !!result.next_cursor && !screen.state.search_limit_reached && !searchInProgress && !screen.owner.busy && !searchError
         function restoreArchiveMatch() {
             if (!pendingArchiveMatch || !opened || !hasArchiveResults) return
             const index = findMatchIndex(pendingArchiveMatch.sessionId, pendingArchiveMatch.index)
@@ -3272,9 +3281,10 @@ Item {
                         }
                     }
                     GlassButton {
-                        visible: !!screen.state.search.next_cursor && !screen.state.search_limit_reached
-                        text: screen.tr("session_more"); enabled: !screen.owner.busy
-                        onClicked: { screen.rememberSearch(); screen.owner.moreSearch() }
+                        visible: !screen.archiveSearchAvailable && searchPanel.matchingQuery
+                            && !!searchPanel.result.next_cursor && !screen.state.search_limit_reached
+                        text: screen.tr("session_more"); enabled: searchPanel.canLoadMoreMatches
+                        onClicked: searchPanel.loadMoreMatches()
                     }
                     BusyIndicator {
                         visible: screen.owner.busy && !searchPanel.searchInProgress

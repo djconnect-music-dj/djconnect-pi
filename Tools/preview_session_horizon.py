@@ -739,9 +739,34 @@ def main():
                     assert search_empty.property("visible")
                     assert search_message.property("text") == TRANSLATIONS[language]["session_search_empty"]
                     assert search_message.property("contentWidth") <= search_message.width() + 1
+                completed_search = owner._search
+                owner._search = {**completed_search, "complete": False, "next_cursor": "fixture-next-match", "matches": [
+                    {"session_id": saved["session_id"], "entry_id": f"fixture-search-match-{index}", "summary": "Fixture match"}
+                    for index in (1, 2)
+                ]}
+                owner.changed.emit()
+                QTest.qWait(65)
+                with patch.object(owner, "_launch") as verify:
+                    QTest.keyClick(window, Qt.Key.Key_Down)
+                    verify.assert_not_called()
+                    QTest.keyClick(window, Qt.Key.Key_Down)
+                    verify.assert_called_once_with("search_more", {"session_id": saved["session_id"], "query": "fixture", "pages": 2})
+                    assert panel.property("selectedMatchId") == "fixture-search-match-2"
+                owner._search["matches"] = [*owner._search["matches"], {
+                    "session_id": saved["session_id"], "entry_id": "fixture-search-match-3", "summary": "Fixture match",
+                }]
+                owner.changed.emit()
+                owner.searchUpdated.emit()
+                QTest.qWait(65)
+                assert panel.property("selectedMatchId") == "fixture-search-match-2"
+                owner._search = completed_search
+                owner.changed.emit()
                 search_field.setProperty("text", "different query")
                 assert not search_empty.property("visible")
                 search_field.setProperty("text", "fixture")
+                QTest.qWait(65)
+                search_flick = search_scroll.property("contentItem")
+                search_flick.setProperty("contentY", search_flick.property("originY"))
                 with patch.object(owner, "_launch") as verify:
                     drag_scroll(window, search_scroll, touch, 230)
                     verify.assert_called_once_with("search_refresh", {
