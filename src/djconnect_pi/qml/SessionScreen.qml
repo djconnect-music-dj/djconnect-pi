@@ -679,8 +679,15 @@ Item {
     }
     function returnArchiveDetail() {
         var saved = archiveDetailReturn
+        const source = archiveSearchOrigin && archiveSearchOrigin.sessionId === searchTarget ? archiveSearchOrigin : null
+        archiveSearchOrigin = null
         owner.closeSaved()
         archiveDetailReturn = null; archiveReturn = saved
+        if (source && source.scope === composerContext && archiveSearchAvailable) {
+            pendingArchiveSearchReturn = source
+            Qt.callLater(restoreArchiveSearch)
+            return
+        }
         archiveIntent = {profile: scopeProfileId}
         archiveRead.restart()
     }
@@ -797,6 +804,22 @@ Item {
     }
     function showSearch() { searchPanel.open(); searchInput.forceActiveFocus() }
     property var archiveSearchHandoff: null
+    property var archiveSearchOrigin: null
+    property var pendingArchiveSearchReturn: null
+    function restoreArchiveSearch() {
+        const pending = pendingArchiveSearchReturn
+        if (!pending) return
+        if (!historyViewOpen || !archiveSearchAvailable || pending.scope !== composerContext) {
+            pendingArchiveSearchReturn = null
+            return
+        }
+        if (owner.busy || searchPanel.visible) return
+        pendingArchiveSearchReturn = null
+        searchPanel.open()
+        searchPanel.keyboardVisible = false
+        searchInput.text = pending.query
+        owner.searchArchive(pending.query)
+    }
     function openArchiveMatch(sessionId) {
         if (!archiveSearchAvailable || !searchPanel.matchingQuery || owner.busy) return
         archiveSearchHandoff = {sessionId: sessionId, query: searchPanel.result.query, scope: composerContext}
@@ -804,6 +827,8 @@ Item {
     }
     function closeTransient() {
         archiveDetailReturn = null
+        archiveSearchOrigin = null
+        pendingArchiveSearchReturn = null
         cancelSearchRead()
         clearComposer()
         closePlaybackPanels()
@@ -825,6 +850,7 @@ Item {
         archiveSearchHandoff = null
         if (handoff && searchPanel.opened && historical && handoff.scope === composerContext
                 && handoff.sessionId === searchTarget && handoff.query === searchInput.text.trim()) {
+            archiveSearchOrigin = handoff
             searchPanel.keyboardVisible = false
             Qt.callLater(function() {
                 if (screen.historyViewOpen && searchPanel.opened && handoff.scope === screen.composerContext
@@ -1001,6 +1027,7 @@ Item {
         function onHistoryUpdated() { screen.scheduleArchivePosition() }
         function onArchiveInvalidated() {
             screen.cancelArchiveRead(); screen.archiveReturn = null; screen.archiveDetailReturn = null
+            screen.archiveSearchOrigin = null; screen.pendingArchiveSearchReturn = null
             screen.searchReturn = null; screen.cancelSearchRead(); searchPanel.close()
             readingRestore.stop(); screen.pendingReadingAnchor = ""; screen.readingOffset = 0
             if (screen.historyReadKind === "archive") { historyRead.stop(); screen.historyReadPending = false }
@@ -1010,7 +1037,15 @@ Item {
             screen.archiveReturn = {id: sessionId, profile: screen.scopeProfileId, offset: offset}
             screen.scheduleArchivePosition()
         }
-        function onChanged() { if (!screen.owner.busy) screen.archiveReadActive = false; if (!screen.historical || screen.currentHistory || screen.state.timeline.session) screen.cancelArchiveRead(); if (screen.archiveIntent && !screen.owner.busy) archiveRead.restart(); if (!screen.state.search.query) screen.cancelSearchRead(); if (screen.historyReadPending && !screen.owner.busy) historyRead.restart(); if (screen.searchRefreshPending && !screen.owner.busy) searchRead.restart() }
+        function onChanged() {
+            if (!screen.owner.busy) screen.archiveReadActive = false
+            if (!screen.historical || screen.currentHistory || screen.state.timeline.session) screen.cancelArchiveRead()
+            if (screen.archiveIntent && !screen.owner.busy) archiveRead.restart()
+            if (!screen.state.search.query) screen.cancelSearchRead()
+            if (screen.historyReadPending && !screen.owner.busy) historyRead.restart()
+            if (screen.searchRefreshPending && !screen.owner.busy) searchRead.restart()
+            if (screen.pendingArchiveSearchReturn && !screen.owner.busy) Qt.callLater(screen.restoreArchiveSearch)
+        }
         function onSearchUpdated() { searchPosition.restart() }
         function onContextCleared() { screen.cancelArchiveRead(); screen.clearFlowReturn(); historyRead.stop(); screen.historyReadProfile = ""; screen.historyReadSession = ""; readingRestore.stop(); screen.pendingReadingAnchor = ""; screen.readingOffset = 0; screen.closeTransient(); if (screen.historical) screen.navigate(screen.currentHistory ? "session" : "more"); screen.historyReadPending = false }
         function onEntryOpened() {
@@ -1020,6 +1055,7 @@ Item {
             screen.navigate(screen.currentHistory || !screen.historical ? "session-history" : "history")
         }
     }
+
 
     Connections {
         target: screen.backend
@@ -2847,8 +2883,14 @@ Item {
             keyboardVisible = false
             screen.searchNow()
         }
-        onOpened: keyboardVisible = true
-        onClosed: { keyboardVisible = false; screen.cancelSearchRead(); searchInput.clear(); resetSearch() }
+        onOpened: keyboardVisible = !searchInput.text.length
+        onClosed: {
+            keyboardVisible = false
+            screen.cancelSearchRead()
+            searchInput.clear()
+            resetSearch()
+            if (screen.pendingArchiveSearchReturn) Qt.callLater(screen.restoreArchiveSearch)
+        }
         x: keyboardVisible ? 0 : 16
         y: toolbar.y + toolbar.height + 8
         width: screen.width - 2 * x

@@ -417,8 +417,21 @@ def main():
                 assert not close_archive_search.hasError()
                 QTest.qWait(300)
                 assert not owner.archiveSearchState
-                owner._timeline = {}
-                owner.changed.emit()
+                back = one(screen, "sessionHistoryBack")
+                with patch.object(owner, "_launch") as verify:
+                    owner._set_running(1, "search_refresh")
+                    owner.changed.emit()
+                    click(window, back)
+                    verify.assert_not_called()
+                    owner._set_running()
+                    owner.changed.emit()
+                    QTest.qWait(200)
+                    verify.assert_called_once_with("archive_search", "fixture")
+                    assert not owner.state["timeline"]
+                    assert archive_panel.property("opened") and archive_field.property("text") == "fixture"
+                    assert not archive_panel.property("keyboardVisible")
+                close_archive_search.evaluate()
+                QTest.qWait(300)
                 owner._history_start = "fixture-older-window"
                 owner.changed.emit()
                 assert not archive_empty.property("visible") and archive_window_empty.property("visible")
