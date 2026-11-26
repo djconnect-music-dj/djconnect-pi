@@ -1088,11 +1088,20 @@ BrandWindow {
                     id: mediaRows
                     objectName: "mediaRows"
                     anchors.fill: parent
-                    visible: panel.matches.length > 0
+                    visible: !panel.searching || panel.matches.length > 0
                     model: panel.matches
                     clip: true
                     spacing: panel.compact ? 10 : 14
                     ScrollBar.vertical: ScrollBar {}
+
+                    PullToRefresh {
+                        objectName: "mediaPullToRefresh"
+                        flickable: mediaRows
+                        canRefresh: panel.visible && root.active && !root.screenBlanked
+                            && djconnect.paired && !djconnect.demoMode && !panel.loading && !panel.searching
+                        onRefreshRequested: panel.refreshRequested()
+                    }
+
                     delegate: Button {
                         id: mediaRow
                         required property var modelData
