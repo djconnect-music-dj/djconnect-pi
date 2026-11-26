@@ -25,6 +25,7 @@ from .ha import (
     DJConnectError,
     HAClient,
     Playback,
+    playlist_command_target,
 )
 from .i18n import translate
 from .logging_config import setup_logging
@@ -368,7 +369,7 @@ def _parse_playlist_items(data: dict[str, object]) -> list[dict[str, object]]:
 def _media_item(item: dict[str, object], playlist: bool = False) -> dict[str, object] | None:
     title = _media_item_value(item, "name", "title", "display_title", "track_name")
     subtitle = _media_item_value(item, "artist", "artist_name", "artists", "subtitle", "album")
-    uri = _media_item_value(item, "uri", "id", "value", "playlist_uri", "track_uri")
+    uri = playlist_command_target(item)
     context_uri = _media_item_value(item, "context_uri", "contextUri", "queue_context", "queueContext")
     index = item.get("index")
     image_url = _media_item_value(

@@ -73,6 +73,7 @@ from .ha import (
     StaleBackendAction,
     StatusObservation,
     UnsupportedBackendCapability,
+    playlist_command_target,
 )
 from .i18n import LANGUAGES, normalize_language, translate
 from .logging_config import clear_log_files, setup_logging
@@ -5100,8 +5101,7 @@ def parse_playlist_items(data: dict[str, object]) -> list[dict[str, object]]:
 
 def _playlist_item(item: dict[str, object]) -> dict[str, object] | None:
     title = str(item.get("name") or item.get("title") or item.get("display_title") or item.get("track_name") or "")
-    uri = next((value.strip() for key in ("uri", "value", "playlist_uri", "id", "track_uri")
-                if isinstance(value := item.get(key), str) and value.strip()), "")
+    uri = playlist_command_target(item)
     if not title or not uri:
         return None
     subtitle = str(item.get("owner") or item.get("owner_name") or item.get("description")

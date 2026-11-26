@@ -1094,6 +1094,14 @@ def _output_device_details(value: Any) -> list[dict[str, Any]]:
     return [detail] if detail else []
 
 
+def playlist_command_target(item: dict[str, object]) -> str:
+    for key in ("uri", "value", "playlist_uri", "id", "track_uri"):
+        value = item.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return ""
+
+
 def _first_truthy(*values: Any) -> Any:
     return next((value for value in values if value), values[-1] if values else None)
 
