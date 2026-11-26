@@ -994,6 +994,7 @@ BrandWindow {
         property bool searching: false
         property bool keyboardOpen: false
         property var pendingMediaItem: null
+        property var refreshReading: null
         property int selectedMatchIndex: 0
         readonly property bool compact: width < 900
         readonly property bool playbackAvailable: djconnect.demoMode || (djconnect.paired && djconnect.backendAvailable
@@ -1025,6 +1026,29 @@ BrandWindow {
             if (!visible || !query || !matches.length) return
             mediaRows.positionViewAtIndex(selectedMatchIndex, ListView.Center)
         }
+        function refreshList() {
+            if (!refreshAvailable) return
+            if (!query && mediaRows.count) {
+                const y = mediaRows.contentY
+                const first = mediaRows.indexAt(1, y)
+                const index = first >= 0 ? first : mediaRows.indexAt(1, y + mediaRows.spacing)
+                const row = mediaRows.itemAtIndex(index)
+                if (row) refreshReading = {index: index, item: row.modelData, offset: row.y - y}
+            }
+            refreshRequested()
+            if (!loading) refreshReading = null
+        }
+        function restoreMediaReading(anchor) {
+            if (!visible || query || !matches.length) return
+            const match = matches.findIndex(item => item.uri && item.uri === anchor.item.uri
+                && (playCommand !== "play_context_at" || item.index === anchor.item.index))
+            const index = match < 0 ? Math.min(anchor.index, matches.length - 1) : match
+            mediaRows.positionViewAtIndex(index, ListView.Beginning)
+            mediaRows.forceLayout()
+            const row = mediaRows.itemAtIndex(index)
+            if (row) mediaRows.contentY = Math.max(mediaRows.originY, Math.min(row.y - anchor.offset,
+                mediaRows.originY + Math.max(0, mediaRows.contentHeight - mediaRows.height)))
+        }
         function openSearch(showKeyboard) {
             if (!searchToggle.enabled) return
             searching = true
@@ -1033,7 +1057,7 @@ BrandWindow {
         }
         function closeSearch(resetPending) {
             const restoreFocus = !resetPending && searching && visible
-            if (resetPending) pendingMediaItem = null
+            if (resetPending) { pendingMediaItem = null; refreshReading = null }
             keyboardOpen = false
             searching = false
             searchInput.clear()
@@ -1073,8 +1097,13 @@ BrandWindow {
         onMatchesChanged: {
             selectedMatchIndex = Math.max(0, Math.min(selectedMatchIndex, matches.length - 1))
             if (query) Qt.callLater(centerMatch)
+            else if (refreshReading) {
+                Qt.callLater(restoreMediaReading, refreshReading)
+                refreshReading = null
+            }
             else mediaRows.positionViewAtBeginning()
         }
+        onLoadingChanged: if (!loading) refreshReading = null
         onQueryChanged: {
             selectedMatchIndex = 0
             if (query) Qt.callLater(centerMatch)
@@ -1139,7 +1168,7 @@ BrandWindow {
                     text: panel.refreshLabel
                     loading: panel.loading
                     enabled: panel.refreshAvailable
-                    onClicked: if (panel.refreshAvailable) panel.refreshRequested()
+                    onClicked: panel.refreshList()
                 }
             }
             Control {
@@ -1217,7 +1246,7 @@ BrandWindow {
                         flickable: mediaRows
                         canRefresh: panel.visible && root.active && !root.screenBlanked
                             && panel.refreshAvailable && !djconnect.demoMode && !panel.searching
-                        onRefreshRequested: if (canRefresh) panel.refreshRequested()
+                        onRefreshRequested: if (canRefresh) panel.refreshList()
                     }
 
                     delegate: Button {

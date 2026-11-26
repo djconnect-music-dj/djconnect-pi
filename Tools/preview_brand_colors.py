@@ -289,6 +289,29 @@ def main():
                    for index in range(30)]
         backend._queue_items = parse_queue_items({"queue": records})
         backend.mediaListsChanged.emit()
+        queue_panel.setProperty("searching", False)
+        scroll = QQmlExpression(engine.rootContext(), media_rows, "positionViewAtIndex(8, ListView.Beginning)")
+        scroll.evaluate()
+        QTest.qWait(80)
+        anchor = visual_item(media_rows, "mediaItemRow-8")
+        previous_y = anchor.mapToItem(media_rows, QPointF()).y()
+        backend._demo_mode = False
+        backend.cfg.paired, backend.cfg.device_token = True, "synthetic-not-a-credential"
+        with patch.object(backend, "_sync_config_from_disk"), patch.object(backend, "_run") as request:
+            QMetaObject.invokeMethod(queue_refresh, "clicked")
+            request.assert_called_once()
+            inserted = {"title": "New first track", "uri": "spotify:track:inserted", "index": 99}
+            backend._queue_items = parse_queue_items({"queue": [inserted, *records]})
+            backend.mediaListsChanged.emit()
+            request.call_args.kwargs["done"]()
+        capture("queue-refresh-keeps-position")
+        anchor = visual_item(media_rows, "mediaItemRow-9")
+        assert anchor.property("text") == "Fixture 08"
+        assert abs(anchor.mapToItem(media_rows, QPointF()).y() - previous_y) < 2
+        backend.cfg.paired, backend.cfg.device_token = False, ""
+        backend._demo_mode = True
+        backend._queue_items = parse_queue_items({"queue": records})
+        backend.mediaListsChanged.emit()
         queue_panel.setProperty("searching", True)
         search_input = visual_item(queue_panel, "mediaSearchInput")
         search_input.setProperty("text", "fixture")
