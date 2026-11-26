@@ -5593,6 +5593,7 @@ BrandWindow {
                 ? trackInsightLoader.item : null
             pollingAllowed: root.active && !root.screenBlanked && !root.splashVisible && !vibeScapeLoader.active
                 && !djconnect.logsVisible && !djconnect.versionMismatchVisible
+            vibeScapeActive: vibeScapeLoader.active
             historical: root.activeScreen === "history" || root.activeScreen === "session-history"
             currentHistory: root.activeScreen === "session-history"
             onExpandTrackArtwork: root.openTrackArtwork()

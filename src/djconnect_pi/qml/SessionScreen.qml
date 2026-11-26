@@ -9,6 +9,7 @@ Item {
     id: screen
     objectName: "djSessionScreen"
     property bool pollingAllowed: true
+    property bool vibeScapeActive: false
     property Item trackInsightMoodSurface: null
     onTrackInsightMoodSurfaceChanged: if (!trackInsightMoodSurface && choices && choices.fromTrackInsight) choices.close()
     readonly property bool liveViewOpen: visible && !historical && pollingAllowed
@@ -335,6 +336,8 @@ Item {
     }
     property bool forecastMode: false
     readonly property bool showForecast: !historical && state.forecast_supported && forecastMode
+    readonly property bool flowSearchBlocked: showForecast || vibeScapeActive
+    onFlowSearchBlockedChanged: if (flowSearchBlocked && searchPanel && searchPanel.visible) searchPanel.close()
     property Item pullRefreshView: null
     property bool historyPullRefreshing: false
     property bool historyToolbarRefreshing: false
@@ -375,10 +378,8 @@ Item {
         syncMediaVisibility()
     }
     onShowForecastChanged: {
-        if (showForecast) {
-            closePlaybackPanels()
-            if (searchPanel && searchPanel.visible) searchPanel.close()
-        } else if (forecastScroll && forecastScroll.contentItem) forecastScroll.contentItem.cancelFlick()
+        if (showForecast) closePlaybackPanels()
+        else if (forecastScroll && forecastScroll.contentItem) forecastScroll.contentItem.cancelFlick()
         syncMediaVisibility()
     }
     onStateChanged: {
@@ -423,7 +424,7 @@ Item {
     readonly property string searchTarget: historical ? ((state.timeline.session || {}).session_id || "") : state.session_id
     readonly property bool archiveSearchAvailable: historical && !currentHistory && !state.timeline.session
         && state.search_available && backend.paired && !backend.demoMode
-    readonly property bool searchAvailable: !showForecast
+    readonly property bool searchAvailable: !flowSearchBlocked
         && (archiveSearchAvailable || (state.search_available && searchTarget.length > 0))
     readonly property string searchLabel: tr(archiveSearchAvailable ? "session_archive_search" : "session_search")
     property real readingOffset: 0

@@ -335,6 +335,26 @@ def main():
                         assert not flow_search_panel.property("visible")
                         click(window, flow)
                         assert screen.property("searchAvailable")
+                        open_flow_search.evaluate()
+                        QTest.qWait(65)
+                        assert flow_search_panel.property("opened")
+                        open_vibescape = QQmlExpression(engine.rootContext(), window, "openVibeScape(120)")
+                        vibe_loader = window.findChild(QObject, "vibeScapeLoader")
+                        with QSignalBlocker(poll_timer), patch.object(owner, "_launch") as read:
+                            QTest.keyClick(window, Qt.Key.Key_F)
+                            open_vibescape.evaluate()
+                            assert not open_vibescape.hasError()
+                            if profile == "pi5-arm64":
+                                assert vibe_loader.property("active")
+                                QTest.qWait(375)
+                                assert not flow_search_panel.property("visible") and not screen.property("searchAvailable")
+                                assert flow_search_input.property("text") == ""
+                                QQmlExpression(engine.rootContext(), window, "closeVibeScape()").evaluate()
+                                assert not vibe_loader.property("active") and screen.property("searchAvailable")
+                            else:
+                                assert not vibe_loader.property("active") and flow_search_panel.property("opened")
+                                QQmlExpression(engine.rootContext(), flow_search_panel, "close()").evaluate()
+                            read.assert_not_called()
                         owner._caps = caps
                         owner.changed.emit()
                     row = {
