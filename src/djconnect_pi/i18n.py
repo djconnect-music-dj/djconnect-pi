@@ -1639,6 +1639,13 @@ _KEYBOARD_TRANSLATIONS = {
     "music_dna_import_confirm": ("Importing this file replaces the Music DNA profile in Home Assistant.", "Bij importeren vervangt dit bestand het Music DNA-profiel in Home Assistant.", "Beim Import ersetzt diese Datei das Music-DNA-Profil in Home Assistant.", "L’importation de ce fichier remplace le profil Music DNA dans Home Assistant.", "Al importar este archivo se reemplaza el perfil de Music DNA en Home Assistant."),
     "music_dna_import_saved": ("Music DNA imported", "Music DNA geïmporteerd", "Music DNA importiert", "Music DNA importé", "Music DNA importado"),
     "music_dna_import_failed": ("Could not import Music DNA", "Music DNA kon niet worden geïmporteerd", "Music DNA konnte nicht importiert werden", "Impossible d’importer Music DNA", "No se pudo importar Music DNA"),
+    "music_dna_import_uncertain": (
+        "Home Assistant did not confirm the import. Refresh Music DNA before importing again.",
+        "Home Assistant heeft de import niet bevestigd. Vernieuw Music DNA voordat je opnieuw importeert.",
+        "Home Assistant hat den Import nicht bestätigt. Aktualisiere Music DNA vor einem erneuten Import.",
+        "Home Assistant n’a pas confirmé l’importation. Actualisez Music DNA avant de réimporter.",
+        "Home Assistant no ha confirmado la importación. Actualiza Music DNA antes de volver a importar.",
+    ),
     "queue_updated": ("Queue updated", "Wachtrij vernieuwd", "Warteschlange aktualisiert", "File d’attente actualisée", "Cola actualizada"),
     "queue_update_failed": ("Could not refresh the queue", "Wachtrij kon niet worden vernieuwd", "Warteschlange konnte nicht aktualisiert werden", "Impossible d’actualiser la file d’attente", "No se pudo actualizar la cola"),
     "playlists_updated": ("Playlists updated", "Playlists vernieuwd", "Playlists aktualisiert", "Playlists actualisées", "Listas actualizadas"),

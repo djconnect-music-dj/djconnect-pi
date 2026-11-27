@@ -762,6 +762,11 @@ class DJConnectBackend(QObject):
         return bool(request and request.get("saved") and self._music_dna_import_current(request))
 
     @Property(str, notify=musicDnaChanged)
+    def musicDnaImportFailureKey(self) -> str:
+        request = self._music_dna_import
+        return request.get("failure", "") if request and self._music_dna_import_current(request) else ""
+
+    @Property(str, notify=musicDnaChanged)
     def musicDnaSummary(self) -> str:
         return self._music_dna_summary
 
@@ -2884,7 +2889,7 @@ class DJConnectBackend(QObject):
 
         def upload() -> None:
             data = None
-            notice = "music_dna_import_failed"
+            notice = "music_dna_import_uncertain"
             try:
                 if not self._music_dna_import_current(request):
                     return
@@ -2892,9 +2897,11 @@ class DJConnectBackend(QObject):
                 if (response.get("success") is True and response.get("enabled") is True
                         and response.get("music_dna_key") == request["key"] and isinstance(response.get("profile"), dict)):
                     data = response
-            except requests.RequestException:
-                notice = "session_uncertain"
-            except DJConnectError:
+                elif response.get("success") is False:
+                    notice = "music_dna_import_failed"
+            except (AuthenticationError, ProfileContextError):
+                notice = "music_dna_import_failed"
+            except (requests.RequestException, DJConnectError):
                 pass
             finally:
                 self._musicDnaImportFinished.emit(request, data, notice)
@@ -2906,13 +2913,13 @@ class DJConnectBackend(QObject):
     def _finish_music_dna_import(self, request: dict, data: dict | None, notice: str) -> None:
         if not self._music_dna_import_current(request):
             return
+        request["uploading"] = False
         if data is not None:
-            request["uploading"] = False
             request["saved"] = True
             self._apply_music_dna_data(self._profile_read_result(data, request["ticket"]))
             return
-        self.cancelMusicDnaImport()
-        self._show_toast(self.tr_key(notice), 3500, "musicdna")
+        request["failure"] = notice
+        self.musicDnaChanged.emit()
 
     @Slot(bool)
     @Slot(bool, int)

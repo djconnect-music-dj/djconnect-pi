@@ -2516,7 +2516,9 @@ BrandWindow {
         }
 
         GlassPopup {
+            id: musicDnaImportPreview
             objectName: "musicDnaImportPreview"
+            readonly property bool finished: djconnect.musicDnaImportSaved || djconnect.musicDnaImportFailureKey.length > 0
             anchors.centerIn: parent
             width: Math.min(parent.width - 40, 560)
             padding: 24
@@ -2616,8 +2618,10 @@ BrandWindow {
                 }
                 Text {
                     objectName: "musicDnaImportMessage"
-                    text: root.tr(djconnect.musicDnaImportSaved ? "music_dna_import_saved" : "music_dna_import_confirm")
-                    color: djconnect.musicDnaImportSaved ? BrandTheme.colors.success : BrandTheme.colors.muted
+                    readonly property string failureKey: djconnect.musicDnaImportFailureKey
+                    text: root.tr(failureKey || (djconnect.musicDnaImportSaved ? "music_dna_import_saved" : "music_dna_import_confirm"))
+                    color: failureKey ? BrandTheme.colors.danger
+                                      : (djconnect.musicDnaImportSaved ? BrandTheme.colors.success : BrandTheme.colors.muted)
                     textFormat: Text.PlainText
                     font.pixelSize: 20
                     wrapMode: Text.WordWrap
@@ -2631,7 +2635,7 @@ BrandWindow {
                     wrapText: true
                     leftPadding: uploading ? 50 : padding
                     primary: true
-                    visible: !djconnect.musicDnaImportSaved
+                    visible: !musicDnaImportPreview.finished
                     enabled: visible && settingsPanel.canTransferMusicDna
                     opacity: enabled || uploading ? 1 : 0.5
                     Layout.fillWidth: true
@@ -2649,9 +2653,9 @@ BrandWindow {
                 }
                 GlassButton {
                     objectName: "musicDnaImportClose"
-                    text: root.tr(djconnect.musicDnaImportSaved ? "close" : "cancel")
-                    primary: djconnect.musicDnaImportSaved
-                    enabled: !djconnect.musicDnaBusy
+                    text: root.tr(musicDnaImportPreview.finished ? "close" : "cancel")
+                    primary: musicDnaImportPreview.finished
+                    enabled: musicDnaImportPreview.finished || !djconnect.musicDnaBusy
                     Layout.fillWidth: true
                     onClicked: djconnect.cancelMusicDnaImport()
                 }
