@@ -1624,6 +1624,97 @@ BrandWindow {
         onPressed: function(mouse) { root.recordActivity(); mouse.accepted = false }
     }
 
+    readonly property bool playbackSeekActionsAvailable: (djconnect.demoMode || (djconnect.paired && djconnect.backendAvailable))
+        && djconnect.durationSeconds > 0 && !djconnect.busy
+        && (djconnect.demoMode || (djconnect.musicBackendAvailable && djconnect.playbackSeekOutputKnown))
+
+    component PlaybackPositionControl: RowLayout {
+        id: playbackPosition
+        property bool controlPage: false
+        objectName: controlPage ? "controlPlaybackPosition" : "nowPlaybackPosition"
+        visible: djconnect.hasTrackTitle && djconnect.durationSeconds > 0
+        spacing: 10
+        Slider {
+            id: positionSlider
+            objectName: playbackPosition.controlPage ? "controlPlaybackProgress" : "nowPlaybackProgress"
+            Layout.fillWidth: true
+            Layout.preferredHeight: 44
+            from: 0
+            to: djconnect.durationSeconds
+            stepSize: 1
+            enabled: root.playbackSeekActionsAvailable && (djconnect.demoMode || djconnect.musicBackendSupportsSeek)
+            Accessible.name: root.tr("session_playback_position")
+            onEnabledChanged: if (!enabled && seekPointer && seekPointer.lease) djconnect.cancelPlaybackSeek()
+            onMoved: if (!seekPointer.pressed) {
+                const lease = djconnect.beginPlaybackSeek()
+                if (lease) djconnect.commitPlaybackSeek(lease, Math.round(value))
+            }
+            Binding {
+                target: positionSlider; property: "value"
+                value: seekPointer.lease > 0 ? seekPointer.draft : djconnect.positionSeconds
+                restoreMode: Binding.RestoreNone
+            }
+            background: Rectangle {
+                x: positionSlider.leftPadding
+                y: (positionSlider.height - height) / 2
+                width: positionSlider.availableWidth
+                height: 6; radius: 3
+                color: BrandTheme.alpha(BrandTheme.colors.text, "30")
+                Rectangle {
+                    width: parent.width * positionSlider.visualPosition
+                    height: parent.height
+                    radius: 3
+                    color: BrandTheme.colors.text
+                }
+            }
+            handle: Rectangle {
+                width: 16; height: 16; radius: 8
+                visible: positionSlider.enabled
+                x: positionSlider.leftPadding + positionSlider.visualPosition * (positionSlider.availableWidth - width)
+                y: (positionSlider.height - height) / 2
+                color: BrandTheme.colors.text
+            }
+            MouseArea {
+                id: seekPointer
+                anchors.fill: parent
+                property int lease: 0
+                property int draft: 0
+                Connections {
+                    target: djconnect
+                    function onPlaybackSeekCancelled() { seekPointer.lease = 0 }
+                }
+                function targetAt(x) {
+                    const inset = positionSlider.leftPadding + positionSlider.handle.width / 2
+                    const travel = Math.max(1, positionSlider.availableWidth - positionSlider.handle.width)
+                    return Math.round(positionSlider.valueAt(Math.max(0, Math.min(1, (x - inset) / travel))))
+                }
+                onPressed: function(mouse) {
+                    lease = djconnect.beginPlaybackSeek()
+                    draft = targetAt(mouse.x)
+                }
+                onPositionChanged: function(mouse) { if (lease) draft = targetAt(mouse.x) }
+                onReleased: function(mouse) {
+                    const ticket = lease
+                    lease = 0
+                    if (ticket) djconnect.commitPlaybackSeek(ticket, targetAt(mouse.x))
+                }
+                onCanceled: {
+                    if (lease) djconnect.cancelPlaybackSeek()
+                    lease = 0
+                }
+            }
+        }
+        Text {
+            objectName: playbackPosition.controlPage ? "controlPlaybackTime" : "nowPlaybackTime"
+            text: seekPointer.lease > 0
+                ? Math.floor(seekPointer.draft / 60) + ":" + ("0" + seekPointer.draft % 60).slice(-2)
+                    + " / " + djconnect.progressLabel.split("/")[1]
+                : djconnect.progressLabel.replace("/", " / ")
+            color: BrandTheme.colors.muted
+            font.pixelSize: 18
+        }
+    }
+
     CompactPageLoader {
         id: nowLoader
         visible: root.activeScreen === "now"
@@ -1637,8 +1728,7 @@ BrandWindow {
         objectName: "nowPanel"
         readonly property alias artworkTint: nowArtworkPalette.tint
         readonly property bool playbackActionsAvailable: djconnect.demoMode || (djconnect.paired && djconnect.backendAvailable)
-        readonly property bool seekActionsAvailable: playbackActionsAvailable && djconnect.durationSeconds > 0 && !djconnect.busy
-            && (djconnect.demoMode || (djconnect.musicBackendAvailable && djconnect.playbackSeekOutputKnown))
+        readonly property bool seekActionsAvailable: root.playbackSeekActionsAvailable
 
         AppBackground {}
 
@@ -1794,91 +1884,9 @@ BrandWindow {
                 }
             }
 
-            RowLayout {
-                objectName: "nowPlaybackPosition"
-                visible: djconnect.hasTrackTitle && djconnect.durationSeconds > 0
+            PlaybackPositionControl {
                 Layout.alignment: Qt.AlignHCenter
                 Layout.preferredWidth: Math.min(parent.width, 416)
-                spacing: 10
-                Slider {
-                    id: nowPositionSlider
-                    objectName: "nowPlaybackProgress"
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 44
-                    from: 0
-                    to: djconnect.durationSeconds
-                    stepSize: 1
-                    enabled: nowPanel.seekActionsAvailable && (djconnect.demoMode || djconnect.musicBackendSupportsSeek)
-                    Accessible.name: root.tr("session_playback_position")
-                    onEnabledChanged: if (!enabled && seekPointer && seekPointer.lease) djconnect.cancelPlaybackSeek()
-                    onMoved: if (!seekPointer.pressed) {
-                        const lease = djconnect.beginPlaybackSeek()
-                        if (lease) djconnect.commitPlaybackSeek(lease, Math.round(value))
-                    }
-                    Binding {
-                        target: nowPositionSlider; property: "value"
-                        value: seekPointer.lease > 0 ? seekPointer.draft : djconnect.positionSeconds
-                        restoreMode: Binding.RestoreNone
-                    }
-                    background: Rectangle {
-                        x: nowPositionSlider.leftPadding
-                        y: (nowPositionSlider.height - height) / 2
-                        width: nowPositionSlider.availableWidth
-                        height: 6; radius: 3
-                        color: BrandTheme.alpha(BrandTheme.colors.text, "30")
-                        Rectangle {
-                            width: parent.width * nowPositionSlider.visualPosition
-                            height: parent.height
-                            radius: 3
-                            color: BrandTheme.colors.text
-                        }
-                    }
-                    handle: Rectangle {
-                        width: 16; height: 16; radius: 8
-                        visible: nowPositionSlider.enabled
-                        x: nowPositionSlider.leftPadding + nowPositionSlider.visualPosition * (nowPositionSlider.availableWidth - width)
-                        y: (nowPositionSlider.height - height) / 2
-                        color: BrandTheme.colors.text
-                    }
-                    MouseArea {
-                        id: seekPointer
-                        anchors.fill: parent
-                        property int lease: 0
-                        property int draft: 0
-                        Connections {
-                            target: djconnect
-                            function onPlaybackSeekCancelled() { seekPointer.lease = 0 }
-                        }
-                        function targetAt(x) {
-                            const inset = nowPositionSlider.leftPadding + nowPositionSlider.handle.width / 2
-                            const travel = Math.max(1, nowPositionSlider.availableWidth - nowPositionSlider.handle.width)
-                            return Math.round(nowPositionSlider.valueAt(Math.max(0, Math.min(1, (x - inset) / travel))))
-                        }
-                        onPressed: function(mouse) {
-                            lease = djconnect.beginPlaybackSeek()
-                            draft = targetAt(mouse.x)
-                        }
-                        onPositionChanged: function(mouse) { if (lease) draft = targetAt(mouse.x) }
-                        onReleased: function(mouse) {
-                            const ticket = lease
-                            lease = 0
-                            if (ticket) djconnect.commitPlaybackSeek(ticket, targetAt(mouse.x))
-                        }
-                        onCanceled: {
-                            if (lease) djconnect.cancelPlaybackSeek()
-                            lease = 0
-                        }
-                    }
-                }
-                Text {
-                    objectName: "nowPlaybackTime"
-                    text: seekPointer.lease > 0
-                        ? Math.floor(seekPointer.draft / 60) + ":" + ("0" + seekPointer.draft % 60).slice(-2)
-                            + " / " + djconnect.progressLabel.split("/")[1]
-                        : djconnect.progressLabel.replace("/", " / ")
-                    color: BrandTheme.colors.muted
-                    font.pixelSize: 18
-                }
             }
 
             GlassSurface {
@@ -2007,7 +2015,10 @@ BrandWindow {
         z: 10
         onVisibleChanged: {
             if (visible && !root.wallProfile) djconnect.refreshControlOutputs(false)
-            else djconnect.cancelControlVolume()
+            else {
+                djconnect.cancelControlVolume()
+                djconnect.cancelPlaybackSeek()
+            }
         }
         sourceComponent: PlaybackControlPage {}
     }
@@ -2102,40 +2113,10 @@ BrandWindow {
                 }
             }
 
-            RowLayout {
+            PlaybackPositionControl {
+                controlPage: true
                 Layout.fillWidth: true
                 Layout.preferredHeight: 54
-                spacing: 12
-
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 18
-                    Layout.alignment: Qt.AlignVCenter
-                    radius: 8
-                    color: BrandTheme.alpha(BrandTheme.colors.surface, "55")
-                    border.color: BrandTheme.colors.surfaceRaised
-                    border.width: 1
-
-                    Rectangle {
-                        width: parent.width * djconnect.trackProgress
-                        height: parent.height
-                        radius: parent.radius
-                        gradient: Gradient {
-                            orientation: Gradient.Horizontal
-                            GradientStop { position: 0.0; color: root.moodColor("sliderStart") }
-                            GradientStop { position: 1.0; color: root.moodColor("sliderEnd") }
-                        }
-                    }
-                }
-
-                Text {
-                    text: djconnect.progressLabel
-                    color: BrandTheme.colors.text
-                    font.pixelSize: 24
-                    font.bold: true
-                    horizontalAlignment: Text.AlignRight
-                    Layout.preferredWidth: 128
-                }
             }
 
             RowLayout {

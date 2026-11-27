@@ -172,6 +172,33 @@ def main():
             QTest.mouseClick(window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, center.toPoint())
             assert window.property("activeScreen") == "control" and backend.outputDevice == "Fixture output"
             QTest.qWait(80)
+            control_progress = visual_item(window.contentItem(), "controlPlaybackProgress")
+            control_time = visual_item(window.contentItem(), "controlPlaybackTime")
+            backend.playback.duration_seconds = 240
+            backend.playback.position_seconds = 75
+            backend.progressChanged.emit()
+            assert control_progress.property("visible") and control_progress.property("enabled")
+            assert control_time.property("text") == "1:15 / 4:00"
+            control_start = control_progress.mapToScene(QPointF(control_progress.width() * 0.31, control_progress.height() / 2)).toPoint()
+            control_end = control_progress.mapToScene(QPointF(control_progress.width() * 0.6, control_progress.height() / 2)).toPoint()
+            QTest.mousePress(window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, control_start)
+            QTest.mouseMove(window, control_end)
+            assert backend.positionSeconds == 75 and control_time.property("text") != "1:15 / 4:00"
+            QTest.mouseRelease(window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, control_end)
+            assert 135 <= backend.positionSeconds <= 155
+            capture("control-playback-position")
+
+            QTest.mousePress(window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, control_start)
+            QTest.mouseMove(window, control_end)
+            cancelled_position = backend.positionSeconds
+            window.setProperty("activeScreen", "now")
+            QTest.mouseRelease(window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, control_end)
+            assert backend.positionSeconds == cancelled_position
+            window.setProperty("activeScreen", "control")
+            QTest.qWait(80)
+            backend.playback.duration_seconds = duration_before
+            backend.playback.position_seconds = position_before
+            backend.progressChanged.emit()
             outputs = visual_item(window.contentItem(), "controlOutputDeviceCombo")
             refresh_outputs = visual_item(window.contentItem(), "controlRefreshOutputs")
             refresh_center = refresh_outputs.mapToScene(QPointF(refresh_outputs.width() / 2, refresh_outputs.height() / 2))
