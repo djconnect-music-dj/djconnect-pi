@@ -15,7 +15,7 @@ OVERLAY_CAPABILITIES = {
     "repeat": "supports_repeat",
     "toggle_favorite": "supports_favorites",
 }
-REPEAT_NEXT = {"off": "context", "context": "track", "track": "off"}
+REPEAT_NEXT = {"off": "track", "track": "context", "context": "off"}
 
 COMMANDS = frozenset({"play", "pause", "previous", "next", "save_current_track"})
 

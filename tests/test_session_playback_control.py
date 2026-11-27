@@ -53,16 +53,18 @@ def test_explicit_command_once_then_independent_owner_read_without_optimism(cont
     assert len(backend.jobs) == 1 and owner._running_action == "refresh"
 
 
-@pytest.mark.parametrize(("command", "wire", "value"), [
-    ("seek_back_15", "seek_relative", -15000),
-    ("seek_forward_15", "seek_relative", 15000),
-    ("shuffle", "set_shuffle", False),
-    ("repeat", "set_repeat", "track"),
-    ("toggle_favorite", "set_current_track_favorite", True),
+@pytest.mark.parametrize(("command", "wire", "value", "previous_repeat"), [
+    ("seek_back_15", "seek_relative", -15000, "off"),
+    ("seek_forward_15", "seek_relative", 15000, "off"),
+    ("shuffle", "set_shuffle", False, "off"),
+    ("repeat", "set_repeat", "track", "off"),
+    ("repeat", "set_repeat", "context", "track"),
+    ("repeat", "set_repeat", "off", "context"),
+    ("toggle_favorite", "set_current_track_favorite", True, "off"),
 ])
 @pytest.mark.parametrize("changed_output", [False, True])
 def test_overlay_intent_rechecks_output_and_sends_only_one_explicit_adjustment(
-    controller, command, wire, value, changed_output,
+    controller, command, wire, value, previous_repeat, changed_output,
 ):
     owner, backend = setup(controller)
     caps = {"supports_favorites": True, "supports_seek": True, "supports_shuffle": True, "supports_repeat": True}
@@ -70,7 +72,7 @@ def test_overlay_intent_rechecks_output_and_sends_only_one_explicit_adjustment(
     owner._session["broadcast"]["playback"]["target_name"] = "Speaker"
     status = owner.transport.playback_status.return_value
     status["music_backend_capabilities"] = caps
-    status["playback"].update(shuffle=True, repeat_state="context", favorite_status=False, device={
+    status["playback"].update(shuffle=True, repeat_state=previous_repeat, favorite_status=False, device={
         "id": "speaker-id", "name": "Another speaker" if changed_output else "Speaker",
         "active": True, "is_restricted": False,
     })

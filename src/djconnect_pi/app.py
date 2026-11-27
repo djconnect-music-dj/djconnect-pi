@@ -85,7 +85,7 @@ from .session_history_view import (
     ask_dj_history_matches, contribution_question, conversation_entries, local_highlighted_text,
     presented_history, retained_contribution_preview,
 )
-from .session_playback_control import favorite_observation, output_id
+from .session_playback_control import REPEAT_NEXT, favorite_observation, output_id
 from .session_playback_control import reference as session_playback_reference
 from .session_projection import active_session, history_page, safe_link, timestamp, track_insight_verified_credit, volume_observation
 from .session_projection import text as bounded_text
@@ -2343,12 +2343,11 @@ class DJConnectBackend(QObject):
 
     @Slot()
     def cycleRepeat(self) -> None:
-        next_value = {"off": "context", "context": "track", "track": "off"}.get(self.playback.repeat, "off")
-        self.setPlaybackRepeatMode(next_value)
+        self.setPlaybackRepeatMode(REPEAT_NEXT.get(self.playback.repeat, "off"))
 
     @Slot(str)
     def setPlaybackRepeatMode(self, value: str) -> None:
-        if value not in {"off", "track", "context"}:
+        if value not in REPEAT_NEXT:
             return
         self._request_playback_mode("repeat", value)
 

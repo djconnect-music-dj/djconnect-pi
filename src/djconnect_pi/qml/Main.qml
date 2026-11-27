@@ -1955,8 +1955,7 @@ BrandWindow {
                     Accessible.description: modeLabel
                     ToolTip.text: modeLabel
                     ToolTip.visible: hovered
-                    onClicked: djconnect.setPlaybackRepeatMode(djconnect.repeat === "off" ? "track"
-                        : djconnect.repeat === "track" ? "context" : "off")
+                    onClicked: djconnect.cycleRepeat()
                 }
             }
 
@@ -2394,6 +2393,7 @@ BrandWindow {
                 }
 
                 IconButton {
+                    objectName: "playbackControlRepeat"
                     iconName: djconnect.repeat === "track" ? "repeatOne" : djconnect.repeat === "context" ? "repeat" : "repeatOff"
                     active: djconnect.repeat !== "off"
                     enabled: !djconnect.busy && !djconnect.playbackModePending
