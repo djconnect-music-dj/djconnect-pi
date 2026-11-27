@@ -364,6 +364,7 @@ class SessionController(QObject):
                 "sessions": [] if revoked else self._archive_view(),
             } if full_snapshot else {}),
             "selection": {} if revoked else deepcopy(self._selection), "question_status": self._question_status,
+            "selection_preview": {} if revoked else self._selection_preview(),
             "moments": [] if revoked else deepcopy(self._moments),
             "saved_summary": [] if revoked else self._saved_summary(),
             "timeline": {} if revoked else deepcopy(self._timeline), "search": {} if revoked else deepcopy(self._search), "error": self._error,
@@ -1118,14 +1119,32 @@ class SessionController(QObject):
         return ask_dj_context_entry(message_id, self._without_withdrawn_entries(rows), now=self._clock.now())
 
     def _entry_selection_valid(self, selected, source):
+        return self._entry_selection_row(selected, source) is not None
+
+    def _entry_selection_row(self, selected, source):
         if source == "flow":
             session_id, rows = self._session.get("session_id"), self._retained_flow
         else:
             session_id, rows = self._timeline.get("session", {}).get("session_id"), self._timeline.get("entries", [])
-        return (selected["session_id"] == session_id
-                and any(row["session_id"] == selected["session_id"] and row["entry_id"] == selected["entry_id"]
-                        and row.get("state") != "source_withdrawn"
-                        and (timestamp(row.get("retained_until")) or 0) > self._clock.now() for row in rows))
+        if selected["session_id"] != session_id:
+            return None
+        now = self._clock.now()
+        return next((row for row in rows
+                     if row["session_id"] == session_id and row["entry_id"] == selected["entry_id"]
+                     and row.get("state") != "source_withdrawn"
+                     and (timestamp(row.get("retained_until")) or 0) > now), None)
+
+    def _selection_preview(self):
+        if (self._selection.get("kind") != "selected_entry"
+                or not self._foreground or not self._composer_supported()):
+            return {}
+        row = self._entry_selection_row(self._selection, self._selection_source)
+        body = text(row.get("text")).strip() if row else ""
+        if not body:
+            return {}
+        return {"text": body, "sources": deepcopy(row.get("display_sources", [])),
+                "requires_spotify_attribution": row.get("requires_spotify_attribution") is True,
+                "spotify_source_url": row.get("spotify_source_url", "")}
 
     @Slot()
     def clearSelection(self):
@@ -1225,11 +1244,9 @@ class SessionController(QObject):
         return contribution_question(self._caps, self.backend.cfg.language) if self._standalone_saved_composer() else ""
 
     def _entry_exploration_valid(self, selected, source):
-        if not self._entry_selection_valid(selected, source):
+        entry = self._entry_selection_row(selected, source)
+        if entry is None:
             return False
-        rows = self._retained_flow if source == "flow" else self._timeline.get("entries", [])
-        entry = next(row for row in rows if row["session_id"] == selected["session_id"]
-                     and row["entry_id"] == selected["entry_id"])
         if entry["kind"] not in {"dj_moment", "playback_observed", "conversation_dj"}:
             return False
         playback = entry.get("historical_playback") or {}
