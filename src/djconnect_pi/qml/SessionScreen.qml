@@ -3922,6 +3922,8 @@ Item {
         id: momentInsight
         objectName: "sessionMomentInsight"
         readonly property var detail: screen.owner.momentTrackInsight
+        readonly property var credit: detail.credit || ({})
+        readonly property bool separateSummary: !credit.context || credit.context !== detail.summary
         anchors.centerIn: parent
         width: Math.min(screen.width - 32, 680)
         padding: 20
@@ -3988,12 +3990,56 @@ Item {
                         Layout.fillWidth: true
                     }
                     Text {
+                        visible: !!momentInsight.credit.context
+                        text: screen.tr("track_insight_verified_credits")
+                        textFormat: Text.PlainText
+                        color: BrandTheme.colors.muted
+                        font.pixelSize: 17; font.bold: true
+                        Layout.fillWidth: true
+                    }
+                    Text {
+                        objectName: "sessionMomentInsightVerifiedContext"
+                        visible: text.length > 0
+                        text: momentInsight.credit.context || ""
+                        textFormat: Text.PlainText
+                        color: BrandTheme.colors.text
+                        font.pixelSize: 20
+                        wrapMode: Text.Wrap
+                        Layout.fillWidth: true
+                    }
+                    SessionAttribution {
+                        objectName: "sessionMomentInsightAttribution"
+                        visible: sources.length > 0
+                        sources: momentInsight.credit.url ? [{ provider: momentInsight.credit.provider,
+                            license: momentInsight.credit.license, links: [momentInsight.credit.url] }] : []
+                        Layout.fillWidth: true
+                    }
+                    Text {
+                        visible: momentInsight.separateSummary
+                        text: screen.tr("track_insight_interpretation")
+                        textFormat: Text.PlainText
+                        color: BrandTheme.colors.muted
+                        font.pixelSize: 17; font.bold: true
+                        Layout.fillWidth: true
+                    }
+                    Text {
                         objectName: "sessionMomentInsightSummary"
+                        visible: momentInsight.separateSummary
                         text: momentInsight.detail.summary || ""
                         textFormat: Text.PlainText
                         color: BrandTheme.colors.text
                         font.pixelSize: 20
                         wrapMode: Text.Wrap
+                        Layout.fillWidth: true
+                    }
+                    Text {
+                        objectName: "sessionMomentInsightUnmeasured"
+                        visible: momentInsight.detail.unmeasured_audio === true
+                        text: screen.tr("track_insight_unmeasured_audio")
+                        textFormat: Text.PlainText
+                        color: BrandTheme.colors.muted
+                        font.pixelSize: 17
+                        wrapMode: Text.WordWrap
                         Layout.fillWidth: true
                     }
                 }

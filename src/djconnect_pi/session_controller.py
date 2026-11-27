@@ -52,6 +52,7 @@ from .session_projection import (
     session_playback,
     text,
     timestamp,
+    track_insight_verified_credit,
 )
 from .session_transport import (
     SessionBinding,
@@ -1296,8 +1297,10 @@ class SessionController(QObject):
             title = text(track.get("title"), 2048).strip() if isinstance(track, dict) else ""
             summary = text(analysis.get("summary")).strip() if isinstance(analysis, dict) else ""
             if self._moment_insight_current(request) and title and summary:
+                credit = track_insight_verified_credit(analysis)
                 request["view"] = {"status": "ready", "title": title, "summary": summary,
-                                   "artist": text(track.get("artist"), 2048).strip()}
+                                   "artist": text(track.get("artist"), 2048).strip(), "credit": credit,
+                                   "unmeasured_audio": analysis.get("measured_audio") is False}
             else:
                 request["view"] = {"status": "unavailable"}
         self.momentInsightChanged.emit()

@@ -43,6 +43,23 @@ def safe_link(value):
         return ""
 
 
+def track_insight_verified_credit(analysis: dict[str, object]) -> dict[str, str]:
+    if analysis.get("basis") != "qualified_credit_and_interpretation_v1" or analysis.get("measured_audio") is not False:
+        return {}
+    context = analysis.get("verified_context")
+    source = analysis.get("source_attribution")
+    if not isinstance(context, str) or not isinstance(source, dict) or source.get("license") != "CC0-1.0":
+        return {}
+    context = context.strip()
+    if not 1 <= len(context) <= 16_384 or (context[0], context[-1]) in {("{", "}"), ("[", "]")}:
+        return {}
+    provider = source.get("provider")
+    url = safe_link(source.get("url"))
+    if not isinstance(provider, str) or not 1 <= len(provider.strip()) <= 128 or not url:
+        return {}
+    return {"context": context, "provider": provider.strip(), "url": url, "license": "CC0-1.0"}
+
+
 def text(value, maximum=32768):
     return value if isinstance(value, str) and len(value) <= maximum else ""
 
