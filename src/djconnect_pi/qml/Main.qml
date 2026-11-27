@@ -2743,16 +2743,6 @@ BrandWindow {
                     Layout.fillWidth: true
                 }
                 Text {
-                    objectName: "musicDnaImportGeneration"
-                    readonly property var generation: djconnect.musicDnaImportPreview.generation
-                    visible: typeof generation === "number"
-                    text: root.tr("music_dna_import_generation").replace("%1", generation)
-                    textFormat: Text.PlainText
-                    color: BrandTheme.colors.muted
-                    font.pixelSize: 18
-                    Layout.fillWidth: true
-                }
-                Text {
                     objectName: "musicDnaImportExportedAt"
                     readonly property string exportedTime: {
                         root.trVersion
@@ -2775,37 +2765,56 @@ BrandWindow {
                     font.pixelSize: 18
                     Layout.fillWidth: true
                 }
-                RowLayout {
+                GridLayout {
                     id: importCounts
                     objectName: "musicDnaImportCounts"
                     readonly property var counts: djconnect.musicDnaImportPreview.counts || []
-                    visible: counts.length > 0
+                    columns: 2
+                    rowSpacing: 8
+                    columnSpacing: 10
                     Layout.fillWidth: true
-                    spacing: 12
+
                     Repeater {
-                        model: importCounts.counts
-                        delegate: ColumnLayout {
-                            required property var modelData
-                            Layout.fillWidth: true
-                            Layout.preferredWidth: 1
-                            spacing: 4
-                            Text {
-                                objectName: "musicDnaImportCountValue"
-                                text: Number(modelData.value).toLocaleString(Qt.locale(djconnect.language), "f", 0)
-                                color: BrandTheme.colors.text
-                                font.bold: true
-                                font.pixelSize: 22
-                                wrapMode: Text.WrapAnywhere
-                                Layout.fillWidth: true
+                        model: ["music_dna_card_tracks", "music_dna_card_artists",
+                            "music_dna_card_genres", "music_dna_import_generation"]
+                        delegate: Rectangle {
+                            objectName: "musicDnaImportStat"
+                            required property string modelData
+                            readonly property var value: {
+                                if (modelData === "music_dna_import_generation")
+                                    return djconnect.musicDnaImportPreview.generation
+                                return importCounts.counts.find(count => count.label === modelData)?.value
                             }
-                            Text {
-                                objectName: "musicDnaImportCountLabel"
-                                text: root.tr(modelData.label)
-                                textFormat: Text.PlainText
-                                color: BrandTheme.colors.muted
-                                font.pixelSize: 16
-                                wrapMode: Text.WordWrap
-                                Layout.fillWidth: true
+                            radius: 7
+                            color: BrandTheme.alpha(BrandTheme.colors.text, "14")
+                            implicitHeight: importStatLabels.implicitHeight + 12
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            Layout.preferredWidth: 1
+                            ColumnLayout {
+                                id: importStatLabels
+                                anchors.fill: parent
+                                anchors.margins: 6
+                                spacing: 2
+                                Text {
+                                    objectName: "musicDnaImportCountLabel"
+                                    text: root.tr(modelData)
+                                    textFormat: Text.PlainText
+                                    color: BrandTheme.colors.muted
+                                    font.pixelSize: 16
+                                    wrapMode: Text.WordWrap
+                                    Layout.fillWidth: true
+                                }
+                                Text {
+                                    objectName: "musicDnaImportCountValue"
+                                    text: typeof value === "number" ? value.toLocaleString(Qt.locale(djconnect.language), "f", 0) : "–"
+                                    textFormat: Text.PlainText
+                                    color: BrandTheme.colors.text
+                                    font.bold: true
+                                    font.pixelSize: 22
+                                    wrapMode: Text.WrapAnywhere
+                                    Layout.fillWidth: true
+                                }
                             }
                         }
                     }
