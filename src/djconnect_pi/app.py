@@ -321,6 +321,7 @@ class DJConnectBackend(QObject):
         self._ask_dj_history_open = None
         self._ask_dj_context_request = None
         self._ask_dj_context_page = None
+        self._ask_dj_destination_loading = False
         self._ask_dj_history_revision = 0
         self._ask_dj_delivery_key = ""
         self._ask_dj_clear_revision = 0
@@ -703,6 +704,13 @@ class DJConnectBackend(QObject):
         self._ask_dj_history_open = None
         self._ask_dj_context_request = None
         self._ask_dj_context_page = None
+        if self._ask_dj_destination_loading:
+            self._ask_dj_destination_loading = False
+            self.askDjChanged.emit()
+
+    @Property(bool, notify=askDjChanged)
+    def askDjDestinationLoading(self):
+        return self._ask_dj_destination_loading
 
     @Slot(str, str, str)
     def openAskDjHistoryMatch(self, message_id, session_id, entry_id):
@@ -2784,18 +2792,28 @@ class DJConnectBackend(QObject):
         _LOGGER.info("User %s Ask DJ history", action)
         if show_toast:
             self.showToastForContext(self.tr_key("refreshing"), "askdj")
-        self._set_ask_dj_busy(True)
         ticket = self._private_read_context()
         request = self._ask_dj_context_request = object()
-        self._run(self.tr_key("ask_dj"), lambda: self._load_ask_dj_history_worker(
-                  ticket=ticket, show_toast=show_toast, context_request=request),
-                  done=lambda: self._set_ask_dj_busy(False))
+        self._ask_dj_destination_loading = True
+        self._set_ask_dj_busy(True)
+
+        def load_history():
+            reading_destination = False
+            try:
+                reading_destination = self._load_ask_dj_history_worker(
+                    ticket=ticket, show_toast=show_toast, context_request=request)
+            finally:
+                if not reading_destination:
+                    self._askDjContextReady.emit(ticket, request, (None, []))
+
+        self._run(self.tr_key("ask_dj"), load_history, done=lambda: self._set_ask_dj_busy(False))
 
     @Slot(str, result=bool)
     @Slot(str, str, str, str, result=bool)
     def sendAskDjQuestion(self, text: str, reply_id="", session_id="", entry_id="") -> bool:
         text = text.strip()
-        if not text or len(text) > 4000 or self._ask_dj_busy or not self._application_foreground or self._shutting_down:
+        if (not text or len(text) > 4000 or self._ask_dj_busy or self._ask_dj_destination_loading
+                or not self._application_foreground or self._shutting_down):
             return False
         selected = {"session_id": session_id, "entry_id": entry_id} if reply_id else None
         message_id = uuid4().hex
@@ -3847,23 +3865,23 @@ class DJConnectBackend(QObject):
         _LOGGER.info("Playlist list displayed in %.0fms", _elapsed_ms(started))
         self._cache_media_artwork_async("playlists", items)
 
-    def _load_ask_dj_history_worker(self, *, ticket, show_toast: bool, context_request) -> None:
+    def _load_ask_dj_history_worker(self, *, ticket, show_toast: bool, context_request) -> bool:
         if ticket != self._private_read_context():
-            return
+            return False
         try:
             data = self.client.ask_dj_history(self._ask_dj_history_revision)
             if ticket != self._private_read_context():
-                return
+                return False
             self._apply_profile_context(data)
             ticket = self._private_read_context()
             self._persist_backend_summary()
         except (AuthenticationError, ProtocolVersionMismatch):
             if ticket == self._private_read_context():
                 raise
-            return
+            return False
         except (DJConnectError, requests.RequestException) as exc:
             if ticket != self._private_read_context():
-                return
+                return False
             if not show_toast:
                 raise BackendUnavailable("Ask DJ unavailable") from exc
             data = {"success": False, "_transport_unavailable": True}
@@ -3872,6 +3890,8 @@ class DJConnectBackend(QObject):
         owner = data.get("owner_profile_id")
         if data.get("history_scope") == "profile" and owner == self.cfg.active_profile_id and owner:
             self._session_executor.submit(self._read_ask_dj_context_rows, ticket, context_request, owner)
+            return True
+        return False
 
     def _read_ask_dj_context_rows(self, ticket, request, owner):
         def current():
@@ -3879,13 +3899,13 @@ class DJConnectBackend(QObject):
                     and not self._shutting_down and self._application_foreground and self.personalProfileExportAllowed
                     and self.cfg.active_profile_privacy_mode == "private")
 
-        if not current():
-            return
         session = self._session_controller
         transport = session.transport
         rows = []
         destination = None
         try:
+            if not current():
+                return
             binding = transport.binding()
             if binding.profile_id != owner:
                 return
@@ -3897,6 +3917,7 @@ class DJConnectBackend(QObject):
                 if (current() and active.get("owner_profile_id") == owner
                         and active.get("runtime_state") == "active"):
                     destination = active["session_id"]
+                    self._askDjContextReady.emit(ticket, request, (destination, []))
                     page = history_page(transport.timeline(binding, destination, isolated=True), session_id=destination,
                                         now=session._clock.now())
                     keys = ("session_id", "entry_id", "kind", "role", "origin_message_id", "retained_until", "state")
@@ -3907,15 +3928,18 @@ class DJConnectBackend(QObject):
                             if row["kind"] == "conversation_dj"]
         except SessionError:
             pass
-        if current():
-            self._askDjContextReady.emit(ticket, request, (destination, rows))
+        finally:
+            self._askDjContextReady.emit(ticket, request, (destination, rows) if current() else (None, []))
 
     @Slot(object, object, object)
     def _apply_ask_dj_context_rows(self, ticket, request, result):
-        if request is self._ask_dj_context_request and ticket == self._private_read_context():
+        if request is not self._ask_dj_context_request:
+            return
+        self._ask_dj_destination_loading = False
+        if ticket == self._private_read_context():
             destination, rows = result
             self._ask_dj_context_page = (ticket, destination, rows)
-            self.askDjChanged.emit()
+        self.askDjChanged.emit()
 
     @Slot(object)
     def _apply_ask_dj_refresh_result(self, data: object) -> None:
@@ -4633,6 +4657,7 @@ class DJConnectBackend(QObject):
         if clear_revision > self._ask_dj_clear_revision or clear_ack:
             if clear_ack:
                 self._ask_dj_context_request = None
+                self._ask_dj_destination_loading = False
             self._clear_ask_dj_cache(reset_revisions=False)
             self._ask_dj_clear_revision = max(self._ask_dj_clear_revision, clear_revision)
             self._ask_dj_history_revision = max(self._ask_dj_history_revision, history_revision)
@@ -4709,6 +4734,7 @@ class DJConnectBackend(QObject):
         self._ask_dj_context_page = None
         if reset_revisions:
             self._ask_dj_context_request = None
+            self._ask_dj_destination_loading = False
         self._ask_dj_withdrawn_ids.clear()
         self._ask_dj_withdrawn_entries.clear()
         self._ask_dj_delivery_key = ""

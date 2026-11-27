@@ -7365,10 +7365,19 @@ BrandWindow {
                     GlassButton {
                         id: askDjSend
                         objectName: "askDjSend"
-                        iconName: "send"; Accessible.name: root.tr("session_send")
+                        iconName: djconnect.askDjDestinationLoading ? "" : "send"
+                        Accessible.name: root.tr(djconnect.askDjDestinationLoading ? "loading" : "session_send")
                         primary: true
                         Layout.preferredWidth: 52; Layout.fillHeight: true
-                        enabled: !askDjPanel.historyOffline && askDjChatInput.enabled && askDjChatInput.text.trim().length > 0
+                        enabled: !djconnect.askDjDestinationLoading && !askDjPanel.historyOffline
+                            && askDjChatInput.enabled && askDjChatInput.text.trim().length > 0
+                        BusyIndicator {
+                            anchors.centerIn: parent
+                            width: 26
+                            height: 26
+                            visible: running
+                            running: djconnect.askDjDestinationLoading
+                        }
                         onClicked: askDjPanel.sendQuestion()
                     }
                 }
