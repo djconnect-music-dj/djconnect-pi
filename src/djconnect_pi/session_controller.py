@@ -1358,9 +1358,9 @@ class SessionController(QObject):
         if (request and self._moment_insight_admitted(request)
                 and (request["view"].get("retryable") or request["view"].get("status") == "ready")):
             request["style"] = self.track_insight_session_style()
-            self._fetch_moment_insight(request)
+            self._fetch_moment_insight(request, manual=True)
 
-    def _fetch_moment_insight(self, request):
+    def _fetch_moment_insight(self, request, *, manual=False):
         attempt = request["attempt"] = object()
         request["view"] = {"status": "loading"}
         self._schedule_moment_insight_expiry(request)
@@ -1375,7 +1375,7 @@ class SessionController(QObject):
                 result = (data, started, "")
             except SessionError as error:
                 result = (None, started, error.category)
-            self._momentInsightReady.emit(request, attempt, result)
+            self._momentInsightReady.emit(request, attempt, (*result, manual))
 
         self.backend._executor.submit(fetch)
 
@@ -1451,7 +1451,7 @@ class SessionController(QObject):
             if request is self._moment_insight:
                 self._reconcile_moment_insight()
             return
-        data, started, error = result
+        data, started, error, manual = result
         if data is None:
             request["view"] = {
                 "status": "expired" if error in {"denied", "expired"} else "unavailable",
@@ -1485,6 +1485,8 @@ class SessionController(QObject):
                                    "palette": moment_insight_palette(data.get("visual_profile")),
                                    "listening_cues": listening_cues,
                                    "unmeasured_audio": analysis.get("measured_audio") is False}
+                if manual:
+                    request["view"]["refreshed"] = True
             else:
                 request["view"] = {"status": "unavailable"}
         self.momentInsightChanged.emit()

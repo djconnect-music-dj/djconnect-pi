@@ -3978,6 +3978,17 @@ Item {
         readonly property var credit: detail.credit || ({})
         readonly property bool separateSummary: !credit.context || credit.context !== detail.summary
         readonly property var listeningCues: detail.listening_cues || []
+        property bool refreshNoticeVisible: false
+        onDetailChanged: {
+            refreshNoticeVisible = detail.status === "ready" && detail.refreshed === true
+            if (refreshNoticeVisible) refreshNoticeTimer.restart()
+            else refreshNoticeTimer.stop()
+        }
+        Timer {
+            id: refreshNoticeTimer
+            interval: 2200
+            onTriggered: momentInsight.refreshNoticeVisible = false
+        }
         anchors.centerIn: parent
         width: Math.min(screen.width - 32, 680)
         padding: 20
@@ -4038,6 +4049,16 @@ Item {
                     wrapMode: Text.WordWrap
                     Layout.fillWidth: true
                 }
+            }
+            Text {
+                objectName: "sessionMomentInsightRefreshNotice"
+                visible: momentInsight.refreshNoticeVisible && momentInsight.detail.status === "ready"
+                text: screen.tr("track_insight_updated")
+                color: BrandTheme.colors.success
+                textFormat: Text.PlainText
+                font.pixelSize: 17
+                wrapMode: Text.Wrap
+                Layout.fillWidth: true
             }
             ScrollView {
                 id: momentInsightScroll
