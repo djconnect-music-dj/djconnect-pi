@@ -3548,10 +3548,14 @@ BrandWindow {
             property color exportNoticeColor: BrandTheme.colors.muted
             property bool copiedShareText: false
             property string saveIntent: ""
+            property string exportFileName: ""
+            property string savedFileName: ""
             readonly property string exportSelection: JSON.stringify([trackInsightPanel.autoInsightKey,
                 djconnect.trackInsightShareText, djconnect.trackInsightImageUrl, djconnect.trackInsightShareDescriptors,
                 djconnect.trackInsightShareMeters, djconnect.language, djconnect.demoMode, storyCard, exportClip])
             onExportSelectionChanged: {
+                exportFileName = ""
+                savedFileName = ""
                 if ((saveIntent && saveIntent !== exportSelection) || exportBusy) {
                     saveIntent = ""
                     exportGeneration += 1
@@ -3574,8 +3578,10 @@ BrandWindow {
                 flickable.cancelFlick()
                 flickable.contentY = flickable.originY
             }
-            onClosed: {
+            onAboutToHide: {
                 saveIntent = ""
+                exportFileName = ""
+                savedFileName = ""
                 exportGeneration += 1
                 renderingCard = false
                 djconnect.cancelTrackInsightClip()
@@ -3596,8 +3602,11 @@ BrandWindow {
                 }
                 function onTrackInsightExportFinished(key, saved) {
                     if (!insightSharePopup.opened || !trackInsightPanel.canShareInsight) return
-                    insightSharePopup.exportNoticeKey = key
-                    insightSharePopup.exportNoticeColor = saved ? BrandTheme.colors.success : BrandTheme.colors.danger
+                    const popup = insightSharePopup
+                    popup.exportNoticeKey = key
+                    popup.exportNoticeColor = saved ? BrandTheme.colors.success : BrandTheme.colors.danger
+                    popup.savedFileName = saved ? popup.exportFileName : ""
+                    popup.exportFileName = ""
                 }
                 function onTrackInsightClipFrameRequested(phase) {
                     if (!insightSharePopup.opened || !trackInsightPanel.canShareInsight) {
@@ -3619,6 +3628,8 @@ BrandWindow {
             function saveCard(destination) {
                 if (!trackInsightPanel.canShareInsight || exportBusy) return
                 exportNoticeKey = ""
+                savedFileName = ""
+                exportFileName = decodeURIComponent(String(destination).split("/").pop())
                 if (exportClip) {
                     exportGeneration += 1
                     clipProgress = 0
@@ -3640,6 +3651,7 @@ BrandWindow {
                 }, Qt.size(1080, story ? 1920 : 1080))
                 if (!accepted) {
                     renderingCard = false
+                    exportFileName = ""
                     exportNoticeKey = "track_insight_card_save_failed"
                     exportNoticeColor = BrandTheme.colors.danger
                 }
@@ -3797,6 +3809,7 @@ BrandWindow {
                         tertiary: true
                         onClicked: {
                             insightSharePopup.exportGeneration += 1
+                            insightSharePopup.exportFileName = ""
                             djconnect.cancelTrackInsightClip()
                             insightSharePopup.exportNoticeKey = "track_insight_clip_cancelled"
                             insightSharePopup.exportNoticeColor = BrandTheme.colors.muted
@@ -3825,9 +3838,13 @@ BrandWindow {
                 Text {
                     objectName: "trackInsightExportNotice"
                     visible: insightSharePopup.exportNoticeKey.length > 0
-                    text: visible ? root.tr(insightSharePopup.exportNoticeKey) : ""
+                    text: {
+                        if (!visible) return ""
+                        const notice = root.tr(insightSharePopup.exportNoticeKey)
+                        return insightSharePopup.savedFileName ? notice + "\n" + insightSharePopup.savedFileName : notice
+                    }
                     textFormat: Text.PlainText
-                    wrapMode: Text.WordWrap
+                    wrapMode: Text.Wrap
                     color: insightSharePopup.exportNoticeColor
                     font.pixelSize: 18
                     Layout.fillWidth: true
