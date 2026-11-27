@@ -2273,11 +2273,16 @@ Item {
                             confirmationMood: screen.state.mood || ""
                             selectionAvailable: screen.state.composer_available
                             selectionBusy: screen.owner.busy || screen.owner.questionBusy
+                            explorationAvailable: screen.state.contribution_exploration
                             deletionAvailable: !!screen.contentDeletion.available && !screen.showForecast
                             flowDeletionScope: screen.composerContext + "|" + modelData.entry_id
                             flowSurface: screen
                             onDeleteEntry: (sessionId, entryId) => screen.deleteContent("entry", sessionId, entryId)
                             onAskAbout: (sessionId, entryId) => { if (screen.owner.selectFlowEntry(sessionId, entryId)) composerPanel.open() }
+                            onTellMore: (sessionId, entryId) => {
+                                screen.followQuestionReply = true
+                                if (!screen.owner.exploreFlowEntry(sessionId, entryId)) screen.followQuestionReply = false
+                            }
                         }
                     }
                 }

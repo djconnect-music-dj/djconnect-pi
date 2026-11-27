@@ -1190,17 +1190,33 @@ class SessionController(QObject):
 
     @Slot(str, str, result=bool)
     def exploreMoment(self, session_id, moment_id):
+        return self._explore_contribution({"kind": "selected_moment", "session_id": session_id, "moment_id": moment_id})
+
+    @Slot(str, str, result=bool)
+    def exploreFlowEntry(self, session_id, entry_id):
+        selected = {"kind": "selected_entry", "session_id": session_id, "entry_id": entry_id}
+        if not self._entry_selection_valid(selected, "flow"):
+            return False
+        entry = next(row for row in self._retained_flow if row["session_id"] == session_id and row["entry_id"] == entry_id)
+        if entry["kind"] not in {"dj_moment", "playback_observed", "conversation_dj"}:
+            return False
+        playback = entry.get("historical_playback") or {}
+        if not any(text(value, 32768).strip()
+                   for value in (entry.get("text"), playback.get("title"), playback.get("artist"), playback.get("album"))):
+            return False
+        return self._explore_contribution(selected, selection_source="flow")
+
+    def _explore_contribution(self, selected, *, selection_source=""):
         if (self.busy or self._question_running or not self._foreground or not self._view_active
                 or self.backend.demoMode or not self._composer_supported()):
             return False
         question = contribution_question(self._caps, self.backend.cfg.language)
-        selected = {"kind": "selected_moment", "session_id": session_id, "moment_id": moment_id}
         live_reference = moment_reference(self._session, selected, now=self._clock.now())
-        if not question or not live_reference:
+        if not question or (selected["kind"] == "selected_moment" and not live_reference):
             return False
         self._launch("question", {"text": question, "client_message_id": "pi-turn-" + uuid4().hex,
-            "session_id": session_id, "selected": selected, "live_reference": live_reference,
-            "preserve_selection": True})
+            "session_id": self._session["session_id"], "selected": selected, "live_reference": live_reference,
+            "preserve_selection": True, "selection_source": selection_source})
         return bool(self._question_running)
 
     def _search_supported(self):
@@ -2029,7 +2045,7 @@ class SessionController(QObject):
             return
         view_epoch = self._view_epoch
         receipt_snapshot = deepcopy(self._question_receipt)
-        selection_source = self._selection_source
+        selection_source = value.get("selection_source") if action == "question" and value.get("preserve_selection") else self._selection_source
         flow_window = self._flow_window
         expand_session = value if action == "refresh" else ""
         def read_flow(sid, receipt):
