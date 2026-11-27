@@ -3970,10 +3970,10 @@ class DJConnectBackend(QObject):
             data = self.client.command("queue", limit=100)
             if ticket != self._private_read_context():
                 return
-            if data.get("success") is False:
+            items = _parse_queue_snapshot(data) if data.get("success") is not False else None
+            if items is None:
                 raise DJConnectError(self.tr_key("queue_update_failed"))
             self._persist_backend_summary()
-            items = parse_queue_items(data)
             _LOGGER.info("Loaded %s queue items from Home Assistant", len(items))
             self._mediaListReady.emit("queue", items, ticket)
         _LOGGER.info("Queue list displayed in %.0fms", _elapsed_ms(started))
@@ -3989,10 +3989,10 @@ class DJConnectBackend(QObject):
         data = self.client.command("playlists", limit=100)
         if ticket != self._private_read_context():
             return
-        if data.get("success") is False:
+        items = _parse_playlist_snapshot(data) if data.get("success") is not False else None
+        if items is None:
             raise DJConnectError(self.tr_key("playlists_update_failed"))
         self._persist_backend_summary()
-        items = parse_playlist_items(data)
         _LOGGER.info("Loaded %s playlists from Home Assistant", len(items))
         self._mediaListReady.emit("playlists", items, ticket)
         _LOGGER.info("Playlist list displayed in %.0fms", _elapsed_ms(started))
@@ -5747,6 +5747,10 @@ def demo_playlist_items() -> list[dict[str, object]]:
 
 
 def parse_queue_items(data: dict[str, object]) -> list[dict[str, object]]:
+    return _parse_queue_snapshot(data) or []
+
+
+def _parse_queue_snapshot(data: dict[str, object]) -> list[dict[str, object]] | None:
     raw_queue = _first_present(data, ("queue",))
     context_uri = str(_first_present(data, ("context_uri", "contextUri")) or "")
     if isinstance(raw_queue, dict):
@@ -5757,7 +5761,7 @@ def parse_queue_items(data: dict[str, object]) -> list[dict[str, object]]:
     else:
         raw_items = None
     if not isinstance(raw_items, list):
-        return []
+        return None
     return compact_adjacent_tracks([
         {**parsed, "sourceIndex": source_index}
         for source_index, item in enumerate(raw_items[:100])
@@ -5766,9 +5770,13 @@ def parse_queue_items(data: dict[str, object]) -> list[dict[str, object]]:
 
 
 def parse_playlist_items(data: dict[str, object]) -> list[dict[str, object]]:
+    return _parse_playlist_snapshot(data) or []
+
+
+def _parse_playlist_snapshot(data: dict[str, object]) -> list[dict[str, object]] | None:
     raw_items = _first_present(data, ("playlists", "items"))
     if not isinstance(raw_items, list):
-        return []
+        return None
     return [parsed for item in raw_items[:100] if isinstance(item, dict) and (parsed := _playlist_item(item))]
 
 

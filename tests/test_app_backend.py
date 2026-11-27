@@ -4228,15 +4228,22 @@ def test_media_list_demo_and_unpaired_never_dispatch(tmp_path: Path, screen, slo
 
 
 @pytest.mark.parametrize("kind", ["queue", "playlists"])
-@pytest.mark.parametrize("failure", [False, True])
-def test_manual_media_list_refresh_reports_outcome(tmp_path, kind, failure):
+@pytest.mark.parametrize("outcome", ["empty", "rejected", "missing", "malformed"])
+def test_manual_media_list_refresh_reports_outcome(tmp_path, kind, outcome):
     ensure_app()
     config_path = tmp_path / "config.json"
     save_config(config_path, Config(paired=True, device_token="fixture", ha_url="http://fixture.invalid"))
     backend = DJConnectBackend(config_path)
     backend._executor.submit = Mock()
     setattr(backend, f"_{'queue' if kind == 'queue' else 'playlist'}_items", [{"title": "Previous list"}])
-    backend.client.command = Mock(return_value={"success": not failure, kind: []})
+    responses = {
+        "empty": {"success": True, kind: []},
+        "rejected": {"success": False, kind: []},
+        "missing": {"success": True},
+        "malformed": {"success": True, kind: {"unexpected": []}},
+    }
+    backend.client.command = Mock(return_value=responses[outcome])
+    failure = outcome != "empty"
     refresh = backend.loadQueue if kind == "queue" else backend.loadPlaylists
     failed_property = "queueLoadFailed" if kind == "queue" else "playlistsLoadFailed"
 
