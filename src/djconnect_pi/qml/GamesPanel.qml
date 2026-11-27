@@ -803,6 +803,8 @@ Rectangle {
                     visible: !root.playing
                     enabled: root.gameplayActive
                     text: root.tr("tap_to_play")
+                    iconName: "play"
+                    primary: true
                     font.pixelSize: 22
                     onClicked: root.startGame()
                 }
