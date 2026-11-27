@@ -2393,9 +2393,71 @@ BrandWindow {
         color: "transparent"
         readonly property bool canChangeMusicDna: djconnect.musicDnaLoaded && !djconnect.musicDnaBusy
             && (djconnect.paired || djconnect.demoMode)
-        readonly property bool canTransferMusicDna: canChangeMusicDna && djconnect.musicDnaEnabled
-            && djconnect.paired && djconnect.personalProfileExportAllowed && djconnect.backendAvailable
+        readonly property bool canTransferProfileData: djconnect.paired && djconnect.personalProfileExportAllowed && djconnect.backendAvailable
             && !djconnect.demoMode && !djconnect.versionMismatchVisible
+        readonly property bool canTransferMusicDna: canTransferProfileData && canChangeMusicDna && djconnect.musicDnaEnabled
+        readonly property bool canExportAskDj: canTransferProfileData && !djconnect.askDjBusy
+
+        GlassPopup {
+            id: profileExportPreview
+            objectName: "profileExportPreview"
+            anchors.centerIn: parent
+            width: Math.min(parent.width - 40, 560)
+            padding: 24
+            modal: true
+            property int profileRevision: 0
+            property bool musicDna: false
+            readonly property bool isCurrent: settingsPanel.visible && profileRevision === djconnect.musicDnaContextRevision
+                && settingsPanel.canTransferProfileData && (!musicDna || djconnect.musicDnaEnabled)
+            onIsCurrentChanged: if (!isCurrent) close()
+            function review(exportMusicDna) {
+                musicDna = exportMusicDna
+                profileRevision = djconnect.musicDnaContextRevision
+                if (isCurrent) open()
+            }
+            contentItem: ColumnLayout {
+                spacing: 16
+                Text {
+                    text: root.tr(profileExportPreview.musicDna ? "music_dna_export" : "ask_dj_export")
+                    textFormat: Text.PlainText
+                    color: BrandTheme.colors.text
+                    font.bold: true
+                    font.pixelSize: 24
+                    wrapMode: Text.WordWrap
+                    Layout.fillWidth: true
+                }
+                Text {
+                    objectName: "profileExportDescription"
+                    text: root.tr(profileExportPreview.musicDna ? "music_dna_export_review" : "ask_dj_export_review")
+                    textFormat: Text.PlainText
+                    color: BrandTheme.colors.muted
+                    font.pixelSize: 18
+                    wrapMode: Text.WordWrap
+                    Layout.fillWidth: true
+                }
+                GlassButton {
+                    objectName: "profileExportChooseFile"
+                    text: root.tr("profile_export_choose_file")
+                    Layout.fillWidth: true
+                    primary: true
+                    enabled: profileExportPreview.isCurrent && (profileExportPreview.musicDna
+                        ? settingsPanel.canTransferMusicDna : settingsPanel.canExportAskDj)
+                    onClicked: {
+                        if (!enabled) return
+                        profileExportDialog.musicDna = profileExportPreview.musicDna
+                        profileExportDialog.profileRevision = profileExportPreview.profileRevision
+                        profileExportPreview.close()
+                        profileExportDialog.open()
+                    }
+                }
+                GlassButton {
+                    objectName: "profileExportCancel"
+                    text: root.tr("cancel")
+                    Layout.fillWidth: true
+                    onClicked: profileExportPreview.close()
+                }
+            }
+        }
 
         FileDialog {
             id: profileExportDialog
@@ -2923,13 +2985,8 @@ BrandWindow {
                 font.pixelSize: 24
                 Layout.fillWidth: true
                 Layout.preferredHeight: 58
-                enabled: djconnect.paired && djconnect.personalProfileExportAllowed && djconnect.backendAvailable
-                    && !djconnect.demoMode && !djconnect.versionMismatchVisible && !djconnect.askDjBusy
-                onClicked: {
-                    profileExportDialog.musicDna = false
-                    profileExportDialog.profileRevision = djconnect.musicDnaContextRevision
-                    profileExportDialog.open()
-                }
+                enabled: settingsPanel.canExportAskDj
+                onClicked: profileExportPreview.review(false)
             }
 
             PurpleButton {
@@ -2939,11 +2996,7 @@ BrandWindow {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 58
                 enabled: settingsPanel.canTransferMusicDna
-                onClicked: {
-                    profileExportDialog.musicDna = true
-                    profileExportDialog.profileRevision = djconnect.musicDnaContextRevision
-                    profileExportDialog.open()
-                }
+                onClicked: profileExportPreview.review(true)
             }
 
             PurpleButton {
