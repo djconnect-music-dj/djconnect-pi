@@ -344,8 +344,12 @@ class SessionTransport:
                     selected_context = body.get("conversation_context")
                     unavailable = (response.status_code == 404 and code == "history_unavailable"
                         or response.status_code == 409 and code in {"source_withdrawn", "conversation_source_withdrawn"})
-                    if unavailable and isinstance(selected_context, dict) and selected_context.get("selected_entry"):
-                        raise SessionError("reference_unavailable")
+                    if isinstance(selected_context, dict):
+                        if unavailable and selected_context.get("selected_entry"):
+                            raise SessionError("reference_unavailable")
+                        if (response.status_code == 409 and code == "session_context_changed"
+                                and selected_context.get("session_id")):
+                            raise SessionError("session_changed")
                 if response.status_code in (404, 405, 426) or code == "history_contract_upgrade_required":
                     raise SessionError("unavailable", code if code in {"history_unavailable", "active_session_not_found", "history_contract_upgrade_required"} else "")
                 if response.status_code == 409:

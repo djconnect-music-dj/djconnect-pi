@@ -1098,6 +1098,11 @@ class SessionController(QObject):
             return selected["session_id"] == self._session.get("session_id") and any(row["moment_id"] == selected["moment_id"] for row in live_presentations(self._session, now=self._clock.now()))
         return self._entry_selection_valid(selected, self._selection_source)
 
+    def ask_dj_session_destination(self):
+        if self._foreground and self._composer_supported():
+            return self.runtimeHeader["session_id"]
+        return ""
+
     def ask_dj_context_entry(self, message_id, context_rows):
         if not message_id or not self._foreground:
             return {}

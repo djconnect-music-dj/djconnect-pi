@@ -325,20 +325,23 @@ def test_profile_question_requires_its_confirmed_active_session_and_saved_entrie
     assert request.call_args.kwargs["json"]["conversation_context"] == {"session_id": "session-at-send"}
 
 
-@pytest.mark.parametrize(("status", "code", "category"), [
-    (404, "history_unavailable", "reference_unavailable"),
-    (409, "source_withdrawn", "reference_unavailable"),
-    (409, "conversation_source_withdrawn", "reference_unavailable"),
-    (409, "session_context_changed", "conflict"),
-    (404, "route_missing", "unavailable"),
+@pytest.mark.parametrize(("status", "code", "active_session_id", "category"), [
+    (404, "history_unavailable", None, "reference_unavailable"),
+    (409, "source_withdrawn", None, "reference_unavailable"),
+    (409, "conversation_source_withdrawn", None, "reference_unavailable"),
+    (409, "session_context_changed", None, "conflict"),
+    (409, "session_context_changed", "current-session", "session_changed"),
+    (404, "route_missing", None, "unavailable"),
 ])
-def test_standalone_follow_up_distinguishes_withdrawal_from_other_errors(transport, status, code, category):
+def test_profile_follow_up_distinguishes_context_changes_from_other_errors(
+        transport, status, code, active_session_id, category):
     client, _, request, response = transport
     response.status_code = status
     response.json.return_value = {"success": False, "error": code}
     with pytest.raises(SessionError, match=f"^{category}$"):
         client.standalone_question(client.binding(), "Tell me more", "turn", "owner",
-                                   selected_entry={"session_id": "earlier", "entry_id": "saved"})
+                                   selected_entry={"session_id": "earlier", "entry_id": "saved"},
+                                   active_session_id=active_session_id)
     request.assert_called_once()
 
 

@@ -1763,6 +1763,13 @@ for _key, _values in _SESSION_LIFECYCLE_TRANSLATIONS.items():
 
 
 _SESSION_COMPOSER_TRANSLATIONS = {
+    "ask_dj_destination_changed": (
+        "The active session changed. Refresh before sending your draft.",
+        "De actieve sessie is gewijzigd. Vernieuw voordat je je concept verstuurt.",
+        "Die aktive Session hat sich geändert. Aktualisiere, bevor du deinen Entwurf sendest.",
+        "La session active a changé. Actualisez avant d’envoyer votre brouillon.",
+        "La sesión activa cambió. Actualiza antes de enviar tu borrador.",
+    ),
     "session_clear_reference": ("Clear contribution reference", "Verwijzing naar bijdrage wissen", "Beitragsverweis entfernen", "Retirer la référence à la contribution", "Quitar la referencia a la contribución"),
     "session_question_reference_unavailable": ("The selected contribution is no longer available. Select a contribution again.", "De geselecteerde bijdrage is niet meer beschikbaar. Kies opnieuw een bijdrage.", "Der ausgewählte Beitrag ist nicht mehr verfügbar. Wähle erneut einen Beitrag.", "La contribution sélectionnée n’est plus disponible. Sélectionnez une contribution à nouveau.", "La contribución seleccionada ya no está disponible. Vuelve a elegir una contribución."),
     "session_question_title": ("Talk to your DJ", "Praat met je DJ", "Sprich mit deinem DJ", "Parlez à votre DJ", "Habla con tu DJ"),

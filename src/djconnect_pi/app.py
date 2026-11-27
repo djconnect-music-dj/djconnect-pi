@@ -692,7 +692,7 @@ class DJConnectBackend(QObject):
                            for message in self._ask_dj_messages)):
             return {}
         page = self._ask_dj_context_page
-        rows = page[1] if page and page[0] == self._private_read_context() else []
+        rows = page[2] if page and page[0] == self._private_read_context() else []
         reference = self._session_controller.ask_dj_context_entry(message_id, rows)
         if reference and (reference["session_id"], reference["entry_id"]) in self._ask_dj_withdrawn_entries:
             return {}
@@ -2819,6 +2819,15 @@ class DJConnectBackend(QObject):
         except SessionError:
             return False
         ticket = self._private_read_context()
+        page = self._ask_dj_context_page
+        destination = page[1] if page and page[0] == ticket else None
+        if destination is None:
+            destination = self._session_controller.ask_dj_session_destination()
+        question_context = {}
+        if destination:
+            question_context["active_session_id"] = destination
+        if selected is not None:
+            question_context["selected_entry"] = selected
 
         def current():
             return (not self._shutting_down and self._application_foreground and not self._demo_mode
@@ -2836,14 +2845,11 @@ class DJConnectBackend(QObject):
                     self._askDjUnsentDraftReady.emit(ticket, text)
                     self._toastReady.emit(self.tr_key("session_profile_missing"), 5000, "askdj")
                     return
-                if selected is not None:
-                    if self.askDjContextEntry(reply_id) != selected:
-                        self._askDjUnsentDraftReady.emit(ticket, text)
-                        self._toastReady.emit(self.tr_key("session_question_reference_unavailable"), 5000, "askdj")
-                        return
-                    transport.standalone_question(binding, text, message_id, owner, selected_entry=selected)
-                else:
-                    transport.standalone_question(binding, text, message_id, owner)
+                if selected is not None and self.askDjContextEntry(reply_id) != selected:
+                    self._askDjUnsentDraftReady.emit(ticket, text)
+                    self._toastReady.emit(self.tr_key("session_question_reference_unavailable"), 5000, "askdj")
+                    return
+                transport.standalone_question(binding, text, message_id, owner, **question_context)
                 accepted = True
                 if not current():
                     return
@@ -2856,6 +2862,10 @@ class DJConnectBackend(QObject):
                     if not accepted and selected is not None and exc.category == "reference_unavailable":
                         self._askDjUnsentDraftReady.emit(ticket, text)
                         self._askDjContextWithdrawn.emit(ticket, (selected["session_id"], selected["entry_id"]))
+                        return
+                    if not accepted and destination and exc.category == "session_changed":
+                        self._askDjUnsentDraftReady.emit(ticket, text)
+                        self._askDjDeliveryReady.emit(ticket, "ask_dj_destination_changed")
                         return
                     key = "session_question_accepted_unavailable" if accepted else "session_question_uncertain"
                     self._askDjDeliveryReady.emit(ticket, key)
@@ -3874,6 +3884,7 @@ class DJConnectBackend(QObject):
         session = self._session_controller
         transport = session.transport
         rows = []
+        destination = None
         try:
             binding = transport.binding()
             if binding.profile_id != owner:
@@ -3881,10 +3892,12 @@ class DJConnectBackend(QObject):
             caps = transport.capabilities(binding, isolated=True)
             if current() and session._supports_history(caps) and session._supports_contextual_dialogue(caps):
                 active = active_session(transport.active(binding, isolated=True))
+                if not active:
+                    destination = ""
                 if (current() and active.get("owner_profile_id") == owner
                         and active.get("runtime_state") == "active"):
-                    sid = active["session_id"]
-                    page = history_page(transport.timeline(binding, sid, isolated=True), session_id=sid,
+                    destination = active["session_id"]
+                    page = history_page(transport.timeline(binding, destination, isolated=True), session_id=destination,
                                         now=session._clock.now())
                     keys = ("session_id", "entry_id", "kind", "role", "origin_message_id", "retained_until", "state")
                     dialogue = conversation_entries(page)
@@ -3895,12 +3908,13 @@ class DJConnectBackend(QObject):
         except SessionError:
             pass
         if current():
-            self._askDjContextReady.emit(ticket, request, rows)
+            self._askDjContextReady.emit(ticket, request, (destination, rows))
 
     @Slot(object, object, object)
-    def _apply_ask_dj_context_rows(self, ticket, request, rows):
+    def _apply_ask_dj_context_rows(self, ticket, request, result):
         if request is self._ask_dj_context_request and ticket == self._private_read_context():
-            self._ask_dj_context_page = (ticket, rows)
+            destination, rows = result
+            self._ask_dj_context_page = (ticket, destination, rows)
             self.askDjChanged.emit()
 
     @Slot(object)
