@@ -6992,7 +6992,7 @@ def _music_dna_cards(profile: dict[str, object], ha_url: str) -> list[dict[str, 
         value = profile.get(key)
         return value if isinstance(value, dict) and value.get("eligible") is not False else {}
 
-    def rows(items, *, artwork=False, limit=5, title_fields=("title", "name", "track_name")):
+    def rows(items, *, artwork=False, limit=5, title_fields=("title", "name", "track_name"), subtitle_field=None):
         result = []
         for item in items[:limit] if isinstance(items, list) else []:
             if isinstance(item, str) and item.strip():
@@ -7007,6 +7007,10 @@ def _music_dna_cards(profile: dict[str, object], ha_url: str) -> list[dict[str, 
             subtitle = " · ".join(value for value in (item.get("artist") or item.get("artist_name"),
                                                        item.get("album") or item.get("album_name"))
                                   if isinstance(value, str) and value.strip())
+            if subtitle_field:
+                secondary = bounded_text(item.get(subtitle_field), 256).strip()
+                if secondary and secondary != title:
+                    subtitle = secondary
             count = item.get("play_count", item.get("count"))
             row = {"title": title, "subtitle": subtitle, "value": item.get("formatted") or "",
                    "count": count if type(count) is int and count >= 0 else None}
@@ -7030,6 +7034,10 @@ def _music_dna_cards(profile: dict[str, object], ha_url: str) -> list[dict[str, 
             entry["rank"] = rank
             entry["value"] = bounded_text(entry.get("value"), 64).strip() or "–"
         return entries
+
+    def accepted_rows(items, *, artwork=False, limit=5):
+        return rows(items, artwork=artwork, limit=limit, title_fields=("title", "name", "track_name", "subtitle"),
+                    subtitle_field="subtitle")
 
     def signal_rows(items):
         if not isinstance(items, list):
@@ -7146,7 +7154,7 @@ def _music_dna_cards(profile: dict[str, object], ha_url: str) -> list[dict[str, 
     card("repeat", "repeat", entries=rows(block("repeat_magnets").get("items")))
     positives = block("explicit_positives")
     card("positives", "heart", groups=grouped("recent_favorites", rows(positives.get("favorite_tracks")))
-         + grouped("accepted", rows(positives.get("accepted_recommendations"))),
+         + grouped("accepted", accepted_rows(positives.get("accepted_recommendations"), artwork=True)),
          entries=rows(positives.get("items")))
     card("anchors", "sparkles", entries=rows(block("taste_anchors").get("items")))
     card("recent_tracks", "history", entries=rows(tracks, artwork=True, limit=3))
@@ -7164,7 +7172,7 @@ def _music_dna_cards(profile: dict[str, object], ha_url: str) -> list[dict[str, 
         card("top_artists", "session_persona", groups=artist_groups)
     feedback = block("discovery_feedback")
     accepted = feedback.get("accepted_recommendations") or feedback.get("accepted_items") or feedback.get("accepted")
-    groups = grouped("accepted", rows(accepted, title_fields=("title", "name", "track_name", "subtitle"), limit=3))
+    groups = grouped("accepted", accepted_rows(accepted, limit=3))
     less_like_this = signal_rows(feedback.get("negative_signals"))
     if less_like_this:
         groups.append({"key": "music_discovery_less_like_this", "rows": less_like_this, "shelf": False})

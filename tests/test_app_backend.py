@@ -849,6 +849,33 @@ def test_music_dna_keeps_each_playtime_ranking_in_producer_order():
     assert [(row["rank"], row["title"], row["value"]) for row in albums["rows"]] == [(1, "Album", "1h 54m")]
 
 
+def test_music_dna_positive_recommendations_keep_the_confirmed_label_and_artwork(monkeypatch):
+    monkeypatch.setattr("djconnect_pi.app.time.time", lambda: 100)
+    uri = "spotify:artist:" + "a" * 22
+    other_uri = "spotify:artist:" + "b" * 22
+    grant = {
+        "image_url": "/api/djconnect/v1/image_proxy/disc-" + "c" * 32,
+        "image_expires_at": 160,
+        "image_attribution": {"provider": "spotify", "media_uri": uri,
+                              "source_url": "https://open.spotify.com/artist/" + "a" * 22},
+    }
+    accepted = [
+        {"subtitle": " Subtitle-only recommendation ", "uri": uri, "image_subject_uri": uri, **grant},
+        {"title": "Track title", "subtitle": "Confirmed subtitle", "uri": other_uri, "image_subject_uri": uri, **grant},
+    ]
+    cards = parse_music_dna_profile(
+        {"enabled": True, "profile": {"explicit_positives": {"accepted_recommendations": accepted}}},
+        ha_url="http://fixture.invalid",
+    )["sections"]
+    card, = cards
+    first, second = card["groups"][0]["rows"]
+    assert first["title"] == "Subtitle-only recommendation" and not first["subtitle"]
+    assert first["imageUrl"] == "http://fixture.invalid" + grant["image_url"]
+    assert first["imageExpiresAt"] == 160_000
+    assert second["title"] == "Track title" and second["subtitle"] == "Confirmed subtitle"
+    assert not second.get("imageUrl")
+
+
 def test_music_dna_shows_confirmed_discover_feedback_totals_and_details():
     feedback = {
         "accepted_recommendations": [{"subtitle": "Accepted album"}],
