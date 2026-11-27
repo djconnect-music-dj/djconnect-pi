@@ -185,16 +185,17 @@ BrandWindow {
     property bool askDjClearConfirmOpen: false
     property int askDjClearConfirmationRevision: -1
     property string askDjDraft: ""
+    property string askDjPendingQuestion: ""
     property var pendingMediaStart: null
     property var askDjHistoryReturnReading: null
     property var pendingAskDjSavedContext: null
     readonly property int askDjDraftContextRevision: djconnect.musicDnaContextRevision
-    onAskDjDraftContextRevisionChanged: { askDjDraft = ""; pendingAskDjSavedContext = null }
+    onAskDjDraftContextRevisionChanged: { askDjDraft = ""; askDjPendingQuestion = ""; pendingAskDjSavedContext = null }
     Connections {
         target: djconnect
-        function onProfileChanged() { root.askDjDraft = ""; root.pendingMediaStart = null; root.askDjHistoryReturnReading = null }
-        function onPairedChanged() { root.askDjDraft = ""; root.pendingMediaStart = null; root.askDjHistoryReturnReading = null }
-        function onDemoModeChanged() { root.askDjDraft = ""; root.pendingMediaStart = null; root.askDjHistoryReturnReading = null }
+        function onProfileChanged() { root.askDjDraft = ""; root.askDjPendingQuestion = ""; root.pendingMediaStart = null; root.askDjHistoryReturnReading = null }
+        function onPairedChanged() { root.askDjDraft = ""; root.askDjPendingQuestion = ""; root.pendingMediaStart = null; root.askDjHistoryReturnReading = null }
+        function onDemoModeChanged() { root.askDjDraft = ""; root.askDjPendingQuestion = ""; root.pendingMediaStart = null; root.askDjHistoryReturnReading = null }
         function onMediaActivityChanged() {
             if (!djconnect.mediaPlaybackBusy) root.pendingMediaStart = null
         }
@@ -234,11 +235,15 @@ BrandWindow {
                 source.forceActiveFocus(Qt.PopupFocusReason)
         })
     }
-    onActiveChanged: if (!active) pendingMediaStart = null
+    onActiveChanged: if (!active) {
+        pendingMediaStart = null
+        askDjPendingQuestion = ""
+    }
     onScreenBlankedChanged: {
         if (screenBlanked) {
             trackArtworkOpen = false
             pendingMediaStart = null
+            askDjPendingQuestion = ""
         }
     }
     function showTrackArtwork(fromSession, automatic) {
@@ -1542,6 +1547,7 @@ BrandWindow {
             }
         }
         function onAskDjChanged() {
+            if (!djconnect.askDjBusy) root.askDjPendingQuestion = ""
             const panel = askDjLoader.item
             if (panel && djconnect.askDjMessages.length === 0 && panel.searchOpen)
                 panel.closeSearch()
@@ -5864,7 +5870,6 @@ BrandWindow {
         property bool chatKeyboardOpen: false
         property bool helpOpen: false
         property int draftEditRevision: 0
-        property string pendingQuestionText: ""
         property string feedbackMessageId: ""
         readonly property var feedbackAnswer: feedbackMessageId && !historyOffline ? djconnect.askDjMessages.find(message =>
             message.id === feedbackMessageId && message.role === "assistant" && message.text) : null
@@ -6018,7 +6023,7 @@ BrandWindow {
                         answerContext.reference.session_id, answerContext.reference.entry_id))
                 : djconnect.sendAskDjQuestion(question)
             if (accepted) {
-                if (djconnect.askDjBusy) pendingQuestionText = question
+                if (djconnect.askDjBusy) root.askDjPendingQuestion = question
                 answerContext = null
                 clearChatDraft()
                 Qt.callLater(scrollToTop)
@@ -6048,7 +6053,6 @@ BrandWindow {
         function clearQuestionUi(clearDraft) {
             root.askDjClearConfirmOpen = false
             feedbackMessageId = ""
-            pendingQuestionText = ""
             answerContext = null
             readingAnchor = null
             closeHelp()
@@ -6070,10 +6074,9 @@ BrandWindow {
             function onAskDjChanged() {
                 askDjPanel.updateMessages()
                 askDjPanel.answerContextRevision += 1
-                if (!djconnect.askDjBusy) askDjPanel.pendingQuestionText = ""
             }
             function onAskDjUnsentDraft(text) {
-                if (!askDjPanel.visible || askDjPanel.pendingQuestionText !== text || askDjChatInput.text) return
+                if (!askDjPanel.visible || root.askDjPendingQuestion !== text || askDjChatInput.text) return
                 askDjChatInput.text = text
                 askDjChatInput.cursorPosition = text.length
             }
@@ -6108,14 +6111,12 @@ BrandWindow {
             target: root
             function onActiveChanged() {
                 if (root.active) return
-                askDjPanel.pendingQuestionText = ""
                 askDjPanel.answerContext = null
                 askDjPanel.feedbackMessageId = ""
                 askDjPanel.closeHelp()
             }
             function onScreenBlankedChanged() {
                 if (!root.screenBlanked) return
-                askDjPanel.pendingQuestionText = ""
                 askDjPanel.answerContext = null
                 askDjPanel.feedbackMessageId = ""
                 askDjPanel.closeHelp()
@@ -6629,7 +6630,7 @@ BrandWindow {
                                     onClicked: {
                                         const ref = askDjAnswerContextButton.reference
                                         if (!djconnect.exploreAskDjAnswer(bubble.messageId, ref.session_id, ref.entry_id)) return
-                                        askDjPanel.pendingQuestionText = djconnect.askDjContributionQuestion
+                                        root.askDjPendingQuestion = djconnect.askDjContributionQuestion
                                         askDjPanel.closeSearch(false)
                                         askDjPanel.chatKeyboardOpen = false
                                         Qt.callLater(askDjPanel.scrollToTop)
@@ -7427,7 +7428,7 @@ BrandWindow {
 
             GlassSurface {
                 objectName: "askDjPendingQuestion"
-                visible: !askDjPanel.searchOpen && askDjPanel.pendingQuestionText.length > 0
+                visible: !askDjPanel.searchOpen && root.askDjPendingQuestion.length > 0
                 Layout.fillWidth: true
                 implicitHeight: pendingQuestionContent.implicitHeight + 20
                 radius: 22
@@ -7439,7 +7440,7 @@ BrandWindow {
                     spacing: 4
                     Text {
                         objectName: "askDjPendingQuestionText"
-                        text: askDjPanel.pendingQuestionText
+                        text: root.askDjPendingQuestion
                         textFormat: Text.PlainText
                         color: BrandTheme.colors.text
                         font.pixelSize: 18
