@@ -435,8 +435,16 @@ def test_discovery_play_ignores_results_when_profile_changes(tmp_path, stage):
     assert backend.playback.title == ""
 
 
-@pytest.mark.parametrize("success", [True, False, None])
-def test_discovery_feedback_removes_only_acknowledged_recommendation(tmp_path, success):
+@pytest.mark.parametrize(("receipt", "accepted"), [
+    ({"success": True}, True),
+    ({"success": True, "feedback": "not_for_me", "item": {"id": "fixture-id"}}, True),
+    ({"success": True, "feedback": "hide_artist", "item": {"id": "fixture-id"}}, False),
+    ({"success": True, "feedback": "not_for_me", "item": {"id": "other-id"}}, False),
+    ({"success": True, "feedback": "not_for_me"}, False),
+    ({"success": False}, False),
+    ({}, False),
+])
+def test_discovery_feedback_removes_only_acknowledged_recommendation(tmp_path, receipt, accepted):
     ensure_app()
     config_path = tmp_path / "config.json"
     save_config(config_path, Config(paired=True, device_token="fixture", ha_url="http://fixture.invalid"))
@@ -445,7 +453,7 @@ def test_discovery_feedback_removes_only_acknowledged_recommendation(tmp_path, s
         {"id": "daily", "items": [{"id": "fixture-id", "title": "Selected"}]},
         {"id": "similar", "items": [{"id": "fixture-id", "title": "Different section"}]},
     ]})
-    backend.client.music_discovery_feedback = Mock(return_value={"success": success} if success is not None else {})
+    backend.client.music_discovery_feedback = Mock(return_value=receipt)
     backend.client.music_discovery_feed = Mock(side_effect=BackendUnavailable("fixture read error"))
     backend._executor.submit = Mock()
 
@@ -453,7 +461,7 @@ def test_discovery_feedback_removes_only_acknowledged_recommendation(tmp_path, s
     assert [item["title"] for item in backend.musicDiscoveryItems] == ["Selected", "Different section"]
     backend._executor.submit.call_args.args[0]()
 
-    if success:
+    if accepted:
         assert [item["title"] for item in backend.musicDiscoveryItems] == ["Different section"]
         backend.client.music_discovery_feed.assert_called_once()
     else:

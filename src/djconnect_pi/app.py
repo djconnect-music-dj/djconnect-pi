@@ -4354,13 +4354,18 @@ class DJConnectBackend(QObject):
             result = {}
         if not self._discovery_action_current(ticket, consent_epoch):
             return
-        if result.get("success") is not True:
+        item_id = str(item.get("discovery_item_id") or item.get("id") or "").strip()
+        receipt_item = result.get("item")
+        legacy_receipt = "feedback" not in result and "item" not in result
+        acknowledged = (legacy_receipt or (result.get("feedback") == feedback and isinstance(receipt_item, dict)
+                                           and receipt_item.get("id") == item_id))
+        if result.get("success") is not True or not acknowledged:
             error = {"success": False, "error": "music_discovery_feedback_failed"}
             self._musicDiscoveryReady.emit(_DiscoveryReadResult(error, ticket, consent_epoch))
             return
         self._persist_backend_summary()
         self._musicDiscoveryFeedbackAccepted.emit(
-            (ticket, consent_epoch), str(item.get("section_id") or ""), str(item.get("discovery_item_id") or item.get("id") or "").strip(),
+            (ticket, consent_epoch), str(item.get("section_id") or ""), item_id,
         )
         self._music_discovery_feed_worker(ticket=ticket, consent_epoch=consent_epoch)
 
