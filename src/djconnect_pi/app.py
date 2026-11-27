@@ -4759,6 +4759,9 @@ class DJConnectBackend(QObject):
             self.shuffleChanged.emit()
         if old.repeat != playback.repeat:
             self.repeatChanged.emit()
+        if (playback.uri and playback.output_device_active
+                and (old.shuffle, old.repeat, old.is_favorite) != (playback.shuffle, playback.repeat, playback.is_favorite)):
+            self.djSession.playback_overlay_observation_changed(playback.uri, playback.output_device_id)
         output_confirmed = bool(self._unconfirmed_output_choice and playback.output_device_active
                                 and playback.output_device_id == self._unconfirmed_output_choice)
         if output_confirmed:

@@ -326,6 +326,19 @@ class PlaybackControl(QObject):
         return self._start(session_id, item_id, "seek_to",
                            value=(target_ms, expected_output), transport_epoch=transport_epoch)
 
+    def overlay_observation_changed(self, uri, origin):
+        """Withdraw a possibly stale value and let the open controls request an isolated read."""
+        if (self.closed or not self.visible or not output_id(origin)
+                or origin != self.owner.backend.outputDeviceId
+                or not OBSERVED_OVERLAY_COMMANDS.intersection(self.overlay_commands())):
+            return False
+        current = reference(self.owner)
+        if not current or not current[6] or sha256(uri.strip().encode()).hexdigest()[:24] != current[1]:
+            return False
+        self.overlay_state = None
+        self.overlay_revision += 1
+        return True
+
     def read_overlay(self, session_id, item_id, transport_epoch, expected_output):
         if (not output_id(expected_output) or expected_output != self.owner.backend.outputDeviceId
                 or not OBSERVED_OVERLAY_COMMANDS.intersection(self.overlay_commands())):
@@ -395,6 +408,8 @@ class PlaybackControl(QObject):
             self.request.update(value=value, origin=self.outputs["origin"])
         if command in {"seek_to", "overlay_read"}:
             self.request["value"] = value
+        if command == "overlay_read":
+            self.request["overlay_revision"] = self.overlay_revision
         if command in OBSERVED_OVERLAY_COMMANDS or command == "set_output":
             self.overlay_state = None
             self.overlay_revision += 1
@@ -578,7 +593,8 @@ class PlaybackControl(QObject):
             self.owner.invalidate()
             self.owner._error = "denied" if result.get("error") == "denied" else "context_changed"
         elif command == "overlay_read":
-            if not result.get("error") and self.request["value"] == self.owner.backend.outputDeviceId:
+            if (not result.get("error") and self.request["value"] == self.owner.backend.outputDeviceId
+                    and self.request["overlay_revision"] == self.overlay_revision):
                 self.overlay_state = {**result["overlay_state"], "output_id": self.request["value"],
                               "context": (self.request["reference"], self.request["binding"])}
         elif command == "outputs_read":

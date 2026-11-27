@@ -120,6 +120,30 @@ def test_favorite_overlay_read_checks_exact_output_and_consistent_favorite_field
     assert not backend.jobs
 
 
+def test_same_playback_change_fences_an_older_overlay_observation(controller):
+    owner, backend = setup(controller)
+    owner._session["broadcast"]["playback"]["target_name"] = "Speaker"
+    backend.outputDeviceId = "speaker-id"
+    owner.transport.playback_status.return_value["playback"].update(
+        favorite_status=True,
+        device={"id": "speaker-id", "name": "Speaker", "active": True, "is_restricted": False},
+    )
+    epoch = owner.state["playback_control"]["transport_epoch"]
+    revision = owner.state["playback_control"]["overlay_revision"]
+    assert owner.readPlaybackOverlay("synthetic-session", ITEM_ID, epoch, "speaker-id")
+    owner.playback_overlay_observation_changed("spotify:track:other", "speaker-id")
+    owner.playback_overlay_observation_changed(URI, "other-output")
+    assert owner.state["playback_control"]["overlay_revision"] == revision
+    owner.playback_overlay_observation_changed(URI, "speaker-id")
+    backend.jobs.pop()()
+    assert owner.state["playback_control"]["overlay_revision"] == revision + 1
+    assert owner.state["playback_control"]["overlay_state"] == {}
+    assert owner.readPlaybackOverlay("synthetic-session", ITEM_ID, epoch, "speaker-id")
+    backend.jobs.pop()()
+    assert owner.state["playback_control"]["overlay_state"] == {"toggle_favorite": True}
+    assert not backend.jobs
+
+
 @pytest.mark.parametrize(("output_id", "progress_ms", "offset"), [
     ("speaker-id", 18_000, 42_000),
     ("other-id", 18_000, None),

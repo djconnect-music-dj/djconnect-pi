@@ -488,6 +488,10 @@ class SessionController(QObject):
     def setPlaybackPosition(self, session_id, item_id, transport_epoch, target_ms, expected_output):
         return self._playback_control.seek_to(session_id, item_id, transport_epoch, target_ms, expected_output)
 
+    def playback_overlay_observation_changed(self, uri, output_id):
+        if self._playback_control.overlay_observation_changed(uri, output_id):
+            self.changed.emit()
+
     @Slot(str, str, int, str, result=bool)
     def readPlaybackOverlay(self, session_id, item_id, transport_epoch, expected_output):
         return self._playback_control.read_overlay(session_id, item_id, transport_epoch, expected_output)

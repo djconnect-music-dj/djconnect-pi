@@ -751,6 +751,22 @@ def main():
                 favorite_button = window.findChild(QObject, 'sessionArtworkFavorite')
                 assert favorite_button.property('checked') and favorite_button.property('iconName') == 'heart_filled'
                 capture('confirmed-playback-modes')
+                saved_global_playback = deepcopy(backend.playback)
+                backend.playback.uri = mode_status['playback']['uri']
+                backend.playback.shuffle = False
+                remote_playback = deepcopy(backend.playback)
+                remote_playback.output_device_active = True
+                remote_playback.shuffle = True
+                mode_status['playback']['shuffle'] = False
+                backend._apply_playback(remote_playback)
+                QTest.qWait(60)
+                assert len(intents) == 1 and not shuffle_button.property('checked')
+                intents.pop(0)()
+                QTest.qWait(60)
+                assert owner.state['playback_control']['overlay_state']['shuffle'] is False
+                assert repeat_button.property('checked') and not shuffle_button.property('checked')
+                backend.playback = saved_global_playback
+                mode_status['playback']['shuffle'] = True
                 click('sessionPlaybackRepeat')
                 assert not repeat_button.property('checked') and len(intents) == 1
                 intents.pop(0)()
