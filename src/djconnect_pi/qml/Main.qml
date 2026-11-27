@@ -2601,6 +2601,52 @@ BrandWindow {
         readonly property bool canExportAskDj: root.canTransferProfileData && !djconnect.askDjBusy
 
         GlassPopup {
+            id: disableLoggingPopup
+            anchors.centerIn: parent
+            width: Math.min(parent.width - 40, 520)
+            padding: 24
+            modal: true
+            readonly property bool canDisable: settingsPanel.visible && djconnect.logLevel !== "OFF"
+            onCanDisableChanged: if (!canDisable) close()
+
+            contentItem: ColumnLayout {
+                spacing: 16
+                Text {
+                    objectName: "disableLoggingTitle"
+                    text: root.tr("disable_logging_title")
+                    color: BrandTheme.colors.text
+                    font.bold: true
+                    font.pixelSize: 24
+                    wrapMode: Text.WordWrap
+                    Layout.fillWidth: true
+                }
+                Text {
+                    text: root.tr("disable_logging_message")
+                    color: BrandTheme.colors.muted
+                    font.pixelSize: 18
+                    wrapMode: Text.WordWrap
+                    Layout.fillWidth: true
+                }
+                DangerButton {
+                    objectName: "disableLoggingConfirm"
+                    text: root.tr("disable_logging_confirm")
+                    enabled: disableLoggingPopup.canDisable
+                    Layout.fillWidth: true
+                    onClicked: {
+                        disableLoggingPopup.close()
+                        djconnect.setLogLevel("OFF")
+                    }
+                }
+                GlassButton {
+                    objectName: "disableLoggingCancel"
+                    text: root.tr("cancel")
+                    Layout.fillWidth: true
+                    onClicked: disableLoggingPopup.close()
+                }
+            }
+        }
+
+        GlassPopup {
             id: profileExportPreview
             objectName: "profileExportPreview"
             anchors.centerIn: parent
@@ -3183,6 +3229,7 @@ BrandWindow {
 
                 BrandComboBox {
                     id: logLevelBox
+                    objectName: "settingsLogLevel"
                     font.pixelSize: 28
                     model: ["OFF", "DEBUG", "INFO", "WARNING", "ERROR"]
                     currentIndex: model.indexOf(djconnect.logLevel)
@@ -3193,7 +3240,15 @@ BrandWindow {
                         font.pixelSize: 30
                     }
                     Layout.fillWidth: true
-                    onActivated: djconnect.setLogLevel(model[currentIndex])
+                    onActivated: function(index) {
+                        const level = model[index]
+                        if (level === "OFF" && disableLoggingPopup.canDisable) {
+                            currentIndex = Qt.binding(() => model.indexOf(djconnect.logLevel))
+                            disableLoggingPopup.open()
+                        } else {
+                            djconnect.setLogLevel(level)
+                        }
+                    }
                 }
             }
 
