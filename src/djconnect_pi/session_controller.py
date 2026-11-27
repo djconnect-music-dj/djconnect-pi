@@ -113,6 +113,8 @@ class SessionController(QObject):
     selectionInvalidated = Signal()
     contextCleared = Signal()
     ownerScopeChanged = Signal()
+    momentInsightChanged = Signal()
+    _momentInsightReady = Signal(object, object)
     _ready = Signal(object)
 
     def __init__(self, backend, *, view_active=True):
@@ -133,6 +135,7 @@ class SessionController(QObject):
         self._forecast = ForecastReceiver()
         self._forecast_dirty = False
         self._moments = []
+        self._moment_insight = None
         self._conversation = []
         self._retained_flow = []
         self._flow_window = None
@@ -211,6 +214,8 @@ class SessionController(QObject):
         self.changed.connect(self._notify_flow_rows)
         self.contextCleared.connect(self._content_delete.cancel)
         self._ready.connect(self._apply)
+        self._momentInsightReady.connect(self._apply_moment_insight)
+        self.changed.connect(self._reconcile_moment_insight)
         backend.demoModeChanged.connect(self._demo_changed)
         # Deferred visibility notifications must die with their QObject owner.
         self._visibility_notify = QTimer(self)
@@ -737,6 +742,7 @@ class SessionController(QObject):
         self._reconcile_question = False
 
     def invalidate(self):
+        self.closeMomentTrackInsight()
         self._last_runtime_read = None
         self._connection_offline = False
         had_scope = self._bootstrap_binding is not None
@@ -796,6 +802,7 @@ class SessionController(QObject):
             return
         self._view_active = active
         if not active:
+            self.closeMomentTrackInsight()
             self._contribution_wake_scope = None
             if self.refreshing:
                 # The queued worker checks its ticket. A response already in flight
@@ -988,6 +995,7 @@ class SessionController(QObject):
 
     def _expire(self):
         now = self._clock.now()
+        self._reconcile_moment_insight()
         headers_expired = self._expire_history_headers(now) or self._history_dirty
         self._history_dirty = False
         if self._history_selection_dirty:
@@ -1197,6 +1205,102 @@ class SessionController(QObject):
             if display_expiry is not None and now < min(display_expiry, offer["expires_at"]):
                 return deepcopy(offer)
         return {}
+
+    @Property("QVariantMap", notify=momentInsightChanged)
+    def momentTrackInsight(self):
+        request = self._moment_insight
+        return deepcopy(request["view"]) if request and self._moment_insight_current(request) else {}
+
+    @Slot(str)
+    def openMomentTrackInsight(self, action_id):
+        if self._moment_insight:
+            return
+        offer = self.moment_insight_offer()
+        if not offer or offer["reference"]["action_id"] != action_id:
+            return
+        try:
+            binding = self.transport.binding()
+        except SessionError:
+            return
+        request = {
+            "reference": offer["reference"], "deadline": offer["expires_at"], "binding": binding,
+            "style": self.track_insight_session_style(), "view": {"status": "loading"},
+        }
+        self._moment_insight = request
+        if not self._moment_insight_current(request):
+            self._moment_insight = None
+            return
+        self.momentInsightChanged.emit()
+
+        def fetch():
+            if not self._moment_insight_current(request):
+                return
+            started = self._clock.now()
+            try:
+                data = self.transport.moment_track_insight(binding, request["reference"])
+                result = (data, started, "")
+            except SessionError as error:
+                result = (None, started, error.category)
+            self._momentInsightReady.emit(request, result)
+
+        self.backend._executor.submit(fetch)
+
+    @Slot()
+    def closeMomentTrackInsight(self):
+        if self._moment_insight is not None:
+            self._moment_insight = None
+            self.momentInsightChanged.emit()
+
+    def _moment_insight_current(self, request):
+        if (self._moment_insight is not request or not self._foreground or not self._view_active
+                or self._connection_offline or not private_scope_allowed(self)
+                or getattr(self.backend, "versionMismatchVisible", False)
+                or request["style"] != self.track_insight_session_style()
+                or self._clock.now() >= request["deadline"]):
+            return False
+        try:
+            if request["binding"] != self.transport.binding():
+                return False
+        except SessionError:
+            return False
+        reference = request["reference"]
+        authority = (self._session.get("broadcast") or {}).get("native_delivery")
+        if (self._session.get("runtime_state") != "active" or self._session.get("session_id") != reference["session_id"]
+                or not isinstance(authority, dict) or authority.get("session_id") != reference["session_id"]
+                or type(authority.get("schema_version")) is not int or authority["schema_version"] != 1
+                or authority.get("revocation_scope") != "session"):
+            return False
+        admissions = authority.get("admissions")
+        if not isinstance(admissions, list):
+            return False
+        matching = [grant for grant in admissions if isinstance(grant, dict) and grant.get("moment_id") == reference["moment_id"]]
+        return (len(matching) == 1 and matching[0].get("qualification") == "qualified"
+                and (timestamp(matching[0].get("source_expires_at")) or 0) > self._clock.now())
+
+    def _reconcile_moment_insight(self):
+        request = self._moment_insight
+        if request and not self._moment_insight_current(request):
+            self.closeMomentTrackInsight()
+
+    @Slot(object, object)
+    def _apply_moment_insight(self, request, result):
+        if not self._moment_insight_current(request):
+            return
+        data, started, error = result
+        if data is None:
+            request["view"] = {"status": "expired" if error in {"denied", "expired"} else "unavailable"}
+        else:
+            request["deadline"] = min(request["deadline"], started + data["subject"]["expires_in"])
+            track = data.get("track")
+            analysis = data.get("analysis")
+            title = text(track.get("title"), 2048).strip() if isinstance(track, dict) else ""
+            summary = text(analysis.get("summary")).strip() if isinstance(analysis, dict) else ""
+            if self._moment_insight_current(request) and title and summary:
+                request["view"] = {"status": "ready", "title": title, "summary": summary,
+                                   "artist": text(track.get("artist"), 2048).strip()}
+            else:
+                request["view"] = {"status": "unavailable"}
+        self.momentInsightChanged.emit()
 
     def track_insight_session_style(self) -> tuple:
         session = self._session or {}

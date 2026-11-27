@@ -84,6 +84,46 @@ def test_moment_insight_offer_requires_capability_and_live_private_session(contr
     assert not owner.screenState["moment_insight_offer"]
 
 
+@pytest.mark.parametrize("source_withdrawn", [False, True])
+def test_moment_insight_keeps_the_original_recording_across_playback_changes(controller, source_withdrawn):
+    owner, backend = controller
+    owner._clock = Mock()
+    owner._clock.now.return_value = 100
+    reference = {"schema_version": 1, "session_id": "session-a", "moment_id": "m1", "action_id": "insight-m1"}
+    grant = {"moment_id": "m1", "qualification": "qualified", "source_expires_at": "1970-01-01T00:05:00Z"}
+    authority = {"schema_version": 1, "session_id": "session-a", "revocation_scope": "session",
+                 "current_moment_id": "m1", "admissions": [grant]}
+    owner._session = {"session_id": "session-a", "runtime_state": "active",
+                      "broadcast": {"native_delivery": authority, "playback": {"item_id": "track-a"}}}
+    owner._caps = {"capabilities": {"moment_track_insight_navigation_v1": True},
+                   "contract_versions": {"moment_track_insight_navigation": 1}}
+    owner._moments = [{"current": True, "display_expires_at": "1970-01-01T00:02:30Z",
+                      "insight_navigation": {"reference": reference, "expires_at": 200}}]
+
+    def read(_binding, requested):
+        assert requested == reference
+        authority["current_moment_id"] = "m2"
+        owner._session["broadcast"]["playback"] = {"item_id": "track-b"}
+        if source_withdrawn:
+            authority["admissions"] = []
+        return {"track": {"title": "Original song", "artist": "Original artist"},
+                "analysis": {"summary": "Original insight"}, "subject": {"expires_in": 50}}
+
+    owner.transport.moment_track_insight = Mock(side_effect=read)
+    owner.openMomentTrackInsight("insight-m1")
+    assert owner.momentTrackInsight == {"status": "loading"}
+    owner.openMomentTrackInsight("insight-m1")
+    worker, = backend.jobs
+    worker()
+    owner.transport.moment_track_insight.assert_called_once()
+    if source_withdrawn:
+        assert not owner.momentTrackInsight
+    else:
+        assert owner.momentTrackInsight["title"] == "Original song"
+        owner._clock.now.return_value = 150
+        assert not owner.momentTrackInsight
+
+
 def test_screen_state_omits_flow_projection_but_keeps_fresh_rows_available(controller, monkeypatch):
     owner, backend = controller
     backend.demoMode = True
