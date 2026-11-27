@@ -1641,6 +1641,9 @@ Item {
             && screen.state.loaded && screen.state.runtime_state === "active" && !screen.state.error
         readonly property int flowSpacing: spaciousFlow ? 26 : 22
         readonly property int dockClearance: composerDock.visible ? composerDock.height + 144 : 132
+        readonly property bool archiveAutoPageAllowed: visible && screen.historyViewOpen && screen.backend.paired
+            && !screen.backend.demoMode && !screen.state.error && archiveMore.visible && archiveMore.enabled
+            && !searchPanel.visible && !screen.archiveMoreLoading
         anchors.top: screen.idleWelcome && !screen.compact ? parent.top : modeSwitch.visible ? modeSwitch.bottom : toolbar.bottom; anchors.bottom: parent.bottom
         anchors.left: parent.left; anchors.right: parent.right
         anchors.margins: 20
@@ -1653,11 +1656,16 @@ Item {
             target: historyScroll.contentItem
             function onMovementEnded() {
                 const flick = historyScroll.contentItem
-                if (!screen.historyViewOpen || screen.currentHistory || screen.state.timeline.session
-                        || screen.state.error || screen.backend.demoMode || flick.atYBeginning) return
+                if (!historyScroll.archiveAutoPageAllowed || flick.atYBeginning) return
                 const remaining = flick.originY + flick.contentHeight - flick.contentY - flick.height
                 if (remaining <= 100) screen.loadMoreArchive()
             }
+        }
+        Timer {
+            interval: 120
+            running: historyScroll.archiveAutoPageAllowed && historyScroll.contentItem.contentHeight
+                <= historyScroll.contentItem.height
+            onTriggered: screen.loadMoreArchive()
         }
         PullToRefresh {
             objectName: "sessionFlowPullToRefresh"
