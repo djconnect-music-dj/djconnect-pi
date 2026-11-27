@@ -186,13 +186,14 @@ BrandWindow {
     property int askDjClearConfirmationRevision: -1
     property string askDjDraft: ""
     property var pendingMediaStart: null
+    property var askDjHistoryReturnReading: null
     readonly property int askDjDraftContextRevision: djconnect.musicDnaContextRevision
     onAskDjDraftContextRevisionChanged: askDjDraft = ""
     Connections {
         target: djconnect
-        function onProfileChanged() { root.askDjDraft = ""; root.pendingMediaStart = null }
-        function onPairedChanged() { root.askDjDraft = ""; root.pendingMediaStart = null }
-        function onDemoModeChanged() { root.askDjDraft = ""; root.pendingMediaStart = null }
+        function onProfileChanged() { root.askDjDraft = ""; root.pendingMediaStart = null; root.askDjHistoryReturnReading = null }
+        function onPairedChanged() { root.askDjDraft = ""; root.pendingMediaStart = null; root.askDjHistoryReturnReading = null }
+        function onDemoModeChanged() { root.askDjDraft = ""; root.pendingMediaStart = null; root.askDjHistoryReturnReading = null }
         function onMediaActivityChanged() {
             if (!djconnect.mediaPlaybackBusy) root.pendingMediaStart = null
         }
@@ -387,6 +388,7 @@ BrandWindow {
     }
 
     onActiveScreenChanged: {
+        if (activeScreen !== "askdj" && activeScreen !== "session-history") askDjHistoryReturnReading = null
         root.trackArtworkOpen = false
         if (root.wallProfile && (root.activeScreen === "now" || root.activeScreen === "control")) {
             root.closeVibeScape()
@@ -5955,7 +5957,15 @@ BrandWindow {
             triggeredOnStart: true
             onTriggered: askDjPanel.messageClock = Date.now()
         }
-        Component.onCompleted: updateMessages()
+        Component.onCompleted: {
+            updateMessages()
+            if (visible && root.askDjHistoryReturnReading) historyReturnRestore.restart()
+        }
+        Timer {
+            id: historyReturnRestore
+            interval: 75
+            onTriggered: askDjPanel.restoreHistoryReturnReading()
+        }
         readonly property var matches: {
             const query = searchText(searchQuery)
             const messages = displayedMessages
@@ -5975,10 +5985,15 @@ BrandWindow {
             onActivated: askDjPanel.openSearch(false)
         }
 
-        onVisibleChanged: if (!visible) {
-            djconnect.cancelAskDjHistoryOpen()
-            closeSearch()
-            clearQuestionUi(false)
+        onVisibleChanged: {
+            if (visible) {
+                if (root.askDjHistoryReturnReading) historyReturnRestore.restart()
+            } else {
+                historyReturnRestore.stop()
+                djconnect.cancelAskDjHistoryOpen()
+                closeSearch()
+                clearQuestionUi(false)
+            }
         }
         onMatchesChanged: {
             if (!searchOpen)
@@ -5995,17 +6010,27 @@ BrandWindow {
             askDjMessagesView.positionViewAtBeginning()
         }
 
+        function currentReadingAnchor() {
+            const view = askDjMessagesView
+            // The top of the viewport can fall in the spacing between message rows.
+            let index = view.indexAt(view.width / 2, view.contentY)
+            if (index < 0) index = view.indexAt(view.width / 2, view.contentY + view.spacing + 1)
+            const row = view.itemAtIndex(index)
+            const message = displayedMessages[index]
+            return row && message && message.id ? {id: message.id, offset: view.contentY - row.y} : null
+        }
+
+        function restoreHistoryReturnReading() {
+            if (!visible || !root.askDjHistoryReturnReading) return
+            readingAnchor = root.askDjHistoryReturnReading
+            root.askDjHistoryReturnReading = null
+            restoreReadingAnchor()
+        }
+
         function updateMessages() {
             const view = askDjMessagesView
-            if (visible && !searchOpen && !readingAnchor && !view.atYBeginning && !view.moving) {
-                // The top of the viewport can fall in the spacing between message rows.
-                let index = view.indexAt(view.width / 2, view.contentY)
-                if (index < 0) index = view.indexAt(view.width / 2, view.contentY + view.spacing + 1)
-                const row = view.itemAtIndex(index)
-                const message = displayedMessages[index]
-                if (row && message && message.id)
-                    readingAnchor = {id: message.id, offset: view.contentY - row.y}
-            }
+            if (visible && !searchOpen && !readingAnchor && !view.atYBeginning && !view.moving)
+                readingAnchor = currentReadingAnchor()
             displayedMessages = djconnect.askDjMessages
             if (readingAnchor) Qt.callLater(restoreReadingAnchor)
         }
@@ -7325,6 +7350,9 @@ BrandWindow {
             onOpenVibeScape: function(pickerTop) { root.openVibeScape(pickerTop) }
             onPairingRecoveryRequested: root.resetPairingConfirmOpen = true
             onNavigate: function(destination) {
+                if (destination === "session-history" && root.activeScreen === "askdj"
+                        && sharedSessionScreen.returnToAskDj && askDjLoader.item)
+                    root.askDjHistoryReturnReading = askDjLoader.item.currentReadingAnchor()
                 if (destination === "about") root.aboutOpen = true
                 else root.activeScreen = destination
             }
