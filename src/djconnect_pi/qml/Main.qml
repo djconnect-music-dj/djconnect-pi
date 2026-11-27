@@ -7558,18 +7558,21 @@ BrandWindow {
                     GlassButton {
                         id: askDjSend
                         objectName: "askDjSend"
-                        iconName: djconnect.askDjDestinationLoading ? "" : "send"
-                        Accessible.name: root.tr(djconnect.askDjDestinationLoading ? "loading" : "session_send")
+                        readonly property bool waiting: djconnect.askDjDestinationLoading
+                            || (djconnect.askDjBusy && root.askDjPendingQuestion.length > 0)
+                        iconName: waiting ? "" : "send"
+                        Accessible.name: root.tr(waiting ? "loading" : "session_send")
                         primary: true
                         Layout.preferredWidth: 52; Layout.fillHeight: true
                         enabled: askDjPanel.questionActionsReady
                             && askDjChatInput.enabled && askDjChatInput.text.trim().length > 0
                         BusyIndicator {
+                            objectName: "askDjSendSpinner"
                             anchors.centerIn: parent
                             width: 26
                             height: 26
                             visible: running
-                            running: djconnect.askDjDestinationLoading
+                            running: askDjSend.waiting
                         }
                         onClicked: askDjPanel.sendQuestion()
                     }
