@@ -6467,6 +6467,14 @@ def _read_music_dna_import(path: Path) -> tuple[dict[str, object], dict[str, obj
     profile = response["profile"]
     json.dumps(profile, allow_nan=False)
     preview = {"filename": path.name}
+    counts = []
+    for field, label in (("track_count", "music_dna_card_tracks"), ("artist_count", "music_dna_card_artists"),
+                         ("genre_count", "music_dna_card_genres")):
+        value = profile.get(field)
+        if type(value) is int and 0 <= value <= 2**53 - 1:
+            counts.append({"label": label, "value": value})
+    if counts:
+        preview["counts"] = counts
     updated = response.get("updated_at") or profile.get("updated_at") or (document.get("exported_at") if envelope else "")
     if isinstance(updated, str) and timestamp(updated) is not None:
         preview["updatedAt"] = updated

@@ -2556,6 +2556,41 @@ BrandWindow {
                     font.pixelSize: 18
                     Layout.fillWidth: true
                 }
+                RowLayout {
+                    id: importCounts
+                    objectName: "musicDnaImportCounts"
+                    readonly property var counts: djconnect.musicDnaImportPreview.counts || []
+                    visible: counts.length > 0
+                    Layout.fillWidth: true
+                    spacing: 12
+                    Repeater {
+                        model: importCounts.counts
+                        delegate: ColumnLayout {
+                            required property var modelData
+                            Layout.fillWidth: true
+                            Layout.preferredWidth: 1
+                            spacing: 4
+                            Text {
+                                objectName: "musicDnaImportCountValue"
+                                text: Number(modelData.value).toLocaleString(Qt.locale(djconnect.language), "f", 0)
+                                color: BrandTheme.colors.text
+                                font.bold: true
+                                font.pixelSize: 22
+                                wrapMode: Text.WrapAnywhere
+                                Layout.fillWidth: true
+                            }
+                            Text {
+                                objectName: "musicDnaImportCountLabel"
+                                text: root.tr(modelData.label)
+                                textFormat: Text.PlainText
+                                color: BrandTheme.colors.muted
+                                font.pixelSize: 16
+                                wrapMode: Text.WordWrap
+                                Layout.fillWidth: true
+                            }
+                        }
+                    }
+                }
                 Text {
                     text: root.tr("music_dna_import_confirm")
                     color: BrandTheme.colors.muted

@@ -1368,6 +1368,7 @@ _MUSIC_DNA_CARD_TRANSLATIONS = {
     "music_dna_card_anchors": ('Taste anchors', 'Smaakankers', 'Musikalische Anker', 'Repères musicaux', 'Referentes musicales'),
     "music_dna_card_recent_tracks": ('Recent tracks', 'Recente tracks', 'Letzte Titel', 'Titres récents', 'Pistas recientes'),
     "music_dna_card_tracks": ('Tracks', 'Tracks', 'Titel', 'Titres', 'Pistas'),
+    "music_dna_card_genres": ('Genres', 'Genres', 'Genres', 'Genres', 'Géneros'),
     "music_dna_card_recent_favorites": ('Recent favorites', 'Recente favorieten', 'Letzte Favoriten', 'Favoris récents', 'Favoritos recientes'),
     "music_dna_card_top_tracks": ('Top tracks by period', 'Toptracks per periode', 'Toptitel nach Zeitraum', 'Titres préférés par période', 'Pistas favoritas por período'),
     "music_dna_card_top_artists": ('Top artists by period', 'Topartiesten per periode', 'Topkünstler nach Zeitraum', 'Artistes préférés par période', 'Artistas favoritos por período'),

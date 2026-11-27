@@ -3564,7 +3564,8 @@ def test_backend_displays_package_version_separately_from_protocol_version(tmp_p
 def test_read_music_dna_import_keeps_profile_data_separate_from_source_identity(tmp_path: Path, envelope: bool) -> None:
     path = tmp_path / "music-dna.json"
     profile = {"success": True, "enabled": True, "music_dna_key": "source-only",
-               "generation": 7, "profile": {"summary": "Test Music DNA"}}
+               "generation": 7, "profile": {"summary": "Test Music DNA", "track_count": 1200,
+                                            "artist_count": 0, "genre_count": True}}
     document = {"success": True, "format": "djconnect.music_dna.export", "schema_version": 1,
                 "exported_at": "2026-10-19T14:10:00Z", "profile": profile} if envelope else profile
     path.write_text(json.dumps(document))
@@ -3573,6 +3574,10 @@ def test_read_music_dna_import_keeps_profile_data_separate_from_source_identity(
 
     assert payload == {"success": True, "enabled": True, "profile": profile["profile"]}
     assert preview["generation"] == 7 and preview["filename"] == path.name
+    assert preview["counts"] == [
+        {"label": "music_dna_card_tracks", "value": 1200},
+        {"label": "music_dna_card_artists", "value": 0},
+    ]
     assert ("updatedAt" in preview) is envelope
 
 
