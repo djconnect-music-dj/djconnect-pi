@@ -1,13 +1,12 @@
 """Read-only presentation eligibility for the pinned Core Ask DJ catalogue."""
+import json
+import re
 from dataclasses import dataclass, field
 from functools import lru_cache
 from hashlib import sha256
 from importlib.resources import files
-import json
-import re
 from unicodedata import category
 from uuid import uuid4
-
 
 HELP_ROUTE = "ask_dj/help-context"
 HELP_RESPONSE_BYTES = 16_384

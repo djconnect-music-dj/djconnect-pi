@@ -30,8 +30,8 @@ from PySide6.QtCore import (
     QIODevice,
     QObject,
     QSaveFile,
-    QStandardPaths,
     QSettings,
+    QStandardPaths,
     Qt,
     QTimer,
     QUrl,
@@ -45,7 +45,12 @@ from PySide6.QtQuickControls2 import QQuickStyle
 
 from . import __version__
 from .artwork_palette import displayed_artwork_tint
-from .ask_dj_help import compatible_catalogue, demo_help, project_help, select_suggestions
+from .ask_dj_help import (
+    compatible_catalogue,
+    demo_help,
+    project_help,
+    select_suggestions,
+)
 from .brand_theme import apply_palette
 from .config import (
     CLIENT_TYPE,
@@ -61,6 +66,7 @@ from .config import (
     normalize_log_level,
     save_config,
 )
+from .expiry_clock import elapsed_time
 from .ha import (
     DJCONNECT_API_PREFIX,
     PROFILE_ERROR_CODES,
@@ -82,18 +88,32 @@ from .navigation_gesture import EdgeBackGesture
 from .queue_projection import compact_adjacent_tracks, queue_artist_and_album
 from .session_controller import SessionController
 from .session_history_view import (
-    ask_dj_history_matches, contribution_question, conversation_entries, local_highlighted_text,
-    presented_history, retained_contribution_preview,
+    ask_dj_history_matches,
+    contribution_question,
+    conversation_entries,
+    local_highlighted_text,
+    presented_history,
+    retained_contribution_preview,
 )
-from .session_playback_control import REPEAT_NEXT, favorite_observation, output_id, sorted_output_choices
+from .session_playback_control import (
+    REPEAT_NEXT,
+    favorite_observation,
+    output_id,
+    sorted_output_choices,
+)
 from .session_playback_control import reference as session_playback_reference
-from .session_projection import active_session, history_page, safe_link, timestamp, track_insight_verified_credit, volume_observation
+from .session_projection import (
+    active_session,
+    history_page,
+    timestamp,
+    track_insight_verified_credit,
+    volume_observation,
+)
 from .session_projection import text as bounded_text
-from .expiry_clock import elapsed_time
 from .session_transport import SessionError, session_profile_id
-from .track_insight_clip import TrackInsightClip, clip_format
 from .shared_settings import SettingsError
 from .system_info import log_raspberry_pi_system_info
+from .track_insight_clip import TrackInsightClip, clip_format
 
 _LOGGER = logging.getLogger(__name__)
 LOCAL_TERMINAL_UNIT = Path("/etc/systemd/system/djconnect-local-terminal.service")
@@ -6951,11 +6971,10 @@ def _read_music_dna_import(path: Path) -> tuple[dict[str, object], dict[str, obj
     if len(contents) > MUSIC_DNA_IMPORT_MAX_BYTES:
         raise ValueError("invalid_music_dna_import")
     document = json.loads(contents)
-    if not isinstance(document, dict):
+    export_format = "djconnect.music_dna.export"
+    if not isinstance(document, dict) or ("format" in document and document["format"] != export_format):
         raise ValueError("invalid_music_dna_import")
-    envelope = document.get("format") == "djconnect.music_dna.export"
-    if "format" in document and not envelope:
-        raise ValueError("invalid_music_dna_import")
+    envelope = "format" in document
     if envelope and (document.get("success") is not True or type(document.get("schema_version")) is not int
                      or document["schema_version"] != 1):
         raise ValueError("invalid_music_dna_import")

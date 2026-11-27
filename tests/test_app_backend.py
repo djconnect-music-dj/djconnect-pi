@@ -18,10 +18,10 @@ from djconnect_pi import __version__
 from djconnect_pi.app import (
     DJConnectBackend,
     SaveCurrentTrackError,
-    _DiscoveryReadResult,
     _ask_dj_actions,
     _ask_dj_display_time,
     _current_track_insight_proof,
+    _DiscoveryReadResult,
     _format_duration,
     _format_logs_for_display,
     _read_music_dna_import,
@@ -37,7 +37,13 @@ from djconnect_pi.app import (
     prepare_media_artwork,
 )
 from djconnect_pi.ask_dj_help import (
-    CATALOGUE_ID, CATALOGUE_REVISION, CATALOGUE_SHA256, HelpObservation, demo_help, project_help, select_suggestions,
+    CATALOGUE_ID,
+    CATALOGUE_REVISION,
+    CATALOGUE_SHA256,
+    HelpObservation,
+    demo_help,
+    project_help,
+    select_suggestions,
 )
 from djconnect_pi.config import Config, load_config, save_config
 from djconnect_pi.ha import (

@@ -1694,9 +1694,11 @@ def test_ask_dj_history_export_requests_the_profile_export_route() -> None:
     assert post.call_args.kwargs["json"]["identity"]["device_id"] == cfg.device_id
 
     for invalid in ({"schema_version": True}, {"owner_profile_id": "another-profile"}):
-        with patch("djconnect_pi.ha.requests.post", return_value=FakeResponse(200, {**export, **invalid})):
-            with pytest.raises(DJConnectError, match="invalid_ask_dj_history_export"):
-                client.ask_dj_history_export()
+        with (
+            patch("djconnect_pi.ha.requests.post", return_value=FakeResponse(200, {**export, **invalid})),
+            pytest.raises(DJConnectError, match="invalid_ask_dj_history_export"),
+        ):
+            client.ask_dj_history_export()
 
 
 def test_music_dna_uses_advertised_http_fallback_path_when_websocket_command_missing() -> None:

@@ -380,8 +380,9 @@ class HAClient:
         )
         if self.cfg.music_dna_key:
             body["music_dna_key"] = self.cfg.music_dna_key
+        timeout_seconds = max(self.timeout, 10.0)
         response = requests.post(self._djconnect_url("track_insight"), json=body, headers=self._headers(),
-                                 timeout=max(self.timeout, 10.0))
+                                 timeout=timeout_seconds)
         data = self._json(response)
         self._validate_ha_version(data)
         return data

@@ -2260,7 +2260,6 @@ _PLAYBACK_CONTROL_TRANSLATIONS = {
     "session_favorite_remove": ("Remove from favorites", "Verwijderen uit favorieten", "Aus Favoriten entfernen", "Retirer des favoris", "Quitar de favoritos"),
     "favorite_removed": ("Removed from favorites", "Verwijderd uit favorieten", "Aus Favoriten entfernt", "Retiré des favoris", "Quitado de favoritos"),
     "session_favorite_unavailable": ("Favorite status is unavailable.", "De favorietenstatus is niet beschikbaar.", "Der Favoritenstatus ist nicht verfügbar.", "Le statut de favori est indisponible.", "El estado de favorito no está disponible."),
-    "session_volume_read": ("Read current volume", "Huidig volume lezen", "Aktuelle Lautstärke lesen", "Lire le volume actuel", "Leer volumen actual"),
     "session_volume_unknown": ("Read the volume before adjusting it.", "Lees het volume voordat je het aanpast.", "Lies die Lautstärke, bevor du sie änderst.", "Lisez le volume avant de le modifier.", "Lee el volumen antes de ajustarlo."),
     "session_volume_read": ("Read volume again", "Volume opnieuw ophalen", "Lautstärke erneut abrufen", "Relire le volume", "Volver a consultar el volumen"),
     "session_volume_unavailable": ("Current output volume is unavailable.", "Het volume van de huidige uitvoer is niet beschikbaar.", "Die Lautstärke der aktuellen Ausgabe ist nicht verfügbar.", "Le volume de la sortie actuelle est indisponible.", "El volumen de la salida actual no está disponible."),

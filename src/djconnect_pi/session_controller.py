@@ -70,7 +70,6 @@ from .session_transport import (
 from .session_vibecast import VibeCastSender
 from .shared_settings import CHOICES
 
-
 _HISTORY_READ_ACTIONS = frozenset({
     "history", "history_more", "history_refresh", "timeline", "timeline_refresh", "timeline_page",
     "timeline_previous", "timeline_extend", "search", "search_more", "search_refresh", "open_entry",

@@ -1,7 +1,6 @@
 """Encode one bounded Track Insight clip from successive QML card captures."""
-from PySide6.QtCore import QIODevice, QObject, QSaveFile, QSize, QTimer, Qt, Signal
+from PySide6.QtCore import QIODevice, QObject, QSaveFile, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QImage
-
 
 FRAME_RATE = 24
 FRAME_COUNT = 6 * FRAME_RATE
@@ -26,7 +25,12 @@ class TrackInsightClip(QObject):
     finished = Signal(str)
 
     def __init__(self, path, height, fmt, current, parent=None):
-        from PySide6.QtMultimedia import QMediaCaptureSession, QMediaRecorder, QVideoFrame, QVideoFrameInput
+        from PySide6.QtMultimedia import (
+            QMediaCaptureSession,
+            QMediaRecorder,
+            QVideoFrame,
+            QVideoFrameInput,
+        )
 
         super().__init__(parent)
         self._current = current
