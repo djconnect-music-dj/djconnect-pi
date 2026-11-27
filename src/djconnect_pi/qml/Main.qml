@@ -1630,12 +1630,31 @@ BrandWindow {
         && djconnect.durationSeconds > 0 && !djconnect.busy
         && (djconnect.demoMode || (djconnect.musicBackendAvailable && djconnect.playbackSeekOutputKnown))
 
+    component PlaybackSeekStepButton: GlassButton {
+        id: stepButton
+        required property int offsetMs
+        property bool showInSurface: true
+        iconName: offsetMs < 0 ? "seek_back_15" : "seek_forward_15"
+        Accessible.name: root.tr(iconName)
+        visible: showInSurface && (djconnect.demoMode || djconnect.musicBackendSupportsSeek)
+        enabled: root.playbackSeekActionsAvailable
+        onClicked: djconnect.seekPlayback(stepButton.offsetMs)
+    }
+
     component PlaybackPositionControl: RowLayout {
         id: playbackPosition
         property bool controlPage: false
         objectName: controlPage ? "controlPlaybackPosition" : "nowPlaybackPosition"
         visible: djconnect.hasTrackTitle && djconnect.durationSeconds > 0
         spacing: 10
+        PlaybackSeekStepButton {
+            objectName: "controlSeekBack"
+            offsetMs: -15000
+            showInSurface: playbackPosition.controlPage
+            Layout.preferredWidth: 52
+            Layout.preferredHeight: 50
+            padding: 0
+        }
         Slider {
             id: positionSlider
             objectName: playbackPosition.controlPage ? "controlPlaybackProgress" : "nowPlaybackProgress"
@@ -1715,6 +1734,14 @@ BrandWindow {
             color: BrandTheme.colors.muted
             font.pixelSize: 18
         }
+        PlaybackSeekStepButton {
+            objectName: "controlSeekForward"
+            offsetMs: 15000
+            showInSurface: playbackPosition.controlPage
+            Layout.preferredWidth: 52
+            Layout.preferredHeight: 50
+            padding: 0
+        }
     }
 
     CompactPageLoader {
@@ -1730,7 +1757,6 @@ BrandWindow {
         objectName: "nowPanel"
         readonly property alias artworkTint: nowArtworkPalette.tint
         readonly property bool playbackActionsAvailable: root.compactPlaybackActionsAvailable
-        readonly property bool seekActionsAvailable: root.playbackSeekActionsAvailable
 
         AppBackground {}
 
@@ -1901,14 +1927,10 @@ BrandWindow {
                     anchors.fill: parent
                     anchors.margins: 10
                     spacing: 10
-                    GlassButton {
+                    PlaybackSeekStepButton {
                         objectName: "nowSeekBack"
                         Layout.fillWidth: true
-                        iconName: "seek_back_15"
-                        Accessible.name: root.tr("seek_back_15")
-                        visible: djconnect.demoMode || djconnect.musicBackendSupportsSeek
-                        enabled: nowPanel.seekActionsAvailable
-                        onClicked: djconnect.seekPlayback(-15000)
+                        offsetMs: -15000
                     }
                     GlassButton {
                         objectName: "nowPreviousTrack"
@@ -1935,14 +1957,10 @@ BrandWindow {
                         enabled: nowPanel.playbackActionsAvailable
                         onClicked: djconnect.next()
                     }
-                    GlassButton {
+                    PlaybackSeekStepButton {
                         objectName: "nowSeekForward"
                         Layout.fillWidth: true
-                        iconName: "seek_forward_15"
-                        Accessible.name: root.tr("seek_forward_15")
-                        visible: djconnect.demoMode || djconnect.musicBackendSupportsSeek
-                        enabled: nowPanel.seekActionsAvailable
-                        onClicked: djconnect.seekPlayback(15000)
+                        offsetMs: 15000
                     }
                 }
             }

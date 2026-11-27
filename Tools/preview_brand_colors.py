@@ -179,6 +179,12 @@ def main():
             backend.progressChanged.emit()
             assert control_progress.property("visible") and control_progress.property("enabled")
             assert control_time.property("text") == "1:15 / 4:00"
+            for name, expected in (("controlSeekBack", 60), ("controlSeekForward", 75)):
+                step = visual_item(window.contentItem(), name)
+                assert step.property("visible") and step.property("enabled")
+                center = step.mapToScene(QPointF(step.width() / 2, step.height() / 2)).toPoint()
+                QTest.mouseClick(window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, center)
+                assert backend.positionSeconds == expected
             control_start = control_progress.mapToScene(QPointF(control_progress.width() * 0.31, control_progress.height() / 2)).toPoint()
             control_end = control_progress.mapToScene(QPointF(control_progress.width() * 0.6, control_progress.height() / 2)).toPoint()
             QTest.mousePress(window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, control_start)
