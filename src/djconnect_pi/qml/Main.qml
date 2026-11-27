@@ -6180,7 +6180,6 @@ BrandWindow {
         function consumeUnsentAnswerContext() {
             const draft = root.askDjUnsentAnswerContext
             if (!visible || !draft || askDjChatInput.text !== draft.text || answerContext) return
-            root.askDjUnsentAnswerContext = null
             answerContext = draft.context
         }
 
@@ -7589,7 +7588,10 @@ BrandWindow {
                         return selected ? djconnect.askDjSelectedContributionPreview(selected.messageId || "",
                             selected.reference.session_id, selected.reference.entry_id) : ({})
                     }
-                    onCleared: askDjPanel.answerContext = null
+                    onCleared: {
+                        root.askDjUnsentAnswerContext = null
+                        askDjPanel.answerContext = null
+                    }
                     Timer {
                         running: askDjSelection.visible && !!askDjSelection.preview.expires_at
                         interval: askDjSelection.preview.expires_at ? Math.max(1, Math.min(2147483647, Math.ceil(
@@ -7691,6 +7693,9 @@ BrandWindow {
                         onTextChanged: {
                             if (!draftReady) return
                             askDjPanel.draftEditRevision += 1
+                            const restored = root.askDjUnsentAnswerContext
+                            if (restored && askDjPanel.visible && askDjPanel.answerContext === restored.context && text.trim())
+                                root.askDjUnsentAnswerContext = {text: text, context: restored.context}
                             if (text !== root.askDjDraft) root.askDjDraft = text
                         }
                         Component.onCompleted: draftReady = true
