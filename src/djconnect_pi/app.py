@@ -14,7 +14,7 @@ import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
-from datetime import datetime
+from datetime import UTC, datetime
 from importlib.resources import files
 from pathlib import Path
 from threading import Lock
@@ -836,8 +836,8 @@ class DJConnectBackend(QObject):
         elapsed = max(0, now_ms / 1000 - stamp)
         if elapsed < 3600:
             return self.tr_key("ask_dj_minutes_ago", count=max(1, int(elapsed // 60)))
-        created = datetime.fromtimestamp(stamp)
-        days = (datetime.fromtimestamp(now_ms / 1000).date() - created.date()).days
+        created = datetime.fromtimestamp(stamp, UTC).astimezone()
+        days = (datetime.fromtimestamp(now_ms / 1000, UTC).astimezone().date() - created.date()).days
         if days <= 0:
             return created.strftime("%H:%M")
         if days == 1:
@@ -1075,7 +1075,7 @@ class DJConnectBackend(QObject):
     @Slot(QUrl, bool, result=QUrl)
     def profileExportDestination(self, folder: QUrl, music_dna: bool) -> QUrl:
         data_kind = "music-dna" if music_dna else "ask-dj-history"
-        date = datetime.now().strftime("%Y%m%d-%H%M%S")
+        date = datetime.now(UTC).astimezone().strftime("%Y%m%d-%H%M%S")
         return self._local_export_destination(folder, f"djconnect-{data_kind}-{CLIENT_TYPE}-{date}.json",
                                               QStandardPaths.StandardLocation.DocumentsLocation)
 
