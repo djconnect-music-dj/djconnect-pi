@@ -2822,6 +2822,10 @@ Item {
             const first = [seekBackTransport, previousTransport, refreshTransport].find(button => button.visible && button.enabled)
             if (first) first.forceActiveFocus(Qt.PopupFocusReason)
         }
+        function playbackTime(milliseconds) {
+            const seconds = Math.floor(milliseconds / 1000)
+            return Math.floor(seconds / 60) + ":" + String(seconds % 60).padStart(2, "0")
+        }
         Item { visible: transportControls.overArtwork; Layout.fillHeight: true }
         Text {
             objectName: "sessionTransportTrackTitle"
@@ -2879,7 +2883,9 @@ Item {
                     property int draft: 0
                     function targetAt(x) {
                         const slider = playbackPositionSlider
-                        const fraction = Math.max(0, Math.min(1, (x - slider.leftPadding) / Math.max(1, slider.availableWidth)))
+                        const inset = slider.leftPadding + slider.handle.width / 2
+                        const travel = Math.max(1, slider.availableWidth - slider.handle.width)
+                        const fraction = Math.max(0, Math.min(1, (x - inset) / travel))
                         return Math.round(slider.valueAt(slider.mirrored ? 1 - fraction : fraction))
                     }
                     onPressed: function(mouse) {
@@ -2906,7 +2912,11 @@ Item {
             Text {
                 id: positionText
                 objectName: "sessionTransportPosition"
-                text: screen.state.playback.time_label || ""; textFormat: Text.PlainText
+                text: playbackPositionPointer.epoch > 0
+                    ? transportControls.playbackTime(playbackPositionPointer.draft) + " / "
+                        + transportControls.playbackTime(playbackPositionSlider.to)
+                    : screen.state.playback.time_label || ""
+                textFormat: Text.PlainText
                 color: BrandTheme.colors.muted; font.pixelSize: 16; font.features: ({ "tnum": 1 })
                 Layout.alignment: Qt.AlignRight
             }
