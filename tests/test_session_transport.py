@@ -264,6 +264,41 @@ def test_standalone_question_checks_receipt_and_sends_text_once(transport):
     request.assert_called_once()
 
 
+@pytest.mark.parametrize("receipt_entry", ["entry-1", "another-entry", None])
+def test_standalone_follow_up_requires_the_exact_saved_entry_receipt(transport, receipt_entry):
+    client, _, request, response = transport
+    selected = {"session_id": "earlier", "entry_id": "entry-1"}
+    context = {"session_id": None, "selected_entry": selected}
+    receipt_context = {"session_id": None}
+    if receipt_entry is not None:
+        receipt_context["selected_entry"] = {**selected, "entry_id": receipt_entry}
+    response.json.return_value = {
+        "success": True, "owner_profile_id": "owner", "client_message_id": "turn",
+        "conversation": {"schema_version": 1, "input_type": "text", "history_scope": "profile",
+                         "context": receipt_context},
+    }
+
+    if receipt_entry == selected["entry_id"]:
+        client.standalone_question(client.binding(), "Tell me more", "turn", "owner", selected_entry=selected)
+    else:
+        with pytest.raises(SessionError, match="^uncertain$"):
+            client.standalone_question(client.binding(), "Tell me more", "turn", "owner", selected_entry=selected)
+
+    request.assert_called_once()
+    body = request.call_args.kwargs["json"]
+    assert body["conversation_context"] == context
+    assert body["conversation_scope"] == "profile" and body["profile_id"] == "owner"
+
+
+@pytest.mark.parametrize("entry_id", ["", " entry", "a" * 129, True])
+def test_standalone_follow_up_rejects_malformed_references_before_sending(transport, entry_id):
+    client, _, request, _ = transport
+    with pytest.raises(SessionError, match="^invalid$"):
+        client.standalone_question(client.binding(), "Tell me more", "turn", "owner",
+                                   selected_entry={"session_id": "earlier", "entry_id": entry_id})
+    request.assert_not_called()
+
+
 def test_question_timeout_is_uncertain_with_no_write_replay(transport):
     client, _, request, _ = transport
     request.side_effect = requests.Timeout()

@@ -642,16 +642,31 @@ class SessionTransport:
             raise SessionError("context_changed")
         return result
 
-    def standalone_question(self, binding, text: str, message_id: str, owner: str):
+    def standalone_question(self, binding, text: str, message_id: str, owner: str, *, selected_entry=None):
         if not isinstance(text, str) or not text.strip() or len(text) > 4000:
             raise SessionError("invalid")
+        context = {}
+        if selected_entry is not None:
+            if not isinstance(selected_entry, dict) or set(selected_entry) != {"session_id", "entry_id"}:
+                raise SessionError("invalid")
+            if any(len(identifier(value)) > 128 or value != value.strip()
+                   for value in (*selected_entry.values(), message_id)):
+                raise SessionError("invalid")
+            context = {"session_id": None, "selected_entry": dict(selected_entry)}
         result = self._request(binding, "POST", "ask_dj/message", {
             "text": text.strip(), "client_message_id": identifier(message_id),
-            "conversation_context": {}, "conversation_scope": "profile", "profile_id": identifier(owner),
+            "conversation_context": context, "conversation_scope": "profile", "profile_id": identifier(owner),
             "language": locale_for_language(binding.language), "audio_response": "never",
         }, timeout=(8, 120), isolated=True)
         if result.get("owner_profile_id") != owner or result.get("client_message_id") != message_id:
             raise SessionError("uncertain")
+        if selected_entry is not None:
+            conversation = result.get("conversation")
+            if (result.get("success") is not True or not isinstance(conversation, dict)
+                    or type(conversation.get("schema_version")) is not int or conversation["schema_version"] != 1
+                    or conversation.get("input_type") != "text" or conversation.get("history_scope") != "profile"
+                    or conversation.get("context") != context):
+                raise SessionError("uncertain")
 
     def question(self, binding, request):
         body = request["text"].strip() if isinstance(request.get("text"), str) else ""
