@@ -5182,7 +5182,7 @@ BrandWindow {
                         textFormat: Text.PlainText
                         color: BrandTheme.colors.text
                         font.pixelSize: 18
-                        wrapMode: Text.WordWrap
+                        wrapMode: Text.Wrap
                         Layout.fillWidth: true
                     }
 
