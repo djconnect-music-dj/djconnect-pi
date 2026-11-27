@@ -186,6 +186,13 @@ BrandWindow {
     property int askDjClearConfirmationRevision: -1
     property string askDjDraft: ""
     property string askDjPendingQuestion: ""
+    property var askDjPendingAnswerContext: null
+    property var askDjUnsentAnswerContext: null
+    onAskDjPendingQuestionChanged: if (!askDjPendingQuestion) askDjPendingAnswerContext = null
+    onAskDjDraftChanged: {
+        if (askDjUnsentAnswerContext && askDjUnsentAnswerContext.text !== askDjDraft)
+            askDjUnsentAnswerContext = null
+    }
     property var pendingMediaStart: null
     property var askDjHistoryReturnReading: null
     property var pendingAskDjSavedContext: null
@@ -238,12 +245,14 @@ BrandWindow {
     onActiveChanged: if (!active) {
         pendingMediaStart = null
         askDjPendingQuestion = ""
+        askDjUnsentAnswerContext = null
     }
     onScreenBlankedChanged: {
         if (screenBlanked) {
             trackArtworkOpen = false
             pendingMediaStart = null
             askDjPendingQuestion = ""
+            askDjUnsentAnswerContext = null
         }
     }
     function showTrackArtwork(fromSession, automatic) {
@@ -1558,8 +1567,11 @@ BrandWindow {
         function onAskDjUnsentDraft(text) {
             if (!root.active || root.screenBlanked || root.askDjPendingQuestion !== text || root.askDjDraft) return
             const panel = askDjLoader.item
+            if (panel && panel.answerContext) return
+            root.askDjDraft = text
+            if (root.askDjPendingAnswerContext)
+                root.askDjUnsentAnswerContext = {text: text, context: root.askDjPendingAnswerContext}
             if (panel) panel.restoreUnsentDraft(text)
-            else root.askDjDraft = text
         }
         function onScreenshotRequested() {
             root.temporaryWake(10, false)
@@ -6002,7 +6014,10 @@ BrandWindow {
         visible: root.activeScreen === "askdj"
         z: 17
         sourceComponent: Component { AskDjPage {} }
-        onLoaded: item.consumeSavedContext()
+        onLoaded: {
+            item.consumeSavedContext()
+            item.consumeUnsentAnswerContext()
+        }
     }
 
     component AskDjPage: Rectangle {
@@ -6156,14 +6171,23 @@ BrandWindow {
         }
 
         function restoreUnsentDraft(text) {
-            if (askDjChatInput.text) return
+            if (askDjChatInput.text && askDjChatInput.text !== text) return
             askDjChatInput.text = text
             askDjChatInput.cursorPosition = text.length
+            consumeUnsentAnswerContext()
+        }
+
+        function consumeUnsentAnswerContext() {
+            const draft = root.askDjUnsentAnswerContext
+            if (!visible || !draft || askDjChatInput.text !== draft.text || answerContext) return
+            root.askDjUnsentAnswerContext = null
+            answerContext = draft.context
         }
 
         function sendQuestion() {
             const question = askDjChatInput.text.trim()
             if (!askDjSend.enabled) return
+            consumeUnsentAnswerContext()
             const accepted = answerContext
                 ? (answerContext.saved
                     ? djconnect.sendAskDjSavedQuestion(question, answerContext.reference.session_id, answerContext.reference.entry_id)
@@ -6171,7 +6195,10 @@ BrandWindow {
                         answerContext.reference.session_id, answerContext.reference.entry_id))
                 : djconnect.sendAskDjQuestion(question)
             if (accepted) {
-                if (djconnect.askDjBusy) root.askDjPendingQuestion = question
+                if (djconnect.askDjBusy) {
+                    root.askDjPendingQuestion = question
+                    root.askDjPendingAnswerContext = answerContext
+                }
                 answerContext = null
                 clearChatDraft()
                 Qt.callLater(scrollToTop)
@@ -6181,6 +6208,7 @@ BrandWindow {
         function selectAnswerContext(messageId, reference) {
             const fresh = djconnect.askDjContextEntry(messageId)
             if (fresh.session_id !== reference.session_id || fresh.entry_id !== reference.entry_id) return
+            root.askDjUnsentAnswerContext = null
             answerContext = {messageId: messageId, reference: fresh}
             closeSearch(false)
             closeHelp()
@@ -6192,6 +6220,7 @@ BrandWindow {
             if (!reference || !visible) return
             root.pendingAskDjSavedContext = null
             if (!djconnect.canAskAboutSavedEntry(reference.session_id, reference.entry_id)) return
+            root.askDjUnsentAnswerContext = null
             answerContext = {saved: true, reference: reference}
             closeSearch(false)
             closeHelp()
@@ -6315,6 +6344,7 @@ BrandWindow {
         onVisibleChanged: {
             if (visible) {
                 if (root.pendingAskDjSavedContext) Qt.callLater(consumeSavedContext)
+                if (root.askDjUnsentAnswerContext) Qt.callLater(consumeUnsentAnswerContext)
                 if (root.askDjHistoryReturnReading) historyReturnRestore.restart()
             } else {
                 historyReturnRestore.stop()
