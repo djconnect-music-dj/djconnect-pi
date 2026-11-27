@@ -2813,7 +2813,11 @@ BrandWindow {
                 Text {
                     objectName: "musicDnaImportMessage"
                     readonly property string failureKey: djconnect.musicDnaImportFailureKey
-                    text: root.tr(failureKey || (djconnect.musicDnaImportSaved ? "music_dna_import_saved" : "music_dna_import_confirm"))
+                    text: {
+                        if (failureKey) return root.tr(failureKey)
+                        if (djconnect.musicDnaImportSaved) return root.tr("music_dna_import_saved")
+                        return root.tr(djconnect.musicDnaImportUploading ? "music_dna_import_uploading" : "music_dna_import_confirm")
+                    }
                     color: failureKey ? BrandTheme.colors.danger
                                       : (djconnect.musicDnaImportSaved ? BrandTheme.colors.success : BrandTheme.colors.muted)
                     textFormat: Text.PlainText
@@ -2825,7 +2829,7 @@ BrandWindow {
                     id: importConfirm
                     objectName: "musicDnaImportConfirm"
                     readonly property bool uploading: djconnect.musicDnaImportUploading
-                    text: root.tr(uploading ? "music_dna_import_uploading" : "music_dna_import_upload")
+                    text: root.tr("music_dna_import_upload")
                     wrapText: true
                     leftPadding: uploading ? 50 : padding
                     primary: true
@@ -2847,7 +2851,8 @@ BrandWindow {
                 }
                 GlassButton {
                     objectName: "musicDnaImportClose"
-                    text: root.tr(musicDnaImportPreview.finished ? "close" : "cancel")
+                    text: root.tr(djconnect.musicDnaImportSaved ? "done"
+                        : (musicDnaImportPreview.finished ? "close" : "cancel"))
                     primary: musicDnaImportPreview.finished
                     enabled: musicDnaImportPreview.finished || !djconnect.musicDnaBusy
                     Layout.fillWidth: true
