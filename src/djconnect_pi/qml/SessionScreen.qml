@@ -1707,6 +1707,25 @@ Item {
                 wrapMode: Text.WordWrap
                 Layout.fillWidth: true
             }
+            RowLayout {
+                objectName: "sessionArchiveInitialLoading"
+                visible: screen.historyViewOpen && !screen.currentHistory && !screen.state.timeline.session
+                    && !screen.state.history_loaded && !screen.state.error && !screen.backend.demoMode
+                    && screen.historyReadOutstanding
+                Layout.alignment: Qt.AlignHCenter
+                spacing: 10
+                BusyIndicator {
+                    running: parent.visible
+                    Layout.preferredWidth: 30
+                    Layout.preferredHeight: 30
+                }
+                Text {
+                    text: screen.tr("loading")
+                    textFormat: Text.PlainText
+                    color: BrandTheme.colors.muted
+                    font.pixelSize: 21
+                }
+            }
             VinylPlaceholder {
                 objectName: "sessionWaitingVinyl"
                 visible: !screen.historical && screen.state.session_id.length > 0 && screen.state.loaded && !screen.state.playback.item_id &&
