@@ -355,6 +355,7 @@ class SessionController(QObject):
             "contribution_exploration": not revoked and self._composer_supported() and not self.backend.demoMode
                 and bool(contribution_question(self._caps, self.backend.cfg.language)),
             "standalone_exploration": not revoked and bool(self._standalone_exploration_question()),
+            "standalone_saved_composer": not revoked and self._standalone_saved_composer(),
             "flow_more": active_history and self._incomplete_flow_limit == 20,
             "flow_history_hint": active_history and self._incomplete_flow_limit == 50,
             **({
@@ -1209,13 +1210,19 @@ class SessionController(QObject):
 
     def saved_exploration_question(self, selected):
         return (self._standalone_exploration_question()
-                if self._entry_exploration_valid(selected, "timeline") else "")
+                if self.saved_question_available(selected) else "")
+
+    def _standalone_saved_composer(self):
+        return (not self.backend.demoMode and self._foreground
+                and not self._session and self._history_supported() and self._supports_contextual_dialogue(self._caps)
+                and private_scope_allowed(self))
+
+    def saved_question_available(self, selected):
+        return (not self.busy and not self._question_running and self._standalone_saved_composer()
+                and self._entry_exploration_valid(selected, "timeline"))
 
     def _standalone_exploration_question(self):
-        if (self.backend.demoMode or not self._foreground or self.busy or self._question_running
-                or self._session or not self._history_supported() or not private_scope_allowed(self)):
-            return ""
-        return contribution_question(self._caps, self.backend.cfg.language)
+        return contribution_question(self._caps, self.backend.cfg.language) if self._standalone_saved_composer() else ""
 
     def _entry_exploration_valid(self, selected, source):
         if not self._entry_selection_valid(selected, source):

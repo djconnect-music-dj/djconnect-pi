@@ -737,6 +737,15 @@ class DJConnectBackend(QObject):
         return self._send_ask_dj_question(question, "", session_id, entry_id,
                                           restore_draft=False, from_archive=True)
 
+    @Slot(str, str, result=bool)
+    def canAskAboutSavedEntry(self, session_id, entry_id):
+        return ((session_id, entry_id) not in self._ask_dj_withdrawn_entries
+                and self._session_controller.saved_question_available({"session_id": session_id, "entry_id": entry_id}))
+
+    @Slot(str, str, str, result=bool)
+    def sendAskDjSavedQuestion(self, text, session_id, entry_id):
+        return self._send_ask_dj_question(text, "", session_id, entry_id, restore_draft=True, from_archive=True)
+
     @Slot(str, str, str)
     def openAskDjHistoryMatch(self, message_id, session_id, entry_id):
         ticket = self._private_read_context()
@@ -2859,7 +2868,8 @@ class DJConnectBackend(QObject):
             return False
         def reference_current():
             if from_archive:
-                return text == self._session_controller.saved_exploration_question(selected)
+                return (self.canAskAboutSavedEntry(session_id, entry_id)
+                        and (restore_draft or text == self._session_controller.saved_exploration_question(selected)))
             return selected is None or self.askDjContextEntry(reply_id) == selected
 
         if not reference_current():
@@ -2901,9 +2911,17 @@ class DJConnectBackend(QObject):
                     restore_unsent()
                     self._toastReady.emit(self.tr_key("session_profile_missing"), 5000, "askdj")
                     return
-                if from_archive and active_session(transport.active(binding, isolated=True)):
-                    self._askDjDeliveryReady.emit(ticket, "ask_dj_destination_changed")
-                    return
+                if from_archive:
+                    try:
+                        active = active_session(transport.active(binding, isolated=True))
+                    except SessionError:
+                        restore_unsent()
+                        self._askDjDeliveryReady.emit(ticket, "ask_dj_destination_unavailable")
+                        return
+                    if active:
+                        restore_unsent()
+                        self._askDjDeliveryReady.emit(ticket, "ask_dj_destination_changed")
+                        return
                 if not current():
                     return
                 if not reference_current():

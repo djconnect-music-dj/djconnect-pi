@@ -1050,6 +1050,7 @@ Item {
     }
     signal openVibeScape(real pickerTop)
     signal navigate(string destination)
+    signal askAboutSavedInChat(string sessionId, string entryId)
     signal pairingRecoveryRequested()
     function tr(key) { backend.translationVersion; return backend.t(key) }
     function displayDate(value) { backend.translationVersion; return owner.formatTimestamp(value || "") }
@@ -2461,12 +2462,17 @@ Item {
                 SessionRetainedEntry {
                     required property var modelData
                     entry: modelData; translate: screen.tr; dateText: screen.displayDate(modelData.occurred_at)
-                    selectionAvailable: screen.state.composer_available; selectionBusy: screen.owner.busy || screen.owner.questionBusy
+                    selectionAvailable: screen.state.composer_available || (screen.state.standalone_saved_composer
+                        && screen.backend.canAskAboutSavedEntry(modelData.session_id, modelData.entry_id))
+                    selectionBusy: screen.owner.busy || screen.owner.questionBusy || screen.backend.askDjBusy
                     explorationAvailable: screen.historyViewOpen
                         && (screen.state.contribution_exploration || screen.state.standalone_exploration)
                     deletionAvailable: !!screen.contentDeletion.available
                     onDeleteEntry: (sessionId, entryId) => screen.deleteContent("entry", sessionId, entryId)
-                    onAskAbout: (sessionId, entryId) => { if (screen.owner.selectEntry(sessionId, entryId)) { screen.navigate("session"); composerPanel.open() } }
+                    onAskAbout: (sessionId, entryId) => {
+                        if (screen.state.standalone_saved_composer) screen.askAboutSavedInChat(sessionId, entryId)
+                        else if (screen.owner.selectEntry(sessionId, entryId)) { screen.navigate("session"); composerPanel.open() }
+                    }
                     onTellMore: (sessionId, entryId) => {
                         if (!screen.historyViewOpen) return
                         if (screen.state.standalone_exploration) {

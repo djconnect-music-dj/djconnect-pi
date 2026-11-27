@@ -187,8 +187,9 @@ BrandWindow {
     property string askDjDraft: ""
     property var pendingMediaStart: null
     property var askDjHistoryReturnReading: null
+    property var pendingAskDjSavedContext: null
     readonly property int askDjDraftContextRevision: djconnect.musicDnaContextRevision
-    onAskDjDraftContextRevisionChanged: askDjDraft = ""
+    onAskDjDraftContextRevisionChanged: { askDjDraft = ""; pendingAskDjSavedContext = null }
     Connections {
         target: djconnect
         function onProfileChanged() { root.askDjDraft = ""; root.pendingMediaStart = null; root.askDjHistoryReturnReading = null }
@@ -389,6 +390,7 @@ BrandWindow {
 
     onActiveScreenChanged: {
         if (activeScreen !== "askdj" && activeScreen !== "session-history") askDjHistoryReturnReading = null
+        if (activeScreen !== "askdj") pendingAskDjSavedContext = null
         root.trackArtworkOpen = false
         if (root.wallProfile && (root.activeScreen === "now" || root.activeScreen === "control")) {
             root.closeVibeScape()
@@ -5712,6 +5714,7 @@ BrandWindow {
         visible: root.activeScreen === "askdj"
         z: 17
         sourceComponent: Component { AskDjPage {} }
+        onLoaded: item.consumeSavedContext()
     }
 
     component AskDjPage: Rectangle {
@@ -5867,8 +5870,10 @@ BrandWindow {
             const question = askDjChatInput.text.trim()
             if (!askDjSend.enabled) return
             const accepted = answerContext
-                ? djconnect.sendAskDjQuestion(question, answerContext.messageId,
-                    answerContext.reference.session_id, answerContext.reference.entry_id)
+                ? (answerContext.saved
+                    ? djconnect.sendAskDjSavedQuestion(question, answerContext.reference.session_id, answerContext.reference.entry_id)
+                    : djconnect.sendAskDjQuestion(question, answerContext.messageId,
+                        answerContext.reference.session_id, answerContext.reference.entry_id))
                 : djconnect.sendAskDjQuestion(question)
             if (accepted) {
                 if (djconnect.askDjBusy) pendingQuestionText = question
@@ -5882,6 +5887,17 @@ BrandWindow {
             const fresh = djconnect.askDjContextEntry(messageId)
             if (fresh.session_id !== reference.session_id || fresh.entry_id !== reference.entry_id) return
             answerContext = {messageId: messageId, reference: fresh}
+            closeSearch(false)
+            closeHelp()
+            askDjChatInput.forceActiveFocus()
+        }
+
+        function consumeSavedContext() {
+            const reference = root.pendingAskDjSavedContext
+            if (!reference || !visible) return
+            root.pendingAskDjSavedContext = null
+            if (!djconnect.canAskAboutSavedEntry(reference.session_id, reference.entry_id)) return
+            answerContext = {saved: true, reference: reference}
             closeSearch(false)
             closeHelp()
             askDjChatInput.forceActiveFocus()
@@ -6012,6 +6028,7 @@ BrandWindow {
 
         onVisibleChanged: {
             if (visible) {
+                if (root.pendingAskDjSavedContext) Qt.callLater(consumeSavedContext)
                 if (root.askDjHistoryReturnReading) historyReturnRestore.restart()
             } else {
                 historyReturnRestore.stop()
@@ -7452,6 +7469,11 @@ BrandWindow {
             onExpandTrackArtwork: function(source) { root.openTrackArtwork(source) }
             onOpenVibeScape: function(pickerTop) { root.openVibeScape(pickerTop) }
             onPairingRecoveryRequested: root.resetPairingConfirmOpen = true
+            onAskAboutSavedInChat: function(sessionId, entryId) {
+                if (!djconnect.canAskAboutSavedEntry(sessionId, entryId)) return
+                root.pendingAskDjSavedContext = {session_id: sessionId, entry_id: entryId}
+                root.activeScreen = "askdj"
+            }
             onNavigate: function(destination) {
                 if (destination === "session-history" && root.activeScreen === "askdj"
                         && sharedSessionScreen.returnToAskDj && askDjLoader.item)
