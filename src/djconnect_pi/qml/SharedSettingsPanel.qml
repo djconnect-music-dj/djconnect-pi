@@ -154,7 +154,7 @@ ColumnLayout {
                 currentIndex: editor.selectedIndex(fieldRow.modelData)
                 displayText: currentIndex >= 0 ? editor.label(model[currentIndex]) : editor.tr("shared_unavailable_selection")
                 enabled: !!editor.backend.sharedSettings.available && !editor.backend.sharedSettingsBusy &&
-                         !editor.backend.sharedSettings.operation_pending &&
+                         !editor.outcomeUncertain &&
                          (editor.backend.sharedSettings.writable || []).indexOf(fieldRow.modelData) >= 0
                 Accessible.name: editor.tr("shared_field_" + fieldRow.modelData)
                 delegate: ItemDelegate {
@@ -249,7 +249,7 @@ ColumnLayout {
             Layout.minimumHeight: 54
             font.pixelSize: 22
             enabled: !!editor.backend.sharedSettings.available && !editor.backend.sharedSettingsBusy &&
-                     !editor.backend.sharedSettings.operation_pending && editor.editToken.length > 0 &&
+                     !editor.outcomeUncertain && editor.editToken.length > 0 &&
                      (editor.dirty || editor.backend.sharedSettings.selection_required)
             onClicked: {
                 var patch = {}
@@ -260,6 +260,19 @@ ColumnLayout {
                 editor.backend.saveSharedSettings(patch)
                 if (!editor.backend.sharedSettingsBusy) editor.saving = false
             }
+        }
+    }
+    GlassButton {
+        objectName: "sharedUseConfirmed"
+        visible: !!editor.backend.sharedSettings.operation_unknown
+        enabled: !editor.backend.sharedSettingsBusy
+        text: editor.tr("shared_use_confirmed")
+        wrapText: true
+        Layout.fillWidth: true
+        onClicked: {
+            editor.checkingOutcome = true
+            editor.backend.useConfirmedSharedSettings()
+            if (!editor.backend.sharedSettingsBusy) editor.checkingOutcome = false
         }
     }
 }

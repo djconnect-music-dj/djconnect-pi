@@ -252,8 +252,37 @@ def test_unresolved_operation_never_issues_a_second_patch(owner, monkeypatch):
         client.update({"mood": "party"}, state["edit_token"])
     current = client.read()
     assert current["operation_pending"] is True
+    with pytest.raises(SettingsError, match="reload"):
+        client.read(accept_current=True)
     with pytest.raises(SettingsError, match="uncertain"):
         client.update({"mood": "chill"}, current["edit_token"])
+    assert patch.call_count == 1
+
+
+def test_unknown_operation_requires_fresh_read_to_use_confirmed_settings(owner, monkeypatch):
+    client, _, get = owner
+    state = client.read()
+    patch = Mock(side_effect=requests.Timeout())
+    monkeypatch.setattr(requests, "patch", patch)
+    monkeypatch.setattr(requests, "post", Mock(return_value=response(
+        {"success": True, "contract_version": 3, "phase": "unknown"}
+    )))
+    with pytest.raises(SettingsError, match="uncertain"):
+        client.update({"mood": "party"}, state["edit_token"])
+    current = client.read()
+    assert current["operation_unknown"] and not current["operation_pending"]
+    with pytest.raises(SettingsError, match="uncertain"):
+        client.update({"mood": "chill"}, current["edit_token"])
+    get.side_effect = requests.Timeout()
+    with pytest.raises(SettingsError):
+        client.read(accept_current=True)
+    get.side_effect = None
+    assert client.read()["operation_unknown"]
+    confirmed = fixture()
+    confirmed["snapshot"]["session"]["settings"]["mood"] = "energy"
+    get.return_value = response(confirmed)
+    assert client.read(accept_current=True)["values"]["mood"] == "energy"
+    assert not client.read()["operation_unknown"]
     assert patch.call_count == 1
 
 

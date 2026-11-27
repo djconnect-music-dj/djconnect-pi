@@ -539,7 +539,17 @@ class DJConnectBackend(QObject):
             return
         self._start_shared_settings(deepcopy(patch))
 
-    def _start_shared_settings(self, patch: dict | None = None) -> None:
+    @Slot()
+    def useConfirmedSharedSettings(self) -> None:
+        if self._shutting_down:
+            return
+        self._invalidate_shared_settings_if_context_changed()
+        if (self._demo_mode or not self.paired or self._shared_settings_inflight
+                or not self._shared_settings_state.get("operation_unknown")):
+            return
+        self._start_shared_settings(accept_current=True)
+
+    def _start_shared_settings(self, patch: dict | None = None, *, accept_current: bool = False) -> None:
         self._shared_settings_inflight = True
         self.sharedSettingsChanged.emit()
         epoch = self._shared_settings_epoch
@@ -549,7 +559,9 @@ class DJConnectBackend(QObject):
             result = {"epoch": epoch, "context": context}
             try:
                 owner = self._shared_settings
-                if patch is None:
+                if accept_current:
+                    result["projection"] = owner.read(accept_current=True)
+                elif patch is None:
                     result["projection"] = owner.read()
                 else:
                     token = patch.pop("_edit_token", self._shared_settings_state.get("edit_token", ""))

@@ -1232,6 +1232,13 @@ _SHARED_SETTINGS_TRANSLATIONS = {
         'Vérifier le résultat',
         'Comprobar resultado',
     ),
+    'shared_use_confirmed': (
+        'Use current confirmed choices',
+        'Gebruik huidige bevestigde keuzes',
+        'Aktuelle bestätigte Auswahl verwenden',
+        'Utiliser les choix actuels confirmés',
+        'Usar opciones actuales confirmadas',
+    ),
     'shared_apply': (
         'Confirm choices',
         'Keuzes bevestigen',

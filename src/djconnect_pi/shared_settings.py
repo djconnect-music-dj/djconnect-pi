@@ -194,9 +194,11 @@ class SharedSettingsClient:
             raise SettingsError("uncertain" if method == "patch" else "invalid")
         return data
 
-    def read(self) -> dict:
+    def read(self, *, accept_current=False) -> dict:
         with self._lock:
             context = self.context()
+            if accept_current and (context != self._context or self._pending is not None or not self._unknown):
+                raise SettingsError("reload")
             if context != self._context:
                 self._snapshot = None
                 if context[:3] != self._context[:3]:
@@ -211,6 +213,8 @@ class SharedSettingsClient:
                 if context != self.context():
                     raise SettingsError("denied")
                 self._snapshot = data
+                if accept_current:
+                    self._unknown = False
                 self.managed = True
                 return self.projection()
             except SettingsError:
@@ -261,7 +265,7 @@ class SharedSettingsClient:
 
     def update(self, patch: dict, edit_token: str) -> dict:
         with self._lock:
-            if self._pending is not None:
+            if self._pending is not None or self._unknown:
                 raise SettingsError("uncertain")
             if self._snapshot is None or self.context() != self._context:
                 raise SettingsError("reload")

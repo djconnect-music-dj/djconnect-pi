@@ -4078,7 +4078,8 @@ Item {
                     && choices.editToken === (screen.backend.sharedSettings.edit_token || "")
                     && !!screen.backend.sharedSettings.available && !screen.backend.sharedSettingsBusy
                     && !screen.backend.sharedSettings.selection_required && choices.editToken.length > 0
-                    && !screen.backend.sharedSettings.operation_pending))
+                    && !screen.backend.sharedSettings.operation_pending
+                    && !screen.backend.sharedSettings.operation_unknown))
         y: fromTrackInsight ? trackInsightTop : toolbar.y + toolbar.height + 8
         width: Math.min(screen.width - 24, 560); padding: 22
         modal: true; dim: false
