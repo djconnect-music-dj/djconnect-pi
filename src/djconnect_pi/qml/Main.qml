@@ -8590,8 +8590,23 @@ BrandWindow {
         property bool discoveryConsent: false
         property int profileRevision: -1
         readonly property bool currentProfile: profileRevision === djconnect.musicDnaContextRevision
+        readonly property bool requestBusy: discoveryConsent ? djconnect.musicDiscoveryBusy : djconnect.musicDnaBusy
+        property bool activationPending: false
+        property string activationError: ""
         z: 86
-        onClosed: profileRevision = -1
+        onRequestBusyChanged: finishActivation()
+        onClosed: {
+            profileRevision = -1
+            activationPending = false
+            activationError = ""
+        }
+
+        function finishActivation() {
+            if (!activationPending || requestBusy || !currentProfile) return
+            activationPending = false
+            if (djconnect.musicDnaEnabled && !djconnect.musicDnaError) close()
+            else activationError = djconnect.musicDnaError || root.tr("music_dna_profile_unavailable")
+        }
 
         contentItem: ScrollView {
             id: optInScroll
@@ -8653,22 +8668,35 @@ BrandWindow {
                             }
                         }
                     }
+                    Text {
+                        objectName: "musicDnaOptInError"
+                        visible: musicDnaOptIn.activationError.length > 0
+                        text: musicDnaOptIn.activationError
+                        textFormat: Text.PlainText
+                        color: BrandTheme.colors.danger
+                        font.pixelSize: musicDnaOptIn.compact ? 17 : 20
+                        wrapMode: Text.WordWrap
+                        Layout.fillWidth: true
+                    }
                     GlassButton {
                         objectName: "musicDnaConfirmEnable"
                         primary: true
                         text: root.tr("music_dna_opt_in_accept")
                         iconName: "discover"
+                        busy: musicDnaOptIn.activationPending
                         Layout.fillWidth: true
                         Layout.preferredHeight: musicDnaOptIn.compact ? 56 : 68
                         enabled: (djconnect.paired || djconnect.demoMode) && !djconnect.musicDnaBusy
-                            && !djconnect.musicDiscoveryBusy && musicDnaOptIn.currentProfile
+                            && !djconnect.musicDiscoveryBusy && musicDnaOptIn.currentProfile && !busy
                         onClicked: {
                             if (!musicDnaOptIn.opened || !enabled) return
+                            musicDnaOptIn.activationError = ""
+                            musicDnaOptIn.activationPending = true
                             const discoveryConsent = musicDnaOptIn.discoveryConsent
                             const revision = musicDnaOptIn.profileRevision
-                            musicDnaOptIn.close()
                             if (discoveryConsent) djconnect.acceptMusicDiscoveryConsent(revision)
                             else djconnect.setMusicDnaEnabled(true, revision)
+                            musicDnaOptIn.finishActivation()
                         }
                     }
                     GlassButton {
@@ -8676,6 +8704,7 @@ BrandWindow {
                         foregroundColor: BrandTheme.colors.muted
                         font.pixelSize: musicDnaOptIn.compact ? 18 : 21
                         text: root.tr("music_dna_opt_in_not_now")
+                        enabled: !musicDnaOptIn.activationPending
                         tertiary: true
                         Layout.fillWidth: true
                         onClicked: {
