@@ -390,6 +390,14 @@ Item {
         refreshHistory(true)
         historyPullRefreshing = historyReadOutstanding
     }
+    function refreshDisplayedSession() {
+        if (!toolbarRefresh.enabled) return
+        if (historical) {
+            refreshHistory(true)
+            historyToolbarRefreshing = historyReadOutstanding
+        } else owner.refresh(true)
+        backend.pollSharedSettings()
+    }
 
     function syncMediaVisibility() {
         if (!owner) return
@@ -1368,14 +1376,7 @@ Item {
                     enabled: screen.backend.paired && !screen.backend.demoMode && !refreshing
                         && (screen.historical ? !screen.historyReadOutstanding && !screen.archiveReadActive : !screen.owner.busy)
                     opacity: enabled || refreshing ? 1 : 0.4
-                    onClicked: {
-                        if (!enabled) return
-                        if (screen.historical) {
-                            screen.refreshHistory(true)
-                            screen.historyToolbarRefreshing = screen.historyReadOutstanding
-                        } else screen.owner.refresh(true)
-                        screen.backend.pollSharedSettings()
-                    }
+                    onClicked: screen.refreshDisplayedSession()
                     BusyIndicator {
                         objectName: "sessionRefreshSpinner"
                         anchors.centerIn: parent
@@ -1659,12 +1660,23 @@ Item {
                 Layout.alignment: Qt.AlignHCenter
             }
             GlassCard {
+                readonly property bool profileMissing: screen.state.error === "profile_unavailable" || screen.state.error === "profile_required"
+                id: sessionErrorCard
                 visible: screen.state.error.length > 0
                 Layout.fillWidth: true
                 Text {
-                    text: screen.tr(screen.state.error === "uncertain" ? "session_uncertain" : (screen.state.error === "profile_unavailable" || screen.state.error === "profile_required") ? "session_profile_missing" : "session_error")
+                    text: screen.tr(screen.state.error === "uncertain" ? "session_uncertain"
+                        : sessionErrorCard.profileMissing ? "session_profile_missing" : "session_error")
                     color: BrandTheme.colors.warning; font.pixelSize: 21; wrapMode: Text.WordWrap
                     Layout.fillWidth: true; textFormat: Text.PlainText
+                }
+                GlassButton {
+                    objectName: "sessionRecheckProfile"
+                    visible: sessionErrorCard.profileMissing && screen.backend.paired && !screen.backend.demoMode
+                    enabled: toolbarRefresh.enabled
+                    iconName: toolbarRefresh.refreshing ? "" : "refresh"
+                    text: screen.tr(toolbarRefresh.refreshing ? "loading" : "session_profile_recheck")
+                    onClicked: screen.refreshDisplayedSession()
                 }
                 GlassButton {
                     objectName: "sessionArchiveRetry"

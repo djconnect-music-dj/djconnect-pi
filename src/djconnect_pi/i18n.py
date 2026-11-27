@@ -1899,6 +1899,7 @@ _SESSION_FORECAST_TRANSLATIONS = {
         "Una orientación para los próximos minutos. La música y las intervenciones pueden cambiar.",
     ),
     "session_owner_read_only": ("Following the active session. Personal functions require personal Profile access.", "Je volgt de actieve sessie. Privéfuncties vereisen toegang tot een persoonlijk profiel.", "Die aktive Session wird angezeigt. Private Funktionen erfordern Zugriff auf ein persönliches Profil.", "La session active est affichée. Les fonctions privées nécessitent un accès à un profil personnel.", "Se muestra la sesión activa. Las funciones privadas requieren acceso a un perfil personal."),
+    "session_profile_recheck": ("Check profile again", "Controleer profiel opnieuw", "Profil erneut prüfen", "Vérifier à nouveau le profil", "Volver a comprobar el perfil"),
     "session_forecast_current": ("Playing now", "Speelt nu", "Läuft gerade", "En cours", "Sonando ahora"),
     "session_forecast_intention": ("Intention", "Voornemen", "Absicht", "Intention", "Intención"),
     "session_forecast_conditional_target": ("Possible direction", "Mogelijke richting", "Mögliche Richtung", "Direction possible", "Dirección posible"),
