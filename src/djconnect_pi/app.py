@@ -4297,8 +4297,18 @@ class DJConnectBackend(QObject):
             data = {}
         if not self._discovery_action_current(ticket, consent_epoch):
             return
-        if data.get("success") is not True:
-            error = {"success": False, "error": "music_discovery_play_failed"}
+        item_id = str(item.get("discovery_item_id") or item.get("id") or "").strip()
+        receipt_item = data.get("item")
+        legacy_receipt = "played" not in data and "item" not in data
+        acknowledged = (legacy_receipt or (data.get("played") is True and isinstance(receipt_item, dict)
+                                           and receipt_item.get("id") == item_id))
+        if data.get("success") is not True or not acknowledged:
+            outcome = data.get("action_outcome")
+            if data.get("success") is True or (isinstance(outcome, dict) and outcome.get("state") in ("unknown", "dispatched")):
+                error_key = "music_discovery_play_unconfirmed"
+            else:
+                error_key = "music_discovery_play_failed"
+            error = {"success": False, "error": error_key}
             self._musicDiscoveryReady.emit(_DiscoveryReadResult(error, ticket, consent_epoch))
             return
         self._apply_profile_context(data)
@@ -4307,7 +4317,7 @@ class DJConnectBackend(QObject):
         self._persist_backend_summary()
         has_playback = _contains_playback_payload(data)
         self._musicDiscoveryPlayConfirmed.emit(
-            (ticket, consent_epoch), str(item.get("section_id") or ""), str(item.get("discovery_item_id") or item.get("id") or "").strip(),
+            (ticket, consent_epoch), str(item.get("section_id") or ""), item_id,
             self.client.playback_from_status(data) if has_playback else None,
         )
         readbacks = (self._load_queue_worker,) if has_playback else (self._load_queue_worker, self._refresh_worker)
@@ -5030,7 +5040,9 @@ class DJConnectBackend(QObject):
             return
         manual = isinstance(data, _DiscoveryReadResult) and data.manual
         error = str(data.get("error") or "")
-        if data.get("success") is False and error in {"music_discovery_play_failed", "music_discovery_feedback_failed"}:
+        if data.get("success") is False and error in {
+            "music_discovery_play_failed", "music_discovery_play_unconfirmed", "music_discovery_feedback_failed",
+        }:
             self._music_discovery_error = self.tr_key(error)
             self.musicDiscoveryChanged.emit()
             return

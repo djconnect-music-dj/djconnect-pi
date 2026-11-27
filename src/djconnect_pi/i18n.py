@@ -1951,6 +1951,13 @@ _SESSION_COMPOSER_TRANSLATIONS = {
         "Impossible de lire cette recommandation.",
         "No se pudo reproducir esta recomendación.",
     ),
+    "music_discovery_play_unconfirmed": (
+        "Playback could not be confirmed. Check what is playing before trying again.",
+        "Het afspelen kon niet worden bevestigd. Controleer wat er speelt voordat je het opnieuw probeert.",
+        "Die Wiedergabe konnte nicht bestätigt werden. Prüfe vor einem neuen Versuch, was gerade läuft.",
+        "La lecture n’a pas pu être confirmée. Vérifiez ce qui joue avant de réessayer.",
+        "No se pudo confirmar la reproducción. Comprueba qué está sonando antes de volver a intentarlo.",
+    ),
     "music_discovery_feedback_failed": (
         "Could not send your feedback.",
         "Je feedback kon niet worden verstuurd.",

@@ -334,11 +334,18 @@ def test_music_discovery_play_ignores_items_without_backend_id(tmp_path: Path) -
     backend.client.music_discovery_play.assert_not_called()
 
 
-@pytest.mark.parametrize("response", [
-    {"success": True}, {"success": True, "playback": {"title": "Confirmed track"}},
-    {"success": False}, {}, {"success": "true"},
+@pytest.mark.parametrize(("response", "error_key"), [
+    ({"success": True}, ""),
+    ({"success": True, "playback": {"title": "Confirmed track"}}, ""),
+    ({"success": True, "played": True, "item": {"id": "recommendation"}}, ""),
+    ({"success": True, "played": False}, "music_discovery_play_unconfirmed"),
+    ({"success": True, "played": True, "item": {"id": "another-item"}}, "music_discovery_play_unconfirmed"),
+    ({"success": False, "action_outcome": {"state": "unknown"}}, "music_discovery_play_unconfirmed"),
+    ({"success": False}, "music_discovery_play_failed"),
+    ({}, "music_discovery_play_failed"),
+    ({"success": "true"}, "music_discovery_play_failed"),
 ])
-def test_discovery_play_closes_only_on_acknowledged_playback(tmp_path: Path, response: dict) -> None:
+def test_discovery_play_closes_only_on_acknowledged_playback(tmp_path: Path, response: dict, error_key: str) -> None:
     ensure_app()
     config_path = tmp_path / "config.json"
     save_config(config_path, Config(paired=True, device_token="fixture", ha_url="http://fixture.invalid"))
@@ -357,10 +364,10 @@ def test_discovery_play_closes_only_on_acknowledged_playback(tmp_path: Path, res
     backend._executor.submit.assert_called_once()
     backend._executor.submit.call_args.args[0]()
 
-    accepted = response.get("success") is True
+    accepted = not error_key
     assert completions == ([("rediscover", "recommendation")] if accepted else [])
     if not accepted:
-        assert backend.musicDiscoveryError == backend.t("music_discovery_play_failed")
+        assert backend.musicDiscoveryError == backend.t(error_key)
     assert backend.musicDiscoveryPlayingId == ""
     assert backend.client.music_discovery_feed.call_count == int(accepted)
     assert backend._load_queue_worker.call_count == int(accepted)
