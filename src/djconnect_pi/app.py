@@ -1922,8 +1922,9 @@ class DJConnectBackend(QObject):
             self.cancelControlVolume()
 
     @Slot()
-    def openTrackInsight(self) -> None:
-        if not self._demo_mode and not self.playback.is_playing:
+    @Slot(bool)
+    def openTrackInsight(self, explicit: bool = False) -> None:
+        if not self._demo_mode and not self.playback.is_playing and not (explicit and self.hasTrackTitle):
             return
         self._request_track_insight(manual=False)
 

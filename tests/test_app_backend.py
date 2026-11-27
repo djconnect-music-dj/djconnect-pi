@@ -3316,7 +3316,8 @@ def test_backend_track_insight_refresh_requests_fresh_analysis_and_shows_toast(t
     assert backend.askDjBusy and not backend.trackInsightLoading
 
 
-def test_backend_track_insight_auto_open_requires_playing_track(tmp_path: Path) -> None:
+@pytest.mark.parametrize("explicit", [False, True])
+def test_backend_track_insight_auto_open_requires_playing_track(tmp_path: Path, explicit: bool) -> None:
     ensure_app()
     backend = DJConnectBackend(tmp_path / "config.json")
     backend.cfg.paired = True
@@ -3329,12 +3330,11 @@ def test_backend_track_insight_auto_open_requires_playing_track(tmp_path: Path) 
     backend._run = fake_run  # type: ignore[method-assign]
     backend._sync_config_from_disk = lambda: None  # type: ignore[method-assign]
 
-    backend.playback.is_playing = False
-    backend.openTrackInsight()
+    backend.openTrackInsight(explicit)
     assert calls == []
 
-    backend.playback.is_playing = True
-    backend.openTrackInsight()
+    backend.playback = Playback(title="Fixture track", is_playing=not explicit)
+    backend.openTrackInsight(explicit)
     assert calls
     assert calls[0][0] == backend.t("track_insight")
 

@@ -6356,6 +6356,7 @@ BrandWindow {
                                             if (!visible || !enabled || askDjPanel.historyOffline) return
                                             askDjPanel.chatKeyboardOpen = false
                                             root.activeScreen = "trackinsight"
+                                            djconnect.openTrackInsight(true)
                                         }
                                     }
                                     GlassButton {
