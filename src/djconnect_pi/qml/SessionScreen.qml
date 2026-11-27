@@ -2462,9 +2462,16 @@ Item {
                     required property var modelData
                     entry: modelData; translate: screen.tr; dateText: screen.displayDate(modelData.occurred_at)
                     selectionAvailable: screen.state.composer_available; selectionBusy: screen.owner.busy || screen.owner.questionBusy
+                    explorationAvailable: screen.historyViewOpen && screen.state.contribution_exploration
                     deletionAvailable: !!screen.contentDeletion.available
                     onDeleteEntry: (sessionId, entryId) => screen.deleteContent("entry", sessionId, entryId)
                     onAskAbout: (sessionId, entryId) => { if (screen.owner.selectEntry(sessionId, entryId)) { screen.navigate("session"); composerPanel.open() } }
+                    onTellMore: (sessionId, entryId) => {
+                        if (!screen.historyViewOpen) return
+                        screen.followQuestionReply = true
+                        if (screen.owner.exploreSavedEntry(sessionId, entryId)) screen.navigate("session")
+                        else screen.followQuestionReply = false
+                    }
                 }
             }
             SessionTimingCard {

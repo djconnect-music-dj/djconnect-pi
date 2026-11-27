@@ -1194,20 +1194,29 @@ class SessionController(QObject):
 
     @Slot(str, str, result=bool)
     def exploreFlowEntry(self, session_id, entry_id):
+        return self._explore_entry(session_id, entry_id, "flow")
+
+    @Slot(str, str, result=bool)
+    def exploreSavedEntry(self, session_id, entry_id):
+        return self._explore_entry(session_id, entry_id, "timeline")
+
+    def _explore_entry(self, session_id, entry_id, source):
         selected = {"kind": "selected_entry", "session_id": session_id, "entry_id": entry_id}
-        if not self._entry_selection_valid(selected, "flow"):
+        if not self._entry_selection_valid(selected, source):
             return False
-        entry = next(row for row in self._retained_flow if row["session_id"] == session_id and row["entry_id"] == entry_id)
+        rows = self._retained_flow if source == "flow" else self._timeline.get("entries", [])
+        entry = next(row for row in rows if row["session_id"] == session_id and row["entry_id"] == entry_id)
         if entry["kind"] not in {"dj_moment", "playback_observed", "conversation_dj"}:
             return False
         playback = entry.get("historical_playback") or {}
         if not any(text(value, 32768).strip()
                    for value in (entry.get("text"), playback.get("title"), playback.get("artist"), playback.get("album"))):
             return False
-        return self._explore_contribution(selected, selection_source="flow")
+        return self._explore_contribution(selected, selection_source=source)
 
     def _explore_contribution(self, selected, *, selection_source=""):
-        if (self.busy or self._question_running or not self._foreground or not self._view_active
+        if (self.busy or self._question_running or not self._foreground
+                or (not self._view_active and selection_source != "timeline")
                 or self.backend.demoMode or not self._composer_supported()):
             return False
         question = contribution_question(self._caps, self.backend.cfg.language)
