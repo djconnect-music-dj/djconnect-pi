@@ -751,6 +751,11 @@ class DJConnectBackend(QObject):
         request = self._music_dna_import
         return dict(request["preview"]) if request and self._music_dna_import_current(request) else {}
 
+    @Property(bool, notify=musicDnaChanged)
+    def musicDnaImportUploading(self) -> bool:
+        request = self._music_dna_import
+        return bool(request and request.get("uploading") and self._music_dna_import_current(request))
+
     @Property(str, notify=musicDnaChanged)
     def musicDnaSummary(self) -> str:
         return self._music_dna_summary
@@ -2866,6 +2871,7 @@ class DJConnectBackend(QObject):
                 or "payload" not in request):
             return
         payload = request.pop("payload")
+        request["uploading"] = True
         config = deepcopy(self.cfg)
         config.explicit_profile_id = session_profile_id(config)
         client = HAClient(config)

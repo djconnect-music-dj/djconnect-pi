@@ -1623,6 +1623,8 @@ _KEYBOARD_TRANSLATIONS = {
     "music_dna_import": ("Import Music DNA", "Music DNA importeren", "Music DNA importieren", "Importer Music DNA", "Importar Music DNA"),
     "music_dna_import_invalid": ("Choose a valid Music DNA JSON file.", "Kies een geldig Music DNA-bestand in JSON-formaat.", "Wähle eine gültige Music-DNA-Datei im JSON-Format.", "Choisissez un fichier JSON Music DNA valide.", "Elige un archivo JSON de Music DNA válido."),
     "music_dna_import_generation": ("Generation %1", "Generatie %1", "Generation %1", "Génération %1", "Generación %1"),
+    "music_dna_import_upload": ("Upload to Home Assistant", "Uploaden naar Home Assistant", "Zu Home Assistant hochladen", "Envoyer à Home Assistant", "Subir a Home Assistant"),
+    "music_dna_import_uploading": ("Uploading to Home Assistant…", "Wordt geüpload naar Home Assistant…", "Wird zu Home Assistant hochgeladen…", "Envoi à Home Assistant…", "Subiendo a Home Assistant…"),
     "music_dna_import_confirm": ("Importing this file replaces the Music DNA profile in Home Assistant.", "Bij importeren vervangt dit bestand het Music DNA-profiel in Home Assistant.", "Beim Import ersetzt diese Datei das Music-DNA-Profil in Home Assistant.", "L’importation de ce fichier remplace le profil Music DNA dans Home Assistant.", "Al importar este archivo se reemplaza el perfil de Music DNA en Home Assistant."),
     "music_dna_import_saved": ("Music DNA imported", "Music DNA geïmporteerd", "Music DNA importiert", "Music DNA importé", "Music DNA importado"),
     "music_dna_import_failed": ("Could not import Music DNA", "Music DNA kon niet worden geïmporteerd", "Music DNA konnte nicht importiert werden", "Impossible d’importer Music DNA", "No se pudo importar Music DNA"),

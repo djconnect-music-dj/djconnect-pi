@@ -2599,12 +2599,27 @@ BrandWindow {
                     Layout.fillWidth: true
                 }
                 GlassButton {
+                    id: importConfirm
                     objectName: "musicDnaImportConfirm"
-                    text: root.tr("music_dna_import")
+                    readonly property bool uploading: djconnect.musicDnaImportUploading
+                    text: root.tr(uploading ? "music_dna_import_uploading" : "music_dna_import_upload")
+                    wrapText: true
+                    leftPadding: uploading ? 50 : padding
                     primary: true
                     enabled: settingsPanel.canTransferMusicDna
+                    opacity: enabled || uploading ? 1 : 0.5
                     Layout.fillWidth: true
                     onClicked: djconnect.confirmMusicDnaImport()
+                    BusyIndicator {
+                        objectName: "musicDnaImportSpinner"
+                        anchors.left: parent.left
+                        anchors.leftMargin: 14
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: 26
+                        height: width
+                        visible: importConfirm.uploading
+                        running: visible
+                    }
                 }
                 GlassButton {
                     text: root.tr("cancel")
