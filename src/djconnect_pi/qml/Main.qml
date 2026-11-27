@@ -2583,7 +2583,8 @@ BrandWindow {
         readonly property bool sharedStatus: status === "saving" || status === "read_failed"
         text: !status ? "" : root.tr((sharedStatus ? "profile_export" : keyPrefix) + "_" + status)
         textFormat: Text.PlainText
-        color: status === "failed" || status === "read_failed" ? BrandTheme.colors.warning : BrandTheme.colors.muted
+        color: status === "failed" || status === "read_failed" ? BrandTheme.colors.danger
+            : (status === "saved" ? BrandTheme.colors.success : BrandTheme.colors.muted)
         visible: status.length > 0
         font.pixelSize: 17
         wrapMode: Text.WordWrap
