@@ -1863,6 +1863,13 @@ _SESSION_COMPOSER_TRANSLATIONS = {
         "Le clip vidéo n’a pas pu être encodé.",
         "No se pudo codificar el vídeo.",
     ),
+    "track_insight_export_cancelled": (
+        "Export cancelled.",
+        "Export geannuleerd.",
+        "Export abgebrochen.",
+        "Exportation annulée.",
+        "Exportación cancelada.",
+    ),
     "track_insight_share_image_type": ("Image (PNG)", "Afbeelding (PNG)", "Bild (PNG)", "Image (PNG)", "Imagen (PNG)"),
     "track_insight_share_clip_type": ("Clip (MP4)", "Clip (MP4)", "Clip (MP4)", "Clip (MP4)", "Clip (MP4)"),
     "track_insight_save_card": ("Save card as PNG", "Kaart bewaren als PNG", "Karte als PNG speichern", "Enregistrer la carte en PNG", "Guardar tarjeta como PNG"),

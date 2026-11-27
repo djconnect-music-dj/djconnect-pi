@@ -3477,6 +3477,14 @@ BrandWindow {
                 djconnect.cancelTrackInsightClip()
                 if (insightSaveDialog.visible) insightSaveDialog.close()
             }
+            function selectPreset(story, clip) {
+                if (storyCard === story && clipSelected === clip) return
+                const cancelled = exportBusy
+                storyCard = story
+                clipSelected = clip
+                exportNoticeKey = cancelled ? "track_insight_export_cancelled" : ""
+                exportNoticeColor = BrandTheme.colors.muted
+            }
             Connections {
                 target: djconnect
                 function onTrackInsightChanged() {
@@ -3565,17 +3573,15 @@ BrandWindow {
                         objectName: "trackInsightShareStory"
                         text: root.tr("track_insight_share_story")
                         checked: insightSharePopup.storyCard
-                        enabled: !insightSharePopup.exportBusy
                         Layout.fillWidth: true; Layout.preferredWidth: 1
-                        onClicked: insightSharePopup.storyCard = true
+                        onClicked: insightSharePopup.selectPreset(true, insightSharePopup.clipSelected)
                     }
                     GlassButton {
                         objectName: "trackInsightShareSquare"
                         text: root.tr("track_insight_share_square")
                         checked: !insightSharePopup.storyCard
-                        enabled: !insightSharePopup.exportBusy
                         Layout.fillWidth: true; Layout.preferredWidth: 1
-                        onClicked: insightSharePopup.storyCard = false
+                        onClicked: insightSharePopup.selectPreset(false, insightSharePopup.clipSelected)
                     }
                 }
                 RowLayout {
@@ -3585,17 +3591,15 @@ BrandWindow {
                         objectName: "trackInsightShareImage"
                         text: root.tr("track_insight_share_image_type")
                         checked: !insightSharePopup.exportClip
-                        enabled: !insightSharePopup.exportBusy
                         Layout.fillWidth: true; Layout.preferredWidth: 1
-                        onClicked: insightSharePopup.clipSelected = false
+                        onClicked: insightSharePopup.selectPreset(insightSharePopup.storyCard, false)
                     }
                     GlassButton {
                         objectName: "trackInsightShareClip"
                         text: root.tr("track_insight_share_clip_type")
                         checked: insightSharePopup.exportClip
-                        enabled: !insightSharePopup.exportBusy
                         Layout.fillWidth: true; Layout.preferredWidth: 1
-                        onClicked: insightSharePopup.clipSelected = true
+                        onClicked: insightSharePopup.selectPreset(insightSharePopup.storyCard, true)
                     }
                 }
                 GlassButton {
