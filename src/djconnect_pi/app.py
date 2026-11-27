@@ -2245,9 +2245,13 @@ class DJConnectBackend(QObject):
         )
 
     @Property(bool, notify=controlVolumeChanged)
+    def controlVolumeKnown(self) -> bool:
+        return self._control_volume_context(self.playback) is not None
+
+    @Property(bool, notify=controlVolumeChanged)
     def controlVolumeAvailable(self) -> bool:
         return (self._session_controller._foreground and not self._control_volume_pending
-                and self._control_volume_context(self.playback) is not None)
+                and self.controlVolumeKnown)
 
     @Slot(result=int)
     def beginControlVolume(self) -> int:

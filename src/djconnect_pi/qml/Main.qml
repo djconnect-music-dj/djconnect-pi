@@ -2253,7 +2253,9 @@ BrandWindow {
                 }
 
                 Text {
-                    text: Math.round(Math.min(60, djconnect.volume) / 60 * 100) + "%"
+                    objectName: "controlVolumePercent"
+                    text: djconnect.controlVolumeKnown && (djconnect.demoMode || djconnect.backendAvailable)
+                        ? djconnect.volume + "%" : "–"
                     color: BrandTheme.colors.text
                     font.pixelSize: 26
                     font.bold: true

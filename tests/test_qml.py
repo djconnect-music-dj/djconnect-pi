@@ -316,7 +316,8 @@ def test_qml_has_touch_readable_glass_controls_and_scrollable_settings() -> None
     assert "repeatOne" in main_qml
     assert "repeatOff" in main_qml
     assert "to: 60" in main_qml
-    assert "Math.round(Math.min(60, djconnect.volume) / 60 * 100) + \"%\"" in main_qml
+    assert 'objectName: "controlVolumePercent"' in main_qml
+    assert 'djconnect.volume + "%" : "–"' in main_qml
     assert "property var timeoutChoices: [30, 60, 90, 120, 180, 240, 300, 600]" in main_qml
     assert "returnToNowBox" not in main_qml
     logs = files("djconnect_pi.qml").joinpath("LogsView.qml").read_text(encoding="utf-8")
