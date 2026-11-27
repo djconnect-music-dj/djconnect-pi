@@ -2600,12 +2600,16 @@ BrandWindow {
             objectName: "profileExportDialog"
             property int profileRevision: 0
             property bool musicDna: false
+            readonly property bool isCurrent: settingsPanel.visible && profileRevision === root.exportProfileRevision
+                && root.canTransferProfileData && (!musicDna || djconnect.musicDnaEnabled)
+            onIsCurrentChanged: if (!isCurrent && visible) close()
             title: root.tr(musicDna ? "music_dna_export" : "ask_dj_export")
             fileMode: FileDialog.SaveFile
             options: FileDialog.DontUseNativeDialog
             defaultSuffix: "json"
             nameFilters: ["JSON (*.json)"]
             onAccepted: {
+                if (!isCurrent) return
                 if (musicDna) djconnect.exportMusicDna(selectedFile, profileRevision)
                 else djconnect.exportAskDjHistory(selectedFile, profileRevision)
             }
