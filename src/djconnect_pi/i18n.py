@@ -1315,6 +1315,14 @@ _MUSIC_DNA_CARD_TRANSLATIONS = {
     "music_dna_exported_at": (
         "Exported %1", "Geëxporteerd %1", "Exportiert %1", "Exporté %1", "Exportado %1",
     ),
+    "music_dna_export_origin": (
+        "Exported from %1", "Geëxporteerd vanaf %1", "Exportiert von %1", "Exporté depuis %1", "Exportado desde %1",
+    ),
+    "music_dna_origin_ios": ("iPhone / iPad", "iPhone / iPad", "iPhone / iPad", "iPhone / iPad", "iPhone / iPad"),
+    "music_dna_origin_macos": ("Mac", "Mac", "Mac", "Mac", "Mac"),
+    "music_dna_origin_watchos": ("Apple Watch", "Apple Watch", "Apple Watch", "Apple Watch", "Apple Watch"),
+    "music_dna_origin_raspberry_pi": ("Raspberry Pi", "Raspberry Pi", "Raspberry Pi", "Raspberry Pi", "Raspberry Pi"),
+    "music_dna_origin_esp32": ("ESP32", "ESP32", "ESP32", "ESP32", "ESP32"),
     "music_dna_loading_profile": (
         "Loading Music DNA from Home Assistant…", "Music DNA ophalen uit Home Assistant…",
         "Music DNA wird aus Home Assistant geladen…", "Chargement de Music DNA depuis Home Assistant…",

@@ -3560,15 +3560,24 @@ def test_backend_displays_package_version_separately_from_protocol_version(tmp_p
     assert backend.protocolVersion == "99.0.0"
 
 
-@pytest.mark.parametrize("envelope", [False, True])
-def test_read_music_dna_import_keeps_profile_data_separate_from_source_identity(tmp_path: Path, envelope: bool) -> None:
+@pytest.mark.parametrize(("envelope", "client_type", "client_label"), [
+    (False, "ios", None),
+    (True, "ios", "music_dna_origin_ios"),
+    (True, "raspberry_pi", "music_dna_origin_raspberry_pi"),
+    (True, "<b>unknown</b>", None),
+    (True, ["ios"], None),
+])
+def test_read_music_dna_import_keeps_profile_data_separate_from_source_identity(
+    tmp_path: Path, envelope: bool, client_type: object, client_label: str | None,
+) -> None:
     path = tmp_path / "music-dna.json"
     profile = {"success": True, "enabled": True, "music_dna_key": "source-only",
                "generation": 7, "profile": {"summary": "Test Music DNA", "track_count": 1200,
                                             "artist_count": 0, "genre_count": True}}
     exported_at = "2026-10-19T14:10:00Z"
-    document = {"success": True, "format": "djconnect.music_dna.export", "schema_version": 1,
-                "exported_at": exported_at, "profile": profile} if envelope else {**profile, "exported_at": exported_at}
+    metadata = {"exported_at": exported_at, "exported_by_client_type": client_type}
+    document = ({"success": True, "format": "djconnect.music_dna.export", "schema_version": 1,
+                 **metadata, "profile": profile} if envelope else {**profile, **metadata})
     path.write_text(json.dumps(document))
 
     payload, preview = _read_music_dna_import(path)
@@ -3581,6 +3590,7 @@ def test_read_music_dna_import_keeps_profile_data_separate_from_source_identity(
     ]
     assert preview.get("updatedAt") == (exported_at if envelope else None)
     assert preview.get("exportedAt") == (exported_at if envelope else None)
+    assert preview.get("exportClientLabel") == client_label
 
 
 def test_read_music_dna_import_rejects_unknown_format_and_nonfinite_json(tmp_path: Path) -> None:

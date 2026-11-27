@@ -6484,6 +6484,17 @@ def _read_music_dna_import(path: Path) -> tuple[dict[str, object], dict[str, obj
     exported = document.get("exported_at") if envelope else None
     if isinstance(exported, str) and timestamp(exported) is not None:
         preview["exportedAt"] = exported
+    client_type = document.get("exported_by_client_type") if envelope else None
+    if isinstance(client_type, str):
+        client_label = {
+            "ios": "music_dna_origin_ios",
+            "macos": "music_dna_origin_macos",
+            "watchos": "music_dna_origin_watchos",
+            "raspberry_pi": "music_dna_origin_raspberry_pi",
+            "esp32": "music_dna_origin_esp32",
+        }.get(client_type)
+        if client_label:
+            preview["exportClientLabel"] = client_label
     for updated in (response.get("updated_at"), profile.get("updated_at"), preview.get("exportedAt")):
         if isinstance(updated, str) and timestamp(updated) is not None:
             preview["updatedAt"] = updated

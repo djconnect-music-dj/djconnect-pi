@@ -2569,6 +2569,16 @@ BrandWindow {
                     font.pixelSize: 18
                     Layout.fillWidth: true
                 }
+                Text {
+                    objectName: "musicDnaImportExportOrigin"
+                    readonly property string clientLabel: djconnect.musicDnaImportPreview.exportClientLabel || ""
+                    visible: clientLabel.length > 0
+                    text: visible ? root.tr("music_dna_export_origin").replace("%1", root.tr(clientLabel)) : ""
+                    textFormat: Text.PlainText
+                    color: BrandTheme.colors.muted
+                    font.pixelSize: 18
+                    Layout.fillWidth: true
+                }
                 RowLayout {
                     id: importCounts
                     objectName: "musicDnaImportCounts"
