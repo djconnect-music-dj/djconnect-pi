@@ -264,21 +264,24 @@ def test_standalone_question_checks_receipt_and_sends_text_once(transport):
     request.assert_called_once()
 
 
-@pytest.mark.parametrize("receipt_entry", ["entry-1", "another-entry", None])
-def test_standalone_follow_up_requires_the_exact_saved_entry_receipt(transport, receipt_entry):
+@pytest.mark.parametrize(("receipt_context", "accepted"), [
+    ({"session_id": None, "selected_entry": {"session_id": "earlier", "entry_id": "entry-1"}}, True),
+    ({"session_id": None}, True),
+    ({"session_id": None, "selected_entry": {"session_id": "earlier", "entry_id": "another-entry"}}, False),
+    ({"session_id": "some-active-session"}, False),
+    ({}, False),
+])
+def test_standalone_follow_up_accepts_only_the_selected_entry_or_detached_topic(transport, receipt_context, accepted):
     client, _, request, response = transport
     selected = {"session_id": "earlier", "entry_id": "entry-1"}
     context = {"session_id": None, "selected_entry": selected}
-    receipt_context = {"session_id": None}
-    if receipt_entry is not None:
-        receipt_context["selected_entry"] = {**selected, "entry_id": receipt_entry}
     response.json.return_value = {
         "success": True, "owner_profile_id": "owner", "client_message_id": "turn",
         "conversation": {"schema_version": 1, "input_type": "text", "history_scope": "profile",
-                         "context": receipt_context},
+                         "context": receipt_context, "turn_id": "confirmed-turn", "entry_ids": []},
     }
 
-    if receipt_entry == selected["entry_id"]:
+    if accepted:
         client.standalone_question(client.binding(), "Tell me more", "turn", "owner", selected_entry=selected)
     else:
         with pytest.raises(SessionError, match="^uncertain$"):

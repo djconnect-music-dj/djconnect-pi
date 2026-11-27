@@ -668,11 +668,17 @@ class SessionTransport:
             raise SessionError("uncertain")
         if selected_entry is not None:
             conversation = result.get("conversation")
+            # Core can detach a selected entry when the question names an independent topic.
             if (result.get("success") is not True or not isinstance(conversation, dict)
                     or type(conversation.get("schema_version")) is not int or conversation["schema_version"] != 1
                     or conversation.get("input_type") != "text" or conversation.get("history_scope") != "profile"
-                    or conversation.get("context") != context):
+                    or conversation.get("entry_ids") != []
+                    or conversation.get("context") not in (context, {"session_id": None})):
                 raise SessionError("uncertain")
+            try:
+                identifier(conversation.get("turn_id"))
+            except SessionError:
+                raise SessionError("uncertain") from None
 
     def question(self, binding, request):
         body = request["text"].strip() if isinstance(request.get("text"), str) else ""
