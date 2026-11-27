@@ -329,6 +329,7 @@ class SessionController(QObject):
             "started_at": text(session.get("started_at"), 64),
             "playback": self._demo_playback() if self.backend.demoMode else session_playback(session),
             "current_moment_idle": session_current_idle(session),
+            "moment_insight_offer": self.moment_insight_offer(),
             "artwork_prepare": self._artwork_prepare.snapshot(),
             "playback_control": self._playback_control.snapshot(),
             "archive_delete": self._archive_delete.snapshot(),
@@ -1174,6 +1175,28 @@ class SessionController(QObject):
                 and features.get("current_track_insight_subject_v1") is True
                 and type(versions.get("current_track_insight_subject")) is int
                 and versions["current_track_insight_subject"] == 1)
+
+    def moment_insight_offer(self):
+        header, _, revoked = self._runtime_header()
+        if (revoked or self.backend.demoMode or not self._foreground or not self._view_active
+                or self._connection_offline or header["runtime_state"] != "active"
+                or not private_scope_allowed(self)):
+            return {}
+        features = self._caps.get("capabilities")
+        versions = self._caps.get("contract_versions")
+        if (not isinstance(features, dict) or features.get("moment_track_insight_navigation_v1") is not True
+                or not isinstance(versions, dict) or type(versions.get("moment_track_insight_navigation")) is not int
+                or versions["moment_track_insight_navigation"] != 1):
+            return {}
+        now = self._clock.now()
+        for card in self._moments:
+            offer = card.get("insight_navigation")
+            if not card["current"] or not offer or offer["reference"]["session_id"] != header["session_id"]:
+                continue
+            display_expiry = timestamp(card["display_expires_at"])
+            if display_expiry is not None and now < min(display_expiry, offer["expires_at"]):
+                return deepcopy(offer)
+        return {}
 
     def track_insight_session_style(self) -> tuple:
         session = self._session or {}

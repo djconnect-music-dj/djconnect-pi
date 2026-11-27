@@ -61,6 +61,29 @@ def test_runtime_header_matches_full_state_and_withdraws_old_owner(controller):
     assert header == {key: owner.state[key] for key in header}
 
 
+def test_moment_insight_offer_requires_capability_and_live_private_session(controller):
+    owner, backend = controller
+    owner._session = {"session_id": "session-a", "runtime_state": "active"}
+    owner._clock = Mock()
+    owner._clock.now.return_value = 100
+    offer = {
+        "reference": {"schema_version": 1, "session_id": "session-a", "moment_id": "m1", "action_id": "insight-m1"},
+        "expires_at": 200,
+    }
+    owner._moments = [{"current": True, "display_expires_at": "1970-01-01T00:02:30Z", "insight_navigation": offer}]
+    assert not owner.screenState["moment_insight_offer"]
+    owner._caps = {
+        "capabilities": {"moment_track_insight_navigation_v1": True},
+        "contract_versions": {"moment_track_insight_navigation": 1},
+    }
+    assert owner.screenState["moment_insight_offer"] == offer
+    backend.cfg.active_profile_privacy_mode = "shared"
+    assert not owner.screenState["moment_insight_offer"]
+    backend.cfg.active_profile_privacy_mode = "private"
+    owner._clock.now.return_value = 150
+    assert not owner.screenState["moment_insight_offer"]
+
+
 def test_screen_state_omits_flow_projection_but_keeps_fresh_rows_available(controller, monkeypatch):
     owner, backend = controller
     backend.demoMode = True
