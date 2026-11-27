@@ -2102,8 +2102,8 @@ Item {
                             readonly property bool known: typeof percent === "number"
                             visible: !!screen.state.playback_control.available && !!screen.state.playback_control.volume_supported
                             enabled: !!screen.state.playback_control.enabled
-                            iconName: percent === 0 ? "voice_muted" : "voice"
-                            text: known ? percent + "%" : screen.tr("volume")
+                            iconName: !known ? "" : percent === 0 ? "voice_muted" : "voice"
+                            text: known ? percent + "%" : "–"
                             font.features: ({ "tnum": 1 })
                             textAlignment: Text.AlignRight
                             Layout.preferredWidth: known ? Math.ceil(volumeLabelWidth.advanceWidth) + 44 : implicitWidth

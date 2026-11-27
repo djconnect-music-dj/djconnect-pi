@@ -884,6 +884,10 @@ def main():
                 QTest.qWait(80)
                 output_shortcut = window.findChild(QObject, 'sessionCurrentOutput')
                 assert output_shortcut.property('visible') and output_shortcut.property('enabled')
+                volume_shortcut = window.findChild(QObject, 'sessionCurrentVolume')
+                assert volume_shortcut.property('visible') and volume_shortcut.property('enabled')
+                assert volume_shortcut.property('text') == '–' and not volume_shortcut.property('iconName')
+                assert volume_shortcut.width() >= 44
                 expected_output_action = TRANSLATIONS[language]['session_output_choose']
                 assert output_shortcut.property('text') == expected_output_action
                 assert QAccessible.queryAccessibleInterface(output_shortcut).text(QAccessible.Text.Name) == expected_output_action
