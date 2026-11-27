@@ -3952,7 +3952,9 @@ Item {
                 Text {
                     objectName: "sessionMomentInsightStatus"
                     text: screen.tr(momentInsight.detail.status === "loading" ? "session_moment_insight_loading"
-                        : momentInsight.detail.status === "expired" ? "session_moment_insight_expired" : "session_moment_insight_unavailable")
+                        : momentInsight.detail.status === "expired" ? "session_moment_insight_expired"
+                        : momentInsight.detail.status === "context_changed" ? "session_moment_insight_context_changed"
+                        : "session_moment_insight_unavailable")
                     textFormat: Text.PlainText
                     color: BrandTheme.colors.muted
                     font.pixelSize: 20

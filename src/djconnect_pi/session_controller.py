@@ -115,7 +115,7 @@ class SessionController(QObject):
     contextCleared = Signal()
     ownerScopeChanged = Signal()
     momentInsightChanged = Signal()
-    _momentInsightReady = Signal(object, object)
+    _momentInsightReady = Signal(object, object, object)
     _ready = Signal(object)
 
     def __init__(self, backend, *, view_active=True):
@@ -1193,13 +1193,7 @@ class SessionController(QObject):
         header, _, revoked = self._runtime_header()
         if (revoked or self.backend.demoMode or not self._foreground or not self._view_active
                 or self._connection_offline or header["runtime_state"] != "active"
-                or not private_scope_allowed(self)):
-            return {}
-        features = self._caps.get("capabilities")
-        versions = self._caps.get("contract_versions")
-        if (not isinstance(features, dict) or features.get("moment_track_insight_navigation_v1") is not True
-                or not isinstance(versions, dict) or type(versions.get("moment_track_insight_navigation")) is not int
-                or versions["moment_track_insight_navigation"] != 1):
+                or not private_scope_allowed(self) or not self._moment_insight_supported()):
             return {}
         now = self._clock.now()
         for card in self._moments:
@@ -1211,13 +1205,22 @@ class SessionController(QObject):
                 return deepcopy(offer)
         return {}
 
+    def _moment_insight_supported(self):
+        features = self._caps.get("capabilities")
+        versions = self._caps.get("contract_versions")
+        return (isinstance(features, dict) and features.get("moment_track_insight_navigation_v1") is True
+                and isinstance(versions, dict) and type(versions.get("moment_track_insight_navigation")) is int
+                and versions["moment_track_insight_navigation"] == 1)
+
     @Property("QVariantMap", notify=momentInsightChanged)
     def momentTrackInsight(self):
         request = self._moment_insight
         if not request or not self._moment_insight_scope_current(request):
             return {}
-        if not self._moment_insight_current(request):
+        if not self._moment_insight_admitted(request):
             return {"status": "expired"}
+        if request["style"] != self.track_insight_session_style():
+            return {"status": "context_changed", "retryable": True}
         return deepcopy(request["view"])
 
     @Slot(str)
@@ -1243,17 +1246,20 @@ class SessionController(QObject):
 
     @Slot()
     def retryMomentTrackInsight(self):
+        self._reconcile_moment_insight()
         request = self._moment_insight
-        if request and self._moment_insight_current(request) and request["view"].get("retryable"):
+        if request and self._moment_insight_admitted(request) and request["view"].get("retryable"):
+            request["style"] = self.track_insight_session_style()
             self._fetch_moment_insight(request)
 
     def _fetch_moment_insight(self, request):
+        attempt = request["attempt"] = object()
         request["view"] = {"status": "loading"}
         self._schedule_moment_insight_expiry(request)
         self.momentInsightChanged.emit()
 
         def fetch():
-            if not self._moment_insight_current(request):
+            if request["attempt"] is not attempt or not self._moment_insight_current(request):
                 return
             started = self._clock.now()
             try:
@@ -1261,7 +1267,7 @@ class SessionController(QObject):
                 result = (data, started, "")
             except SessionError as error:
                 result = (None, started, error.category)
-            self._momentInsightReady.emit(request, result)
+            self._momentInsightReady.emit(request, attempt, result)
 
         self.backend._executor.submit(fetch)
 
@@ -1276,7 +1282,7 @@ class SessionController(QObject):
         if (self._moment_insight is not request or not self._foreground or not self._view_active
                 or self._connection_offline or not private_scope_allowed(self)
                 or getattr(self.backend, "versionMismatchVisible", False)
-                or request["style"] != self.track_insight_session_style()
+                or not self._moment_insight_supported()
                 or self._session.get("runtime_state") != "active"
                 or self._session.get("session_id") != request["reference"]["session_id"]):
             return False
@@ -1286,6 +1292,10 @@ class SessionController(QObject):
             return False
 
     def _moment_insight_current(self, request):
+        return (self._moment_insight_admitted(request)
+                and request["style"] == self.track_insight_session_style())
+
+    def _moment_insight_admitted(self, request):
         if (not self._moment_insight_scope_current(request) or request["view"].get("status") == "expired"
                 or self._clock.now() >= request["deadline"]):
             return False
@@ -1312,16 +1322,23 @@ class SessionController(QObject):
             return
         if not self._moment_insight_scope_current(request):
             self.closeMomentTrackInsight()
-        elif not self._moment_insight_current(request):
+        elif not self._moment_insight_admitted(request):
             self._moment_insight_timer.stop()
             if request["view"].get("status") != "expired":
                 request["view"] = {"status": "expired"}
                 self.momentInsightChanged.emit()
-        elif not self._moment_insight_timer.isActive():
-            self._schedule_moment_insight_expiry(request)
+        else:
+            if request["style"] != self.track_insight_session_style() and request["view"].get("status") != "context_changed":
+                request["attempt"] = None
+                request["view"] = {"status": "context_changed", "retryable": True}
+                self.momentInsightChanged.emit()
+            if not self._moment_insight_timer.isActive():
+                self._schedule_moment_insight_expiry(request)
 
-    @Slot(object, object)
-    def _apply_moment_insight(self, request, result):
+    @Slot(object, object, object)
+    def _apply_moment_insight(self, request, attempt, result):
+        if request.get("attempt") is not attempt:
+            return
         if not self._moment_insight_current(request):
             if request is self._moment_insight:
                 self._reconcile_moment_insight()

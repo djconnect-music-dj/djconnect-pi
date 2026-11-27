@@ -1635,6 +1635,13 @@ _KEYBOARD_TRANSLATIONS = {
         "Der Zugriff auf diese Analyse ist abgelaufen.", "L’accès à cette analyse a expiré.",
         "El acceso a este análisis ha caducado.",
     ),
+    "session_moment_insight_context_changed": (
+        "The DJ settings changed. Request the analysis again.",
+        "De DJ-instellingen zijn gewijzigd. Vraag de analyse opnieuw op.",
+        "Die DJ-Einstellungen wurden geändert. Frage die Analyse erneut an.",
+        "Les réglages DJ ont changé. Redemandez l’analyse.",
+        "Los ajustes del DJ han cambiado. Solicita el análisis de nuevo.",
+    ),
     "track_insight_analyze": ("Analyze track", "Analyseer nummer", "Titel analysieren", "Analyser le morceau", "Analizar la canción"),
     "track_insight_updated": ("Track Insight updated", "Track Insight vernieuwd", "Track Insight aktualisiert", "Track Insight actualisé", "Track Insight actualizado"),
     "refresh_ask_dj": ("Refresh Ask DJ", "Ask DJ vernieuwen", "Ask DJ aktualisieren", "Actualiser Ask DJ", "Actualizar Ask DJ"),
