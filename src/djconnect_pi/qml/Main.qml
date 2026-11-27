@@ -2413,6 +2413,27 @@ BrandWindow {
 
         }
 
+    property string askDjExportStatus: ""
+    property string musicDnaExportStatus: ""
+    readonly property int exportProfileRevision: djconnect.musicDnaContextRevision
+    readonly property bool canTransferProfileData: djconnect.paired && djconnect.personalProfileExportAllowed
+        && djconnect.backendAvailable && !djconnect.demoMode && !djconnect.versionMismatchVisible
+    onExportProfileRevisionChanged: clearExportStatus()
+    onCanTransferProfileDataChanged: if (!canTransferProfileData) clearExportStatus()
+
+    function clearExportStatus() {
+        askDjExportStatus = ""
+        musicDnaExportStatus = ""
+    }
+    Connections {
+        target: djconnect
+        function onProfileExportProgress(revision, musicDna, status) {
+            if (revision !== root.exportProfileRevision || !root.canTransferProfileData) return
+            if (musicDna) root.musicDnaExportStatus = status
+            else root.askDjExportStatus = status
+        }
+    }
+
     CompactPageLoader {
         visible: root.settingsOpen && (djconnect.paired || djconnect.demoMode)
         z: 10
@@ -2438,28 +2459,8 @@ BrandWindow {
         color: "transparent"
         readonly property bool canChangeMusicDna: djconnect.musicDnaLoaded && !djconnect.musicDnaBusy
             && (djconnect.paired || djconnect.demoMode)
-        readonly property bool canTransferProfileData: djconnect.paired && djconnect.personalProfileExportAllowed && djconnect.backendAvailable
-            && !djconnect.demoMode && !djconnect.versionMismatchVisible
-        readonly property bool canTransferMusicDna: canTransferProfileData && canChangeMusicDna && djconnect.musicDnaEnabled
-        readonly property bool canExportAskDj: canTransferProfileData && !djconnect.askDjBusy
-        property string askDjExportStatus: ""
-        property string musicDnaExportStatus: ""
-        readonly property int exportProfileRevision: djconnect.musicDnaContextRevision
-        onExportProfileRevisionChanged: clearExportStatus()
-        onCanTransferProfileDataChanged: if (!canTransferProfileData) clearExportStatus()
-
-        function clearExportStatus() {
-            askDjExportStatus = ""
-            musicDnaExportStatus = ""
-        }
-        Connections {
-            target: djconnect
-            function onProfileExportProgress(revision, musicDna, status) {
-                if (revision !== settingsPanel.exportProfileRevision || !settingsPanel.canTransferProfileData) return
-                if (musicDna) settingsPanel.musicDnaExportStatus = status
-                else settingsPanel.askDjExportStatus = status
-            }
-        }
+        readonly property bool canTransferMusicDna: root.canTransferProfileData && canChangeMusicDna && djconnect.musicDnaEnabled
+        readonly property bool canExportAskDj: root.canTransferProfileData && !djconnect.askDjBusy
 
         GlassPopup {
             id: profileExportPreview
@@ -2471,7 +2472,7 @@ BrandWindow {
             property int profileRevision: 0
             property bool musicDna: false
             readonly property bool isCurrent: settingsPanel.visible && profileRevision === djconnect.musicDnaContextRevision
-                && settingsPanel.canTransferProfileData && (!musicDna || djconnect.musicDnaEnabled)
+                && root.canTransferProfileData && (!musicDna || djconnect.musicDnaEnabled)
             onIsCurrentChanged: if (!isCurrent) close()
             function review(exportMusicDna) {
                 musicDna = exportMusicDna
@@ -3137,7 +3138,7 @@ BrandWindow {
             }
             ProfileExportStatusLabel {
                 objectName: "askDjExportStatus"
-                status: settingsPanel.askDjExportStatus
+                status: root.askDjExportStatus
                 keyPrefix: "ask_dj_export"
             }
 
@@ -3152,7 +3153,7 @@ BrandWindow {
             }
             ProfileExportStatusLabel {
                 objectName: "musicDnaExportStatus"
-                status: settingsPanel.musicDnaExportStatus
+                status: root.musicDnaExportStatus
                 keyPrefix: "music_dna_export"
             }
 
