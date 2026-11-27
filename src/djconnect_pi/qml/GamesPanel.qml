@@ -380,9 +380,10 @@ Rectangle {
         } else if (gameId === "asteroids") {
             asteroidY += asteroidSpeed
             if (asteroidBulletActive) {
+                const hitRadius = Math.max(14, asteroidSize)
                 asteroidBulletY -= 8
                 if (asteroidBulletY < 36) asteroidBulletActive = false
-                else if (Math.abs(asteroidX - shipX) < asteroidSize + 8 && Math.abs(asteroidY - asteroidBulletY) < asteroidSize + 8) {
+                else if (Math.abs(asteroidX - shipX) < hitRadius && Math.abs(asteroidY - asteroidBulletY) < hitRadius) {
                     asteroidBulletActive = false
                     addExplosion(asteroidX, asteroidY, "#ff6fb3")
                     playSfx("explode")
@@ -401,7 +402,7 @@ Rectangle {
             if (flyShotActive) {
                 flyShotX += 9
                 if (flyShotX > 310) flyShotActive = false
-                else if (Math.abs(flyShotX - obstacleX) < 16 && Math.abs(planeY - obstacleY) < 24) {
+                else if (Math.abs(flyShotX - obstacleX) < 22 && Math.abs(planeY - obstacleY) < 26) {
                     flyShotActive = false
                     addExplosion(obstacleX, obstacleY, "#facc15")
                     playSfx("explode")
@@ -413,7 +414,7 @@ Rectangle {
                 setScore(score + 1)
                 resetObstacle()
             }
-            if (obstacleX < 66 && obstacleX > 28 && Math.abs(planeY - obstacleY) < 28) {
+            if (obstacleX < 70 && obstacleX > 28 && Math.abs(planeY - obstacleY) < 30) {
                 showFlash()
                 addExplosion(48, planeY, "#ff5b5b")
                 playSfx("crash")
