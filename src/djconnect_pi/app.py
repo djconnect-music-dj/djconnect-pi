@@ -203,6 +203,7 @@ class DJConnectBackend(QObject):
     mediaActivityChanged = Signal()
     _mediaListFinished = Signal(str)
     _mediaPlaybackFinished = Signal()
+    _mediaPlaybackObserved = Signal(object, object, bool)
     askDjChanged = Signal()
     askDjUnsentDraft = Signal(str)
     _askDjUnsentDraftReady = Signal(object, str)
@@ -435,6 +436,7 @@ class DJConnectBackend(QObject):
         self._mediaArtworkReady.connect(self._apply_cached_media_list)
         self._mediaListFinished.connect(self._finish_media_list_load)
         self._mediaPlaybackFinished.connect(self._finish_media_playback)
+        self._mediaPlaybackObserved.connect(self._apply_media_playback_observation)
         self._outputDeviceRejected.connect(self._apply_output_device_rejection)
         self._outputChoiceFinished.connect(self._finish_output_choice)
         self._controlOutputsFinished.connect(self._finish_control_outputs)
@@ -3246,9 +3248,26 @@ class DJConnectBackend(QObject):
             self._play_demo_uri(uri)
             return
         _LOGGER.info("User requested %s from touch UI", command)
+        scope = self._media_playback_scope()
         self._media_playback_busy = True
         self.mediaActivityChanged.emit()
-        self._run(command, lambda: self._play_media_item_worker(command, payload), done=self._mediaPlaybackFinished.emit)
+        self._run(command, lambda: self._play_media_item_worker(command, payload, scope=scope),
+                  done=self._mediaPlaybackFinished.emit)
+
+    def _media_playback_scope(self):
+        return (self._private_read_context(), self.cfg.music_backend, self.cfg.music_backend_revision,
+                self.cfg.music_target_player.get("id", ""))
+
+    def _media_playback_current(self, scope):
+        return (not self._demo_mode and not self._shutting_down and self._application_foreground
+                and not self._version_mismatch_visible and (scope is None or scope == self._media_playback_scope()))
+
+    @Slot(object, object, bool)
+    def _apply_media_playback_observation(self, scope, playback, suppress_navigation):
+        if self._media_playback_current(scope):
+            self._suppress_next_playback_navigation = suppress_navigation
+            if playback is not None:
+                self._apply_playback(playback)
 
     @Slot()
     def _finish_media_playback(self) -> None:
@@ -3597,16 +3616,26 @@ class DJConnectBackend(QObject):
             self._playbackReady.emit(self.client.playback_from_status(data))
         _LOGGER.info("Save current track completed in %.0fms", _elapsed_ms(started))
 
-    def _play_media_item_worker(self, command: str, payload: dict[str, object]) -> None:
+    def _play_media_item_worker(self, command: str, payload: dict[str, object], *, scope=None) -> None:
+        if not self._media_playback_current(scope):
+            return
         started = time.monotonic()
         _LOGGER.info("Sending media item command: %s", command)
         try:
             data = self.client.command(command, **payload)
+        except DJConnectError:
+            if self._media_playback_current(scope):
+                raise
+            return
         except requests.RequestException as exc:
+            if not self._media_playback_current(scope):
+                return
             _LOGGER.warning("Media item command %s was not confirmed: %s", command, type(exc).__name__)
             self._backendAvailableReady.emit(False)
             self._statusReady.emit(self.tr_key("backend_unavailable"))
             self._toastReady.emit(self.tr_key("session_uncertain"), 5000, "connectivity")
+            return
+        if not self._media_playback_current(scope):
             return
         success = data.get("success")
         if success is False:
@@ -3621,11 +3650,12 @@ class DJConnectBackend(QObject):
             _LOGGER.warning("Media item command %s returned no confirmation", command)
             return
         self._persist_backend_summary()
-        self._suppress_next_playback_navigation = command == "play_context_at"
-        if has_playback:
-            self._playbackReady.emit(self.client.playback_from_status(data))
+        self._mediaPlaybackObserved.emit(scope, self.client.playback_from_status(data) if has_playback else None,
+                                         command == "play_context_at")
+        if not self._media_playback_current(scope):
+            return
         self._load_queue_worker()
-        if command == "play_context_at" or not has_playback:
+        if self._media_playback_current(scope) and (command == "play_context_at" or not has_playback):
             self._refresh_worker()
         _LOGGER.info("Media item command %s completed in %.0fms", command, _elapsed_ms(started))
 

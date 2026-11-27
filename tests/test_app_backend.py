@@ -4236,6 +4236,33 @@ def test_media_command_missing_confirmation_preserves_current_track(tmp_path: Pa
     backend._load_queue_worker.assert_not_called()
 
 
+@pytest.mark.parametrize("switch_during_request", [False, True])
+def test_media_start_from_an_old_profile_cannot_change_playback(tmp_path: Path, switch_during_request: bool) -> None:
+    ensure_app()
+    backend = DJConnectBackend(tmp_path / "config.json")
+    backend.cfg.active_profile_id = "original"
+    backend.playback = Playback(title="Current track")
+    backend._executor.submit = Mock()
+    backend._refresh_worker = Mock()
+    backend._load_queue_worker = Mock()
+
+    def read(*_args, **_kwargs):
+        backend.cfg.active_profile_id = "another"
+        return {"success": True, "playback": {"title": "Previous profile track"}}
+
+    backend.client.command = Mock(side_effect=read)
+    backend.playMediaItem("start_playlist", json.dumps({"uri": "spotify:playlist:fixture"}))
+    if not switch_during_request:
+        backend.cfg.active_profile_id = "another"
+    backend._executor.submit.call_args.args[0]()
+
+    assert backend.client.command.call_count == int(switch_during_request)
+    assert backend.title == "Current track"
+    assert not backend.mediaPlaybackBusy
+    backend._refresh_worker.assert_not_called()
+    backend._load_queue_worker.assert_not_called()
+
+
 def test_backend_queue_item_play_uses_play_context_at_command(tmp_path: Path) -> None:
     ensure_app()
     backend = DJConnectBackend(tmp_path / "config.json")
