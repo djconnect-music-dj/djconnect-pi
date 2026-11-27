@@ -5363,12 +5363,16 @@ BrandWindow {
         sourceComponent: MusicDnaPage {}
     }
 
+    function musicDnaPercent(value) {
+        const rounded = Math.round(value * 10) / 10
+        return rounded.toLocaleString(Qt.locale(djconnect.language), "f", Number.isInteger(rounded) ? 0 : 1) + "%"
+    }
+
     component MusicDnaMeter: ColumnLayout {
         id: meter
         required property real value
         property string label: ""
         property color tint: BrandTheme.colors.actionAccent
-        readonly property real roundedValue: Math.round(value * 10) / 10
         spacing: 5
         RowLayout {
             Layout.fillWidth: true
@@ -5381,8 +5385,7 @@ BrandWindow {
                 wrapMode: Text.Wrap
             }
             Text {
-                text: meter.roundedValue.toLocaleString(Qt.locale(djconnect.language), "f",
-                    Number.isInteger(meter.roundedValue) ? 0 : 1) + "%"
+                text: root.musicDnaPercent(meter.value)
                 color: BrandTheme.colors.text; font.bold: true; font.pixelSize: 17
             }
         }
@@ -5822,6 +5825,7 @@ BrandWindow {
                                 ColumnLayout {
                                     id: dnaGroup
                                     required property var modelData
+                                    readonly property bool weekdays: modelData.key === "music_dna_card_weekdays"
                                     Layout.fillWidth: true
                                     spacing: 8
                                     Text {
@@ -5873,8 +5877,53 @@ BrandWindow {
                                         Layout.fillWidth: true
                                         wrapMode: Text.WordWrap
                                     }
+                                    GridLayout {
+                                        objectName: "musicDnaWeekdayGrid"
+                                        visible: dnaGroup.weekdays
+                                        Layout.fillWidth: true
+                                        columns: Math.max(1, Math.floor((width + columnSpacing) / (118 + columnSpacing)))
+                                        columnSpacing: 8
+                                        rowSpacing: 8
+                                        Repeater {
+                                            model: dnaGroup.weekdays ? dnaGroup.modelData.rows : []
+                                            Rectangle {
+                                                objectName: "musicDnaWeekdayTile"
+                                                required property var modelData
+                                                radius: 7
+                                                color: BrandTheme.alpha(BrandTheme.colors.text, "14")
+                                                implicitHeight: weekdayLabels.implicitHeight + 16
+                                                Layout.alignment: Qt.AlignTop
+                                                Layout.fillWidth: true
+                                                Layout.preferredWidth: 1
+                                                ColumnLayout {
+                                                    id: weekdayLabels
+                                                    anchors.fill: parent
+                                                    anchors.leftMargin: 10
+                                                    anchors.rightMargin: 10
+                                                    anchors.topMargin: 8
+                                                    anchors.bottomMargin: 8
+                                                    spacing: 2
+                                                    Text {
+                                                        text: modelData.labelKey ? root.tr(modelData.labelKey) : modelData.title
+                                                        textFormat: Text.PlainText
+                                                        color: BrandTheme.colors.text
+                                                        font.pixelSize: 16
+                                                        font.bold: true
+                                                        Layout.fillWidth: true
+                                                        wrapMode: Text.Wrap
+                                                    }
+                                                    Text {
+                                                        text: root.musicDnaPercent(modelData.percent)
+                                                        color: BrandTheme.colors.muted
+                                                        font.pixelSize: 15
+                                                        Layout.fillWidth: true
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
                                     Repeater {
-                                        model: dnaGroup.modelData.shelf ? [] : dnaGroup.modelData.rows
+                                        model: dnaGroup.modelData.shelf || dnaGroup.weekdays ? [] : dnaGroup.modelData.rows
                                         MusicDnaRow {
                                             required property var modelData
                                             entry: modelData
