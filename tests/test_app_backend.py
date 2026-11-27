@@ -1693,17 +1693,22 @@ def test_ask_dj_history_keeps_only_qualified_matches_for_the_read_owner(tmp_path
         "playback": {"title": "Fixture track", "coverage": "observed_playing_not_full_listen"},
         "open_action": {"kind": "open_session", **reference, "navigation_only": True},
     }
-    assert backend._apply_ask_dj_data({
+    reply = {
         "success": True, "history_scope": "profile", "owner_profile_id": owner,
         "messages": [{"id": "fixture-reply", "role": "assistant", "text": "Fixture reply",
                       "historical_matches": [row, {**row, "retained_until": "1970-01-01T00:01:30Z"},
                                              {**row, "open_action": {**row["open_action"], "entry_id": "wrong"}}]}],
-    })
+    }
+    assert backend._apply_ask_dj_data(reply)
     matches = backend.askDjMessages[0].get("historicalMatches", [])
     if owner == "fixture-profile":
         match, = matches
         assert match["title"] == "Fixture track" and match["can_open"]
         assert match["entry_id"] == "fixture-entry" and match["expires_at"] == 180
+        withdrawn = {**reply["messages"][0], "status": "source_withdrawn"}
+        assert backend._apply_ask_dj_data({**reply, "messages": [withdrawn]})
+        assert backend._apply_ask_dj_data(reply)
+        assert backend.askDjMessages == []
     else:
         assert not matches
 

@@ -314,6 +314,7 @@ class DJConnectBackend(QObject):
         self._queue_items: list[dict[str, object]] = []
         self._playlist_items: list[dict[str, object]] = []
         self._ask_dj_messages: list[dict[str, object]] = []
+        self._ask_dj_withdrawn_ids: set[str] = set()
         self._ask_dj_history_open = None
         self._ask_dj_history_revision = 0
         self._ask_dj_delivery_key = ""
@@ -4506,6 +4507,8 @@ class DJConnectBackend(QObject):
         history_revision = _int_value(data.get("history_revision"), self._ask_dj_history_revision)
         if clear_revision < self._ask_dj_clear_revision or history_revision < self._ask_dj_history_revision:
             return False
+        if history_revision > self._ask_dj_history_revision:
+            self._ask_dj_withdrawn_ids.clear()
         clear_ack = data.get("cleared") is True
         if clear_revision > self._ask_dj_clear_revision or clear_ack:
             self._clear_ask_dj_cache(reset_revisions=False)
@@ -4521,19 +4524,24 @@ class DJConnectBackend(QObject):
         if trimmed_count > 0:
             self._ask_dj_messages = _sort_ask_dj_messages_newest_first(_sort_ask_dj_messages(self._ask_dj_messages)[trimmed_count:])
         messages = parse_ask_dj_messages(data)
-        if (messages and data.get("history_scope") == "profile" and self.cfg.active_profile_id
+        if (data.get("history_scope") == "profile" and self.cfg.active_profile_id
                 and data.get("owner_profile_id") == self.cfg.active_profile_id
                 and self.personalProfileExportAllowed and self.cfg.active_profile_privacy_mode == "private"
                 and isinstance(data.get("messages"), list)):
             by_id = {
-                row["id"]: row.get("historical_matches")
+                row["id"]: row
                 for row in data["messages"] if isinstance(row, dict) and isinstance(row.get("id"), str)
-                and row.get("status") != "source_withdrawn"
             }
+            withdrawn = {message_id for message_id, row in by_id.items() if row.get("status") == "source_withdrawn"}
+            if withdrawn:
+                self._ask_dj_withdrawn_ids.update(withdrawn)
+                self._ask_dj_messages = [message for message in self._ask_dj_messages if message.get("id") not in withdrawn]
             now = self._session_controller._clock.now()
             for message in messages:
                 if message.get("role") == "assistant":
-                    message["historicalMatches"] = ask_dj_history_matches(by_id.get(message.get("id")), now=now)
+                    row = by_id.get(message.get("id"), {})
+                    message["historicalMatches"] = ask_dj_history_matches(row.get("historical_matches"), now=now)
+        messages = [message for message in messages if message.get("id") not in self._ask_dj_withdrawn_ids]
         if messages:
             self._merge_ask_dj_messages(messages, limit=_int_value(data.get("history_limit"), 100))
         else:
@@ -4571,6 +4579,7 @@ class DJConnectBackend(QObject):
 
     def _clear_ask_dj_cache(self, *, reset_revisions: bool = True) -> None:
         self._ask_dj_messages = []
+        self._ask_dj_withdrawn_ids.clear()
         self._ask_dj_delivery_key = ""
         self._ask_dj_poll_error_count = 0
         self._ask_dj_poll_in_flight = False
@@ -5562,6 +5571,8 @@ def _contains_playback_payload(data: dict[str, object]) -> bool:
 
 
 def _ask_dj_message(item: dict[str, object]) -> dict[str, object] | None:
+    if item.get("status") == "source_withdrawn":
+        return None
     assistant_payload, text, user_text = _ask_dj_message_content(item)
     role = str(item.get("role") or item.get("sender") or "").strip().lower()
     kind = str(item.get("message_kind") or item.get("kind") or "").strip().lower()
