@@ -3530,17 +3530,22 @@ def test_export_ask_dj_history_only_saves_for_the_original_profile(tmp_path: Pat
         return export
 
     backend.client.ask_dj_history_export = Mock(side_effect=read_export)
+    progress = []
+    backend.profileExportProgress.connect(lambda _, music_dna, state: progress.append((music_dna, state)))
     url = QUrl.fromLocalFile(str(destination))
     backend.exportAskDjHistory(url, backend.musicDnaContextRevision - 1)
     backend._executor.submit.assert_not_called()
 
     backend.exportAskDjHistory(url, backend.musicDnaContextRevision)
+    assert progress == [(False, "saving")]
     backend._executor.submit.call_args.args[0]()
     backend.client.ask_dj_history_export.assert_called_once_with()
     assert not backend.askDjBusy
     if profile_changes:
+        assert progress[-1] == (False, "")
         assert not destination.exists()
     else:
+        assert progress[-1] == (False, "saved")
         assert json.loads(destination.read_text()) == export
         assert destination.stat().st_mode & 0o077 == 0
         assert backend.toastText == backend.t("ask_dj_export_saved")

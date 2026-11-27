@@ -208,6 +208,7 @@ class DJConnectBackend(QObject):
     _askDjUnsentDraftReady = Signal(object, str)
     _askDjDeliveryReady = Signal(object, str)
     musicDnaChanged = Signal()
+    profileExportProgress = Signal(int, bool, str)
     musicDiscoveryChanged = Signal()
     musicDiscoveryItemsChanged = Signal()
     musicDiscoveryPlayed = Signal(str, str)
@@ -2624,7 +2625,10 @@ class DJConnectBackend(QObject):
                     and ticket == self._private_read_context()
                     and (not music_dna or (self._music_dna_enabled and self.cfg.music_dna_key == dna_key)))
 
+        saved = False
+
         def export() -> None:
+            nonlocal saved
             if not current():
                 return
             try:
@@ -2648,7 +2652,6 @@ class DJConnectBackend(QObject):
                 return
             contents = json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8") + b"\n"
             target = QSaveFile(destination.toLocalFile())
-            saved = False
             if target.open(QIODevice.OpenModeFlag.WriteOnly):
                 if (target.setPermissions(QSaveFile.Permission.ReadOwner | QSaveFile.Permission.WriteOwner)
                         and target.write(contents) == len(contents) and current()):
@@ -2658,8 +2661,13 @@ class DJConnectBackend(QObject):
             if current():
                 self._toastReady.emit(self.tr_key(prefix + ("_saved" if saved else "_failed")), 3500, context)
 
+        def finish() -> None:
+            set_busy(False)
+            self.profileExportProgress.emit(revision, music_dna, ("saved" if saved else "failed") if current() else "")
+
         set_busy(True)
-        self._run(self.tr_key(prefix), export, done=lambda: set_busy(False), interactive=False)
+        self.profileExportProgress.emit(revision, music_dna, "saving")
+        self._run(self.tr_key(prefix), export, done=finish, interactive=False)
 
     @Slot()
     @Slot(int)

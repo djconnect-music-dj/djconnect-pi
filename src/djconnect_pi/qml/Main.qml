@@ -2387,6 +2387,18 @@ BrandWindow {
         sourceComponent: SettingsPage {}
     }
 
+    component ProfileExportStatusLabel: Text {
+        required property string status
+        required property string keyPrefix
+        text: !status ? "" : root.tr(status === "saving" ? "profile_export_saving" : keyPrefix + "_" + status)
+        textFormat: Text.PlainText
+        color: status === "failed" ? BrandTheme.colors.warning : BrandTheme.colors.muted
+        visible: status.length > 0
+        font.pixelSize: 17
+        wrapMode: Text.WordWrap
+        Layout.fillWidth: true
+    }
+
     component SettingsPage: Rectangle {
         id: settingsPanel
         objectName: "settingsPanel"
@@ -2397,6 +2409,24 @@ BrandWindow {
             && !djconnect.demoMode && !djconnect.versionMismatchVisible
         readonly property bool canTransferMusicDna: canTransferProfileData && canChangeMusicDna && djconnect.musicDnaEnabled
         readonly property bool canExportAskDj: canTransferProfileData && !djconnect.askDjBusy
+        property string askDjExportStatus: ""
+        property string musicDnaExportStatus: ""
+        readonly property int exportProfileRevision: djconnect.musicDnaContextRevision
+        onExportProfileRevisionChanged: clearExportStatus()
+        onCanTransferProfileDataChanged: if (!canTransferProfileData) clearExportStatus()
+
+        function clearExportStatus() {
+            askDjExportStatus = ""
+            musicDnaExportStatus = ""
+        }
+        Connections {
+            target: djconnect
+            function onProfileExportProgress(revision, musicDna, status) {
+                if (revision !== settingsPanel.exportProfileRevision || !settingsPanel.canTransferProfileData) return
+                if (musicDna) settingsPanel.musicDnaExportStatus = status
+                else settingsPanel.askDjExportStatus = status
+            }
+        }
 
         GlassPopup {
             id: profileExportPreview
@@ -2988,6 +3018,11 @@ BrandWindow {
                 enabled: settingsPanel.canExportAskDj
                 onClicked: profileExportPreview.review(false)
             }
+            ProfileExportStatusLabel {
+                objectName: "askDjExportStatus"
+                status: settingsPanel.askDjExportStatus
+                keyPrefix: "ask_dj_export"
+            }
 
             PurpleButton {
                 objectName: "musicDnaExportButton"
@@ -2997,6 +3032,11 @@ BrandWindow {
                 Layout.preferredHeight: 58
                 enabled: settingsPanel.canTransferMusicDna
                 onClicked: profileExportPreview.review(true)
+            }
+            ProfileExportStatusLabel {
+                objectName: "musicDnaExportStatus"
+                status: settingsPanel.musicDnaExportStatus
+                keyPrefix: "music_dna_export"
             }
 
             PurpleButton {
