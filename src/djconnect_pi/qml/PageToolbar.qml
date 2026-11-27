@@ -12,6 +12,7 @@ Control {
     property bool showLeading: true
     property string connectionLabel: ""
     property string connectionText: ""
+    property string connectionDetail: ""
     property string connectionIcon: "globe"
     property color connectionIconColor: BrandTheme.colors.text
     property string aboutLabel: ""
@@ -39,6 +40,16 @@ Control {
                 text: bar.connectionText
                 textFormat: Text.PlainText
                 font.pixelSize: 22
+                color: BrandTheme.colors.muted
+                Layout.fillWidth: true
+                wrapMode: Text.Wrap
+            }
+            Text {
+                objectName: "pageToolbarConnectionDetail"
+                visible: text.length > 0
+                text: bar.connectionDetail
+                textFormat: Text.PlainText
+                font.pixelSize: 18
                 color: BrandTheme.colors.muted
                 Layout.fillWidth: true
                 wrapMode: Text.Wrap

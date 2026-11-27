@@ -349,6 +349,8 @@ BrandWindow {
         }
         connectionText: djconnect.demoMode ? root.tr("demo_mode")
             : connectionProblem ? root.tr(connectionProblem) : djconnect.connectionType
+        connectionDetail: connectionProblem === "backend_unavailable"
+            ? djconnect.connectionType + "\n" + root.tr("music_backend_retry_notice") : ""
         connectionIcon: connectionProblem ? "info" : "globe"
         connectionIconColor: connectionProblem === "ha_connection_unavailable" ? BrandTheme.colors.danger
             : connectionProblem ? BrandTheme.colors.warning : BrandTheme.colors.text
