@@ -1651,6 +1651,13 @@ _KEYBOARD_TRANSLATIONS = {
     ),
     "track_insight_analyze": ("Analyze track", "Analyseer nummer", "Titel analysieren", "Analyser le morceau", "Analizar la canción"),
     "track_insight_updated": ("Track Insight updated", "Track Insight vernieuwd", "Track Insight aktualisiert", "Track Insight actualisé", "Track Insight actualizado"),
+    "track_insight_export_preview_changed": (
+        "Track Insight changed. Check the preview before saving.",
+        "Track Insight is gewijzigd. Bekijk het voorbeeld voordat je opslaat.",
+        "Track Insight hat sich geändert. Prüfe vor dem Speichern die Vorschau.",
+        "Track Insight a changé. Vérifiez l’aperçu avant d’enregistrer.",
+        "Track Insight cambió. Revisa la vista previa antes de guardar.",
+    ),
     "refresh_ask_dj": ("Refresh Ask DJ", "Ask DJ vernieuwen", "Ask DJ aktualisieren", "Actualiser Ask DJ", "Actualizar Ask DJ"),
     "ask_dj_export": ("Export Ask DJ history", "Ask DJ-geschiedenis exporteren", "Ask-DJ-Verlauf exportieren", "Exporter l’historique Ask DJ", "Exportar el historial de Ask DJ"),
     "ask_dj_export_saved": ("Ask DJ history saved", "Ask DJ-geschiedenis opgeslagen", "Ask-DJ-Verlauf gespeichert", "Historique Ask DJ enregistré", "Historial de Ask DJ guardado"),

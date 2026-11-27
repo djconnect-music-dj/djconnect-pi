@@ -3446,6 +3446,23 @@ BrandWindow {
             property string exportNoticeKey: ""
             property color exportNoticeColor: BrandTheme.colors.muted
             property bool copiedShareText: false
+            property string saveIntent: ""
+            readonly property string exportSelection: JSON.stringify([trackInsightPanel.autoInsightKey,
+                djconnect.trackInsightShareText, djconnect.trackInsightImageUrl, djconnect.trackInsightShareDescriptors,
+                djconnect.trackInsightShareMeters, storyCard, exportClip])
+            onExportSelectionChanged: {
+                if ((saveIntent && saveIntent !== exportSelection) || exportBusy) {
+                    saveIntent = ""
+                    exportGeneration += 1
+                    renderingCard = false
+                    djconnect.cancelTrackInsightClip()
+                    if (insightSaveDialog && insightSaveDialog.visible) insightSaveDialog.close()
+                    if (opened && trackInsightPanel.canShareInsight) {
+                        exportNoticeKey = "track_insight_export_preview_changed"
+                        exportNoticeColor = BrandTheme.colors.muted
+                    }
+                } else if (exportNoticeKey !== "track_insight_export_preview_changed") exportNoticeKey = ""
+            }
             onAboutToShow: {
                 storyCard = true
                 animatedPreview = false
@@ -3454,6 +3471,7 @@ BrandWindow {
                 copiedShareText = false
             }
             onClosed: {
+                saveIntent = ""
                 exportGeneration += 1
                 renderingCard = false
                 djconnect.cancelTrackInsightClip()
@@ -3495,7 +3513,7 @@ BrandWindow {
                     djconnect.startTrackInsightClip(destination, storyCard, djconnect.trackInsightShareText)
                     return
                 }
-                const key = trackInsightPanel.autoInsightKey
+                const key = exportSelection
                 const text = djconnect.trackInsightShareText
                 const story = storyCard
                 const popup = insightSharePopup
@@ -3505,7 +3523,7 @@ BrandWindow {
                     if (!popup || popup.exportGeneration !== generation) return
                     popup.renderingCard = false
                     if (popup.opened && trackInsightPanel.canShareInsight && popup.storyCard === story
-                            && trackInsightPanel.autoInsightKey === key)
+                            && popup.exportSelection === key)
                         djconnect.saveTrackInsightCard(result.image, destination, text)
                 }, Qt.size(1080, story ? 1920 : 1080))
                 if (!accepted) {
@@ -3524,7 +3542,13 @@ BrandWindow {
                 nameFilters: insightSharePopup.exportClip ? [root.tr("track_insight_mp4_files") + " (*.mp4)"]
                     : [root.tr("track_insight_png_files") + " (*.png)"]
                 options: FileDialog.DontUseNativeDialog
-                onAccepted: insightSharePopup.saveCard(selectedFile)
+                onAccepted: {
+                    const intent = insightSharePopup.saveIntent
+                    insightSharePopup.saveIntent = ""
+                    if (intent && intent === insightSharePopup.exportSelection)
+                        insightSharePopup.saveCard(selectedFile)
+                }
+                onRejected: insightSharePopup.saveIntent = ""
             }
 
             contentItem: ColumnLayout {
@@ -3702,7 +3726,11 @@ BrandWindow {
                         iconName: "document"
                         Layout.fillWidth: true
                         enabled: trackInsightPanel.canShareInsight && !insightSharePopup.exportBusy
-                        onClicked: insightSaveDialog.open()
+                        onClicked: {
+                            insightSharePopup.exportNoticeKey = ""
+                            insightSharePopup.saveIntent = insightSharePopup.exportSelection
+                            insightSaveDialog.open()
+                        }
                     }
                 }
                 Text {
