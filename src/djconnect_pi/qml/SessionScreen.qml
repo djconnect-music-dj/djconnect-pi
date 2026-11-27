@@ -312,6 +312,16 @@ Item {
             textFormat: Text.PlainText
         }
         GlassButton {
+            objectName: "sessionOpenMomentInsight"
+            readonly property var reference: (screen.state.moment_insight_offer || {}).reference || ({})
+            visible: screen.liveViewOpen && liveSources.ready && modelData.current && reference.moment_id === modelData.moment_id
+            text: screen.tr("session_moment_insight_open")
+            iconName: "trackInsight"
+            wrapText: true
+            Layout.fillWidth: true
+            onClicked: screen.owner.openMomentTrackInsight(reference.action_id)
+        }
+        GlassButton {
             objectName: "sessionPrepareArtwork"
             visible: liveSources.ready && modelData.current && screen.state.artwork_prepare.available && screen.state.artwork_prepare.moment_id === modelData.moment_id
             text: screen.tr(screen.state.artwork_prepare.status === "loading" ? "session_artwork_loading" : "session_artwork_load")
@@ -3905,6 +3915,94 @@ Item {
                 onEdited: searchPanel.editSearch()
                 onSubmitted: searchPanel.acceptSearchInput()
                 onDismissed: searchPanel.keyboardVisible = false
+            }
+        }
+    }
+    GlassPopup {
+        id: momentInsight
+        objectName: "sessionMomentInsight"
+        readonly property var detail: screen.owner.momentTrackInsight
+        anchors.centerIn: parent
+        width: Math.min(screen.width - 32, 680)
+        padding: 20
+        modal: true
+        closePolicy: Popup.NoAutoClose
+        visible: screen.liveViewOpen && !!detail.status
+        contentItem: ColumnLayout {
+            spacing: 16
+            Text {
+                text: screen.tr("track_insight")
+                textFormat: Text.PlainText
+                color: BrandTheme.colors.text
+                font.pixelSize: 25; font.bold: true
+                Layout.fillWidth: true
+            }
+            RowLayout {
+                visible: momentInsight.detail.status !== "ready"
+                Layout.fillWidth: true
+                BusyIndicator {
+                    visible: momentInsight.detail.status === "loading"
+                    running: visible
+                    Layout.preferredWidth: 28
+                    Layout.preferredHeight: 28
+                }
+                Text {
+                    objectName: "sessionMomentInsightStatus"
+                    text: screen.tr(momentInsight.detail.status === "loading" ? "session_moment_insight_loading"
+                        : momentInsight.detail.status === "expired" ? "session_moment_insight_expired" : "session_moment_insight_unavailable")
+                    textFormat: Text.PlainText
+                    color: BrandTheme.colors.muted
+                    font.pixelSize: 20
+                    wrapMode: Text.WordWrap
+                    Layout.fillWidth: true
+                }
+            }
+            ScrollView {
+                id: momentInsightScroll
+                visible: momentInsight.detail.status === "ready"
+                clip: true
+                Layout.fillWidth: true
+                Layout.preferredHeight: Math.min(momentInsightContent.implicitHeight, screen.height * 0.58)
+                contentWidth: availableWidth
+                ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+                ColumnLayout {
+                    id: momentInsightContent
+                    width: momentInsightScroll.availableWidth
+                    spacing: 12
+                    Text {
+                        objectName: "sessionMomentInsightTitle"
+                        text: momentInsight.detail.title || ""
+                        textFormat: Text.PlainText
+                        color: BrandTheme.colors.text
+                        font.pixelSize: 26; font.bold: true
+                        wrapMode: Text.Wrap
+                        Layout.fillWidth: true
+                    }
+                    Text {
+                        visible: text.length > 0
+                        text: momentInsight.detail.artist || ""
+                        textFormat: Text.PlainText
+                        color: BrandTheme.colors.muted
+                        font.pixelSize: 21
+                        wrapMode: Text.Wrap
+                        Layout.fillWidth: true
+                    }
+                    Text {
+                        objectName: "sessionMomentInsightSummary"
+                        text: momentInsight.detail.summary || ""
+                        textFormat: Text.PlainText
+                        color: BrandTheme.colors.text
+                        font.pixelSize: 20
+                        wrapMode: Text.Wrap
+                        Layout.fillWidth: true
+                    }
+                }
+            }
+            GlassButton {
+                objectName: "sessionMomentInsightClose"
+                text: screen.tr("close")
+                Layout.fillWidth: true
+                onClicked: screen.owner.closeMomentTrackInsight()
             }
         }
     }

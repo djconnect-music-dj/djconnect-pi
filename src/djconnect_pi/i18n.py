@@ -1618,6 +1618,23 @@ _KEYBOARD_TRANSLATIONS = {
     "refresh_music_dna": ("Refresh Music DNA", "Music DNA vernieuwen", "Music DNA aktualisieren", "Actualiser Music DNA", "Actualizar Music DNA"),
     "refresh_track_insight": ("Refresh Track Insight", "Track Insight vernieuwen", "Track Insight aktualisieren", "Actualiser Track Insight", "Actualizar Track Insight"),
     "track_insight_empty": ("Play music to analyze a track.", "Start muziek om een nummer te analyseren.", "Starte Musik, um einen Titel zu analysieren.", "Lancez de la musique pour analyser un morceau.", "Reproduce música para analizar una canción."),
+    "session_moment_insight_open": (
+        "View Track Insight", "Bekijk Track Insight", "Track Insight ansehen", "Voir Track Insight", "Ver Track Insight",
+    ),
+    "session_moment_insight_loading": (
+        "Loading analysis for this track…", "Analyse voor dit nummer ophalen…", "Analyse für diesen Titel wird geladen…",
+        "Chargement de l’analyse de ce titre…", "Cargando el análisis de esta canción…",
+    ),
+    "session_moment_insight_unavailable": (
+        "Analysis for this track is unavailable.", "De analyse van dit nummer is niet beschikbaar.",
+        "Die Analyse für diesen Titel ist nicht verfügbar.", "L’analyse de ce titre est indisponible.",
+        "El análisis de esta canción no está disponible.",
+    ),
+    "session_moment_insight_expired": (
+        "Access to this analysis has expired.", "De toegang tot deze analyse is verlopen.",
+        "Der Zugriff auf diese Analyse ist abgelaufen.", "L’accès à cette analyse a expiré.",
+        "El acceso a este análisis ha caducado.",
+    ),
     "track_insight_analyze": ("Analyze track", "Analyseer nummer", "Titel analysieren", "Analyser le morceau", "Analizar la canción"),
     "track_insight_updated": ("Track Insight updated", "Track Insight vernieuwd", "Track Insight aktualisiert", "Track Insight actualisé", "Track Insight actualizado"),
     "refresh_ask_dj": ("Refresh Ask DJ", "Ask DJ vernieuwen", "Ask DJ aktualisieren", "Actualiser Ask DJ", "Actualizar Ask DJ"),
