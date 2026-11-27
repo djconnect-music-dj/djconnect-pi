@@ -114,6 +114,7 @@ Item {
         required property var modelData
         id: archiveRow
         signal sessionRequested(string sessionId)
+        readonly property bool opening: screen.owner.busy && screen.openingArchiveSessionId === modelData.session_id
         readonly property string lifecycleNote: modelData.lifecycle_status === "INTERRUPTED"
             ? screen.tr("session_history_interrupted") : ""
         Layout.fillWidth: true
@@ -155,16 +156,27 @@ Item {
                     SessionSummaryMetric { compactMetric: true }
                 }
             }
-            FeatureIcon {
-                objectName: "sessionArchiveRowChevron"
-                iconName: "chevron_right"
-                iconColor: BrandTheme.colors.muted
-                Accessible.ignored: true
+            Item {
                 Layout.preferredWidth: 22
                 Layout.preferredHeight: Layout.preferredWidth
+                FeatureIcon {
+                    objectName: "sessionArchiveRowChevron"
+                    anchors.fill: parent
+                    visible: !archiveRow.opening
+                    iconName: "chevron_right"
+                    iconColor: BrandTheme.colors.muted
+                    Accessible.ignored: true
+                }
+                BusyIndicator {
+                    objectName: "sessionArchiveRowOpening"
+                    anchors.fill: parent
+                    visible: archiveRow.opening
+                    running: visible
+                }
             }
         }
         enabled: !screen.owner.busy && !screen.archiveIntent
+        opacity: enabled || opening ? 1 : 0.4
         text: {
             screen.backend.translationVersion
             return screen.owner.formatArchiveTiming(modelData) || screen.tr("session_title")
@@ -740,6 +752,7 @@ Item {
         else openArchive(manual)
     }
     property var archiveIntent: null
+    property string openingArchiveSessionId: ""
     property bool archiveReadActive: false
     property bool archiveMoreLoading: false
     property var archiveReturn: null
@@ -772,7 +785,9 @@ Item {
         if (!visible || !historical || currentHistory || state.timeline.session || owner.busy || archiveIntent) return
         if (!archiveSessions.some(function(row) { return row.session_id === sessionId })) return
         rememberArchive(); archiveDetailReturn = archiveReturn; archiveReturn = null
+        openingArchiveSessionId = sessionId
         owner.openSaved(sessionId)
+        if (!owner.busy) openingArchiveSessionId = ""
     }
     function returnArchiveDetail() {
         var saved = archiveDetailReturn
@@ -1002,9 +1017,12 @@ Item {
         const index = searchPanel.findMatchIndex(sessionId, -1)
         if (index < 0) return
         archiveSearchHandoff = {sessionId: sessionId, query: searchPanel.result.query, scope: composerContext, index: index}
+        openingArchiveSessionId = sessionId
         owner.openArchiveSearchResult(sessionId)
+        if (!owner.busy) openingArchiveSessionId = ""
     }
     function closeTransient() {
+        openingArchiveSessionId = ""
         archiveDetailReturn = null
         archiveSearchOrigin = null
         pendingArchiveSearchReturn = null
@@ -1242,6 +1260,7 @@ Item {
         }
         function onArchiveInvalidated() {
             screen.cancelArchiveRead(); screen.archiveReturn = null; screen.archiveDetailReturn = null
+            screen.openingArchiveSessionId = ""
             screen.archiveSearchOrigin = null; screen.pendingArchiveSearchReturn = null
             screen.searchReturn = null; screen.cancelSearchRead(); searchPanel.close()
             readingRestore.stop(); screen.pendingReadingAnchor = ""; screen.readingOffset = 0
@@ -1254,6 +1273,7 @@ Item {
         }
         function onChanged() {
             if (!screen.owner.busy) {
+                screen.openingArchiveSessionId = ""
                 screen.archiveReadActive = false
                 screen.archiveMoreLoading = false
             }
