@@ -29,7 +29,7 @@ GlassCard {
     readonly property bool settingsConfirmation: !sourceWithdrawn && entry.kind === "dj_moment"
         && entry.archive_basis === "runtime_accepted_settings_v1"
     readonly property var played: entry.historical_playback || {}
-    readonly property bool canExplore: canAsk && explorationAvailable
+    readonly property bool canExplore: !sourceWithdrawn && historySources.ready && explorationAvailable
         && ["dj_moment", "playback_observed", "conversation_dj"].includes(entry.kind)
         && [entry.text, played.title, played.artist, played.album].some(value => !!String(value || "").trim())
     Layout.fillWidth: true
@@ -80,7 +80,7 @@ GlassCard {
             color: BrandTheme.colors.text; font.pixelSize: 22
             wrapMode: Text.WordWrap; textFormat: Text.PlainText; Layout.fillWidth: true
             TapHandler {
-                enabled: historyCard.canAsk && !historyCard.selectionBusy
+                enabled: (historyCard.canAsk || historyCard.canExplore) && !historyCard.selectionBusy
                     && ["dj_moment", "playback_observed", "conversation_dj"].includes(historyCard.entry.kind)
                 onTapped: historyCard.canExplore
                     ? historyCard.tellMore(entry.session_id, entry.entry_id) : historyCard.askAboutEntry()

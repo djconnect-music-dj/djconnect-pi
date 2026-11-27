@@ -354,6 +354,7 @@ class SessionController(QObject):
             "composer_available": self._composer_supported(), "pending_question": {} if revoked else deepcopy(self._pending_question), "current_reply": {} if revoked else deepcopy(self._current_reply), "retained_flow": [] if revoked else deepcopy(flow),
             "contribution_exploration": not revoked and self._composer_supported() and not self.backend.demoMode
                 and bool(contribution_question(self._caps, self.backend.cfg.language)),
+            "standalone_exploration": not revoked and bool(self._standalone_exploration_question()),
             "flow_more": active_history and self._incomplete_flow_limit == 20,
             "flow_history_hint": active_history and self._incomplete_flow_limit == 50,
             **({
@@ -1202,17 +1203,31 @@ class SessionController(QObject):
 
     def _explore_entry(self, session_id, entry_id, source):
         selected = {"kind": "selected_entry", "session_id": session_id, "entry_id": entry_id}
+        if not self._entry_exploration_valid(selected, source):
+            return False
+        return self._explore_contribution(selected, selection_source=source)
+
+    def saved_exploration_question(self, selected):
+        return (self._standalone_exploration_question()
+                if self._entry_exploration_valid(selected, "timeline") else "")
+
+    def _standalone_exploration_question(self):
+        if (self.backend.demoMode or not self._foreground or self.busy or self._question_running
+                or self._session or not self._history_supported() or not private_scope_allowed(self)):
+            return ""
+        return contribution_question(self._caps, self.backend.cfg.language)
+
+    def _entry_exploration_valid(self, selected, source):
         if not self._entry_selection_valid(selected, source):
             return False
         rows = self._retained_flow if source == "flow" else self._timeline.get("entries", [])
-        entry = next(row for row in rows if row["session_id"] == session_id and row["entry_id"] == entry_id)
+        entry = next(row for row in rows if row["session_id"] == selected["session_id"]
+                     and row["entry_id"] == selected["entry_id"])
         if entry["kind"] not in {"dj_moment", "playback_observed", "conversation_dj"}:
             return False
         playback = entry.get("historical_playback") or {}
-        if not any(text(value, 32768).strip()
-                   for value in (entry.get("text"), playback.get("title"), playback.get("artist"), playback.get("album"))):
-            return False
-        return self._explore_contribution(selected, selection_source=source)
+        return any(text(value).strip()
+                   for value in (entry.get("text"), playback.get("title"), playback.get("artist"), playback.get("album")))
 
     def _explore_contribution(self, selected, *, selection_source=""):
         if (self.busy or self._question_running or not self._foreground

@@ -730,6 +730,13 @@ class DJConnectBackend(QObject):
             return False
         return self._send_ask_dj_question(question, reply_id, session_id, entry_id, restore_draft=False)
 
+    @Slot(str, str, result=bool)
+    def exploreSavedAskDjEntry(self, session_id, entry_id):
+        selected = {"session_id": session_id, "entry_id": entry_id}
+        question = self._session_controller.saved_exploration_question(selected)
+        return self._send_ask_dj_question(question, "", session_id, entry_id,
+                                          restore_draft=False, from_archive=True)
+
     @Slot(str, str, str)
     def openAskDjHistoryMatch(self, message_id, session_id, entry_id):
         ticket = self._private_read_context()
@@ -2831,13 +2838,13 @@ class DJConnectBackend(QObject):
     def sendAskDjQuestion(self, text: str, reply_id="", session_id="", entry_id="") -> bool:
         return self._send_ask_dj_question(text, reply_id, session_id, entry_id, restore_draft=True)
 
-    def _send_ask_dj_question(self, text, reply_id, session_id, entry_id, *, restore_draft):
+    def _send_ask_dj_question(self, text, reply_id, session_id, entry_id, *, restore_draft, from_archive=False):
         text = text.strip()
         if (not text or len(text) > 4000 or self._ask_dj_busy or self._ask_dj_destination_loading
                 or self.askDjDestinationUnavailable
                 or not self._application_foreground or self._shutting_down):
             return False
-        selected = {"session_id": session_id, "entry_id": entry_id} if reply_id else None
+        selected = {"session_id": session_id, "entry_id": entry_id} if reply_id or from_archive else None
         message_id = uuid4().hex
         if self._demo_mode:
             if selected is not None:
@@ -2850,7 +2857,12 @@ class DJConnectBackend(QObject):
         self._sync_config_from_disk()
         if not self.paired or self.cfg.private_session or not self._backend_available or self._version_mismatch_visible:
             return False
-        if selected is not None and self.askDjContextEntry(reply_id) != selected:
+        def reference_current():
+            if from_archive:
+                return text == self._session_controller.saved_exploration_question(selected)
+            return selected is None or self.askDjContextEntry(reply_id) == selected
+
+        if not reference_current():
             self.showToastForContext(self.tr_key("session_question_reference_unavailable"), "askdj")
             return False
         transport = self._session_controller.transport
@@ -2864,7 +2876,7 @@ class DJConnectBackend(QObject):
         if destination is None:
             destination = self._session_controller.ask_dj_session_destination()
         question_context = {}
-        if destination:
+        if destination and not from_archive:
             question_context["active_session_id"] = destination
         if selected is not None:
             question_context["selected_entry"] = selected
@@ -2889,7 +2901,12 @@ class DJConnectBackend(QObject):
                     restore_unsent()
                     self._toastReady.emit(self.tr_key("session_profile_missing"), 5000, "askdj")
                     return
-                if selected is not None and self.askDjContextEntry(reply_id) != selected:
+                if from_archive and active_session(transport.active(binding, isolated=True)):
+                    self._askDjDeliveryReady.emit(ticket, "ask_dj_destination_changed")
+                    return
+                if not current():
+                    return
+                if not reference_current():
                     restore_unsent()
                     self._toastReady.emit(self.tr_key("session_question_reference_unavailable"), 5000, "askdj")
                     return
