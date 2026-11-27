@@ -209,6 +209,19 @@ def main():
             )
             backend.playback.output_device_id = "speaker-b"
             backend.outputDeviceChanged.emit()
+            QTest.qWait(40)
+            assert outputs.property("currentIndex") == 2 and outputs.property("displayText") == "Fixture output (2)"
+            backend.playback.output_device_details = (
+                {"name": "Fixture output", "value": "speaker-a"}, {"name": "Other output", "value": "speaker-c"},
+            )
+            backend.outputDeviceChanged.emit()
+            QTest.qWait(40)
+            assert outputs.property("currentIndex") == 0 and outputs.property("displayText") == "Fixture output"
+            backend.playback.output_device_details = (
+                {"name": "Fixture output", "value": "speaker-a"}, {"name": "Fixture output", "value": "speaker-b"},
+            )
+            backend.outputDeviceChanged.emit()
+            QTest.qWait(40)
             assert outputs.property("currentIndex") == 2 and outputs.property("displayText") == "Fixture output (2)"
             backend._pending_output_choice = ("speaker-a", "New fixture output")
             backend.outputDeviceChanged.emit()
@@ -346,12 +359,14 @@ def main():
         previous_y = anchor.mapToItem(media_rows, QPointF()).y()
         backend._demo_mode = False
         backend.cfg.paired, backend.cfg.device_token = True, "synthetic-not-a-credential"
-        with patch.object(backend, "_sync_config_from_disk"), patch.object(backend, "_run") as request:
+        with (patch.object(backend, "_sync_config_from_disk"), patch.object(backend, "_load_queue_worker"),
+              patch.object(backend, "_run") as request):
             QMetaObject.invokeMethod(queue_refresh, "clicked")
             request.assert_called_once()
             inserted = {"title": "New first track", "uri": "spotify:track:inserted", "index": 99}
             backend._queue_items = parse_queue_items({"queue": [inserted, *records]})
             backend.mediaListsChanged.emit()
+            request.call_args.args[1]()
             request.call_args.kwargs["done"]()
         capture("queue-refresh-keeps-position")
         anchor = visual_item(media_rows, "mediaItemRow-9")
@@ -439,7 +454,7 @@ def main():
         backend.mediaActivityChanged.emit()
         assert media_refresh.property("loading") and not media_refresh.property("enabled")
         assert not media_pull_refresh.property("canRefresh")
-        backend._finish_media_list_load("playlists")
+        backend._finish_media_list_load("playlists", backend._private_read_context(), failed=False)
         playlist_response = {"success": True, "playlists": [
             {"name": "Refreshed playlist", "uri": "spotify:playlist:fixture-only"},
         ]}

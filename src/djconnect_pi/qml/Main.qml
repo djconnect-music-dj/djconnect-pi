@@ -2290,6 +2290,7 @@ BrandWindow {
                             for (var index = 1; index < deviceChoices.length; index++) {
                                 if (choiceValue(deviceChoices[index]) === selectedId) return index
                             }
+                            return 0
                         }
                         let match = 0
                         for (var i = 0; i < deviceChoices.length; i++) {
@@ -2301,10 +2302,17 @@ BrandWindow {
                     }
                     model: deviceChoices
                     textRole: "name"
-                    displayText: displayName(confirmedOutputIndex)
+                    displayText: confirmedOutputIndex > 0 ? displayName(confirmedOutputIndex)
+                        : djconnect.outputDevice.trim() || noOutputDeviceLabel
                     enabled: djconnect.pendingOutputChoiceName.length === 0 && !djconnect.controlOutputsRefreshing
                     visible: djconnect.outputDeviceChoices.length > 0
-                    currentIndex: confirmedOutputIndex
+                    function restoreConfirmedIndex() {
+                        currentIndex = confirmedOutputIndex
+                    }
+                    // ComboBox resets currentIndex during model replacement.
+                    onModelChanged: Qt.callLater(restoreConfirmedIndex)
+                    onConfirmedOutputIndexChanged: Qt.callLater(restoreConfirmedIndex)
+                    Component.onCompleted: Qt.callLater(restoreConfirmedIndex)
                     font.pixelSize: 26
                     delegate: ItemDelegate {
                         id: controlOutputRow
@@ -2353,6 +2361,7 @@ BrandWindow {
                         if (index === 0) djconnect.setOutputDevice("")
                         else if (index !== confirmedOutputIndex)
                             djconnect.setOutputChoice(choiceValue(deviceChoices[index]))
+                        Qt.callLater(restoreConfirmedIndex)
                     }
                 }
 

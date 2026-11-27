@@ -279,8 +279,9 @@ def test_qml_has_touch_readable_glass_controls_and_scrollable_settings() -> None
     assert "id: controlOutputDeviceCombo" in main_qml
     assert "function selectedIndex()" in main_qml
     assert "readonly property int confirmedOutputIndex: selectedIndex()" in main_qml
-    assert "currentIndex: confirmedOutputIndex" in main_qml
-    assert "displayText: displayName(confirmedOutputIndex)" in main_qml
+    assert "currentIndex = confirmedOutputIndex" in main_qml
+    assert "onModelChanged: Qt.callLater(restoreConfirmedIndex)" in main_qml
+    assert "displayText: confirmedOutputIndex > 0 ? displayName(confirmedOutputIndex)" in main_qml
     assert 'text: "🔊"' not in main_qml
     assert "wrapMode: Text.Wrap" in logs_qml
     assert 'text: view.tr("log") + ": " + view.backend.logFile' in logs_qml
@@ -307,7 +308,9 @@ def test_qml_has_touch_readable_glass_controls_and_scrollable_settings() -> None
     assert 'objectName: "mediaSearchInput"' in main_qml
     assert 'keyboardName: "mediaSearchKeyboard"' in main_qml
     assert "model: panel.matches" in main_qml
-    assert "djconnect.trackProgress" in main_qml
+    assert "component PlaybackPositionControl: RowLayout" in main_qml
+    assert main_qml.count("PlaybackPositionControl {") == 2
+    assert "seekPointer.lease > 0 ? seekPointer.draft : djconnect.positionSeconds" in main_qml
     assert "djconnect.progressLabel" in main_qml
     assert 'iconName: djconnect.playing ? "pause" : "play"' in main_qml
     assert 'iconName: "previous"' in main_qml
