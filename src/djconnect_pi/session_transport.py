@@ -340,6 +340,12 @@ class SessionTransport:
                     category = ("conflict" if response.status_code == 409 else "unavailable"
                         if admitted and admitted != "history_delete_outcome_unknown" else "uncertain")
                     raise SessionError(category, admitted)
+                if method == "POST" and route == "ask_dj/message" and data.get("success") is False:
+                    selected_context = body.get("conversation_context")
+                    unavailable = (response.status_code == 404 and code == "history_unavailable"
+                        or response.status_code == 409 and code in {"source_withdrawn", "conversation_source_withdrawn"})
+                    if unavailable and isinstance(selected_context, dict) and selected_context.get("selected_entry"):
+                        raise SessionError("reference_unavailable")
                 if response.status_code in (404, 405, 426) or code == "history_contract_upgrade_required":
                     raise SessionError("unavailable", code if code in {"history_unavailable", "active_session_not_found", "history_contract_upgrade_required"} else "")
                 if response.status_code == 409:

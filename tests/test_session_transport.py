@@ -299,6 +299,23 @@ def test_standalone_follow_up_rejects_malformed_references_before_sending(transp
     request.assert_not_called()
 
 
+@pytest.mark.parametrize(("status", "code", "category"), [
+    (404, "history_unavailable", "reference_unavailable"),
+    (409, "source_withdrawn", "reference_unavailable"),
+    (409, "conversation_source_withdrawn", "reference_unavailable"),
+    (409, "session_context_changed", "conflict"),
+    (404, "route_missing", "unavailable"),
+])
+def test_standalone_follow_up_distinguishes_withdrawal_from_other_errors(transport, status, code, category):
+    client, _, request, response = transport
+    response.status_code = status
+    response.json.return_value = {"success": False, "error": code}
+    with pytest.raises(SessionError, match=f"^{category}$"):
+        client.standalone_question(client.binding(), "Tell me more", "turn", "owner",
+                                   selected_entry={"session_id": "earlier", "entry_id": "saved"})
+    request.assert_called_once()
+
+
 def test_question_timeout_is_uncertain_with_no_write_replay(transport):
     client, _, request, _ = transport
     request.side_effect = requests.Timeout()

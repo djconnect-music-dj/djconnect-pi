@@ -260,6 +260,7 @@ class DJConnectBackend(QObject):
     _updateCheckFinished = Signal(str)
     _askDjReady = Signal(object)
     _askDjContextReady = Signal(object, object, object)
+    _askDjContextWithdrawn = Signal(object, object)
     _askDjRefreshReady = Signal(object)
     _askDjClearReady = Signal(object)
     askDjHelpChanged = Signal()
@@ -457,6 +458,7 @@ class DJConnectBackend(QObject):
         self._updateCheckFinished.connect(self._finish_update_check)
         self._askDjReady.connect(self._apply_ask_dj_data)
         self._askDjContextReady.connect(self._apply_ask_dj_context_rows)
+        self._askDjContextWithdrawn.connect(self._apply_ask_dj_context_withdrawal)
         self._askDjUnsentDraftReady.connect(self._restore_unsent_ask_dj_draft)
         self._askDjDeliveryReady.connect(self._apply_ask_dj_delivery)
         self._askDjRefreshReady.connect(self._apply_ask_dj_refresh_result)
@@ -691,7 +693,10 @@ class DJConnectBackend(QObject):
             return {}
         page = self._ask_dj_context_page
         rows = page[1] if page and page[0] == self._private_read_context() else []
-        return self._session_controller.ask_dj_context_entry(message_id, rows)
+        reference = self._session_controller.ask_dj_context_entry(message_id, rows)
+        if reference and (reference["session_id"], reference["entry_id"]) in self._ask_dj_withdrawn_entries:
+            return {}
+        return reference
 
     @Slot()
     def cancelAskDjHistoryOpen(self):
@@ -2846,8 +2851,12 @@ class DJConnectBackend(QObject):
                 if current():
                     self._askDjReady.emit(self._profile_read_result(history, ticket))
                     self._askDjDeliveryReady.emit(ticket, "")
-            except SessionError:
+            except SessionError as exc:
                 if ticket == self._private_read_context() and self._application_foreground:
+                    if not accepted and selected is not None and exc.category == "reference_unavailable":
+                        self._askDjUnsentDraftReady.emit(ticket, text)
+                        self._askDjContextWithdrawn.emit(ticket, (selected["session_id"], selected["entry_id"]))
+                        return
                     key = "session_question_accepted_unavailable" if accepted else "session_question_uncertain"
                     self._askDjDeliveryReady.emit(ticket, key)
 
@@ -2866,6 +2875,14 @@ class DJConnectBackend(QObject):
         if (self._application_foreground and not self._shutting_down and not self._demo_mode
                 and ticket == self._private_read_context()):
             self.askDjUnsentDraft.emit(text)
+
+    @Slot(object, object)
+    def _apply_ask_dj_context_withdrawal(self, ticket, reference):
+        if (not self._application_foreground or self._shutting_down or self._demo_mode
+                or ticket != self._private_read_context()):
+            return
+        self._ask_dj_withdrawn_entries.add(reference)
+        self._apply_ask_dj_delivery(ticket, "session_question_reference_unavailable")
 
     @Property(str, notify=askDjChanged)
     def askDjDeliveryKey(self) -> str:
