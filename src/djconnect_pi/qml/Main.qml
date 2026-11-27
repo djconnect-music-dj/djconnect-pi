@@ -5620,10 +5620,13 @@ BrandWindow {
                     }
 
                     Repeater {
-                        model: djconnect.musicDnaSections.length ? djconnect.musicDnaSections
-                            : djconnect.musicDnaSummary ? [{
-                                key: "music_dna_card_summary", icon: "waveform", value: djconnect.musicDnaSummary
-                            }] : []
+                        model: {
+                            const sections = djconnect.musicDnaSections
+                            const summary = djconnect.musicDnaSummary
+                            if (!summary || sections.some(section => section.key === "music_dna_card_summary"))
+                                return sections
+                            return [{key: "music_dna_card_summary", icon: "waveform", value: summary}].concat(sections)
+                        }
 
                         GlassCard {
                             id: dnaCard
