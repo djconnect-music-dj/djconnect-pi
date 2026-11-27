@@ -1678,6 +1678,13 @@ _KEYBOARD_TRANSLATIONS = {
         "Track Insight cambió. Revisa la vista previa antes de guardar.",
     ),
     "refresh_ask_dj": ("Refresh Ask DJ", "Ask DJ vernieuwen", "Ask DJ aktualisieren", "Actualiser Ask DJ", "Actualizar Ask DJ"),
+    "music_dna_opt_in_demo": (
+        "In demo mode, this only shows fictional sample data on this device.",
+        "In demomodus toont dit alleen fictieve voorbeeldgegevens op dit apparaat.",
+        "Im Demomodus werden dadurch nur fiktive Beispieldaten auf diesem Gerät angezeigt.",
+        "En mode démo, seules des données d’exemple fictives s’affichent sur cet appareil.",
+        "En el modo demo, esto solo muestra datos de ejemplo ficticios en este dispositivo.",
+    ),
     "settings_profile": ("Profile", "Profiel", "Profil", "Profil", "Perfil"),
     "ask_dj_export": ("Export Ask DJ history", "Ask DJ-geschiedenis exporteren", "Ask-DJ-Verlauf exportieren", "Exporter l’historique Ask DJ", "Exportar el historial de Ask DJ"),
     "ask_dj_export_saved": ("Ask DJ history saved", "Ask DJ-geschiedenis opgeslagen", "Ask-DJ-Verlauf gespeichert", "Historique Ask DJ enregistré", "Historial de Ask DJ guardado"),

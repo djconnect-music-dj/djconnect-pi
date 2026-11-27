@@ -8617,6 +8617,18 @@ BrandWindow {
                     Layout.maximumWidth: musicDnaOptIn.compact ? optInScroll.width - 40 : 900
                     Layout.alignment: Qt.AlignHCenter
 
+                    Text {
+                        objectName: "musicDnaOptInDemoNotice"
+                        visible: djconnect.demoMode
+                        text: root.tr("music_dna_opt_in_demo")
+                        textFormat: Text.PlainText
+                        color: BrandTheme.colors.muted
+                        font.pixelSize: musicDnaOptIn.compact ? 17 : 20
+                        font.weight: Font.DemiBold
+                        wrapMode: Text.WordWrap
+                        Layout.fillWidth: true
+                    }
+
                     Repeater {
                         model: [
                             {icon: "trash", key: "music_dna_opt_in_erase"},
