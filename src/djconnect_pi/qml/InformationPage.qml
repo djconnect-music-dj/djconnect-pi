@@ -98,7 +98,8 @@ Item {
                     Layout.fillWidth: true
                     Text { text: page.tr("privacy"); textFormat: Text.PlainText; color: BrandTheme.colors.text; font.pixelSize: 20; font.weight: Font.DemiBold; wrapMode: Text.WordWrap; Layout.fillWidth: true }
                     Repeater {
-                        model: ["privacy_data_body", "privacy_tokens_body", "privacy_ai_body", "privacy_choices_body", "privacy_diagnostics_body"]
+                        model: ["privacy_data_body", "privacy_tokens_body", "privacy_profile_body",
+                                "privacy_ai_body", "privacy_choices_body", "privacy_diagnostics_body"]
                         SelectableNotice {
                             required property string modelData
                             objectName: modelData
