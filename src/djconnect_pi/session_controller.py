@@ -489,8 +489,8 @@ class SessionController(QObject):
         return self._playback_control.seek_to(session_id, item_id, transport_epoch, target_ms, expected_output)
 
     @Slot(str, str, int, str, result=bool)
-    def readPlaybackModes(self, session_id, item_id, transport_epoch, expected_output):
-        return self._playback_control.read_modes(session_id, item_id, transport_epoch, expected_output)
+    def readPlaybackOverlay(self, session_id, item_id, transport_epoch, expected_output):
+        return self._playback_control.read_overlay(session_id, item_id, transport_epoch, expected_output)
 
     @Slot(str, str, result=bool)
     def readPlaybackVolume(self, session_id, item_id):

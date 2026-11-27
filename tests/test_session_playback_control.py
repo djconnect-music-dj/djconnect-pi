@@ -94,6 +94,32 @@ def test_overlay_intent_rechecks_output_and_sends_only_one_explicit_adjustment(
         owner.transport.playback_adjustment.assert_called_once_with(owner.transport.binding(), wire, value)
 
 
+@pytest.mark.parametrize(("liked", "alias", "observed_output", "expected"), [
+    (True, True, "speaker-id", {"toggle_favorite": True}),
+    (False, False, "speaker-id", {"toggle_favorite": False}),
+    (True, False, "speaker-id", {}),
+    (True, True, "different-id", {}),
+])
+def test_favorite_overlay_read_checks_exact_output_and_consistent_favorite_fields(
+    controller, liked, alias, observed_output, expected,
+):
+    owner, backend = setup(controller)
+    owner._session["broadcast"]["playback"]["target_name"] = "Speaker"
+    backend.outputDeviceId = "speaker-id"
+    owner.transport.playback_status.return_value["playback"].update(
+        favorite_status=liked, is_liked=alias,
+        device={"id": observed_output, "name": "Speaker", "active": True, "is_restricted": False},
+    )
+    owner.transport.playback_favorite = Mock()
+    epoch = owner.state["playback_control"]["transport_epoch"]
+    assert owner.readPlaybackOverlay("synthetic-session", ITEM_ID, epoch, backend.outputDeviceId)
+    backend.jobs.pop()()
+    assert owner.state["playback_control"]["overlay_state"] == expected
+    owner.transport.playback_favorite.assert_not_called()
+    owner.transport.playback_command.assert_not_called()
+    assert not backend.jobs
+
+
 @pytest.mark.parametrize(("output_id", "progress_ms", "offset"), [
     ("speaker-id", 18_000, 42_000),
     ("other-id", 18_000, None),

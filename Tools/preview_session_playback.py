@@ -731,10 +731,11 @@ def main():
                 original_mode_caps = backend.cfg.music_backend_capabilities
                 original_mode_status_caps = mode_status['music_backend_capabilities']
                 original_adjustment = owner.transport.playback_adjustment
+                original_favorite = owner.transport.playback_favorite
                 preserved_output = backend.playback.output_device_id
                 backend.cfg.music_backend_capabilities = {**original_mode_caps, **mode_caps}
                 mode_status['music_backend_capabilities'] = {**original_mode_status_caps, **mode_caps}
-                mode_status['playback'].update(shuffle=True, repeat_state='track')
+                mode_status['playback'].update(shuffle=True, repeat_state='track', favorite_status=True, is_liked=True)
                 backend.playback.output_device_id = 'synthetic-output'
                 backend.outputDeviceChanged.emit()
                 owner.changed.emit()
@@ -747,6 +748,8 @@ def main():
                 shuffle_button = window.findChild(QObject, 'sessionPlaybackShuffle')
                 assert repeat_button.property('checked') and repeat_button.property('iconName') == 'repeat_one'
                 assert shuffle_button.property('checked')
+                favorite_button = window.findChild(QObject, 'sessionArtworkFavorite')
+                assert favorite_button.property('checked') and favorite_button.property('iconName') == 'heart_filled'
                 capture('confirmed-playback-modes')
                 click('sessionPlaybackRepeat')
                 assert not repeat_button.property('checked') and len(intents) == 1
@@ -759,6 +762,20 @@ def main():
                 intents.pop(0)()
                 QTest.qWait(60)
                 assert repeat_button.property('checked') and repeat_button.property('iconName') == 'repeat'
+                owner.transport.playback_favorite = Mock(return_value={'playback': {'favorite_status': True}})
+                click('sessionArtworkFavorite')
+                assert len(intents) == 1 and not favorite_button.property('checked')
+                intents.pop(0)()
+                owner.transport.playback_favorite.assert_called_once()
+                assert owner.transport.playback_favorite.call_args.args[1] is False
+                mode_status['playback'].update(favorite_status=False, is_liked=False)
+                drain()
+                assert len(intents) == 1
+                intents.pop(0)()
+                QTest.qWait(60)
+                assert not favorite_button.property('checked') and favorite_button.property('iconName') == 'heart'
+                assert favorite_button.property('accessibleLabelKey') == 'session_favorite_add'
+                capture('confirmed-playback-favorite-cleared')
                 backend.playback.output_device_id = 'different-output-same-name'
                 backend.outputDeviceChanged.emit()
                 QTest.qWait(60)
@@ -771,6 +788,7 @@ def main():
                 QTest.qWait(120)
                 backend.playback.output_device_id = 'synthetic-output'
                 backend.outputDeviceChanged.emit()
+                mode_status['playback'].update(favorite_status=True, is_liked=True)
                 click('sessionExpandTrackArtwork')
                 assert window.property('trackArtworkControlsOpen') and len(intents) == 1
                 intents.pop(0)()
@@ -778,6 +796,7 @@ def main():
                 artwork_modes = visual(window.contentItem(), 'trackArtworkTransportControls')
                 assert visual(artwork_modes, 'sessionPlaybackShuffle').property('checked')
                 assert visual(artwork_modes, 'sessionPlaybackRepeat').property('checked')
+                assert visual(artwork_modes, 'sessionArtworkFavorite').property('checked')
                 capture('fullscreen-confirmed-playback-modes')
                 QTest.keyClick(window, Qt.Key.Key_Escape)
                 QTest.qWait(120)
@@ -791,6 +810,8 @@ def main():
                 backend.playback.output_device_id = preserved_output
                 backend.outputDeviceChanged.emit()
                 owner.transport.playback_adjustment = original_adjustment
+                mode_status['playback'].update(favorite_status=False, is_liked=False)
+                owner.transport.playback_favorite = original_favorite
                 owner.changed.emit()
 
                 insight = window.findChild(QObject, 'sessionPlaybackInsight')

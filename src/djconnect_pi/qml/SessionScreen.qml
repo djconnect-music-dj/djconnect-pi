@@ -2816,29 +2816,29 @@ Item {
         readonly property int optionsRow: overArtwork ? 0 : 2
         readonly property int seekRow: overArtwork ? 2 : 0
         readonly property var playbackControl: screen.state.playback_control
-        readonly property string modeOutput: screen.backend.outputDeviceId || ""
-        readonly property var playbackModes: playbackControl.mode_output === modeOutput
-            ? playbackControl.modes : ({})
-        readonly property string modeScope: {
-            const commands = playbackControl.overlay_commands || []
-            if (!visible || !screen.liveViewOpen || !modeOutput || !playbackControl.transport_epoch
-                    || !(commands.includes("shuffle") || commands.includes("repeat")))
+        readonly property string overlayOutput: screen.backend.outputDeviceId || ""
+        readonly property var overlayState: playbackControl.overlay_output === overlayOutput
+            ? playbackControl.overlay_state : ({})
+        readonly property string overlayScope: {
+            const commands = (playbackControl.overlay_commands || []).filter(
+                command => command === "shuffle" || command === "repeat" || command === "toggle_favorite")
+            if (!visible || !screen.liveViewOpen || !overlayOutput || !playbackControl.transport_epoch || !commands.length)
                 return ""
-            return JSON.stringify([playbackControl.transport_epoch, playbackControl.mode_revision,
-                modeOutput, commands.includes("shuffle"), commands.includes("repeat")])
+            return JSON.stringify([playbackControl.transport_epoch, playbackControl.overlay_revision,
+                overlayOutput, commands])
         }
-        property string requestedModeScope: ""
-        readonly property bool needsModeRead: !!modeScope && modeScope !== requestedModeScope
+        property string requestedOverlayScope: ""
+        readonly property bool needsOverlayRead: !!overlayScope && overlayScope !== requestedOverlayScope
             && !!playbackControl.enabled && !screen.owner.refreshing
-        onModeScopeChanged: if (!modeScope) requestedModeScope = ""
-        onNeedsModeReadChanged: if (needsModeRead) Qt.callLater(readModes)
-        Component.onCompleted: if (needsModeRead) Qt.callLater(readModes)
-        function readModes() {
-            if (!needsModeRead) return
-            const scope = modeScope
-            if (screen.owner.readPlaybackModes(screen.state.session_id, screen.state.playback.item_id,
-                    playbackControl.transport_epoch, modeOutput))
-                requestedModeScope = scope
+        onOverlayScopeChanged: if (!overlayScope) requestedOverlayScope = ""
+        onNeedsOverlayReadChanged: if (needsOverlayRead) Qt.callLater(readOverlay)
+        Component.onCompleted: if (needsOverlayRead) Qt.callLater(readOverlay)
+        function readOverlay() {
+            if (!needsOverlayRead) return
+            const scope = overlayScope
+            if (screen.owner.readPlaybackOverlay(screen.state.session_id, screen.state.playback.item_id,
+                    playbackControl.transport_epoch, overlayOutput))
+                requestedOverlayScope = scope
         }
         readonly property var artworkFocusOrder: [repeatTransport, shuffleTransport, favoriteTransport,
             previousTransport, toggleTransport, nextTransport, seekBackTransport, seekForwardTransport, refreshTransport]
@@ -2958,8 +2958,8 @@ Item {
                 KeyNavigation.tab: transportControls.overArtwork ? null : shuffleTransport
                 KeyNavigation.backtab: transportControls.overArtwork ? null : nextTransport
                 commandName: "repeat"
-                iconName: transportControls.playbackModes.repeat === "track" ? "repeat_one" : "repeat"
-                checked: transportControls.playbackModes.repeat === "track" || transportControls.playbackModes.repeat === "context"
+                iconName: transportControls.overlayState.repeat === "track" ? "repeat_one" : "repeat"
+                checked: transportControls.overlayState.repeat === "track" || transportControls.overlayState.repeat === "context"
                 buttonSize: transportControls.buttonSize
             }
             SessionTransportButton {
@@ -2969,7 +2969,7 @@ Item {
                 KeyNavigation.tab: transportControls.overArtwork ? null : favoriteTransport
                 KeyNavigation.backtab: transportControls.overArtwork ? null : repeatTransport
                 commandName: "shuffle"
-                checked: transportControls.playbackModes.shuffle === true
+                checked: transportControls.overlayState.shuffle === true
                 buttonSize: transportControls.buttonSize
             }
             SessionTransportButton {
@@ -2979,7 +2979,11 @@ Item {
                 KeyNavigation.tab: transportControls.overArtwork ? null : seekBackTransport
                 KeyNavigation.backtab: transportControls.overArtwork ? null : shuffleTransport
                 commandName: "toggle_favorite"
-                iconName: "heart"
+                readonly property var favoriteState: transportControls.overlayState.toggle_favorite
+                checked: favoriteState === true
+                iconName: checked ? "heart_filled" : "heart"
+                accessibleLabelKey: favoriteState === true ? "session_favorite_remove"
+                    : favoriteState === false ? "session_favorite_add" : commandName
                 waiting: !!screen.state.playback_control.toggling_favorite
                 buttonSize: transportControls.buttonSize
             }
