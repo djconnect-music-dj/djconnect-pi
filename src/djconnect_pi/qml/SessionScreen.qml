@@ -1758,6 +1758,7 @@ Item {
                             }
                         }
                         Rectangle {
+                            id: artworkResumeFeedback
                             objectName: "sessionArtworkResumeFeedback"
                             anchors.centerIn: parent
                             width: screen.compact ? 64 : 96
@@ -1777,15 +1778,13 @@ Item {
                         }
                         SessionPlaybackShortcut {
                             objectName: "sessionArtworkResume"
-                            anchors.right: parent.right
-                            anchors.bottom: parent.bottom
-                            anchors.margins: screen.compact ? 8 : 14
-                            width: screen.compact ? 46 : 58
+                            anchors.centerIn: parent
+                            width: screen.compact ? 52 : 76
                             height: width
                             iconName: "play"
                             padding: 0
                             visible: screen.liveViewOpen && !!screen.state.playback_control.available
-                                && screen.state.playback.state === "paused"
+                                && screen.state.playback.state === "paused" && !artworkResumeFeedback.visible
                             enabled: !!screen.state.playback_control.enabled
                             Accessible.name: screen.tr("play")
                             onCurrentTrackClicked: screen.owner.playbackCommand(screen.state.session_id,
