@@ -6,7 +6,7 @@ from functools import lru_cache
 from itertools import pairwise
 from urllib.parse import urlsplit
 
-from .session_transport import SessionError, identifier
+from .session_transport import SessionError, identifier, moment_insight_reference
 
 HISTORY_KINDS = {"playback_observed", "dj_moment", "conversation_user", "conversation_dj", "dj_publication", "dj_silence"}
 ARCHIVE_BASES = {"cc0_normalized_fields_v1", "runtime_authored_direction_v1", "owner_metadata_narration_v1", "public_artist_narration_v1"}
@@ -243,17 +243,13 @@ def _moment_insight_navigation(moment, grant, now, source_expiry):
         return {}
     session_id, moment_id = moment["session_id"], moment["moment_id"]
     action_id = "insight-" + moment_id
-    if any(not isinstance(value, str) or not 1 <= len(value) <= 128 or any(ord(char) < 32 or ord(char) == 127 for char in value)
-           for value in (session_id, moment_id, action_id)):
-        return {}
     reference = {"schema_version": 1, "session_id": session_id, "moment_id": moment_id, "action_id": action_id}
     incoming = offer.get("reference")
     if (type(offer.get("schema_version")) is not int or offer["schema_version"] != 1
             or offer.get("kind") != "navigation" or offer.get("target") != "track_insight"
             or offer.get("required_capability") != "moment_track_insight_navigation_v1"
             or offer.get("action_id") != action_id or not text(offer.get("label"), 256).strip()
-            or not isinstance(incoming, dict) or type(incoming.get("schema_version")) is not int
-            or incoming != reference):
+            or not moment_insight_reference(incoming) or incoming != reference):
         return {}
     return {"reference": reference, "expires_at": deadline}
 

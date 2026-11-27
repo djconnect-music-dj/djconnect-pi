@@ -58,6 +58,42 @@ def test_track_insight_capability_probe_distinguishes_missing_route_from_failure
             client.track_insight_capabilities(binding)
 
 
+@pytest.mark.parametrize(("overrides", "status", "error"), [
+    ({}, 200, ""),
+    ({"mode": "current"}, 200, "invalid"),
+    ({"media_identity": "lookalike"}, 200, "invalid"),
+    ({"expires_in": True}, 200, "invalid"),
+    ({"expires_in": 601}, 200, "invalid"),
+    ({"reference": {"schema_version": 1, "session_id": "foreign", "moment_id": "m1",
+                    "action_id": "insight-m1"}}, 200, "invalid"),
+    ({}, 403, "denied"),
+    ({}, 410, "expired"),
+])
+def test_moment_track_insight_is_bound_to_the_explicit_reference(transport, overrides, status, error):
+    client, cfg, request, response = transport
+    cfg.explicit_profile_id = cfg.active_profile_id
+    binding = client.binding()
+    reference = {"schema_version": 1, "session_id": "s1", "moment_id": "m1", "action_id": "insight-m1"}
+    response.status_code = status
+    response.json.return_value = {"success": True, "subject": {
+        "mode": "explicit", "reference": reference, "media_identity": "spotify:track:" + "a" * 22,
+        "expires_in": 424, **overrides,
+    }}
+
+    if error:
+        with pytest.raises(SessionError, match=error):
+            client.moment_track_insight(binding, reference)
+    else:
+        assert client.moment_track_insight(binding, reference) == response.json.return_value
+
+    assert request.call_count == 1
+    assert request.call_args.args == ("POST", "http://fixture.invalid/api/djconnect/v1/track_insight")
+    assert request.call_args.kwargs["json"] == {
+        **binding.identity(), "track_insight_target": reference, "locale": "nl-NL", "include_visual_profile": True,
+    }
+    assert request.call_args.kwargs["allow_redirects"] is False
+
+
 def test_ask_dj_help_uses_closed_paired_get_without_profile_or_identity_query(transport):
     client, cfg, request, response = transport
     def wire(method, url, **options):

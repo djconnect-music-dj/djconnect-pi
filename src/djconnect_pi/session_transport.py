@@ -6,6 +6,7 @@ persistent Session cache and never automatically retries a write.
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Callable
 from contextlib import ExitStack
 from dataclasses import dataclass, field, replace
@@ -159,6 +160,16 @@ def identifier(value: Any) -> str:
     return value
 
 
+def moment_insight_reference(value: object) -> bool:
+    if (not isinstance(value, dict) or set(value) != {"schema_version", "session_id", "moment_id", "action_id"}
+            or type(value["schema_version"]) is not int or value["schema_version"] != 1):
+        return False
+    identifiers = (value["session_id"], value["moment_id"], value["action_id"])
+    return (all(isinstance(item, str) and 1 <= len(item) <= 128
+                and not any(ord(char) < 32 or ord(char) == 127 for char in item) for item in identifiers)
+            and value["action_id"] == "insight-" + value["moment_id"])
+
+
 class SessionTransport:
     def __init__(self, config: Callable, timeout: float = 8.0, *, owner_scope=None):
         self.config = config
@@ -277,6 +288,8 @@ class SessionTransport:
                     if private_probe and response.status_code == 403:
                         raise SessionError("private_scope_denied")
                     raise SessionError("denied")
+                if method == "POST" and route == "track_insight" and response.status_code == 410:
+                    raise SessionError("expired")
                 if help_request is not None and response.status_code != 200:
                     raise SessionError("unavailable")
                 if optional_capabilities and method == "GET" and route == "capabilities" and response.status_code == 404:
@@ -394,6 +407,28 @@ class SessionTransport:
 
     def track_insight_capabilities(self, binding):
         return self._request(binding, "GET", "capabilities", isolated=True, optional_capabilities=True)
+
+    def moment_track_insight(self, binding, reference):
+        """Read one existing Moment via the private owner route without playback fallback."""
+        if not moment_insight_reference(reference):
+            raise SessionError("invalid")
+        if not binding.profile_id or binding.profile_id != binding.resolved_profile_id:
+            raise SessionError("denied")
+        data = self._request(binding, "POST", "track_insight", {
+            "track_insight_target": dict(reference),
+            "locale": locale_for_language(binding.language),
+            "include_visual_profile": True,
+        }, timeout=max(self.timeout, 10.0), isolated=True)
+        subject = data.get("subject")
+        if (not isinstance(subject, dict) or subject.get("mode") != "explicit"
+                or not moment_insight_reference(subject.get("reference")) or subject["reference"] != reference):
+            raise SessionError("invalid")
+        lifetime = subject.get("expires_in")
+        media = subject.get("media_identity")
+        if (type(lifetime) not in (int, float) or not 0 < lifetime <= 600
+                or not isinstance(media, str) or re.fullmatch(r"spotify:track:[A-Za-z0-9]{22}", media) is None):
+            raise SessionError("invalid")
+        return data
 
     def ask_dj_help(self, binding, surface, session_id=None) -> HelpObservation:
         try:
