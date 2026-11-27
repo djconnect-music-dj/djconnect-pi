@@ -9152,7 +9152,8 @@ BrandWindow {
                         GlassButton {
                             objectName: "aboutCheckUpdates"
                             text: djconnect.updateCheckRunning ? root.tr("checking_updates") : root.tr("check_updates")
-                            iconName: djconnect.updateCheckRunning ? "" : "refresh"
+                            iconName: "refresh"
+                            busy: djconnect.updateCheckRunning
                             wrapText: true
                             textAlignment: Text.AlignLeft
                             Layout.fillWidth: true

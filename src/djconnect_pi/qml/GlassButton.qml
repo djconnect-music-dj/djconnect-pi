@@ -6,6 +6,7 @@ import "BrandTheme.js" as BrandTheme
 Button {
     id: control
     property string iconName: ""
+    property bool busy: false
     property int textAlignment: Text.AlignHCenter
     property bool wrapText: false
     property real cornerRadius: height / 2
@@ -42,12 +43,23 @@ Button {
         spacing: 0
         Item { visible: control.primary; Layout.fillWidth: true }
         FeatureIcon {
-            visible: control.iconName.length > 0
+            visible: !control.busy && control.iconName.length > 0
             iconName: control.iconName
             iconColor: control.foregroundColor
             Layout.preferredWidth: 26
             Layout.preferredHeight: 26
             Layout.alignment: Qt.AlignHCenter
+        }
+        Loader {
+            active: control.busy && control.visible
+            visible: active
+            Layout.preferredWidth: 26
+            Layout.preferredHeight: 26
+            Layout.alignment: Qt.AlignHCenter
+            sourceComponent: BusyIndicator {
+                objectName: "buttonBusyIndicator"
+                running: true
+            }
         }
         Text {
             visible: control.text.length > 0
@@ -59,7 +71,7 @@ Button {
             verticalAlignment: Text.AlignVCenter
             wrapMode: control.wrapText ? Text.Wrap : Text.NoWrap
             elide: control.wrapText ? Text.ElideNone : Text.ElideRight
-            Layout.leftMargin: control.iconName.length > 0 ? 10 : 0
+            Layout.leftMargin: control.busy || control.iconName.length > 0 ? 10 : 0
             Layout.fillWidth: !control.primary
             Layout.minimumWidth: 0
         }
