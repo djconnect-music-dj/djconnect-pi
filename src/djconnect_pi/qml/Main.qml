@@ -7520,7 +7520,7 @@ BrandWindow {
                         }
                         Component.onCompleted: draftReady = true
                         Layout.fillWidth: true; Layout.fillHeight: true
-                        enabled: (djconnect.paired || djconnect.demoMode) && !djconnect.askDjBusy
+                        enabled: djconnect.paired || djconnect.demoMode
                         maximumLength: 4000
                         placeholderText: root.tr("session_question_placeholder")
                         Accessible.name: placeholderText
@@ -7553,7 +7553,7 @@ BrandWindow {
                         Accessible.name: root.tr(djconnect.askDjDestinationLoading ? "loading" : "session_send")
                         primary: true
                         Layout.preferredWidth: 52; Layout.fillHeight: true
-                        enabled: !djconnect.askDjDestinationLoading && !askDjPanel.historyOffline
+                        enabled: !djconnect.askDjBusy && !djconnect.askDjDestinationLoading && !askDjPanel.historyOffline
                             && !djconnect.askDjDestinationUnavailable
                             && askDjChatInput.enabled && askDjChatInput.text.trim().length > 0
                         BusyIndicator {
