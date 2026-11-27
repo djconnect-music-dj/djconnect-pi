@@ -3436,6 +3436,7 @@ BrandWindow {
             objectName: "trackInsightSharePopup"
             anchors.centerIn: Overlay.overlay
             width: Math.min(trackInsightPanel.width - 40, 740)
+            height: Math.min(implicitHeight, Overlay.overlay.height - 24)
             modal: true
             padding: 20
             property bool storyCard: true
@@ -3628,6 +3629,8 @@ BrandWindow {
                 ScrollView {
                     id: insightShareScroll
                     Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    Layout.minimumHeight: Math.min(insightShareContent.implicitHeight, 72)
                     Layout.preferredHeight: Math.min(insightShareContent.implicitHeight, trackInsightPanel.height <= 760
                         ? (insightSharePopup.exportBusy ? 250 : 320) : 380)
                     contentWidth: availableWidth; clip: true
