@@ -1624,7 +1624,9 @@ BrandWindow {
         onPressed: function(mouse) { root.recordActivity(); mouse.accepted = false }
     }
 
-    readonly property bool playbackSeekActionsAvailable: (djconnect.demoMode || (djconnect.paired && djconnect.backendAvailable))
+    readonly property bool compactPlaybackActionsAvailable: djconnect.demoMode
+        || (djconnect.paired && djconnect.backendAvailable && !djconnect.versionMismatchVisible)
+    readonly property bool playbackSeekActionsAvailable: compactPlaybackActionsAvailable
         && djconnect.durationSeconds > 0 && !djconnect.busy
         && (djconnect.demoMode || (djconnect.musicBackendAvailable && djconnect.playbackSeekOutputKnown))
 
@@ -1727,7 +1729,7 @@ BrandWindow {
         id: nowPanel
         objectName: "nowPanel"
         readonly property alias artworkTint: nowArtworkPalette.tint
-        readonly property bool playbackActionsAvailable: djconnect.demoMode || (djconnect.paired && djconnect.backendAvailable)
+        readonly property bool playbackActionsAvailable: root.compactPlaybackActionsAvailable
         readonly property bool seekActionsAvailable: root.playbackSeekActionsAvailable
 
         AppBackground {}
@@ -2094,20 +2096,25 @@ BrandWindow {
             RowLayout {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 178
+                enabled: root.compactPlaybackActionsAvailable
+                opacity: enabled ? 1 : 0.55
                 spacing: 18
 
                 IconButton {
+                    objectName: "controlPreviousTrack"
                     iconName: "previous"
                     onClicked: djconnect.previous()
                 }
 
                 IconButton {
+                    objectName: "controlTogglePlayback"
                     iconName: djconnect.playing ? "pause" : "play"
                     primary: true
                     onClicked: djconnect.togglePlay()
                 }
 
                 IconButton {
+                    objectName: "controlNextTrack"
                     iconName: "next"
                     onClicked: djconnect.next()
                 }
@@ -2425,12 +2432,16 @@ BrandWindow {
             RowLayout {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 126
+                enabled: root.compactPlaybackActionsAvailable
+                opacity: enabled ? 1 : 0.55
                 spacing: 18
 
                 IconButton {
+                    objectName: "playbackControlShuffle"
                     iconName: "shuffle"
                     active: djconnect.shuffle
                     enabled: !djconnect.busy && !djconnect.playbackModePending
+                        && (djconnect.demoMode || (djconnect.musicBackendAvailable && djconnect.musicBackendSupportsShuffle))
                     onClicked: djconnect.toggleShuffle()
                 }
 
@@ -2454,6 +2465,7 @@ BrandWindow {
                     iconName: djconnect.repeat === "track" ? "repeatOne" : djconnect.repeat === "context" ? "repeat" : "repeatOff"
                     active: djconnect.repeat !== "off"
                     enabled: !djconnect.busy && !djconnect.playbackModePending
+                        && (djconnect.demoMode || (djconnect.musicBackendAvailable && djconnect.musicBackendSupportsRepeat))
                     onClicked: djconnect.cycleRepeat()
                 }
             }
