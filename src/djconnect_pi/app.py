@@ -1036,14 +1036,26 @@ class DJConnectBackend(QObject):
 
     @Slot(QUrl, bool, bool, result=QUrl)
     def trackInsightExportDestination(self, folder: QUrl, story: bool, clip: bool) -> QUrl:
-        directory = folder.toLocalFile() or QStandardPaths.writableLocation(QStandardPaths.StandardLocation.PicturesLocation)
-        if not directory or not Path(directory).is_absolute():
-            return QUrl()
         words = re.findall(r"[^\W_]+", self.trackInsightTitle[:200])[:4]
         title = "-".join(words)[:40].rstrip("-") or "Track-Insight"
         shape = "story" if story else "square"
         extension = "mp4" if clip else "png"
-        return QUrl.fromLocalFile(str(Path(directory) / f"DJConnect-{title}-{shape}.{extension}"))
+        return self._local_export_destination(folder, f"DJConnect-{title}-{shape}.{extension}",
+                                              QStandardPaths.StandardLocation.PicturesLocation)
+
+    @Slot(QUrl, bool, result=QUrl)
+    def profileExportDestination(self, folder: QUrl, music_dna: bool) -> QUrl:
+        data_kind = "music-dna" if music_dna else "ask-dj-history"
+        date = datetime.now().strftime("%Y%m%d-%H%M%S")
+        return self._local_export_destination(folder, f"djconnect-{data_kind}-{CLIENT_TYPE}-{date}.json",
+                                              QStandardPaths.StandardLocation.DocumentsLocation)
+
+    @staticmethod
+    def _local_export_destination(folder: QUrl, filename: str, fallback: QStandardPaths.StandardLocation) -> QUrl:
+        directory = folder.toLocalFile() or QStandardPaths.writableLocation(fallback)
+        if not directory or not Path(directory).is_absolute():
+            return QUrl()
+        return QUrl.fromLocalFile(str(Path(directory) / filename))
 
     @Slot(QImage, QUrl, str)
     def saveTrackInsightCard(self, image: QImage, destination: QUrl, expected_text: str) -> None:

@@ -2508,6 +2508,8 @@ BrandWindow {
                         if (!enabled) return
                         profileExportDialog.musicDna = profileExportPreview.musicDna
                         profileExportDialog.profileRevision = profileExportPreview.profileRevision
+                        profileExportDialog.selectedFile = djconnect.profileExportDestination(
+                            profileExportDialog.currentFolder, profileExportDialog.musicDna)
                         profileExportPreview.close()
                         profileExportDialog.open()
                     }
