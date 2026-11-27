@@ -5875,6 +5875,8 @@ BrandWindow {
         onProfileContextRevisionChanged: clearQuestionUi(false)
         readonly property bool historyOffline: !djconnect.demoMode
             && (!djconnect.paired || !djconnect.backendAvailable || djconnect.versionMismatchVisible)
+        readonly property bool questionActionsReady: !historyOffline && !djconnect.askDjBusy
+            && !djconnect.askDjDestinationLoading && !djconnect.askDjDestinationUnavailable
 
         GlassPopup {
             id: askDjFeedbackPopup
@@ -6620,8 +6622,7 @@ BrandWindow {
                                     visible: !askDjPanel.historyOffline && !bubble.systemBubble
                                         && !!askDjAnswerContextButton.reference.entry_id
                                         && djconnect.askDjContributionQuestion.length > 0
-                                    enabled: askDjChatInput.enabled && !djconnect.askDjDestinationLoading
-                                        && !djconnect.askDjDestinationUnavailable
+                                    enabled: askDjChatInput.enabled && askDjPanel.questionActionsReady
                                     text: root.tr("ask_dj_tell_more")
                                     tertiary: true
                                     Layout.alignment: Qt.AlignLeft
@@ -7491,7 +7492,7 @@ BrandWindow {
                 Layout.fillWidth: true
                 Layout.preferredHeight: Math.min(340, askDjPanel.height * 0.36)
                 backend: djconnect
-                canChoose: askDjChatInput.enabled && askDjChatInput.text === ""
+                canChoose: askDjChatInput.enabled && askDjPanel.questionActionsReady && askDjChatInput.text === ""
                 onRefreshRequested: djconnect.openAskDjHelp()
                 onCloseRequested: askDjPanel.closeHelp()
                 onExampleChosen: entryId => djconnect.selectAskDjHelp(entryId, askDjPanel.draftEditRevision)
@@ -7553,8 +7554,7 @@ BrandWindow {
                         Accessible.name: root.tr(djconnect.askDjDestinationLoading ? "loading" : "session_send")
                         primary: true
                         Layout.preferredWidth: 52; Layout.fillHeight: true
-                        enabled: !djconnect.askDjBusy && !djconnect.askDjDestinationLoading && !askDjPanel.historyOffline
-                            && !djconnect.askDjDestinationUnavailable
+                        enabled: askDjPanel.questionActionsReady
                             && askDjChatInput.enabled && askDjChatInput.text.trim().length > 0
                         BusyIndicator {
                             anchors.centerIn: parent
