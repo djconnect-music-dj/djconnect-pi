@@ -12,6 +12,17 @@ Item {
     property string fontLicense: ""
     signal back()
     function tr(key) { backend.translationVersion; return backend.t(key) }
+
+    component SelectableNotice: TextEdit {
+        Layout.fillWidth: true
+        textFormat: TextEdit.PlainText
+        color: BrandTheme.colors.text
+        font.pixelSize: 22
+        wrapMode: TextEdit.Wrap
+        readOnly: true
+        selectByMouse: true
+        selectByKeyboard: true
+    }
     ColumnLayout {
         anchors.fill: parent
         anchors.margins: 24
@@ -61,15 +72,10 @@ Item {
                     Text { text: page.tr("privacy"); textFormat: Text.PlainText; color: BrandTheme.colors.text; font.pixelSize: 20; font.weight: Font.DemiBold; wrapMode: Text.WordWrap; Layout.fillWidth: true }
                     Repeater {
                         model: ["privacy_data_body", "privacy_tokens_body", "privacy_ai_body", "privacy_choices_body", "privacy_diagnostics_body"]
-                        Text {
+                        SelectableNotice {
                             required property string modelData
                             objectName: modelData
                             text: page.tr(modelData)
-                            textFormat: Text.PlainText
-                            color: BrandTheme.colors.text
-                            font.pixelSize: 22
-                            wrapMode: Text.WordWrap
-                            Layout.fillWidth: true
                         }
                     }
                     GlassButton {
@@ -84,14 +90,14 @@ Item {
                     visible: !page.privacy && !page.feedback
                     Layout.fillWidth: true
                     Text { text: page.tr("legal"); textFormat: Text.PlainText; color: BrandTheme.colors.text; font.pixelSize: 20; font.weight: Font.DemiBold; wrapMode: Text.WordWrap; Layout.fillWidth: true }
-                    Text { text: page.tr("legal_independence"); textFormat: Text.PlainText; color: BrandTheme.colors.text; font.pixelSize: 22; wrapMode: Text.WordWrap; Layout.fillWidth: true }
-                    Text { text: page.tr("legal_trademarks"); textFormat: Text.PlainText; color: BrandTheme.colors.text; font.pixelSize: 22; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+                    SelectableNotice { objectName: "legalIndependenceNotice"; text: page.tr("legal_independence") }
+                    SelectableNotice { objectName: "legalTrademarksNotice"; text: page.tr("legal_trademarks") }
                 }
                 GlassCard {
                     visible: !page.privacy && !page.feedback
                     Layout.fillWidth: true
                     Text { text: page.tr("legal_oss"); textFormat: Text.PlainText; color: BrandTheme.colors.text; font.pixelSize: 26; font.bold: true; wrapMode: Text.WordWrap; Layout.fillWidth: true }
-                    Text { text: page.tr("legal_oss_body"); textFormat: Text.PlainText; color: BrandTheme.colors.text; font.pixelSize: 22; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+                    SelectableNotice { objectName: "legalOssNotice"; text: page.tr("legal_oss_body") }
                     GlassButton { text: page.tr("legal_license"); onClicked: Qt.openUrlExternally("https://github.com/djconnect-music-dj/djconnect-pi/blob/main/LICENSE") }
                     GlassButton {
                         id: fontLicenseDisclosure
