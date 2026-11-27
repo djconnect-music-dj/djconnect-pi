@@ -333,11 +333,22 @@ BrandWindow {
     }
 
     component AppPageToolbar: PageToolbar {
+        readonly property string connectionProblem: {
+            if (djconnect.demoMode || !djconnect.paired) return ""
+            if (djconnect.versionMismatchVisible) return "version_mismatch_title"
+            if (!djconnect.haUrl.trim()) return "session_connection_address_missing"
+            if (!djconnect.backendAvailable) return "ha_connection_unavailable"
+            if (djconnect.musicBackendId && !djconnect.musicBackendAvailable) return "backend_unavailable"
+            return ""
+        }
+        connectionText: djconnect.demoMode ? root.tr("demo_mode")
+            : connectionProblem ? root.tr(connectionProblem) : djconnect.connectionType
+        connectionIcon: connectionProblem ? "info" : "globe"
+        connectionIconColor: connectionProblem === "ha_connection_unavailable" ? BrandTheme.colors.danger
+            : connectionProblem ? BrandTheme.colors.warning : BrandTheme.colors.text
         aboutLabel: root.tr("about")
         onAboutRequested: root.aboutOpen = true
     }
-
-    readonly property string playbackConnectionText: djconnect.demoMode ? root.tr("demo_mode") : djconnect.connectionType
 
     function trackInsightLabel(value) {
         var key = String(value || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "")
@@ -1242,7 +1253,6 @@ BrandWindow {
                 } ]
                 showConnection: true
                 connectionLabel: root.tr("connection_type")
-                connectionText: root.playbackConnectionText
 
                 GlassButton {
                     id: searchToggle
@@ -1789,7 +1799,6 @@ BrandWindow {
                 title: root.playbackScreenTitle("now_playing")
                 showConnection: true
                 connectionLabel: root.tr("connection_type")
-                connectionText: root.playbackConnectionText
                 Layout.fillWidth: true
 
                 BusyIndicator {
@@ -2085,7 +2094,6 @@ BrandWindow {
                 title: root.playbackScreenTitle("control")
                 showConnection: true
                 connectionLabel: root.tr("connection_type")
-                connectionText: root.playbackConnectionText
                 Layout.fillWidth: true
 
                 BusyIndicator {
@@ -3997,7 +4005,6 @@ BrandWindow {
                 ]
                 showConnection: true
                 connectionLabel: root.tr("connection_type")
-                connectionText: root.playbackConnectionText
                 Layout.fillWidth: true
 
                 RefreshIconButton {
@@ -4899,7 +4906,6 @@ BrandWindow {
                 Layout.preferredHeight: compact ? implicitHeight : 140
                 showConnection: true
                 connectionLabel: root.tr("connection_type")
-                connectionText: root.playbackConnectionText
                 Layout.fillWidth: true
 
                 RefreshIconButton {
@@ -5577,7 +5583,6 @@ BrandWindow {
                 leading: [ GlassButton { iconName: "back"; tertiary: true; implicitWidth: 52; Accessible.name: root.tr("more"); onClicked: root.activeScreen = "more" } ]
                 showConnection: true
                 connectionLabel: root.tr("connection_type")
-                connectionText: root.playbackConnectionText
                 Layout.fillWidth: true
 
                 RefreshIconButton {
@@ -6495,7 +6500,6 @@ BrandWindow {
                 title: root.playbackScreenTitle("ask_dj")
                 showConnection: true
                 connectionLabel: root.tr("connection_type")
-                connectionText: root.playbackConnectionText
                 Layout.fillWidth: true
 
                 GlassButton {

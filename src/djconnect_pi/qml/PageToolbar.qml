@@ -12,6 +12,8 @@ Control {
     property bool showLeading: true
     property string connectionLabel: ""
     property string connectionText: ""
+    property string connectionIcon: "globe"
+    property color connectionIconColor: BrandTheme.colors.text
     property string aboutLabel: ""
     signal aboutRequested()
     onVisibleChanged: if (!visible) connectionInfo.close()
@@ -28,7 +30,15 @@ Control {
         background: GlassSurface { elevated: true }
         contentItem: ColumnLayout {
             Text { text: bar.connectionLabel; textFormat: Text.PlainText; font.bold: true; font.pixelSize: 24; color: BrandTheme.colors.text; Layout.fillWidth: true; wrapMode: Text.WordWrap }
-            Text { text: bar.connectionText; textFormat: Text.PlainText; font.pixelSize: 22; color: BrandTheme.colors.muted; Layout.fillWidth: true; wrapMode: Text.WordWrap }
+            Text {
+                objectName: "pageToolbarConnectionStatus"
+                text: bar.connectionText
+                textFormat: Text.PlainText
+                font.pixelSize: 22
+                color: BrandTheme.colors.muted
+                Layout.fillWidth: true
+                wrapMode: Text.Wrap
+            }
             GlassButton {
                 objectName: "pageToolbarConnectionAbout"
                 visible: bar.aboutLabel.length > 0
@@ -72,7 +82,9 @@ Control {
                     GlassButton {
                         objectName: "pageToolbarConnection"
                         visible: bar.showConnection
-                        iconName: "globe"; tertiary: true; implicitWidth: 52
+                        iconName: bar.connectionIcon
+                        foregroundColor: bar.connectionIconColor
+                        tertiary: true; implicitWidth: 52
                         Accessible.name: bar.connectionLabel
                         onClicked: connectionInfo.open()
                     }
