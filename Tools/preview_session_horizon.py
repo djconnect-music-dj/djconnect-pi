@@ -903,12 +903,19 @@ def main():
                 ]}
                 owner.changed.emit()
                 QTest.qWait(65)
-                with patch.object(owner, "_launch") as verify:
-                    QTest.keyClick(window, Qt.Key.Key_Down)
-                    verify.assert_not_called()
+                def begin_match_page(action, _value):
+                    owner._set_running(81, action)
+                    owner.changed.emit()
+
+                with patch.object(owner, "_launch", side_effect=begin_match_page) as verify:
                     QTest.keyClick(window, Qt.Key.Key_Down)
                     verify.assert_called_once_with("search_more", {"session_id": saved["session_id"], "query": "fixture", "pages": 2})
+                    assert panel.property("selectedMatchId") == "fixture-search-match-1"
+                    QTest.keyClick(window, Qt.Key.Key_Down)
+                    QTest.keyClick(window, Qt.Key.Key_Down)
+                    assert verify.call_count == 1
                     assert panel.property("selectedMatchId") == "fixture-search-match-2"
+                owner._set_running()
                 owner._search["matches"] = [*owner._search["matches"], {
                     "session_id": saved["session_id"], "entry_id": "fixture-search-match-3", "summary": "Fixture match",
                 }]
