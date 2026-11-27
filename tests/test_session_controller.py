@@ -134,11 +134,16 @@ def test_moment_insight_keeps_the_original_recording_across_playback_changes(con
         worker()
     assert calls == [reference] * (2 if retry_first else 1)
     if source_withdrawn:
-        assert not owner.momentTrackInsight
+        assert owner.momentTrackInsight == {"status": "expired"}
+        authority["admissions"] = [grant]
+        assert owner.momentTrackInsight == {"status": "expired"}
     else:
         assert owner.momentTrackInsight["title"] == "Original song"
         owner._clock.now.return_value = 150
-        assert not owner.momentTrackInsight
+        owner._reconcile_moment_insight()
+        assert owner.momentTrackInsight == {"status": "expired"}
+    owner.retryMomentTrackInsight()
+    assert len(backend.jobs) == (1 if retry_first else 0)
 
 
 def test_screen_state_omits_flow_projection_but_keeps_fresh_rows_available(controller, monkeypatch):
