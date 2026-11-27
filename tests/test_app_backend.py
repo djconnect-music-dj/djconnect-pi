@@ -822,6 +822,19 @@ def test_music_dna_energy_uses_available_secondary_metrics(danceability, intensi
         {"labelKey": "music_dna_card_" + metric, "percent": percent} for metric, percent in expected]
 
 
+@pytest.mark.parametrize(("formatted", "seconds", "expected"), [
+    (None, 41, "41s"),
+    ("   ", 59, "59s"),
+    (" 1h 1m ", 3661, "1h 1m"),
+])
+def test_music_dna_playtime_shows_the_supplied_label_or_exact_seconds(formatted, seconds, expected):
+    playtime = {"formatted_total": formatted, "total_seconds": seconds}
+    parsed = parse_music_dna_profile({"enabled": True, "profile": {"playtime": playtime}})
+    summary, card = parsed["sections"]
+    assert summary["rows"][0]["title"] == expected
+    assert card["value"] == expected
+
+
 def test_music_dna_keeps_each_playtime_ranking_in_producer_order():
     profile = {"playtime": {
         "top_artists": [{"name": "Snapshot leader", "formatted": "4h 2m"},

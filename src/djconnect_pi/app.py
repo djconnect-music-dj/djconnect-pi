@@ -7070,10 +7070,11 @@ def _music_dna_cards(profile: dict[str, object], ha_url: str) -> list[dict[str, 
         tuple(weekdays), strict=True)})
 
     playtime = block("playtime")
-    duration = playtime.get("formatted_total")
-    if not isinstance(duration, str) or not duration:
+    formatted_duration = playtime.get("formatted_total")
+    duration = formatted_duration.strip() if isinstance(formatted_duration, str) else ""
+    if not duration:
         seconds = playtime.get("total_seconds")
-        duration = f"{seconds // 3600}h {seconds // 60 % 60}m" if type(seconds) is int and seconds > 0 else ""
+        duration = f"{seconds}s" if type(seconds) is int and seconds > 0 else ""
     genres = ", ".join(entry["title"] for entry in rows(profile.get("favorite_genres"), limit=10))
     tracks = profile.get("recent_tracks")
     artists = profile.get("favorite_artists")
