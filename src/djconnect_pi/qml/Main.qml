@@ -1025,6 +1025,8 @@ BrandWindow {
         property bool keyboardOpen: false
         property var refreshReading: null
         property int selectedMatchIndex: 0
+        readonly property int mediaProfileRevision: djconnect.musicDnaContextRevision
+        property bool profileReloadPending: false
         readonly property bool compact: width < 900
         readonly property bool playbackAvailable: djconnect.demoMode || (djconnect.paired && djconnect.backendAvailable
             && djconnect.musicBackendAvailable && !djconnect.versionMismatchVisible)
@@ -1033,6 +1035,19 @@ BrandWindow {
         readonly property string query: searchInput.text.trim()
         readonly property var matches: filterItems(items, query)
         signal refreshRequested()
+        signal profileReloadRequested()
+
+        function reloadForProfile() {
+            if (!profileReloadPending || !visible || !root.active || root.screenBlanked
+                    || root.splashVisible || !refreshAvailable || djconnect.demoMode) return
+            profileReloadPending = false
+            profileReloadRequested()
+        }
+        onMediaProfileRevisionChanged: {
+            profileReloadPending = visible && !djconnect.demoMode
+            if (profileReloadPending) Qt.callLater(reloadForProfile)
+        }
+        onRefreshAvailableChanged: if (refreshAvailable && profileReloadPending) Qt.callLater(reloadForProfile)
 
         function queueSubtitle(item) {
             var artist = (item.artist || item.subtitle || "").trim()
@@ -1142,7 +1157,10 @@ BrandWindow {
         z: 16
         onVisibleChanged: {
             if (visible) mediaRows.positionViewAtBeginning()
-            else closeSearch(true)
+            else {
+                profileReloadPending = false
+                closeSearch(true)
+            }
         }
         onMatchesChanged: {
             selectedMatchIndex = Math.max(0, Math.min(selectedMatchIndex, matches.length - 1))
@@ -1165,8 +1183,14 @@ BrandWindow {
         }
         Connections {
             target: root
-            function onActiveChanged() { if (!root.active) panel.closeSearch(true) }
-            function onScreenBlankedChanged() { if (root.screenBlanked) panel.closeSearch(true) }
+            function onActiveChanged() {
+                if (!root.active) panel.closeSearch(true)
+                else if (panel.profileReloadPending) Qt.callLater(panel.reloadForProfile)
+            }
+            function onScreenBlankedChanged() {
+                if (root.screenBlanked) panel.closeSearch(true)
+                else if (panel.profileReloadPending) Qt.callLater(panel.reloadForProfile)
+            }
         }
         PageFindShortcut {
             pageReady: panel.visible && searchToggle.enabled
@@ -3187,6 +3211,7 @@ BrandWindow {
             items: djconnect.queueItems
             loading: djconnect.queueLoading
             onRefreshRequested: djconnect.loadQueue(true)
+            onProfileReloadRequested: djconnect.loadQueue()
         }
     }
 
@@ -3206,6 +3231,7 @@ BrandWindow {
             items: djconnect.playlistItems
             loading: djconnect.playlistsLoading
             onRefreshRequested: djconnect.loadPlaylists(true)
+            onProfileReloadRequested: djconnect.loadPlaylists()
         }
     }
 
