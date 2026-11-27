@@ -32,6 +32,7 @@ from .session_history_delete_control import HistoryDeleteControl
 from .session_history_summary import archive_session_summary, saved_session_summary
 from .session_history_view import (
     accepted_question,
+    ask_dj_context_entry,
     confirmed_question_entry,
     conversation_entries,
     demo_search_body,
@@ -1096,6 +1097,17 @@ class SessionController(QObject):
         if selected["kind"] == "selected_moment":
             return selected["session_id"] == self._session.get("session_id") and any(row["moment_id"] == selected["moment_id"] for row in live_presentations(self._session, now=self._clock.now()))
         return self._entry_selection_valid(selected, self._selection_source)
+
+    def ask_dj_context_entry(self, message_id):
+        if (not message_id or not self._foreground or not self._history_supported()
+                or not self._bootstrap_current() or not self._bootstrap_private):
+            return {}
+        version = self._caps["contract_versions"].get("ask_dj_contextual_dialogue")
+        if (self._caps["capabilities"].get("ask_dj_contextual_dialogue") is not True
+                or type(version) is not int or version != 1):
+            return {}
+        rows = self._retained_flow + self._timeline.get("entries", [])
+        return ask_dj_context_entry(message_id, rows, now=self._clock.now())
 
     def _entry_selection_valid(self, selected, source):
         if source == "flow":

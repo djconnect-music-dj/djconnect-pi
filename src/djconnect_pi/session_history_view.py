@@ -131,6 +131,26 @@ def ask_dj_history_matches(rows, *, now):
 
 
 
+def ask_dj_context_entry(message_id, rows, *, now):
+    """Match a retained DJ answer by its server message identity."""
+    matches = set()
+    withdrawn = set()
+    for row in rows:
+        if (row.get("kind") != "conversation_dj" or row.get("role") != "assistant"
+                or row.get("origin_message_id") != message_id):
+            continue
+        reference = (row["session_id"], row["entry_id"])
+        if row.get("state") == "source_withdrawn":
+            withdrawn.add(reference)
+        elif (timestamp(row.get("retained_until")) or 0) > now:
+            matches.add(reference)
+    matches.difference_update(withdrawn)
+    if len(matches) != 1:
+        return {}
+    session_id, entry_id = matches.pop()
+    return {"session_id": session_id, "entry_id": entry_id}
+
+
 def retained_flow_presentation(entries, admitted_moments, session_id):
     """Order admitted history for Flow without changing the canonical timeline.
 

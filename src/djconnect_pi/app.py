@@ -677,6 +677,16 @@ class DJConnectBackend(QObject):
     def askDjHistoryClock(self) -> float:
         return self._session_controller._clock.now()
 
+    @Slot(str, result="QVariantMap")
+    def askDjContextEntry(self, message_id):
+        if (self._demo_mode or not self._application_foreground or not self.paired
+                or not self._backend_available or self._version_mismatch_visible
+                or not self.personalProfileExportAllowed or self.cfg.active_profile_privacy_mode != "private"
+                or not any(message.get("id") == message_id and message.get("contextEligible") is True
+                           for message in self._ask_dj_messages)):
+            return {}
+        return self._session_controller.ask_dj_context_entry(message_id)
+
     @Slot()
     def cancelAskDjHistoryOpen(self):
         self._ask_dj_history_open = None
@@ -4552,6 +4562,8 @@ class DJConnectBackend(QObject):
             for message in messages:
                 if message.get("role") == "assistant":
                     row = by_id.get(message.get("id"), {})
+                    message["contextEligible"] = (row.get("role") == "assistant"
+                        and row.get("message_kind", "assistant") == "assistant")
                     message["historicalMatches"] = [
                         match for match in ask_dj_history_matches(row.get("historical_matches"), now=now)
                         if (match["session_id"], match["entry_id"]) not in self._ask_dj_withdrawn_entries
@@ -5634,6 +5646,7 @@ def _ask_dj_message(item: dict[str, object]) -> dict[str, object] | None:
 def _ask_dj_message_metadata(item: dict[str, object]) -> dict[str, object]:
     return {
         "id": str(item.get("id") or item.get("message_id") or item.get("server_id") or ""),
+        "contextEligible": False,
         "client_message_id": str(item.get("client_message_id") or ""),
         "exchange_id": str(item.get("exchange_id") or ""),
         "exchange_order": _optional_int(item.get("exchange_order")),

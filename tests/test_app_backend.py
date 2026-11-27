@@ -1676,6 +1676,46 @@ def test_ask_dj_merge_orders_exchange_and_deduplicates_refreshes(tmp_path: Path)
     ]
 
 
+def test_ask_dj_context_requires_one_retained_answer_and_current_owner(tmp_path):
+    ensure_app()
+    backend = DJConnectBackend(tmp_path / "config.json")
+    backend.cfg.paired = True
+    backend.cfg.device_token = "synthetic-token"
+    backend.cfg.active_profile_id = "fixture-profile"
+    backend.cfg.active_profile_type = "personal"
+    backend.cfg.active_profile_privacy_mode = "private"
+    session = backend.djSession
+    session._bootstrap_current = Mock(return_value=True)
+    session._bootstrap_private = True
+    session._caps = {
+        "capabilities": {"session_conversation_history": True, "ask_dj_contextual_dialogue": True},
+        "contract_versions": {"session_history_entries": 2, "ask_dj_contextual_dialogue": 1},
+    }
+    session._clock = Mock()
+    session._clock.now.return_value = 100
+    ref = {"session_id": "saved-session", "entry_id": "saved-answer"}
+    row = {**ref, "retained_until": "1970-01-01T00:03:00Z", "kind": "conversation_dj",
+           "role": "assistant", "origin_message_id": "server-reply"}
+    session._timeline = {"entries": [row]}
+    session._retained_flow = [dict(row)]
+    reply = {"id": "server-reply", "role": "assistant", "text": "Fixture reply"}
+    assert backend._apply_ask_dj_data({"messages": [reply]})
+    assert backend.askDjContextEntry("server-reply") == {}
+    assert backend._apply_ask_dj_data(
+        {"history_scope": "profile", "owner_profile_id": "fixture-profile", "messages": [reply]})
+    assert backend.askDjContextEntry("server-reply") == ref
+    session._retained_flow = [{**row, "entry_id": "other-answer"}]
+    assert backend.askDjContextEntry("server-reply") == {}
+    session._retained_flow = [{**row, "state": "source_withdrawn"}]
+    assert backend.askDjContextEntry("server-reply") == {}
+    session._retained_flow = []
+    session._bootstrap_current.return_value = False
+    assert backend.askDjContextEntry("server-reply") == {}
+    session._bootstrap_current.return_value = True
+    session._clock.now.return_value = 180
+    assert backend.askDjContextEntry("server-reply") == {}
+
+
 @pytest.mark.parametrize("owner", ["fixture-profile", "other-profile", None])
 def test_ask_dj_history_keeps_only_qualified_matches_for_the_read_owner(tmp_path: Path, owner: str | None) -> None:
     ensure_app()
