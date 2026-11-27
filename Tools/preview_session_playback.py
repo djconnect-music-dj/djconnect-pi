@@ -726,6 +726,73 @@ def main():
                 assert not transport_panel.property('opened') and not intents
                 assert progress.property('activeFocus')
 
+                mode_caps = {'supports_shuffle': True, 'supports_repeat': True}
+                mode_status = owner.transport.playback_status.return_value
+                original_mode_caps = backend.cfg.music_backend_capabilities
+                original_mode_status_caps = mode_status['music_backend_capabilities']
+                original_adjustment = owner.transport.playback_adjustment
+                preserved_output = backend.playback.output_device_id
+                backend.cfg.music_backend_capabilities = {**original_mode_caps, **mode_caps}
+                mode_status['music_backend_capabilities'] = {**original_mode_status_caps, **mode_caps}
+                mode_status['playback'].update(shuffle=True, repeat_state='track')
+                backend.playback.output_device_id = 'synthetic-output'
+                backend.outputDeviceChanged.emit()
+                owner.changed.emit()
+                owner.transport.playback_adjustment = Mock(return_value={'playback': {'repeat_state': 'off'}})
+                click('sessionPlaybackProgress')
+                assert transport_panel.property('opened') and len(intents) == 1
+                intents.pop(0)()
+                QTest.qWait(60)
+                repeat_button = window.findChild(QObject, 'sessionPlaybackRepeat')
+                shuffle_button = window.findChild(QObject, 'sessionPlaybackShuffle')
+                assert repeat_button.property('checked') and repeat_button.property('iconName') == 'repeat_one'
+                assert shuffle_button.property('checked')
+                capture('confirmed-playback-modes')
+                click('sessionPlaybackRepeat')
+                assert not repeat_button.property('checked') and len(intents) == 1
+                intents.pop(0)()
+                owner.transport.playback_adjustment.assert_called_once()
+                assert owner.transport.playback_adjustment.call_args.args[1:] == ('set_repeat', 'context')
+                mode_status['playback'].update(repeat_state='context')
+                drain()
+                assert len(intents) == 1 and not repeat_button.property('checked')
+                intents.pop(0)()
+                QTest.qWait(60)
+                assert repeat_button.property('checked') and repeat_button.property('iconName') == 'repeat'
+                backend.playback.output_device_id = 'different-output-same-name'
+                backend.outputDeviceChanged.emit()
+                QTest.qWait(60)
+                assert len(intents) == 1
+                intents.pop(0)()
+                QTest.qWait(60)
+                assert not repeat_button.property('checked') and not shuffle_button.property('checked')
+                assert not intents
+                QTest.keyClick(window, Qt.Key.Key_Escape)
+                QTest.qWait(120)
+                backend.playback.output_device_id = 'synthetic-output'
+                backend.outputDeviceChanged.emit()
+                click('sessionExpandTrackArtwork')
+                assert window.property('trackArtworkControlsOpen') and len(intents) == 1
+                intents.pop(0)()
+                QTest.qWait(60)
+                artwork_modes = visual(window.contentItem(), 'trackArtworkTransportControls')
+                assert visual(artwork_modes, 'sessionPlaybackShuffle').property('checked')
+                assert visual(artwork_modes, 'sessionPlaybackRepeat').property('checked')
+                capture('fullscreen-confirmed-playback-modes')
+                QTest.keyClick(window, Qt.Key.Key_Escape)
+                QTest.qWait(120)
+                if window.property('trackArtworkOpen'):
+                    QTest.keyClick(window, Qt.Key.Key_Escape)
+                    QTest.qWait(120)
+                backend.cfg.music_backend_capabilities = original_mode_caps
+                mode_status['music_backend_capabilities'] = original_mode_status_caps
+                mode_status['playback'].pop('shuffle')
+                mode_status['playback'].pop('repeat_state')
+                backend.playback.output_device_id = preserved_output
+                backend.outputDeviceChanged.emit()
+                owner.transport.playback_adjustment = original_adjustment
+                owner.changed.emit()
+
                 insight = window.findChild(QObject, 'sessionPlaybackInsight')
                 original_playback = backend.playback
                 original_request = backend._request_track_insight

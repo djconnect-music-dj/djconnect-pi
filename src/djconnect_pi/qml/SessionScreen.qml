@@ -2815,6 +2815,31 @@ Item {
         property Item refreshFocusFallback: null
         readonly property int optionsRow: overArtwork ? 0 : 2
         readonly property int seekRow: overArtwork ? 2 : 0
+        readonly property var playbackControl: screen.state.playback_control
+        readonly property string modeOutput: screen.backend.outputDeviceId || ""
+        readonly property var playbackModes: playbackControl.mode_output === modeOutput
+            ? playbackControl.modes : ({})
+        readonly property string modeScope: {
+            const commands = playbackControl.overlay_commands || []
+            if (!visible || !screen.liveViewOpen || !modeOutput || !playbackControl.transport_epoch
+                    || !(commands.includes("shuffle") || commands.includes("repeat")))
+                return ""
+            return JSON.stringify([playbackControl.transport_epoch, playbackControl.mode_revision,
+                modeOutput, commands.includes("shuffle"), commands.includes("repeat")])
+        }
+        property string requestedModeScope: ""
+        readonly property bool needsModeRead: !!modeScope && modeScope !== requestedModeScope
+            && !!playbackControl.enabled && !screen.owner.refreshing
+        onModeScopeChanged: if (!modeScope) requestedModeScope = ""
+        onNeedsModeReadChanged: if (needsModeRead) Qt.callLater(readModes)
+        Component.onCompleted: if (needsModeRead) Qt.callLater(readModes)
+        function readModes() {
+            if (!needsModeRead) return
+            const scope = modeScope
+            if (screen.owner.readPlaybackModes(screen.state.session_id, screen.state.playback.item_id,
+                    playbackControl.transport_epoch, modeOutput))
+                requestedModeScope = scope
+        }
         readonly property var artworkFocusOrder: [repeatTransport, shuffleTransport, favoriteTransport,
             previousTransport, toggleTransport, nextTransport, seekBackTransport, seekForwardTransport, refreshTransport]
         spacing: 8
@@ -2933,6 +2958,8 @@ Item {
                 KeyNavigation.tab: transportControls.overArtwork ? null : shuffleTransport
                 KeyNavigation.backtab: transportControls.overArtwork ? null : nextTransport
                 commandName: "repeat"
+                iconName: transportControls.playbackModes.repeat === "track" ? "repeat_one" : "repeat"
+                checked: transportControls.playbackModes.repeat === "track" || transportControls.playbackModes.repeat === "context"
                 buttonSize: transportControls.buttonSize
             }
             SessionTransportButton {
@@ -2942,6 +2969,7 @@ Item {
                 KeyNavigation.tab: transportControls.overArtwork ? null : favoriteTransport
                 KeyNavigation.backtab: transportControls.overArtwork ? null : repeatTransport
                 commandName: "shuffle"
+                checked: transportControls.playbackModes.shuffle === true
                 buttonSize: transportControls.buttonSize
             }
             SessionTransportButton {
