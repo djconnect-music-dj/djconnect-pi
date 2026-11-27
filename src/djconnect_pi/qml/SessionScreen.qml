@@ -4070,6 +4070,16 @@ Item {
                         Layout.fillWidth: true
                     }
                     Text {
+                        objectName: "sessionMomentInsightAlbum"
+                        visible: text.length > 0
+                        text: momentInsight.detail.album || ""
+                        textFormat: Text.PlainText
+                        color: BrandTheme.colors.muted
+                        font.pixelSize: 18
+                        wrapMode: Text.Wrap
+                        Layout.fillWidth: true
+                    }
+                    Text {
                         visible: !!momentInsight.credit.context
                         text: screen.tr("track_insight_verified_credits")
                         textFormat: Text.PlainText

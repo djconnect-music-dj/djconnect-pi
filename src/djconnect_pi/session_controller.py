@@ -1479,7 +1479,8 @@ class SessionController(QObject):
                     cue for value in cues[:5] if (cue := text(value, 240).strip())
                 )) if credit and isinstance(cues, list) else []
                 request["view"] = {"status": "ready", "title": title, "summary": summary,
-                                   "artist": text(track.get("artist"), 2048).strip(), "credit": credit,
+                                   "artist": text(track.get("artist"), 2048).strip(),
+                                   "album": text(track.get("album"), 2048).strip(), "credit": credit,
                                    "listening_cues": listening_cues,
                                    "unmeasured_audio": analysis.get("measured_audio") is False}
             else:
