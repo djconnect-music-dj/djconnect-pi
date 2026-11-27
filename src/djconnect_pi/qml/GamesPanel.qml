@@ -257,15 +257,19 @@ Rectangle {
         resetRound()
     }
 
+    function clampedVerticalPosition(y, margin) {
+        return Math.max(margin, Math.min(170 - margin, y))
+    }
+
     function move(direction) {
         if (!startGame()) return
         playSfx("move")
         if (gameId === "pong") {
-            paddleY = Math.max(42, Math.min(126, paddleY + direction * 12))
+            paddleY = clampedVerticalPosition(paddleY + direction * 12, 19)
         } else if (gameId === "asteroids") {
             shipX = Math.max(24, Math.min(296, shipX + direction * 14))
         } else if (gameId === "fly") {
-            planeY = Math.max(52, Math.min(138, planeY + direction * 12))
+            planeY = clampedVerticalPosition(planeY + direction * 12, 14)
         } else {
             pacmanDY = direction
             pacmanDX = 0
@@ -303,11 +307,11 @@ Rectangle {
         var gx = x / gameCanvas.width * 320
         var gy = y / gameCanvas.height * 170
         if (gameId === "pong") {
-            paddleY = Math.max(42, Math.min(126, gy))
+            paddleY = clampedVerticalPosition(gy, 19)
         } else if (gameId === "asteroids") {
             shipX = Math.max(24, Math.min(296, gx))
         } else if (gameId === "fly") {
-            planeY = Math.max(52, Math.min(138, gy))
+            planeY = clampedVerticalPosition(gy, 14)
         } else {
             var dx = gx - pacmanX
             var dy = gy - pacmanY
