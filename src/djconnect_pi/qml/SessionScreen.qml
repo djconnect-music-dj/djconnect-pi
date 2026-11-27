@@ -2850,7 +2850,58 @@ Item {
             spacing: 4
             SessionPlaybackPositionBar {
                 objectName: "sessionTransportProgress"
+                visible: !playbackPositionSlider.visible
                 Layout.fillWidth: true
+            }
+            Slider {
+                id: playbackPositionSlider
+                objectName: "sessionPlaybackPositionSlider"
+                readonly property int transportEpoch: screen.state.playback_control.transport_epoch || 0
+                readonly property string outputId: screen.backend.outputDeviceId
+                visible: (screen.state.playback_control.overlay_commands || []).includes("seek_to")
+                    && screen.backend.playbackSeekOutputKnown && to > 0
+                enabled: visible && !!screen.state.playback_control.enabled
+                to: screen.state.playback.duration_ms || 0
+                stepSize: 1000
+                Layout.fillWidth: true
+                Layout.preferredHeight: 44
+                Accessible.name: screen.tr("session_playback_position")
+                value: playbackPositionPointer.epoch > 0 ? playbackPositionPointer.draft : (screen.state.playback.position_ms || 0)
+                onMoved: if (!playbackPositionPointer.pressed)
+                    screen.owner.setPlaybackPosition(screen.state.session_id, screen.state.playback.item_id,
+                        transportEpoch, Math.round(value), outputId)
+                MouseArea {
+                    id: playbackPositionPointer
+                    anchors.fill: parent
+                    acceptedButtons: Qt.LeftButton
+                    property int epoch: 0
+                    property string outputAtPress: ""
+                    property int draft: 0
+                    function targetAt(x) {
+                        const slider = playbackPositionSlider
+                        const fraction = Math.max(0, Math.min(1, (x - slider.leftPadding) / Math.max(1, slider.availableWidth)))
+                        return Math.round(slider.valueAt(slider.mirrored ? 1 - fraction : fraction))
+                    }
+                    onPressed: function(mouse) {
+                        playbackPositionSlider.forceActiveFocus(Qt.MouseFocusReason)
+                        epoch = playbackPositionSlider.transportEpoch
+                        outputAtPress = playbackPositionSlider.outputId
+                        draft = targetAt(mouse.x)
+                    }
+                    onPositionChanged: function(mouse) { if (epoch > 0) draft = targetAt(mouse.x) }
+                    onReleased: function(mouse) {
+                        const captured = epoch
+                        epoch = 0
+                        if (captured > 0 && playbackPositionSlider.enabled && outputAtPress === playbackPositionSlider.outputId)
+                            screen.owner.setPlaybackPosition(screen.state.session_id, screen.state.playback.item_id,
+                                captured, targetAt(mouse.x), outputAtPress)
+                    }
+                    onCanceled: epoch = 0
+                }
+                onEnabledChanged: if (!enabled && playbackPositionPointer) playbackPositionPointer.epoch = 0
+                onTransportEpochChanged: if (playbackPositionPointer) playbackPositionPointer.epoch = 0
+                onOutputIdChanged: if (playbackPositionPointer) playbackPositionPointer.epoch = 0
+                onToChanged: if (playbackPositionPointer) playbackPositionPointer.epoch = 0
             }
             Text {
                 id: positionText

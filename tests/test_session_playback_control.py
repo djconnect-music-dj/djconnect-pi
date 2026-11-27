@@ -94,6 +94,37 @@ def test_overlay_intent_rechecks_output_and_sends_only_one_explicit_adjustment(
         owner.transport.playback_adjustment.assert_called_once_with(owner.transport.binding(), wire, value)
 
 
+@pytest.mark.parametrize(("output_id", "progress_ms", "offset"), [
+    ("speaker-id", 18_000, 42_000),
+    ("other-id", 18_000, None),
+    ("speaker-id", 59_800, None),
+    ("speaker-id", True, None),
+])
+def test_session_seek_uses_fresh_progress_and_rechecks_the_exact_output(controller, output_id, progress_ms, offset):
+    owner, backend = setup(controller)
+    caps = {"supports_seek": True}
+    backend.cfg.music_backend_capabilities = caps
+    owner._session["broadcast"]["playback"].update(
+        target_name="Speaker", duration_ms=180_000, position_ms=12_000)
+    status = owner.transport.playback_status.return_value
+    status["music_backend_capabilities"] = caps
+    status["playback"].update(
+        progress_ms=progress_ms, duration_ms=180_000,
+        device={"id": output_id, "name": "Speaker", "active": True, "is_restricted": False})
+    owner.transport.playback_seek_offset = Mock()
+    epoch = owner.state["playback_control"]["transport_epoch"]
+    assert not owner.setPlaybackPosition("synthetic-session", ITEM_ID, epoch - 1, 60_000, "speaker-id")
+    assert not owner.setPlaybackPosition("synthetic-session", ITEM_ID, epoch, 180_001, "speaker-id")
+    assert owner.setPlaybackPosition("synthetic-session", ITEM_ID, epoch, 60_000, "speaker-id")
+    backend.jobs.pop()()
+    if offset is None:
+        owner.transport.playback_seek_offset.assert_not_called()
+        if progress_ms == 59_800:
+            assert owner.state["playback_control"]["status"] == ""
+    else:
+        owner.transport.playback_seek_offset.assert_called_once_with(owner.transport.binding(), offset)
+
+
 @pytest.mark.parametrize("changed", ["item", "state", "profile", "backend_revision", "credential", "hidden"])
 def test_transport_press_cannot_target_new_context_at_release(controller, changed):
     owner, backend = setup(controller)

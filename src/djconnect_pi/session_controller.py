@@ -484,6 +484,10 @@ class SessionController(QObject):
     def playbackCommand(self, session_id, item_id, command, transport_epoch=None):
         return self._playback_control.start(session_id, item_id, command, transport_epoch=transport_epoch)
 
+    @Slot(str, str, int, int, str, result=bool)
+    def setPlaybackPosition(self, session_id, item_id, transport_epoch, target_ms, expected_output):
+        return self._playback_control.seek_to(session_id, item_id, transport_epoch, target_ms, expected_output)
+
     @Slot(str, str, result=bool)
     def readPlaybackVolume(self, session_id, item_id):
         return self._playback_control.read_volume(session_id, item_id)

@@ -11,6 +11,7 @@ from .session_transport import SessionError, private_scope_allowed
 OVERLAY_CAPABILITIES = {
     "seek_back_15": "supports_seek",
     "seek_forward_15": "supports_seek",
+    "seek_to": "supports_seek",
     "shuffle": "supports_shuffle",
     "repeat": "supports_repeat",
     "toggle_favorite": "supports_favorites",
@@ -298,9 +299,17 @@ class PlaybackControl(QObject):
                 "status": "sending" if sending else "uncertain" if self.blocked else self.status}
 
     def start(self, session_id, item_id, command, *, transport_epoch=None):
-        if not isinstance(command, str) or (command not in COMMANDS and command not in OVERLAY_CAPABILITIES):
+        if not isinstance(command, str) or command == "seek_to" or (command not in COMMANDS and command not in OVERLAY_CAPABILITIES):
             return False
         return self._start(session_id, item_id, command, transport_epoch=transport_epoch)
+
+    def seek_to(self, session_id, item_id, transport_epoch, target_ms, expected_output):
+        duration = session_playback(self.owner._session).get("duration_ms", 0)
+        if (type(transport_epoch) is not int or transport_epoch <= 0 or not output_id(expected_output)
+                or type(target_ms) is not int or not 0 <= target_ms <= duration or duration <= 0):
+            return False
+        return self._start(session_id, item_id, "seek_to",
+                           value=(target_ms, expected_output), transport_epoch=transport_epoch)
 
     def read_volume(self, session_id, item_id):
         if not self.volume_supported():
@@ -362,6 +371,8 @@ class PlaybackControl(QObject):
             self.request.update(value=value, liked=self.favorite_state["liked"])
         if command == "set_output":
             self.request.update(value=value, origin=self.outputs["origin"])
+        if command == "seek_to":
+            self.request["value"] = value
         self.outputs = None
         self.outputs_status = ""
         self.volume = None
@@ -410,7 +421,8 @@ class PlaybackControl(QObject):
                     raise SessionError("unavailable")
                 # Existing global command semantics: no invented Session/item/output CAS fields.
                 if command in OVERLAY_CAPABILITIES:
-                    self._run_overlay_adjustment(binding, request, playback, status, observed)
+                    if self._run_overlay_adjustment(binding, request, playback, status, observed) is False:
+                        result["unchanged"] = True
                 elif command in OUTPUT_COMMANDS:
                     origin = output_origin(status, request["reference"][4])
                     if command == "set_output" and origin != request["origin"]:
@@ -475,6 +487,13 @@ class PlaybackControl(QObject):
             raise SessionError("unavailable")
         if command == "toggle_favorite":
             wire_command, value = "set_current_track_favorite", not favorite_observation(status, backend)
+        elif command == "seek_to":
+            target_ms, expected_output = request["value"]
+            progress, duration = observed.get("progress_ms"), observed.get("duration_ms")
+            if (device["id"] != expected_output or type(progress) is not int or type(duration) is not int
+                    or not 0 <= progress <= duration or not 0 <= target_ms <= duration or duration <= 0):
+                raise SessionError("context_changed")
+            value = target_ms - progress
         elif command == "shuffle":
             shuffle = observed.get("shuffle")
             if type(shuffle) is not bool:
@@ -491,6 +510,10 @@ class PlaybackControl(QObject):
             raise SessionError("context_changed")
         if command == "toggle_favorite":
             self.owner.transport.playback_favorite(binding, value)
+        elif command == "seek_to":
+            if abs(value) < 500:
+                return False
+            self.owner.transport.playback_seek_offset(binding, value)
         else:
             self.owner.transport.playback_adjustment(binding, wire_command, value)
 
@@ -533,6 +556,8 @@ class PlaybackControl(QObject):
         elif result.get("error"):
             self.blocked = True
             self.status = "uncertain"
+        elif result.get("unchanged"):
+            self.status = ""
         else:
             self.status = "accepted"
         self.owner.changed.emit()

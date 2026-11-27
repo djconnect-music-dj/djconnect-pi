@@ -148,9 +148,9 @@ def session_playback(session):
     result.update(state=playback["state"], item_id=playback["item_id"], source_url=source,
                   requires_spotify_attribution=bool(source))
     duration, position = playback.get("duration_ms"), playback.get("position_ms")
-    if type(duration) is int and duration > 0 and type(position) is int and position >= 0:
+    if type(duration) is int and 0 < duration <= 2**31 - 1 and type(position) is int and position >= 0:
         current = min(position, duration)
-        result.update(progress=current / duration,
+        result.update(progress=current / duration, position_ms=current, duration_ms=duration,
                       time_label=f"{current // 60000}:{current // 1000 % 60:02d} / {duration // 60000}:{duration // 1000 % 60:02d}")
     return result
 
