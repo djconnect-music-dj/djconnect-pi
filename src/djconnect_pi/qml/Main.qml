@@ -3408,10 +3408,13 @@ BrandWindow {
             readonly property bool exportClip: clipSelected && djconnect.trackInsightClipSupported
             property real clipProgress: 0
             property int exportGeneration: 0
+            property string exportNoticeKey: ""
+            property color exportNoticeColor: BrandTheme.colors.muted
             onAboutToShow: {
                 storyCard = true
                 animatedPreview = false
                 clipSelected = false
+                exportNoticeKey = ""
             }
             onClosed: {
                 exportGeneration += 1
@@ -3421,6 +3424,11 @@ BrandWindow {
             }
             Connections {
                 target: djconnect
+                function onTrackInsightExportFinished(key, saved) {
+                    if (!insightSharePopup.opened || !trackInsightPanel.canShareInsight) return
+                    insightSharePopup.exportNoticeKey = key
+                    insightSharePopup.exportNoticeColor = saved ? BrandTheme.colors.success : BrandTheme.colors.danger
+                }
                 function onTrackInsightClipFrameRequested(phase) {
                     if (!insightSharePopup.opened || !trackInsightPanel.canShareInsight) {
                         djconnect.cancelTrackInsightClip()
@@ -3440,6 +3448,7 @@ BrandWindow {
 
             function saveCard(destination) {
                 if (!trackInsightPanel.canShareInsight || renderingCard) return
+                exportNoticeKey = ""
                 if (exportClip) {
                     exportGeneration += 1
                     clipProgress = 0
@@ -3461,7 +3470,8 @@ BrandWindow {
                 }, Qt.size(1080, story ? 1920 : 1080))
                 if (!accepted) {
                     renderingCard = false
-                    djconnect.showToastForContext(root.tr("track_insight_card_save_failed"), "trackinsight")
+                    exportNoticeKey = "track_insight_card_save_failed"
+                    exportNoticeColor = BrandTheme.colors.danger
                 }
             }
 
@@ -3591,9 +3601,20 @@ BrandWindow {
                         onClicked: {
                             insightSharePopup.exportGeneration += 1
                             djconnect.cancelTrackInsightClip()
-                            djconnect.showToastForContext(root.tr("track_insight_clip_cancelled"), "trackinsight")
+                            insightSharePopup.exportNoticeKey = "track_insight_clip_cancelled"
+                            insightSharePopup.exportNoticeColor = BrandTheme.colors.muted
                         }
                     }
+                }
+                Text {
+                    objectName: "trackInsightExportNotice"
+                    visible: insightSharePopup.exportNoticeKey.length > 0
+                    text: visible ? root.tr(insightSharePopup.exportNoticeKey) : ""
+                    textFormat: Text.PlainText
+                    wrapMode: Text.WordWrap
+                    color: insightSharePopup.exportNoticeColor
+                    font.pixelSize: 18
+                    Layout.fillWidth: true
                 }
                 RowLayout {
                     Layout.fillWidth: true

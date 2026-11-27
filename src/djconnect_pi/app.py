@@ -215,6 +215,7 @@ class DJConnectBackend(QObject):
     trackInsightChanged = Signal()
     trackInsightClipChanged = Signal()
     trackInsightClipFrameRequested = Signal(float)
+    trackInsightExportFinished = Signal(str, bool)
     trackInsightPlaybackItemChanged = Signal()
     trackInsightObservationChanged = Signal()
     demoModeChanged = Signal()
@@ -911,14 +912,14 @@ class DJConnectBackend(QObject):
         path = destination.toLocalFile()
         if (not path or Path(path).suffix.lower() != ".png" or image.width() != 1080
                 or image.height() not in {1080, 1920}):
-            self.showToastForContext(self.tr_key("track_insight_card_save_failed"), "trackinsight")
+            self.trackInsightExportFinished.emit("track_insight_card_save_failed", False)
             return
         target = QSaveFile(path)
         if target.open(QIODevice.OpenModeFlag.WriteOnly) and image.save(target, "PNG") and target.commit():
-            self.showToastForContext(self.tr_key("track_insight_card_saved"), "trackinsight")
+            self.trackInsightExportFinished.emit("track_insight_card_saved", True)
         else:
             target.cancelWriting()
-            self.showToastForContext(self.tr_key("track_insight_card_save_failed"), "trackinsight")
+            self.trackInsightExportFinished.emit("track_insight_card_save_failed", False)
 
     @Property(bool, constant=True)
     def trackInsightClipSupported(self) -> bool:
@@ -943,7 +944,7 @@ class DJConnectBackend(QObject):
         path = destination.toLocalFile()
         fmt = clip_format()
         if not path or Path(path).suffix.lower() != ".mp4" or fmt is None:
-            self.showToastForContext(self.tr_key("track_insight_clip_save_failed"), "trackinsight")
+            self.trackInsightExportFinished.emit("track_insight_clip_save_failed", False)
             return
         clip = TrackInsightClip(path, 1920 if story else 1080, fmt, current, self)
         self._track_insight_clip = clip
@@ -969,8 +970,9 @@ class DJConnectBackend(QObject):
         clip.deleteLater()
         self.trackInsightClipChanged.emit()
         if outcome != "cancelled":
-            key = "track_insight_clip_saved" if outcome == "saved" else "track_insight_clip_save_failed"
-            self.showToastForContext(self.tr_key(key), "trackinsight")
+            saved = outcome == "saved"
+            key = "track_insight_clip_saved" if saved else "track_insight_clip_save_failed"
+            self.trackInsightExportFinished.emit(key, saved)
 
     @Property(bool, notify=trackInsightChanged)
     def trackInsightAudioNotice(self) -> bool:
