@@ -3453,7 +3453,7 @@ BrandWindow {
             property string saveIntent: ""
             readonly property string exportSelection: JSON.stringify([trackInsightPanel.autoInsightKey,
                 djconnect.trackInsightShareText, djconnect.trackInsightImageUrl, djconnect.trackInsightShareDescriptors,
-                djconnect.trackInsightShareMeters, storyCard, exportClip])
+                djconnect.trackInsightShareMeters, djconnect.language, djconnect.demoMode, storyCard, exportClip])
             onExportSelectionChanged: {
                 if ((saveIntent && saveIntent !== exportSelection) || exportBusy) {
                     saveIntent = ""
