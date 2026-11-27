@@ -3405,6 +3405,7 @@ BrandWindow {
             property bool clipSelected: false
             property bool renderingCard: false
             readonly property bool clipRunning: djconnect.trackInsightClipRunning
+            readonly property bool exportBusy: renderingCard || clipRunning
             readonly property bool exportClip: clipSelected && djconnect.trackInsightClipSupported
             property real clipProgress: 0
             property int exportGeneration: 0
@@ -3447,7 +3448,7 @@ BrandWindow {
             }
 
             function saveCard(destination) {
-                if (!trackInsightPanel.canShareInsight || renderingCard) return
+                if (!trackInsightPanel.canShareInsight || exportBusy) return
                 exportNoticeKey = ""
                 if (exportClip) {
                     exportGeneration += 1
@@ -3501,7 +3502,7 @@ BrandWindow {
                         objectName: "trackInsightShareStory"
                         text: root.tr("track_insight_share_story")
                         checked: insightSharePopup.storyCard
-                        enabled: !insightSharePopup.clipRunning
+                        enabled: !insightSharePopup.exportBusy
                         Layout.fillWidth: true; Layout.preferredWidth: 1
                         onClicked: insightSharePopup.storyCard = true
                     }
@@ -3509,7 +3510,7 @@ BrandWindow {
                         objectName: "trackInsightShareSquare"
                         text: root.tr("track_insight_share_square")
                         checked: !insightSharePopup.storyCard
-                        enabled: !insightSharePopup.clipRunning
+                        enabled: !insightSharePopup.exportBusy
                         Layout.fillWidth: true; Layout.preferredWidth: 1
                         onClicked: insightSharePopup.storyCard = false
                     }
@@ -3521,7 +3522,7 @@ BrandWindow {
                         objectName: "trackInsightShareImage"
                         text: root.tr("track_insight_share_image_type")
                         checked: !insightSharePopup.exportClip
-                        enabled: !insightSharePopup.clipRunning && !insightSharePopup.renderingCard
+                        enabled: !insightSharePopup.exportBusy
                         Layout.fillWidth: true; Layout.preferredWidth: 1
                         onClicked: insightSharePopup.clipSelected = false
                     }
@@ -3529,7 +3530,7 @@ BrandWindow {
                         objectName: "trackInsightShareClip"
                         text: root.tr("track_insight_share_clip_type")
                         checked: insightSharePopup.exportClip
-                        enabled: !insightSharePopup.clipRunning && !insightSharePopup.renderingCard
+                        enabled: !insightSharePopup.exportBusy
                         Layout.fillWidth: true; Layout.preferredWidth: 1
                         onClicked: insightSharePopup.clipSelected = true
                     }
@@ -3547,7 +3548,7 @@ BrandWindow {
                     id: insightShareScroll
                     Layout.fillWidth: true
                     Layout.preferredHeight: Math.min(insightShareContent.implicitHeight, trackInsightPanel.height <= 760
-                        ? (insightSharePopup.clipRunning ? 250 : 320) : 380)
+                        ? (insightSharePopup.exportBusy ? 250 : 320) : 380)
                     contentWidth: availableWidth; clip: true
                     ColumnLayout {
                         id: insightShareContent
@@ -3606,6 +3607,25 @@ BrandWindow {
                         }
                     }
                 }
+                RowLayout {
+                    objectName: "trackInsightCardExportProgress"
+                    visible: insightSharePopup.renderingCard
+                    Layout.fillWidth: true
+                    BusyIndicator {
+                        running: parent.visible
+                        Layout.preferredWidth: 26
+                        Layout.preferredHeight: 26
+                    }
+                    Text {
+                        objectName: "trackInsightCardExportProgressLabel"
+                        text: root.tr("track_insight_preparing_card")
+                        textFormat: Text.PlainText
+                        wrapMode: Text.WordWrap
+                        color: BrandTheme.colors.muted
+                        font.pixelSize: 18
+                        Layout.fillWidth: true
+                    }
+                }
                 Text {
                     objectName: "trackInsightExportNotice"
                     visible: insightSharePopup.exportNoticeKey.length > 0
@@ -3629,7 +3649,7 @@ BrandWindow {
                         text: root.tr(insightSharePopup.exportClip ? "track_insight_save_clip" : "track_insight_save_card")
                         iconName: "document"
                         Layout.fillWidth: true
-                        enabled: trackInsightPanel.canShareInsight && !insightSharePopup.renderingCard && !insightSharePopup.clipRunning
+                        enabled: trackInsightPanel.canShareInsight && !insightSharePopup.exportBusy
                         onClicked: insightSaveDialog.open()
                     }
                 }
