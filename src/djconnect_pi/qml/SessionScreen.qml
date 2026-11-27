@@ -4040,6 +4040,8 @@ Item {
         readonly property var options: (screen.backend.demoMode
             ? screen.owner.demoOptions : screen.backend.sharedSettings.options || {})[field] || []
         readonly property string selectedValue: screen.toolbarValue(field)
+        readonly property var selectedVoice: field === "voice" && screen.sessionVoiceAvailable
+            ? (screen.backend.sharedSettings.values || {}).voice : null
         readonly property string voiceGender: (screen.backend.sharedSettings.values || {}).gender || "default"
         readonly property color selectionColor: MoodTheme.moodColor(screen.toolbarValue("mood"), "gradientStart")
         readonly property color selectedForeground: selectionColor.r * 0.21 + selectionColor.g * 0.72 + selectionColor.b * 0.07 > 0.55
@@ -4059,6 +4061,12 @@ Item {
         function voiceOptionAllowed(option) {
             return field !== "voice" || option.value.kind === "provider_default"
                 || voiceGender === "default" || option.gender === voiceGender
+        }
+        function isSelected(option) {
+            if (field !== "voice") return selectedValue === option.value
+            const voice = option.value
+            return !!selectedVoice && voice.kind === selectedVoice.kind
+                && voice.provider_id === selectedVoice.provider_id && voice.voice_id === selectedVoice.voice_id
         }
 
         readonly property bool canSubmit: choices.visible && screen.state.runtime_state === "active"
@@ -4149,12 +4157,26 @@ Item {
                     GlassButton {
                         required property var modelData
                         text: modelData.label_key ? screen.tr(modelData.label_key) : modelData.label || ""
-                        checked: choices.selectedValue === modelData.value
+                        checked: choices.isSelected(modelData)
                         enabled: choices.canSubmit && choices.voiceOptionAllowed(modelData)
                         objectName: "sessionToolbarOption"
-                        onClicked: if (choices.voiceOptionAllowed(modelData)) choices.submit(modelData.value)
+                        onClicked: {
+                            if (!choices.canSubmit || !choices.voiceOptionAllowed(modelData)) return
+                            if (checked) choices.close()
+                            else choices.submit(modelData.value)
+                        }
                     }
                 }
+            }
+            Text {
+                objectName: "sessionToolbarSavedVoiceUnavailable"
+                visible: !!choices.selectedVoice && !choices.options.some(option => choices.isSelected(option))
+                text: screen.tr("shared_unavailable_selection")
+                textFormat: Text.PlainText
+                color: BrandTheme.colors.muted
+                font.pixelSize: 17
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
             }
         }
     }
