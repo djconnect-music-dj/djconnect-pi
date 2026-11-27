@@ -11,6 +11,7 @@ ColumnLayout {
     property bool dirty: false
     property var changedFields: ({})
     property bool saving: false
+    readonly property bool progressVisible: backend.sharedSettingsBusy && (saving || !backend.sharedSettings.values)
     readonly property var allFields: ["persona", "voice", "gender", "mood", "presence", "announcement_output"]
     property var fields: allFields
     readonly property var displayedFields: backend.sharedSettings.selection_required ? allFields : fields
@@ -200,6 +201,24 @@ ColumnLayout {
         wrapMode: Text.WordWrap
     }
     RowLayout {
+        visible: editor.progressVisible
+        Layout.fillWidth: true
+
+        BusyIndicator {
+            running: editor.progressVisible
+            Layout.preferredWidth: 24
+            Layout.preferredHeight: 24
+        }
+        Label {
+            objectName: "sharedSettingsProgress"
+            text: editor.tr(editor.saving ? "shared_saving" : "loading")
+            color: BrandTheme.colors.muted
+            font.pixelSize: 18
+            Layout.fillWidth: true
+            wrapMode: Text.WordWrap
+        }
+    }
+    RowLayout {
         Layout.fillWidth: true
         Button {
             text: editor.tr("shared_reload")
@@ -229,6 +248,7 @@ ColumnLayout {
                 patch._edit_token = editor.editToken
                 editor.saving = true
                 editor.backend.saveSharedSettings(patch)
+                if (!editor.backend.sharedSettingsBusy) editor.saving = false
             }
         }
     }

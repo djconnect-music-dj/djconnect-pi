@@ -1232,6 +1232,13 @@ _SHARED_SETTINGS_TRANSLATIONS = {
         'Confirmer les choix',
         'Confirmar opciones',
     ),
+    'shared_saving': (
+        'Saving choices…',
+        'Keuzes worden opgeslagen…',
+        'Auswahl wird gespeichert…',
+        'Enregistrement des choix…',
+        'Guardando las opciones…',
+    ),
     'shared_error_unsupported': (
         'Shared DJ settings are not available here yet. Update DJConnect or use a supported client.',
         'Gedeelde DJ-instellingen zijn hier nog niet beschikbaar. Werk DJConnect bij of gebruik een ondersteunde client.',
