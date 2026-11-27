@@ -332,6 +332,12 @@ BrandWindow {
         return djconnect.demoMode ? title + " · " + root.tr("demo_mode") : title
     }
 
+    function leaveDemoMode() {
+        if (!djconnect.demoMode) return
+        djconnect.exitDemoMode()
+        root.activeScreen = "now"
+    }
+
     component AppPageToolbar: PageToolbar {
         readonly property string connectionProblem: {
             if (djconnect.demoMode || !djconnect.paired) return ""
@@ -347,7 +353,9 @@ BrandWindow {
         connectionIconColor: connectionProblem === "ha_connection_unavailable" ? BrandTheme.colors.danger
             : connectionProblem ? BrandTheme.colors.warning : BrandTheme.colors.text
         aboutLabel: root.tr("about")
+        stopDemoLabel: djconnect.demoMode ? root.tr("exit_demo") : ""
         onAboutRequested: root.aboutOpen = true
+        onStopDemoRequested: root.leaveDemoMode()
     }
 
     function trackInsightLabel(value) {
@@ -2943,8 +2951,7 @@ BrandWindow {
                     Layout.fillWidth: true
                     onClicked: {
                         if (djconnect.demoMode) {
-                            djconnect.exitDemoMode()
-                            root.activeScreen = "now"
+                            root.leaveDemoMode()
                         } else {
                             djconnect.enterDemoMode()
                             root.activeScreen = "now"

@@ -15,7 +15,9 @@ Control {
     property string connectionIcon: "globe"
     property color connectionIconColor: BrandTheme.colors.text
     property string aboutLabel: ""
+    property string stopDemoLabel: ""
     signal aboutRequested()
+    signal stopDemoRequested()
     onVisibleChanged: if (!visible) connectionInfo.close()
     property bool compact: width < 900
     default property alias actions: trailingRow.data
@@ -48,6 +50,18 @@ Control {
                 onClicked: {
                     connectionInfo.close()
                     bar.aboutRequested()
+                }
+            }
+            GlassButton {
+                objectName: "pageToolbarStopDemo"
+                visible: bar.stopDemoLabel.length > 0
+                text: bar.stopDemoLabel
+                iconName: "end"
+                tint: BrandTheme.colors.danger
+                Layout.fillWidth: true
+                onClicked: {
+                    connectionInfo.close()
+                    bar.stopDemoRequested()
                 }
             }
         }
