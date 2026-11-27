@@ -62,6 +62,7 @@ def test_track_insight_capability_probe_distinguishes_missing_route_from_failure
     ({}, 200, ""),
     ({"mode": "current"}, 200, "invalid"),
     ({"media_identity": "lookalike"}, 200, "invalid"),
+    ({"media_identity": "spotify:track:" + "b" * 22}, 200, "invalid"),
     ({"expires_in": True}, 200, "invalid"),
     ({"expires_in": 601}, 200, "invalid"),
     ({"reference": {"schema_version": 1, "session_id": "foreign", "moment_id": "m1",
@@ -76,10 +77,12 @@ def test_moment_track_insight_is_bound_to_the_explicit_reference(transport, over
     binding = client.binding()
     reference = {"schema_version": 1, "session_id": "s1", "moment_id": "m1", "action_id": "insight-m1"}
     response.status_code = status
-    response.json.return_value = {"success": True, "subject": {
-        "mode": "explicit", "reference": reference, "media_identity": "spotify:track:" + "a" * 22,
-        "expires_in": 424, **overrides,
-    }}
+    media = "spotify:track:" + "a" * 22
+    response.json.return_value = {
+        "subject": {"mode": "explicit", "reference": reference, "media_identity": media,
+                    "expires_in": 424, **overrides},
+        "track": {"title": "Same title", "media_identity": media, "uri": media},
+    }
 
     if error:
         with pytest.raises(SessionError, match=error):
@@ -93,6 +96,16 @@ def test_moment_track_insight_is_bound_to_the_explicit_reference(transport, over
         **binding.identity(), "track_insight_target": reference, "locale": "nl-NL", "include_visual_profile": True,
     }
     assert request.call_args.kwargs["allow_redirects"] is False
+
+
+def test_moment_track_insight_cannot_use_a_rejected_document(transport):
+    client, cfg, request, response = transport
+    cfg.explicit_profile_id = cfg.active_profile_id
+    response.json.return_value = {"success": False}
+    reference = {"schema_version": 1, "session_id": "s1", "moment_id": "m1", "action_id": "insight-m1"}
+    with pytest.raises(SessionError, match="uncertain"):
+        client.moment_track_insight(client.binding(), reference)
+    request.assert_called_once()
 
 
 def test_ask_dj_help_uses_closed_paired_get_without_profile_or_identity_query(transport):

@@ -346,7 +346,9 @@ class SessionTransport:
                     if code in {"device_not_mapped", "profile_required", "invalid_profile", "profile_access_denied"}:
                         raise SessionError("profile_unavailable")
                     raise SessionError("conflict")
-                if response.status_code >= 400 or data.get("success") is not True:
+                # Track Insight returns its document directly on HTTP 200.
+                direct_insight = method == "POST" and route == "track_insight" and response.status_code == 200
+                if response.status_code >= 400 or data.get("success", direct_insight) is not True:
                     raise SessionError("unavailable" if method == "GET" or response.status_code >= 400 else "uncertain")
                 # Parsing creates a fresh exclusively owned tree; no second deep-copy allocation.
                 return data
@@ -430,6 +432,9 @@ class SessionTransport:
         media = subject.get("media_identity")
         if (type(lifetime) not in (int, float) or not 0 < lifetime <= 600
                 or not isinstance(media, str) or re.fullmatch(r"spotify:track:[A-Za-z0-9]{22}", media) is None):
+            raise SessionError("invalid")
+        track = data.get("track")
+        if not isinstance(track, dict) or track.get("media_identity") != media or track.get("uri") != media:
             raise SessionError("invalid")
         return data
 
