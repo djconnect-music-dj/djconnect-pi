@@ -669,6 +669,10 @@ class DJConnectBackend(QObject):
     def askDjMessages(self) -> list[dict[str, object]]:
         return self._ask_dj_messages
 
+    @Slot(result=float)
+    def askDjHistoryClock(self) -> float:
+        return self._session_controller._clock.now()
+
     @Slot(str, str, result=str)
     def highlightAskDjMessage(self, body: str, query: str) -> str:
         return local_highlighted_text(body, query)

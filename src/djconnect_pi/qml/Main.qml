@@ -6385,6 +6385,80 @@ BrandWindow {
                                     }
                                 }
 
+                                Repeater {
+                                    model: modelData.historicalMatches || []
+                                    GlassCard {
+                                        id: historicalMatch
+                                        objectName: "askDjHistoryMatch"
+                                        required property var modelData
+                                        property bool expired: true
+                                        Layout.fillWidth: true
+                                        visible: !expired && !askDjPanel.historyOffline && historyMatchSource.ready
+                                        padding: 12
+                                        onModelDataChanged: Qt.callLater(checkExpiry)
+                                        Component.onCompleted: checkExpiry()
+
+                                        function checkExpiry() {
+                                            const remaining = modelData.expires_at - djconnect.askDjHistoryClock()
+                                            expired = !(remaining > 0)
+                                            if (expired) historyMatchExpiry.stop()
+                                            else {
+                                                historyMatchExpiry.interval = Math.max(1, Math.ceil(Math.min(remaining, 86400) * 1000))
+                                                historyMatchExpiry.restart()
+                                            }
+                                        }
+                                        Timer {
+                                            id: historyMatchExpiry
+                                            onTriggered: historicalMatch.checkExpiry()
+                                        }
+                                        Text {
+                                            objectName: "askDjHistoryMatchTitle"
+                                            text: historicalMatch.expired ? "" : (historicalMatch.modelData.title || "")
+                                            textFormat: Text.PlainText
+                                            color: BrandTheme.colors.text
+                                            font.pixelSize: 20; font.bold: true
+                                            wrapMode: Text.Wrap
+                                            Layout.fillWidth: true
+                                        }
+                                        Text {
+                                            visible: text.length > 0
+                                            text: historicalMatch.expired ? "" : [historicalMatch.modelData.artist, historicalMatch.modelData.album]
+                                                .filter(value => !!value).join(" · ")
+                                            textFormat: Text.PlainText
+                                            color: BrandTheme.colors.muted
+                                            font.pixelSize: 17
+                                            wrapMode: Text.Wrap
+                                            Layout.fillWidth: true
+                                        }
+                                        Text {
+                                            text: {
+                                                djconnect.translationVersion
+                                                return historicalMatch.expired ? "" : djconnect.djSession.formatTimestamp(historicalMatch.modelData.occurred_at)
+                                            }
+                                            textFormat: Text.PlainText
+                                            color: BrandTheme.colors.muted
+                                            font.pixelSize: 16
+                                            Layout.fillWidth: true
+                                        }
+                                        Text {
+                                            objectName: "askDjHistoryMatchCoverage"
+                                            text: root.tr("session_search_playback_coverage")
+                                            textFormat: Text.PlainText
+                                            color: BrandTheme.colors.muted
+                                            font.pixelSize: 16
+                                            wrapMode: Text.WordWrap
+                                            Layout.fillWidth: true
+                                        }
+                                        SessionAttribution {
+                                            id: historyMatchSource
+                                            objectName: "askDjHistoryMatchSource"
+                                            Layout.fillWidth: true
+                                            requiresSpotify: historicalMatch.modelData.requires_spotify_attribution === true
+                                            spotifyURL: historicalMatch.expired ? "" : historicalMatch.modelData.spotify_source_url || ""
+                                        }
+                                    }
+                                }
+
                                 Flow {
                                     visible: modelData.trackInsight && modelData.musicDnaMatch && modelData.musicDnaMatch.length > 0
                                     spacing: 8
