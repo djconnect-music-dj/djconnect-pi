@@ -1098,16 +1098,14 @@ class SessionController(QObject):
             return selected["session_id"] == self._session.get("session_id") and any(row["moment_id"] == selected["moment_id"] for row in live_presentations(self._session, now=self._clock.now()))
         return self._entry_selection_valid(selected, self._selection_source)
 
-    def ask_dj_context_entry(self, message_id):
-        if (not message_id or not self._foreground or not self._history_supported()
-                or not self._bootstrap_current() or not self._bootstrap_private):
+    def ask_dj_context_entry(self, message_id, context_rows):
+        if not message_id or not self._foreground:
             return {}
-        version = self._caps["contract_versions"].get("ask_dj_contextual_dialogue")
-        if (self._caps["capabilities"].get("ask_dj_contextual_dialogue") is not True
-                or type(version) is not int or version != 1):
-            return {}
-        rows = self._retained_flow + self._timeline.get("entries", [])
-        return ask_dj_context_entry(message_id, rows, now=self._clock.now())
+        rows = context_rows
+        if (self._bootstrap_current() and self._bootstrap_private
+                and self._history_supported() and self._supports_contextual_dialogue(self._caps)):
+            rows = rows + self._retained_flow + self._timeline.get("entries", [])
+        return ask_dj_context_entry(message_id, self._without_withdrawn_entries(rows), now=self._clock.now())
 
     def _entry_selection_valid(self, selected, source):
         if source == "flow":
@@ -1425,6 +1423,12 @@ class SessionController(QObject):
         if self._bootstrap_binding is not None and not private_scope_allowed(self):
             return False
         return self._supports_history(self._caps)
+
+    @staticmethod
+    def _supports_contextual_dialogue(caps):
+        version = caps["contract_versions"].get("ask_dj_contextual_dialogue")
+        return (caps["capabilities"].get("ask_dj_contextual_dialogue") is True
+                and type(version) is int and version == 1)
 
     @staticmethod
     def _supports_history(caps):

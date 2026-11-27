@@ -5911,6 +5911,7 @@ BrandWindow {
             function onDemoModeChanged() { askDjPanel.clearQuestionUi(true) }
             function onAskDjChanged() {
                 askDjPanel.updateMessages()
+                askDjPanel.answerContextRevision += 1
                 if (!djconnect.askDjBusy) askDjPanel.pendingQuestionText = ""
             }
             function onAskDjUnsentDraft(text) {
