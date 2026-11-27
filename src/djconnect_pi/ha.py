@@ -1132,6 +1132,8 @@ def _output_device_detail(value: Any) -> dict[str, Any]:
         for key in ("cached", "first_seen_at", "last_seen_at", "provider", "source"):
             if key in value:
                 detail[key] = value[key]
+        if isinstance(value.get("type"), str) and len(value["type"]) <= 32:
+            detail["type"] = value["type"]
         volume = value.get("volume_percent")
         if value.get("cached") is not True and value.get("supports_volume") is True and type(volume) is int and 0 <= volume <= 100:
             detail["volume_percent"] = volume

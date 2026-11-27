@@ -90,6 +90,8 @@ def output_choices(payload, backend, revision, origin):
         if not isinstance(name, str) or not 1 <= len(name) <= 256 or any(ord(c) < 32 for c in name):
             raise SessionError("unavailable")
         choice = {"id": row["id"], "name": name, "active": row["active"]}
+        if isinstance(row.get("type"), str) and len(row["type"]) <= 32:
+            choice["type"] = row["type"]
         volume = row.get("volume_percent")
         if row.get("supports_volume") is True and type(volume) is int and 0 <= volume <= 100:
             choice["volume_percent"] = volume

@@ -3550,7 +3550,8 @@ Item {
                         spacing: 12
                         FeatureIcon {
                             objectName: "sessionOutputChoiceSpeaker"
-                            iconName: "speaker"
+                            iconName: "output_device"
+                            outputType: typeof modelData.type === "string" ? modelData.type : ""
                             Layout.preferredWidth: 24; Layout.preferredHeight: 24
                         }
                         ColumnLayout {

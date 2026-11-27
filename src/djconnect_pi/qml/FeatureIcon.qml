@@ -8,6 +8,21 @@ Canvas {
         property real strokeWidth: 2.4
         property bool heroGradient: false
         property real whiteSweep: -1
+        property string outputType: ""
+        readonly property string outputGlyph: {
+            switch (outputType.trim().toLowerCase()) {
+            case "computer":
+            case "tv":
+                return "output"
+            case "headphones":
+                return "headphones"
+            case "phone":
+            case "smartphone":
+                return "phone"
+            default:
+                return "speaker"
+            }
+        }
 
         DJSessionMenuSymbol {
             anchors.fill: parent
@@ -17,11 +32,13 @@ Canvas {
         implicitWidth: 32
         implicitHeight: 32
         onIconNameChanged: requestPaint()
+        onOutputGlyphChanged: if (iconName === "output_device") requestPaint()
         onIconColorChanged: requestPaint()
         onStrokeWidthChanged: requestPaint()
         onHeroGradientChanged: requestPaint()
         onWhiteSweepChanged: requestPaint()
         onPaint: {
+            const iconName = menuIcon.iconName === "output_device" ? outputGlyph : menuIcon.iconName
             var ctx = getContext("2d")
             var w = width
             var h = height
@@ -215,6 +232,16 @@ Canvas {
             } else if (iconName === "output") {
                 roundRect(4, 5, 24, 17, 2)
                 line(10, 27, 22, 27); line(16, 22, 16, 27)
+            } else if (iconName === "headphones") {
+                ctx.beginPath()
+                ctx.arc(px(16), py(16), 10 * s / 32, Math.PI, Math.PI * 2)
+                ctx.stroke()
+                line(6, 16, 6, 23); line(26, 16, 26, 23)
+                roundRect(5, 17, 6, 10, 2)
+                roundRect(21, 17, 6, 10, 2)
+            } else if (iconName === "phone") {
+                roundRect(9, 3, 14, 26, 3)
+                line(14, 25, 18, 25)
             } else if (iconName === "speaker") {
                 roundRect(8, 4, 16, 24, 2)
                 circle(16, 11, 2, true)

@@ -857,8 +857,9 @@ def main():
                 owner.transport.playback_outputs = Mock(return_value={**observed, 'devices': [
                     {'id': 'synthetic-tenth', 'name': 'Speaker 10', 'active': False, 'cached': False, 'is_restricted': False},
                     {'id': 'synthetic-output', 'name': speaker_name, 'active': True, 'cached': False, 'is_restricted': False,
-                     'supports_volume': True, 'volume_percent': 11},
-                    {'id': 'synthetic-alternative', 'name': 'Speaker 2', 'active': False, 'cached': False, 'is_restricted': False},
+                     'type': 'Computer', 'supports_volume': True, 'volume_percent': 11},
+                    {'id': 'synthetic-alternative', 'name': 'Speaker 2', 'active': False, 'cached': False,
+                     'is_restricted': False, 'type': 'Headphones'},
                     *[{'id': f'fixture-output-{i}', 'name': f'Speaker {i}', 'active': False, 'cached': False, 'is_restricted': False}
                       for i in range(20, 31)],
                 ]})
@@ -875,6 +876,10 @@ def main():
                 intents.pop()()
                 QTest.qWait(80)
                 owner.transport.playback_outputs.assert_called_once()
+                for output_id, glyph in [('synthetic-output', 'output'), ('synthetic-alternative', 'headphones'),
+                                         ('synthetic-tenth', 'speaker')]:
+                    row = visual(window.contentItem(), 'sessionOutputChoice-' + output_id)
+                    assert visual(row, 'sessionOutputChoiceSpeaker').property('outputGlyph') == glyph
                 assert visual(window.contentItem(), 'sessionOutputChoice-synthetic-output').property('checked')
                 QTest.keyClick(window, Qt.Key.Key_Escape)
                 QTest.qWait(65)
@@ -930,15 +935,15 @@ def main():
                 assert alternative_output.property('activeFocus') and not intents
                 QTest.keyClick(window, Qt.Key.Key_Up)
                 assert alternative_output.property('activeFocus') and selected_output.property('checked') and not intents
-                for row, name, volume, active in (
-                    (selected_output, speaker_name, '11%', True),
-                    (alternative_output, 'Speaker 2', '–', False),
+                for row, name, volume, active, glyph in (
+                    (selected_output, speaker_name, '11%', True, 'output'),
+                    (alternative_output, 'Speaker 2', '–', False, 'headphones'),
                 ):
                     speaker_icon = visual(row, 'sessionOutputChoiceSpeaker')
                     row_name = visual(row, 'sessionOutputChoiceName')
                     row_volume = visual(row, 'sessionOutputChoiceVolume')
                     check = visual(row, 'sessionOutputChoiceCheck')
-                    assert speaker_icon.property('visible') and speaker_icon.property('iconName') == 'speaker'
+                    assert speaker_icon.property('visible') and speaker_icon.property('outputGlyph') == glyph
                     assert row_name.property('text') == name and not row_name.property('truncated')
                     assert row_volume.property('text') == volume and check.property('visible') == active
                     assert row_name.mapToItem(row, 0, 0).x() == row_volume.mapToItem(row, 0, 0).x()

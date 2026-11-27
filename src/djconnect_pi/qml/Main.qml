@@ -2325,6 +2325,15 @@ BrandWindow {
                         highlighted: confirmedOutput || index === controlOutputDeviceCombo.highlightedIndex
                         contentItem: RowLayout {
                             spacing: 12
+                            FeatureIcon {
+                                objectName: "controlOutputChoiceIcon"
+                                visible: controlOutputRow.index > 0
+                                iconName: "output_device"
+                                outputType: controlOutputRow.choice && typeof controlOutputRow.choice.type === "string"
+                                    ? controlOutputRow.choice.type : ""
+                                Layout.preferredWidth: 24
+                                Layout.preferredHeight: 24
+                            }
                             Text {
                                 text: controlOutputRow.text
                                 textFormat: Text.PlainText
