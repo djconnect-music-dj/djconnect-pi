@@ -599,7 +599,8 @@ def test_qml_music_dna_enable_is_available_in_disabled_screen() -> None:
     assert "djconnect.refreshMusicDna()" in music_dna_block
     assert "visible: !djconnect.musicDnaEnabled" in music_dna_block
     assert 'objectName: "musicDnaOptInHero"' in music_dna_block
-    assert 'iconName: "heart"' in music_dna_block
+    assert 'iconName: "lock"' in music_dna_block
+    assert 'iconName: "sparkles"' in music_dna_block
     assert 'text: root.tr("music_dna_enable")' in music_dna_block
     assert "enabled: !djconnect.musicDnaBusy" in music_dna_block
     assert "Layout.preferredHeight: 56" in music_dna_block

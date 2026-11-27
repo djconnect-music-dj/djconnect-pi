@@ -5812,13 +5812,16 @@ BrandWindow {
             IntroductionCard {
                 objectName: "musicDnaOptInHero"
                 compact: root.width < 900
-                iconName: "heart"
-                title: root.tr("music_dna")
+                iconName: "lock"
+                title: root.tr("music_dna_disabled")
                 message: root.tr("music_dna_opt_in")
                 visible: !djconnect.musicDnaEnabled && djconnect.musicDnaLoaded && djconnect.musicDnaError.length === 0
 
-                PurpleButton {
+                GlassButton {
+                    objectName: "musicDnaEnableFromPage"
                     text: root.tr("music_dna_enable")
+                    iconName: "sparkles"
+                    wrapText: true
                     primary: true
                     enabled: !djconnect.musicDnaBusy
                     font.pixelSize: 22
