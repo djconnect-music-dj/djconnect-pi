@@ -3296,6 +3296,7 @@ BrandWindow {
             }
 
             RowLayout {
+                visible: djconnect.musicDnaEnabled
                 Layout.fillWidth: true
                 spacing: 14
 
@@ -3312,7 +3313,7 @@ BrandWindow {
                 DangerButton {
                     objectName: "musicDnaSettingsClear"
                     text: root.tr("music_dna_clear")
-                    enabled: djconnect.musicDnaEnabled && settingsPanel.canChangeMusicDna
+                    enabled: settingsPanel.canChangeMusicDna
                     font.pixelSize: 22
                     Layout.preferredWidth: 150
                     Layout.preferredHeight: 52
