@@ -3743,6 +3743,8 @@ BrandWindow {
                         onClicked: {
                             insightSharePopup.exportNoticeKey = ""
                             insightSharePopup.saveIntent = insightSharePopup.exportSelection
+                            insightSaveDialog.selectedFile = djconnect.trackInsightExportDestination(
+                                insightSaveDialog.currentFolder, insightSharePopup.storyCard, insightSharePopup.exportClip)
                             insightSaveDialog.open()
                         }
                     }

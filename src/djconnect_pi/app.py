@@ -30,6 +30,7 @@ from PySide6.QtCore import (
     QIODevice,
     QObject,
     QSaveFile,
+    QStandardPaths,
     QSettings,
     Qt,
     QTimer,
@@ -1031,6 +1032,17 @@ class DJConnectBackend(QObject):
             return False
         QGuiApplication.clipboard().setText(text)
         return True
+
+    @Slot(QUrl, bool, bool, result=QUrl)
+    def trackInsightExportDestination(self, folder: QUrl, story: bool, clip: bool) -> QUrl:
+        directory = folder.toLocalFile() or QStandardPaths.writableLocation(QStandardPaths.StandardLocation.PicturesLocation)
+        if not directory or not Path(directory).is_absolute():
+            return QUrl()
+        words = re.findall(r"[^\W_]+", self.trackInsightTitle[:200])[:4]
+        title = "-".join(words)[:40].rstrip("-") or "Track-Insight"
+        shape = "story" if story else "square"
+        extension = "mp4" if clip else "png"
+        return QUrl.fromLocalFile(str(Path(directory) / f"DJConnect-{title}-{shape}.{extension}"))
 
     @Slot(QImage, QUrl, str)
     def saveTrackInsightCard(self, image: QImage, destination: QUrl, expected_text: str) -> None:
