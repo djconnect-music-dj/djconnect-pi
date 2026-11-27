@@ -520,6 +520,25 @@ def test_ask_dj_returns_draft_if_profile_cannot_send(tmp_path, monkeypatch):
     unsent.assert_called_once_with("Keep this draft")
 
 
+def test_ask_dj_does_not_send_without_a_confirmed_session_destination(tmp_path):
+    ensure_app()
+    config_path = tmp_path / "config.json"
+    save_config(config_path, Config(paired=True, device_token="fixture", ha_url="http://fixture.invalid"))
+    backend = DJConnectBackend(config_path)
+    backend._question_executor.submit = Mock()
+    request = backend._ask_dj_context_request = object()
+    ticket = backend._private_read_context()
+    backend._apply_ask_dj_context_rows(ticket, request, (None, []))
+    assert backend.askDjDestinationUnavailable
+    assert not backend.sendAskDjQuestion("Keep this draft")
+    backend._question_executor.submit.assert_not_called()
+
+    backend._apply_ask_dj_context_rows(ticket, request, ("", []))
+    assert not backend.askDjDestinationUnavailable
+    assert backend.sendAskDjQuestion("Keep this draft")
+    backend._question_executor.submit.assert_called_once()
+
+
 @pytest.mark.parametrize("available_on_selection", [True, False])
 def test_ask_dj_help_selects_only_a_freshly_confirmed_example(tmp_path, available_on_selection):
     ensure_app()

@@ -1763,6 +1763,13 @@ for _key, _values in _SESSION_LIFECYCLE_TRANSLATIONS.items():
 
 
 _SESSION_COMPOSER_TRANSLATIONS = {
+    "ask_dj_destination_unavailable": (
+        "Couldn’t check the active session. Refresh to send your draft.",
+        "De actieve sessie kon niet worden gecontroleerd. Vernieuw om je concept te versturen.",
+        "Die aktive Session konnte nicht geprüft werden. Aktualisiere, um deinen Entwurf zu senden.",
+        "Impossible de vérifier la session active. Actualisez pour envoyer votre brouillon.",
+        "No se pudo comprobar la sesión activa. Actualiza para enviar tu borrador.",
+    ),
     "ask_dj_destination_changed": (
         "The active session changed. Refresh before sending your draft.",
         "De actieve sessie is gewijzigd. Vernieuw voordat je je concept verstuurt.",

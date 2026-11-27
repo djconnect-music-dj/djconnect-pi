@@ -7277,14 +7277,18 @@ BrandWindow {
             }
 
             GlassCard {
+                id: askDjDeliveryNotice
                 objectName: "askDjDeliveryNotice"
-                visible: djconnect.askDjDeliveryKey.length > 0 && !askDjPanel.searchOpen && !askDjPanel.chatKeyboardOpen
+                readonly property string statusKey: djconnect.askDjDestinationUnavailable
+                    ? "ask_dj_destination_unavailable" : djconnect.askDjDeliveryKey
+                visible: statusKey.length > 0 && !askDjPanel.searchOpen
+                    && (!askDjPanel.chatKeyboardOpen || djconnect.askDjDestinationUnavailable)
                 Layout.fillWidth: true
                 padding: 12
                 spacing: 8
                 Text {
                     objectName: "askDjDeliveryStatus"
-                    text: visible && djconnect.askDjDeliveryKey ? root.tr(djconnect.askDjDeliveryKey) : ""
+                    text: visible && askDjDeliveryNotice.statusKey ? root.tr(askDjDeliveryNotice.statusKey) : ""
                     textFormat: Text.PlainText
                     color: BrandTheme.colors.muted
                     font.pixelSize: 17
@@ -7370,6 +7374,7 @@ BrandWindow {
                         primary: true
                         Layout.preferredWidth: 52; Layout.fillHeight: true
                         enabled: !djconnect.askDjDestinationLoading && !askDjPanel.historyOffline
+                            && !djconnect.askDjDestinationUnavailable
                             && askDjChatInput.enabled && askDjChatInput.text.trim().length > 0
                         BusyIndicator {
                             anchors.centerIn: parent

@@ -712,6 +712,12 @@ class DJConnectBackend(QObject):
     def askDjDestinationLoading(self):
         return self._ask_dj_destination_loading
 
+    @Property(bool, notify=askDjChanged)
+    def askDjDestinationUnavailable(self):
+        page = self._ask_dj_context_page
+        return bool(not self._ask_dj_destination_loading and page
+                    and page[0] == self._private_read_context() and page[1] is None)
+
     @Slot(str, str, str)
     def openAskDjHistoryMatch(self, message_id, session_id, entry_id):
         ticket = self._private_read_context()
@@ -2804,7 +2810,7 @@ class DJConnectBackend(QObject):
                     ticket=ticket, show_toast=show_toast, context_request=request)
             finally:
                 if not reading_destination:
-                    self._askDjContextReady.emit(ticket, request, (None, []))
+                    self._askDjContextReady.emit(ticket, request, ("", []))
 
         self._run(self.tr_key("ask_dj"), load_history, done=lambda: self._set_ask_dj_busy(False))
 
@@ -2813,6 +2819,7 @@ class DJConnectBackend(QObject):
     def sendAskDjQuestion(self, text: str, reply_id="", session_id="", entry_id="") -> bool:
         text = text.strip()
         if (not text or len(text) > 4000 or self._ask_dj_busy or self._ask_dj_destination_loading
+                or self.askDjDestinationUnavailable
                 or not self._application_foreground or self._shutting_down):
             return False
         selected = {"session_id": session_id, "entry_id": entry_id} if reply_id else None
@@ -3910,7 +3917,9 @@ class DJConnectBackend(QObject):
             if binding.profile_id != owner:
                 return
             caps = transport.capabilities(binding, isolated=True)
-            if current() and session._supports_history(caps) and session._supports_contextual_dialogue(caps):
+            if not current():
+                return
+            if session._supports_history(caps) and session._supports_contextual_dialogue(caps):
                 active = active_session(transport.active(binding, isolated=True))
                 if not active:
                     destination = ""
@@ -3926,6 +3935,8 @@ class DJConnectBackend(QObject):
                             for row in dialogue + [entry for entry in page["entries"]
                                                   if entry.get("state") == "source_withdrawn"]
                             if row["kind"] == "conversation_dj"]
+            else:
+                destination = ""
         except SessionError:
             pass
         finally:
