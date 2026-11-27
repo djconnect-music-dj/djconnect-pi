@@ -144,10 +144,10 @@ def main():
                 backend._toast_visible = False; backend.toastChanged.emit()
                 screen = window.findChild(QObject, 'djSessionScreen')
                 popup = window.findChild(QObject, 'sessionVolumePanel')
-                def click(name):
+                def click(name, x_fraction=0.5):
                     button = window.findChild(QObject, name)
                     assert button is not None and button.property('visible') and button.property('enabled'), name
-                    point = button.mapToScene(QPointF(button.width()/2, button.height()/2))
+                    point = button.mapToScene(QPointF(button.width() * x_fraction, button.height()/2))
                     QTest.mouseClick(window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, QPoint(round(point.x()), round(point.y())))
                     QTest.qWait(60)
                 def capture(name):
@@ -1069,7 +1069,8 @@ def main():
                 assert heading.property('text') == TRANSLATIONS[language]['session_history']
                 capture('heading-session-archive')
                 screen.setProperty('historical', False); drain()
-                click('sessionExpandTrackArtwork')
+                click('sessionExpandTrackArtwork', x_fraction=0.18)
+                assert window.property('trackArtworkOpen') and not intents
                 backend.cfg.music_backend_capabilities = {'supports_favorites': False}; owner.changed.emit(); QTest.qWait(60)
                 assert not window.findChild(QObject, 'sessionArtworkFavorite').property('enabled')
                 capture('favorite-unsupported')
