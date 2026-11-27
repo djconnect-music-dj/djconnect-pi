@@ -7102,17 +7102,16 @@ def _music_dna_cards(profile: dict[str, object], ha_url: str) -> list[dict[str, 
              entries=[{"valueKey": mood_zone_key}] if mood_zone_key else [])
     energy = block("energy_profile")
     percent = energy.get("energy_percent")
+    sample_count = energy.get("sample_count")
     energy_zone = energy.get("zone")
-    if type(percent) in (int, float) and 0 <= percent <= 100:
+    if type(sample_count) is int and sample_count > 0 and type(percent) in (int, float) and 0 <= percent <= 100:
         energy_rows = [{"valueKey": zones[energy_zone.lower()]}] if (
             isinstance(energy_zone, str) and energy_zone.lower() in zones) else []
         for name in ("danceability", "intensity"):
             secondary = energy.get(name + "_percent")
             if type(secondary) in (int, float) and 0 <= secondary <= 100:
                 energy_rows.append({"labelKey": "music_dna_card_" + name, "percent": secondary})
-        sample_count = energy.get("sample_count")
-        card("energy", "mood_energy", metric=percent, entries=energy_rows,
-             count=sample_count if type(sample_count) is int and sample_count >= 0 else None)
+        card("energy", "mood_energy", metric=percent, entries=energy_rows, count=sample_count)
     rhythm = block("listening_rhythm")
     top_daypart = bounded_text(rhythm.get("top_daypart"), 64).strip()
     top_weekday = bounded_text(rhythm.get("top_weekday"), 64).strip()
