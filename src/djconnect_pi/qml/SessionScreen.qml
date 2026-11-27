@@ -1688,7 +1688,11 @@ Item {
                 objectName: "sessionFlowHeading"
                 visible: !screen.idleWelcome && (screen.historical || screen.backend.demoMode || !screen.state.loaded
                     || !screen.state.session_id || screen.state.runtime_state !== "active" || !!screen.state.error)
-                text: screen.tr(screen.historical ? (screen.state.timeline.session ? "session_history_title" : "session_history") : "session_title") + (screen.backend.demoMode ? " · " + screen.tr("demo_mode") : "")
+                text: {
+                    const showingTimeline = screen.currentHistory || !!screen.state.timeline.session
+                    const key = screen.historical ? (showingTimeline ? "session_history_title" : "session_history") : "session_title"
+                    return screen.tr(key) + (screen.backend.demoMode ? " · " + screen.tr("demo_mode") : "")
+                }
                 color: BrandTheme.colors.text; font.pixelSize: screen.width > 800 ? 40 : 30; font.bold: true
                 textFormat: Text.PlainText; Layout.fillWidth: true
             }
@@ -1704,9 +1708,10 @@ Item {
                 Layout.fillWidth: true
             }
             RowLayout {
-                objectName: "sessionArchiveInitialLoading"
-                visible: screen.historyViewOpen && !screen.currentHistory && !screen.state.timeline.session
-                    && !screen.state.history_loaded && !screen.state.error && !screen.backend.demoMode
+                objectName: screen.currentHistory ? "sessionCurrentHistoryLoading" : "sessionArchiveInitialLoading"
+                visible: screen.historyViewOpen && !screen.state.timeline.session
+                    && (screen.currentHistory || !screen.state.history_loaded)
+                    && !screen.state.error && !screen.backend.demoMode
                     && screen.historyReadOutstanding
                 Layout.alignment: Qt.AlignHCenter
                 spacing: 10
