@@ -1643,6 +1643,8 @@ Item {
         readonly property bool archiveAutoPageAllowed: visible && screen.historyViewOpen && screen.backend.paired
             && !screen.backend.demoMode && !screen.state.error && archiveMore.visible && archiveMore.enabled
             && !screen.historyNavigationBlocked && !screen.archiveMoreLoading
+        readonly property bool timelineAutoPageAllowed: !!screen.timelineExtendScope && contentItem.atYBeginning
+            && timelineExtend.y < contentItem.height
         anchors.top: screen.idleWelcome && !screen.compact ? parent.top : modeSwitch.visible ? modeSwitch.bottom : toolbar.bottom; anchors.bottom: parent.bottom
         anchors.left: parent.left; anchors.right: parent.right
         anchors.margins: 20
@@ -1653,9 +1655,13 @@ Item {
         ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
         Timer {
             interval: 120
-            running: historyScroll.archiveAutoPageAllowed && historyScroll.contentItem.contentHeight
-                <= historyScroll.contentItem.height
-            onTriggered: screen.loadMoreArchive()
+            running: historyScroll.timelineAutoPageAllowed || (historyScroll.archiveAutoPageAllowed
+                && historyScroll.contentItem.contentHeight <= historyScroll.contentItem.height)
+            onTriggered: {
+                if (historyScroll.timelineAutoPageAllowed)
+                    screen.owner.extendEntries(screen.readingAnchor(), screen.readingOffset)
+                else screen.loadMoreArchive()
+            }
         }
         PullToRefresh {
             objectName: "sessionFlowPullToRefresh"
