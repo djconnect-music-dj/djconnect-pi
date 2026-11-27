@@ -2311,9 +2311,32 @@ BrandWindow {
                     currentIndex: selectedIndex()
                     font.pixelSize: 26
                     delegate: ItemDelegate {
+                        id: controlOutputRow
+                        required property int index
+                        readonly property var choice: controlOutputDeviceCombo.deviceChoices[index]
                         width: controlOutputDeviceCombo.width
                         text: controlOutputDeviceCombo.displayName(index)
                         font.pixelSize: 28
+                        contentItem: RowLayout {
+                            spacing: 12
+                            Text {
+                                text: controlOutputRow.text
+                                textFormat: Text.PlainText
+                                font: controlOutputRow.font
+                                color: BrandTheme.colors.text
+                                elide: Text.ElideRight
+                                Layout.fillWidth: true
+                            }
+                            Text {
+                                objectName: "controlOutputChoiceVolume"
+                                readonly property var percent: controlOutputRow.choice && controlOutputRow.choice.volume_percent
+                                visible: controlOutputRow.index > 0
+                                text: typeof percent === "number" ? percent + "%" : "–"
+                                textFormat: Text.PlainText
+                                color: BrandTheme.colors.muted
+                                font.pixelSize: 18
+                            }
+                        }
                     }
                     Layout.fillWidth: true
                     Layout.fillHeight: true
