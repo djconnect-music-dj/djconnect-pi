@@ -2528,13 +2528,17 @@ BrandWindow {
             modal: true
             property int profileRevision: 0
             property bool musicDna: false
+            property url proposedDestination: ""
             readonly property bool isCurrent: settingsPanel.visible && profileRevision === djconnect.musicDnaContextRevision
                 && root.canTransferProfileData && (!musicDna || djconnect.musicDnaEnabled)
             onIsCurrentChanged: if (!isCurrent) close()
+            onClosed: proposedDestination = ""
             function review(exportMusicDna) {
                 musicDna = exportMusicDna
                 profileRevision = djconnect.musicDnaContextRevision
-                if (isCurrent) open()
+                if (!isCurrent) return
+                proposedDestination = djconnect.profileExportDestination(profileExportDialog.currentFolder, musicDna)
+                open()
             }
             contentItem: ColumnLayout {
                 spacing: 16
@@ -2556,6 +2560,16 @@ BrandWindow {
                     wrapMode: Text.WordWrap
                     Layout.fillWidth: true
                 }
+                Text {
+                    objectName: "profileExportFilename"
+                    text: String(profileExportPreview.proposedDestination).split("/").pop()
+                    visible: text.length > 0
+                    textFormat: Text.PlainText
+                    color: BrandTheme.colors.text
+                    font.pixelSize: 18
+                    wrapMode: Text.Wrap
+                    Layout.fillWidth: true
+                }
                 GlassButton {
                     objectName: "profileExportChooseFile"
                     text: root.tr("profile_export_choose_file")
@@ -2567,8 +2581,7 @@ BrandWindow {
                         if (!enabled) return
                         profileExportDialog.musicDna = profileExportPreview.musicDna
                         profileExportDialog.profileRevision = profileExportPreview.profileRevision
-                        profileExportDialog.selectedFile = djconnect.profileExportDestination(
-                            profileExportDialog.currentFolder, profileExportDialog.musicDna)
+                        profileExportDialog.selectedFile = profileExportPreview.proposedDestination
                         profileExportPreview.close()
                         profileExportDialog.open()
                     }
