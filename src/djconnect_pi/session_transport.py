@@ -648,17 +648,22 @@ class SessionTransport:
             raise SessionError("context_changed")
         return result
 
-    def standalone_question(self, binding, text: str, message_id: str, owner: str, *, selected_entry=None):
+    def standalone_question(self, binding, text: str, message_id: str, owner: str, *,
+                            selected_entry=None, active_session_id=None):
         if not isinstance(text, str) or not text.strip() or len(text) > 4000:
             raise SessionError("invalid")
-        context = {}
+        contextual = selected_entry is not None or active_session_id is not None
+        context = {"session_id": active_session_id} if contextual else {}
+        context_ids = [message_id]
+        if active_session_id is not None:
+            context_ids.append(active_session_id)
         if selected_entry is not None:
             if not isinstance(selected_entry, dict) or set(selected_entry) != {"session_id", "entry_id"}:
                 raise SessionError("invalid")
-            if any(len(identifier(value)) > 128 or value != value.strip()
-                   for value in (*selected_entry.values(), message_id)):
-                raise SessionError("invalid")
-            context = {"session_id": None, "selected_entry": dict(selected_entry)}
+            context_ids.extend(selected_entry.values())
+            context["selected_entry"] = dict(selected_entry)
+        if contextual and any(len(identifier(value)) > 128 or value != value.strip() for value in context_ids):
+            raise SessionError("invalid")
         result = self._request(binding, "POST", "ask_dj/message", {
             "text": text.strip(), "client_message_id": identifier(message_id),
             "conversation_context": context, "conversation_scope": "profile", "profile_id": identifier(owner),
@@ -666,17 +671,21 @@ class SessionTransport:
         }, timeout=(8, 120), isolated=True)
         if result.get("owner_profile_id") != owner or result.get("client_message_id") != message_id:
             raise SessionError("uncertain")
-        if selected_entry is not None:
+        if contextual:
             conversation = result.get("conversation")
             # Core can detach a selected entry when the question names an independent topic.
             if (result.get("success") is not True or not isinstance(conversation, dict)
                     or type(conversation.get("schema_version")) is not int or conversation["schema_version"] != 1
                     or conversation.get("input_type") != "text" or conversation.get("history_scope") != "profile"
-                    or conversation.get("entry_ids") != []
-                    or conversation.get("context") not in (context, {"session_id": None})):
+                    or conversation.get("context") not in (context, {"session_id": active_session_id})):
+                raise SessionError("uncertain")
+            entries = conversation.get("entry_ids")
+            if not isinstance(entries, list) or len(entries) != (2 if active_session_id is not None else 0):
                 raise SessionError("uncertain")
             try:
                 identifier(conversation.get("turn_id"))
+                if len(set(map(identifier, entries))) != len(entries):
+                    raise SessionError("uncertain")
             except SessionError:
                 raise SessionError("uncertain") from None
 

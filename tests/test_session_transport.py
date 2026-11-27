@@ -302,6 +302,29 @@ def test_standalone_follow_up_rejects_malformed_references_before_sending(transp
     request.assert_not_called()
 
 
+@pytest.mark.parametrize(("session_id", "entries", "accepted"), [
+    ("session-at-send", ["question", "answer"], True),
+    ("successor-session", ["question", "answer"], False),
+    (None, [], False),
+    ("session-at-send", [], False),
+    ("session-at-send", ["answer", "answer"], False),
+])
+def test_profile_question_requires_its_confirmed_active_session_and_saved_entries(transport, session_id, entries, accepted):
+    client, _, request, response = transport
+    response.json.return_value = {
+        "success": True, "owner_profile_id": "owner", "client_message_id": "turn",
+        "conversation": {"schema_version": 1, "input_type": "text", "history_scope": "profile",
+                         "context": {"session_id": session_id}, "turn_id": "confirmed-turn", "entry_ids": entries},
+    }
+    if accepted:
+        client.standalone_question(client.binding(), "Question", "turn", "owner", active_session_id="session-at-send")
+    else:
+        with pytest.raises(SessionError, match="^uncertain$"):
+            client.standalone_question(client.binding(), "Question", "turn", "owner", active_session_id="session-at-send")
+    request.assert_called_once()
+    assert request.call_args.kwargs["json"]["conversation_context"] == {"session_id": "session-at-send"}
+
+
 @pytest.mark.parametrize(("status", "code", "category"), [
     (404, "history_unavailable", "reference_unavailable"),
     (409, "source_withdrawn", "reference_unavailable"),
