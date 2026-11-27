@@ -3474,6 +3474,9 @@ BrandWindow {
                 clipSelected = false
                 exportNoticeKey = ""
                 copiedShareText = false
+                const flickable = insightShareScroll.contentItem
+                flickable.cancelFlick()
+                flickable.contentY = flickable.originY
             }
             onClosed: {
                 saveIntent = ""
