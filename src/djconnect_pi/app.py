@@ -248,7 +248,7 @@ class DJConnectBackend(QObject):
     _pairingReady = Signal(bool, str)
     _busyReady = Signal(bool)
     _versionMismatchReady = Signal(str, str)
-    _mediaListReady = Signal(str, object)
+    _mediaListReady = Signal(str, object, object)
     _mediaArtworkReady = Signal(str, object, object)
     _outputDeviceRejected = Signal(str, str)
     _outputChoiceFinished = Signal(object, bool)
@@ -3491,7 +3491,7 @@ class DJConnectBackend(QObject):
             return
         self._start_media_list_load("playlists", self._load_playlists_worker, manual=manual)
 
-    def _start_media_list_load(self, kind: str, worker: Callable[[], None], *, manual: bool = False) -> None:
+    def _start_media_list_load(self, kind: str, worker: Callable[..., None], *, manual: bool = False) -> None:
         self._sync_config_from_disk()
         if not self.paired or kind in self._media_loads_in_flight:
             return
@@ -3500,21 +3500,27 @@ class DJConnectBackend(QObject):
         _LOGGER.info("User requested %s from touch UI", kind)
         context = self._private_read_context()
 
-        def refresh_with_notice() -> None:
+        def read() -> None:
             if context != self._private_read_context():
                 return
             key = f"{kind}_updated"
             try:
-                worker()
+                worker(ticket=context)
             except (AuthenticationError, ProtocolVersionMismatch):
-                raise
+                if context == self._private_read_context():
+                    raise
+                return
             except (DJConnectError, requests.RequestException) as exc:
+                if context != self._private_read_context():
+                    return
+                if not manual:
+                    raise
                 _LOGGER.debug("%s refresh failed: %s", kind, type(exc).__name__)
                 key = f"{kind}_update_failed"
-            if context == self._private_read_context():
+            if manual and context == self._private_read_context():
                 self._toastReady.emit(self.tr_key(key), 2200, kind)
 
-        self._run(self.tr_key(kind), refresh_with_notice if manual else worker,
+        self._run(self.tr_key(kind), read,
                   done=lambda: self._mediaListFinished.emit(kind), interactive=False)
 
     @Slot(str)
@@ -3696,34 +3702,42 @@ class DJConnectBackend(QObject):
             raise
 
     def _load_queue_worker(self, *, ticket=None) -> None:
+        if ticket is None:
+            ticket = self._private_read_context()
         started = time.monotonic()
         _LOGGER.info("Loading queue from Home Assistant")
         # An earlier manual read must publish before the post-selection queue.
         with self._queue_read_lock:
-            if ticket is not None and ticket != self._private_read_context():
+            if ticket != self._private_read_context():
                 return
             data = self.client.command("queue", limit=100)
-            if ticket is not None and ticket != self._private_read_context():
+            if ticket != self._private_read_context():
                 return
             if data.get("success") is False:
                 raise DJConnectError(self.tr_key("queue_update_failed"))
             self._persist_backend_summary()
             items = parse_queue_items(data)
             _LOGGER.info("Loaded %s queue items from Home Assistant", len(items))
-            self._mediaListReady.emit("queue", items)
+            self._mediaListReady.emit("queue", items, ticket)
         _LOGGER.info("Queue list displayed in %.0fms", _elapsed_ms(started))
         self._cache_media_artwork_async("queue", items)
 
-    def _load_playlists_worker(self) -> None:
+    def _load_playlists_worker(self, *, ticket=None) -> None:
+        if ticket is None:
+            ticket = self._private_read_context()
+        if ticket != self._private_read_context():
+            return
         started = time.monotonic()
         _LOGGER.info("Loading playlists from Home Assistant")
         data = self.client.command("playlists", limit=100)
+        if ticket != self._private_read_context():
+            return
         if data.get("success") is False:
             raise DJConnectError(self.tr_key("playlists_update_failed"))
         self._persist_backend_summary()
         items = parse_playlist_items(data)
         _LOGGER.info("Loaded %s playlists from Home Assistant", len(items))
-        self._mediaListReady.emit("playlists", items)
+        self._mediaListReady.emit("playlists", items, ticket)
         _LOGGER.info("Playlist list displayed in %.0fms", _elapsed_ms(started))
         self._cache_media_artwork_async("playlists", items)
 
@@ -4427,9 +4441,9 @@ class DJConnectBackend(QObject):
             self.playbackTrackChanged.emit()
         self._set_status_text(self.tr_key("connected" if self.paired else "ready_to_pair"))
 
-    @Slot(str, object)
-    def _apply_media_list(self, kind: str, items: object) -> None:
-        if self._demo_mode:
+    @Slot(str, object, object)
+    def _apply_media_list(self, kind: str, items: object, ticket=None) -> None:
+        if self._demo_mode or (ticket is not None and ticket != self._private_read_context()):
             return
         if not isinstance(items, list):
             return
@@ -4568,6 +4582,10 @@ class DJConnectBackend(QObject):
     def _clear_profile_scoped_caches(self, *, preserve_session=False) -> None:
         if not preserve_session and hasattr(self, "_session_controller"):
             self._session_controller.invalidate()
+        if self._queue_items or self._playlist_items:
+            self._queue_items = []
+            self._playlist_items = []
+            self.mediaListsChanged.emit()
         if (self._pending_output_choice or self._unconfirmed_output_choice
                 or self._control_outputs_request is not None or self._control_outputs_status):
             self._pending_output_choice = None

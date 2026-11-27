@@ -2411,8 +2411,9 @@ def test_compact_media_list_publishes_artwork_sources_without_prefetch(tmp_path,
     getattr(backend, f"_load_{kind}_worker")()
 
     ready.assert_called_once()
-    published_kind, items = ready.call_args.args
+    published_kind, items, ticket = ready.call_args.args
     assert published_kind == kind and items[0]["imageUrl"] == "https://fixture.invalid/art.jpg"
+    assert ticket == backend._private_read_context()
     submit.assert_not_called()
     assert not backend._media_artwork_cache_in_flight
 
@@ -4361,7 +4362,7 @@ def test_backend_playlists_are_emitted_before_artwork_cache(tmp_path: Path, monk
     calls: list[tuple[str, dict[str, object]]] = []
     emitted: list[tuple[str, list[dict[str, object]]]] = []
     submitted: list[object] = []
-    backend._mediaListReady.connect(lambda kind, items: emitted.append((kind, items)))
+    backend._mediaListReady.connect(lambda kind, items, _ticket: emitted.append((kind, items)))
     monkeypatch.setattr("djconnect_pi.app.prepare_media_artwork", lambda items: items)
 
     class FakeExecutor:
@@ -4415,12 +4416,30 @@ def test_delayed_queue_artwork_cannot_replace_a_newer_queue_snapshot(tmp_path: P
     ensure_app()
     backend = DJConnectBackend(tmp_path / "config.json")
     original = [{"title": "Earlier track"}]
-    backend._mediaListReady.emit("queue", original)
+    ticket = backend._private_read_context()
+    backend._mediaListReady.emit("queue", original, ticket)
     backend._mediaArtworkReady.emit("queue", original, [{"title": "Earlier track", "imageUrl": "file:///cached"}])
     assert backend.queueItems[0]["imageUrl"] == "file:///cached"
-    backend._mediaListReady.emit("queue", [{"title": "Updated track"}])
+    backend._mediaListReady.emit("queue", [{"title": "Updated track"}], ticket)
     backend._mediaArtworkReady.emit("queue", original, [{"title": "Earlier track", "imageUrl": "file:///cached"}])
     assert backend.queueItems == [{"title": "Updated track"}]
+
+
+def test_media_lists_and_queued_readbacks_are_withdrawn_on_profile_change(tmp_path: Path) -> None:
+    ensure_app()
+    backend = DJConnectBackend(tmp_path / "config.json")
+    backend.cfg.active_profile_id = "original"
+    ticket = backend._private_read_context()
+    old_rows = [{"title": "Original list"}]
+    for kind in ("queue", "playlists"):
+        backend._mediaListReady.emit(kind, old_rows, ticket)
+    assert backend.queueItems == old_rows and backend.playlistItems == old_rows
+
+    backend.cfg.active_profile_id = "different"
+    backend._clear_profile_scoped_caches()
+    for kind in ("queue", "playlists"):
+        backend._mediaListReady.emit(kind, old_rows, ticket)
+    assert backend.queueItems == [] and backend.playlistItems == []
 
 
 def test_backend_skips_duplicate_media_loads_while_in_flight(tmp_path: Path) -> None:
