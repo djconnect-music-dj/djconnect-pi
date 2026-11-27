@@ -7261,23 +7261,25 @@ BrandWindow {
                 visible: !askDjPanel.searchOpen && askDjPanel.answerContext !== null
                 Layout.fillWidth: true
                 padding: 8
-                RowLayout {
+                ContributionSelection {
+                    id: askDjSelection
                     Layout.fillWidth: true
-                    Text {
-                        text: root.tr("session_question_selected")
-                        color: BrandTheme.colors.text
-                        font.pixelSize: 18
-                        wrapMode: Text.Wrap
-                        Layout.fillWidth: true
+                    property int expiryRevision: 0
+                    previewObjectName: "askDjSelectedContributionPreview"
+                    translate: root.tr
+                    preview: {
+                        void askDjPanel.answerContextRevision
+                        void expiryRevision
+                        const selected = askDjPanel.answerContext
+                        return selected ? djconnect.askDjSelectedContributionPreview(selected.messageId || "",
+                            selected.reference.session_id, selected.reference.entry_id) : ({})
                     }
-                    GlassButton {
-                        objectName: "askDjClearAnswerContext"
-                        iconName: "end"
-                        tertiary: true
-                        Accessible.name: root.tr("session_clear_reference")
-                        ToolTip.text: Accessible.name
-                        ToolTip.visible: hovered
-                        onClicked: askDjPanel.answerContext = null
+                    onCleared: askDjPanel.answerContext = null
+                    Timer {
+                        running: askDjSelection.visible && !!askDjSelection.preview.expires_at
+                        interval: askDjSelection.preview.expires_at ? Math.max(1, Math.min(2147483647, Math.ceil(
+                            (askDjSelection.preview.expires_at - djconnect.askDjHistoryClock()) * 1000))) : 1
+                        onTriggered: askDjSelection.expiryRevision += 1
                     }
                 }
             }

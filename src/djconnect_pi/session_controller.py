@@ -43,6 +43,7 @@ from .session_history_view import (
     opened_entry,
     page_cursor,
     presented_history,
+    retained_contribution_preview,
     search_page,
 )
 from .session_playback_artwork import PlaybackArtwork
@@ -1138,13 +1139,20 @@ class SessionController(QObject):
         if (self._selection.get("kind") != "selected_entry"
                 or not self._foreground or not self._composer_supported()):
             return {}
-        row = self._entry_selection_row(self._selection, self._selection_source)
-        body = text(row.get("text")).strip() if row else ""
-        if not body:
-            return {}
-        return {"text": body, "sources": deepcopy(row.get("display_sources", [])),
-                "requires_spotify_attribution": row.get("requires_spotify_attribution") is True,
-                "spotify_source_url": row.get("spotify_source_url", "")}
+        return retained_contribution_preview(self._entry_selection_row(self._selection, self._selection_source))
+
+    def ask_dj_selection_preview(self, selected, context_rows, *, saved):
+        if saved:
+            return retained_contribution_preview(self._entry_selection_row(selected, "timeline"))
+        now = self._clock.now()
+        preview = next((row["preview"] for row in context_rows
+                        if row.get("session_id") == selected["session_id"] and row.get("entry_id") == selected["entry_id"]
+                        and row.get("state") != "source_withdrawn" and row.get("preview")
+                        and (timestamp(row.get("retained_until")) or 0) > now), {})
+        if preview or not (self._bootstrap_current() and self._bootstrap_private):
+            return preview
+        row = self._entry_selection_row(selected, "timeline") or self._entry_selection_row(selected, "flow")
+        return retained_contribution_preview(row)
 
     @Slot()
     def clearSelection(self):

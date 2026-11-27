@@ -152,6 +152,16 @@ def ask_dj_context_entry(message_id, rows, *, now):
     return {"session_id": session_id, "entry_id": entry_id}
 
 
+def retained_contribution_preview(row):
+    body = text(row.get("text")).strip() if row else ""
+    if not body:
+        return {}
+    return {"text": body[:600], "sources": deepcopy(row.get("display_sources", [])),
+            "expires_at": timestamp(row.get("retained_until")),
+            "requires_spotify_attribution": row.get("requires_spotify_attribution") is True,
+            "spotify_source_url": row.get("spotify_source_url", "")}
+
+
 def contribution_question(caps, language):
     key = "ask_dj_contextual_exploration"
     version = caps.get("contract_versions", {}).get(key)

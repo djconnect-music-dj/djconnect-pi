@@ -80,7 +80,10 @@ from .logging_config import clear_log_files, setup_logging
 from .navigation_gesture import EdgeBackGesture
 from .queue_projection import compact_adjacent_tracks, queue_artist_and_album
 from .session_controller import SessionController
-from .session_history_view import ask_dj_history_matches, contribution_question, conversation_entries, local_highlighted_text
+from .session_history_view import (
+    ask_dj_history_matches, contribution_question, conversation_entries, local_highlighted_text,
+    presented_history, retained_contribution_preview,
+)
 from .session_playback_control import favorite_observation, output_id
 from .session_playback_control import reference as session_playback_reference
 from .session_projection import active_session, history_page, safe_link, timestamp, track_insight_verified_credit, volume_observation
@@ -698,6 +701,18 @@ class DJConnectBackend(QObject):
         if reference and (reference["session_id"], reference["entry_id"]) in self._ask_dj_withdrawn_entries:
             return {}
         return reference
+
+    @Slot(str, str, str, result="QVariantMap")
+    def askDjSelectedContributionPreview(self, message_id, session_id, entry_id):
+        selected = {"session_id": session_id, "entry_id": entry_id}
+        if message_id:
+            if self.askDjContextEntry(message_id) != selected:
+                return {}
+        elif not self.canAskAboutSavedEntry(session_id, entry_id):
+            return {}
+        page = self._ask_dj_context_page
+        rows = page[2] if page and page[0] == self._private_read_context() else []
+        return self._session_controller.ask_dj_selection_preview(selected, rows, saved=not message_id)
 
     @Slot()
     def cancelAskDjHistoryOpen(self):
@@ -3988,9 +4003,11 @@ class DJConnectBackend(QObject):
                                         now=session._clock.now())
                     keys = ("session_id", "entry_id", "kind", "role", "origin_message_id", "retained_until", "state")
                     dialogue = conversation_entries(page)
-                    rows = [{key: row[key] for key in keys if key in row}
-                            for row in dialogue + [entry for entry in page["entries"]
-                                                  if entry.get("state") == "source_withdrawn"]
+                    rows = [{**{key: row[key] for key in keys if key in row},
+                             "preview": retained_contribution_preview(row)}
+                            for row in presented_history({"entries": dialogue + [
+                                entry for entry in page["entries"] if entry.get("state") == "source_withdrawn"
+                            ]})["entries"]
                             if row["kind"] == "conversation_dj"]
             else:
                 destination = ""

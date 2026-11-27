@@ -3553,50 +3553,13 @@ Item {
                 onExampleChosen: entryId => screen.backend.selectAskDjHelp(entryId, screen.draftEditRevision)
                 onSuggestionChosen: entryId => screen.backend.selectAskDjSuggestion(entryId, screen.draftEditRevision)
             }
-            RowLayout {
+            ContributionSelection {
                 visible: !!screen.state.selection.kind
                 Layout.fillWidth: true
-                readonly property var preview: screen.state.selection_preview || ({})
-                id: selectedContribution
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    Text {
-                        text: screen.tr("session_question_selected")
-                        color: BrandTheme.colors.muted
-                        font.pixelSize: 18
-                        wrapMode: Text.WordWrap
-                        textFormat: Text.PlainText
-                        Layout.fillWidth: true
-                    }
-                    Text {
-                        objectName: "sessionSelectedContributionPreview"
-                        visible: text.length > 0
-                        text: selectedContributionSources.ready ? selectedContribution.preview.text || "" : ""
-                        color: BrandTheme.colors.text
-                        font.pixelSize: 18
-                        textFormat: Text.PlainText
-                        wrapMode: Text.Wrap
-                        maximumLineCount: 3
-                        elide: Text.ElideRight
-                        Layout.fillWidth: true
-                    }
-                    ScrollView {
-                        visible: !!selectedContribution.preview.text
-                            && (selectedContribution.preview.requires_spotify_attribution
-                                || (selectedContribution.preview.sources || []).length > 0)
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: Math.min(72, selectedContributionSources.implicitHeight)
-                        contentWidth: availableWidth
-                        clip: true
-                        SessionAttribution {
-                            id: selectedContributionSources
-                            sources: selectedContribution.preview.sources || []
-                            requiresSpotify: selectedContribution.preview.requires_spotify_attribution || false
-                            spotifyURL: selectedContribution.preview.spotify_source_url || ""
-                        }
-                    }
-                }
-                GlassButton { iconName: "end"; Accessible.name: screen.tr("session_clear_reference"); onClicked: screen.owner.clearSelection() }
+                preview: screen.state.selection_preview || ({})
+                previewObjectName: "sessionSelectedContributionPreview"
+                translate: screen.tr
+                onCleared: screen.owner.clearSelection()
             }
             TextField {
                 id: composeInput
