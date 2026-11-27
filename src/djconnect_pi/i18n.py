@@ -2208,6 +2208,7 @@ _PLAYBACK_CONTROL_TRANSLATIONS = {
     ),
     "session_track_title_unknown": ("Unknown title", "Titel onbekend", "Unbekannter Titel", "Titre inconnu", "Título desconocido"),
     "session_output_current": ("Current", "Huidig", "Aktuell", "Actuelle", "Actual"),
+    "playback_output_recently_seen": ("Recently seen", "Recent gezien", "Kürzlich gesehen", "Vu récemment", "Visto recientemente"),
     "session_output_unavailable": ("Available outputs could not be confirmed.", "De beschikbare uitvoer kon niet worden bevestigd.", "Verfügbare Ausgaben konnten nicht bestätigt werden.", "Les sorties disponibles n’ont pas pu être confirmées.", "No se pudieron confirmar las salidas disponibles."),
     "session_output_empty": ("No other outputs are available.", "Er zijn geen andere uitvoerapparaten beschikbaar.", "Keine weiteren Ausgaben verfügbar.", "Aucune autre sortie disponible.", "No hay otras salidas disponibles."),
     "playback_outputs_none_found": ("No output devices found.", "Geen uitvoerapparaten gevonden.", "Keine Ausgabegeräte gefunden.", "Aucune sortie audio trouvée.", "No se encontraron dispositivos de salida."),

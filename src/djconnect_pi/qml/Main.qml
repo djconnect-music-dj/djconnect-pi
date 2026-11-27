@@ -2328,13 +2328,17 @@ BrandWindow {
                                 Layout.fillWidth: true
                             }
                             Text {
-                                objectName: "controlOutputChoiceVolume"
+                                objectName: "controlOutputChoiceStatus"
                                 readonly property var percent: controlOutputRow.choice && controlOutputRow.choice.volume_percent
+                                readonly property bool cached: !!controlOutputRow.choice && controlOutputRow.choice.cached === true
                                 visible: controlOutputRow.index > 0
-                                text: typeof percent === "number" ? percent + "%" : "–"
+                                text: cached ? root.tr("playback_output_recently_seen")
+                                    : typeof percent === "number" ? percent + "%" : "–"
                                 textFormat: Text.PlainText
                                 color: BrandTheme.colors.muted
                                 font.pixelSize: 18
+                                elide: Text.ElideRight
+                                Layout.maximumWidth: controlOutputRow.width * 0.45
                             }
                         }
                     }
