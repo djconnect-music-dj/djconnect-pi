@@ -255,6 +255,7 @@ Rectangle {
     }
 
     function selectGame(index) {
+        if (index === gameIndex) return
         gameIndex = index
         resetRound()
     }
