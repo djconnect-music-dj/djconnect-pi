@@ -6,6 +6,7 @@ import "BrandTheme.js" as BrandTheme
 Button {
     id: control
     property string iconName: ""
+    property string outputType: ""
     property bool busy: false
     property int textAlignment: Text.AlignHCenter
     property bool wrapText: false
@@ -45,6 +46,7 @@ Button {
         FeatureIcon {
             visible: !control.busy && control.iconName.length > 0
             iconName: control.iconName
+            outputType: control.outputType
             iconColor: control.foregroundColor
             Layout.preferredWidth: 26
             Layout.preferredHeight: 26

@@ -2044,7 +2044,11 @@ BrandWindow {
                 Layout.alignment: Qt.AlignHCenter
                 Layout.preferredWidth: Math.min(parent.width, 416)
                 Layout.preferredHeight: 52
-                iconName: "speaker"
+                readonly property var reportedChoice: djconnect.outputDeviceId
+                    ? djconnect.outputDeviceChoices.find(choice => choice.value === djconnect.outputDeviceId && choice.cached !== true)
+                    : null
+                iconName: "output_device"
+                outputType: reportedChoice && typeof reportedChoice.type === "string" ? reportedChoice.type : ""
                 text: reportedOutput || root.tr("session_output_choose")
                 Accessible.name: reportedOutput ? root.tr("output_device") + ": " + reportedOutput : text
                 onClicked: root.activeScreen = "control"
