@@ -21,6 +21,12 @@ def test_translation_languages_have_same_keys() -> None:
         assert set(TRANSLATIONS[language]) == expected
 
 
+def test_privacy_and_legal_notices_are_localized_in_every_supported_language() -> None:
+    keys = ("privacy_data_body", "privacy_tokens_body", "privacy_ai_body", "legal_independence", "legal_trademarks")
+    for key in keys:
+        assert len({TRANSLATIONS[language][key] for language in SUPPORTED_LANGUAGES}) == len(SUPPORTED_LANGUAGES)
+
+
 def test_translation_placeholders_match_english() -> None:
     formatter = Formatter()
     expected = {

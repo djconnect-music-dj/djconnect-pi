@@ -2355,7 +2355,43 @@ for _key, _values in _SESSION_DELETE_TRANSLATIONS.items():
         TRANSLATIONS[_language][_key] = _value
 
 # Applicable Privacy/Legal prose from protected Apple UI e106a467.
-_APPLE_INFORMATION_COPY = {'privacy_data_body': ('DJConnect does not collect, sell, or process personal data in the app.', 'DJConnect verzamelt, verkoopt of verwerkt zelf geen persoonsgegevens in de app.', 'DJConnect does not collect, sell, or process personal data in the app.', 'DJConnect does not collect, sell, or process personal data in the app.', 'DJConnect does not collect, sell, or process personal data in the app.'), 'privacy_tokens_body': ("Device tokens are stored locally in the app's private storage. Diagnostics are only shared when you copy them or open a GitHub issue yourself.", 'Device-tokens worden lokaal in de private app-opslag bewaard. Diagnostiek wordt alleen gedeeld wanneer je die zelf kopieert of een GitHub issue opent.', "Device tokens are stored locally in the app's private storage. Diagnostics are only shared when you copy them or open a GitHub issue yourself.", "Device tokens are stored locally in the app's private storage. Diagnostics are only shared when you copy them or open a GitHub issue yourself.", "Device tokens are stored locally in the app's private storage. Diagnostics are only shared when you copy them or open a GitHub issue yourself."), 'privacy_ai_body': ('AI and Assist answers can be incorrect and depend on your own Home Assistant and Assist configuration.', 'AI- en Assist-antwoorden kunnen onjuist zijn en hangen af van je eigen Home Assistant- en Assist-configuratie.', 'AI and Assist answers can be incorrect and depend on your own Home Assistant and Assist configuration.', 'AI and Assist answers can be incorrect and depend on your own Home Assistant and Assist configuration.', 'AI and Assist answers can be incorrect and depend on your own Home Assistant and Assist configuration.'), 'legal_independence': ('DJConnect is not affiliated with, endorsed by, or sponsored by Apple, Home Assistant, or any supported music service.', 'DJConnect is niet gelieerd aan, goedgekeurd door of gesponsord door Apple, Home Assistant of ondersteunde muziekdiensten.', 'DJConnect is not affiliated with, endorsed by, or sponsored by Apple, Home Assistant, or any supported music service.', 'DJConnect is not affiliated with, endorsed by, or sponsored by Apple, Home Assistant, or any supported music service.', 'DJConnect is not affiliated with, endorsed by, or sponsored by Apple, Home Assistant, or any supported music service.'), 'legal_trademarks': ('Home Assistant is a trademark of the Open Home Foundation. Other service names are trademarks of their respective owners.', 'Home Assistant is een handelsmerk van de Open Home Foundation. Andere dienstnamen zijn handelsmerken van hun respectieve eigenaren.', 'Home Assistant is a trademark of the Open Home Foundation. Other service names are trademarks of their respective owners.', 'Home Assistant is a trademark of the Open Home Foundation. Other service names are trademarks of their respective owners.', 'Home Assistant is a trademark of the Open Home Foundation. Other service names are trademarks of their respective owners.')}
+_APPLE_INFORMATION_COPY = {
+    "privacy_data_body": (
+        "DJConnect does not collect, sell, or process personal data in the app.",
+        "DJConnect verzamelt, verkoopt of verwerkt zelf geen persoonsgegevens in de app.",
+        "DJConnect erhebt, verkauft oder verarbeitet in der App keine personenbezogenen Daten.",
+        "DJConnect ne collecte, ne vend et ne traite aucune donnée personnelle dans l’application.",
+        "DJConnect no recopila, vende ni trata datos personales en la aplicación.",
+    ),
+    "privacy_tokens_body": (
+        "Device tokens are stored locally in the app's private storage. Diagnostics are only shared when you copy them or open a GitHub issue yourself.",
+        "Device-tokens worden lokaal in de private app-opslag bewaard. Diagnostiek wordt alleen gedeeld wanneer je die zelf kopieert of een GitHub issue opent.",
+        "Gerätetoken werden lokal im privaten Speicher der App abgelegt. Diagnosedaten werden nur geteilt, wenn du sie kopierst oder selbst ein GitHub-Issue öffnest.",
+        "Les jetons d’appareil sont stockés localement dans l’espace de stockage privé de l’application. Les données de diagnostic sont partagées uniquement si vous les copiez ou ouvrez vous-même un ticket GitHub.",
+        "Los tokens de dispositivo se guardan localmente en el almacenamiento privado de la aplicación. Los datos de diagnóstico solo se comparten si los copias o abres tú una incidencia en GitHub.",
+    ),
+    "privacy_ai_body": (
+        "AI and Assist answers can be incorrect and depend on your own Home Assistant and Assist configuration.",
+        "AI- en Assist-antwoorden kunnen onjuist zijn en hangen af van je eigen Home Assistant- en Assist-configuratie.",
+        "Antworten von KI und Assist können fehlerhaft sein und hängen von deiner eigenen Konfiguration für Home Assistant und Assist ab.",
+        "Les réponses de l’IA et d’Assist peuvent être inexactes et dépendent de votre configuration de Home Assistant et d’Assist.",
+        "Las respuestas de IA y Assist pueden contener errores y dependen de tu propia configuración de Home Assistant y Assist.",
+    ),
+    "legal_independence": (
+        "DJConnect is not affiliated with, endorsed by, or sponsored by Apple, Home Assistant, or any supported music service.",
+        "DJConnect is niet gelieerd aan, goedgekeurd door of gesponsord door Apple, Home Assistant of ondersteunde muziekdiensten.",
+        "DJConnect ist mit Apple, Home Assistant oder unterstützten Musikdiensten nicht verbunden und wird von ihnen weder offiziell empfohlen noch gesponsert.",
+        "DJConnect n’est affilié ni à Apple, ni à Home Assistant, ni aux services musicaux pris en charge. Ces entités ne l’approuvent et ne le parrainent pas.",
+        "DJConnect no está afiliado a Apple, Home Assistant ni a ningún servicio de música compatible, y ninguno de ellos lo avala ni lo patrocina.",
+    ),
+    "legal_trademarks": (
+        "Home Assistant is a trademark of the Open Home Foundation. Other service names are trademarks of their respective owners.",
+        "Home Assistant is een handelsmerk van de Open Home Foundation. Andere dienstnamen zijn handelsmerken van hun respectieve eigenaren.",
+        "Home Assistant ist eine Marke der Open Home Foundation. Andere Dienstnamen sind Marken ihrer jeweiligen Inhaber.",
+        "Home Assistant est une marque de l’Open Home Foundation. Les autres noms de services sont des marques de leurs propriétaires respectifs.",
+        "Home Assistant es una marca comercial de Open Home Foundation. Los nombres de otros servicios son marcas de sus respectivos titulares.",
+    ),
+}
 for _key, _values in _APPLE_INFORMATION_COPY.items():
     for _locale, _value in zip(("en", "nl", "de", "fr", "es"), _values, strict=True):
         TRANSLATIONS[_locale][_key] = _value
