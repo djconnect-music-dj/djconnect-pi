@@ -4269,7 +4269,7 @@ def test_backend_queue_item_play_uses_play_context_at_command(tmp_path: Path) ->
     parser = HAClient(backend.cfg)
     calls: list[tuple[str, dict[str, object]]] = []
     runs: list[str] = []
-    backend._refresh_worker = lambda: None  # type: ignore[method-assign]
+    backend._refresh_worker = Mock()
 
     def run_now(status: str, worker, **_: object) -> None:
         runs.append(status)
@@ -4314,7 +4314,7 @@ def test_backend_media_item_play_does_not_navigate_to_now_playing(tmp_path: Path
     parser = HAClient(backend.cfg)
     wakes: list[tuple[int, bool]] = []
     backend.temporaryWakeRequested.connect(lambda seconds, navigate: wakes.append((seconds, navigate)))
-    backend._refresh_worker = lambda: None  # type: ignore[method-assign]
+    backend._refresh_worker = Mock()
 
     def run_now(status: str, worker, **_: object) -> None:
         worker()
@@ -4336,6 +4336,23 @@ def test_backend_media_item_play_does_not_navigate_to_now_playing(tmp_path: Path
     QCoreApplication.processEvents()
 
     assert wakes == [(10, False)]
+
+
+def test_playlist_start_reads_back_playback_even_if_the_command_returns_a_track(tmp_path: Path) -> None:
+    ensure_app()
+    backend = DJConnectBackend(tmp_path / "config.json")
+    backend.client.command = Mock(return_value={"success": True, "playback": {"title": "Old track"}})
+    backend._executor.submit = Mock()
+    backend._load_queue_worker = Mock(side_effect=DJConnectError("queue temporarily unavailable"))
+    backend._refresh_worker = Mock()
+
+    backend.playMediaItem("start_playlist", json.dumps({"uri": "spotify:playlist:fixture"}))
+    ticket = backend._private_read_context()
+    backend._executor.submit.call_args.args[0]()
+
+    backend.client.command.assert_called_once()
+    backend._load_queue_worker.assert_called_once_with(ticket=ticket)
+    backend._refresh_worker.assert_called_once_with(ticket=ticket)
 
 
 def test_backend_playlists_are_emitted_before_artwork_cache(tmp_path: Path, monkeypatch) -> None:

@@ -3652,11 +3652,20 @@ class DJConnectBackend(QObject):
         self._persist_backend_summary()
         self._mediaPlaybackObserved.emit(scope, self.client.playback_from_status(data) if has_playback else None,
                                          command == "play_context_at")
-        if not self._media_playback_current(scope):
-            return
-        self._load_queue_worker()
-        if self._media_playback_current(scope) and (command == "play_context_at" or not has_playback):
-            self._refresh_worker()
+        for read in (self._load_queue_worker, self._refresh_worker):
+            if not self._media_playback_current(scope):
+                return
+            try:
+                if scope is None:
+                    read()
+                else:
+                    read(ticket=scope[0])
+            except (AuthenticationError, ProtocolVersionMismatch):
+                if self._media_playback_current(scope):
+                    raise
+                return
+            except (DJConnectError, requests.RequestException) as exc:
+                _LOGGER.debug("Media item readback failed: %s", type(exc).__name__)
         _LOGGER.info("Media item command %s completed in %.0fms", command, _elapsed_ms(started))
 
     def _set_output_worker(self, value: str, previous: str) -> None:
