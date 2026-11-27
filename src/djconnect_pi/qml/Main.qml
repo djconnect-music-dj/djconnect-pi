@@ -2259,6 +2259,7 @@ BrandWindow {
                     id: controlOutputDeviceCombo
                     objectName: "controlOutputDeviceCombo"
                     property string noOutputDeviceLabel: root.tr("none")
+                    readonly property int confirmedOutputIndex: selectedIndex()
                     property var deviceChoices: {
                         root.trVersion
                         const choices = djconnect.outputDeviceChoices
@@ -2305,18 +2306,20 @@ BrandWindow {
                     }
                     model: deviceChoices
                     textRole: "name"
-                    displayText: displayName(currentIndex)
+                    displayText: displayName(confirmedOutputIndex)
                     enabled: djconnect.pendingOutputChoiceName.length === 0 && !djconnect.controlOutputsRefreshing
                     visible: djconnect.outputDeviceChoices.length > 0
-                    currentIndex: selectedIndex()
+                    currentIndex: confirmedOutputIndex
                     font.pixelSize: 26
                     delegate: ItemDelegate {
                         id: controlOutputRow
                         required property int index
                         readonly property var choice: controlOutputDeviceCombo.deviceChoices[index]
+                        readonly property bool confirmedOutput: index > 0 && index === controlOutputDeviceCombo.confirmedOutputIndex
                         width: controlOutputDeviceCombo.width
                         text: controlOutputDeviceCombo.displayName(index)
                         font.pixelSize: 28
+                        highlighted: confirmedOutput || index === controlOutputDeviceCombo.highlightedIndex
                         contentItem: RowLayout {
                             spacing: 12
                             Text {
@@ -2340,13 +2343,21 @@ BrandWindow {
                                 elide: Text.ElideRight
                                 Layout.maximumWidth: controlOutputRow.width * 0.45
                             }
+                            Text {
+                                objectName: "controlOutputChoiceCurrent"
+                                visible: controlOutputRow.confirmedOutput
+                                text: "✓"
+                                color: BrandTheme.colors.actionAccent
+                                font.pixelSize: 22
+                            }
                         }
                     }
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     onActivated: function(index) {
                         if (index === 0) djconnect.setOutputDevice("")
-                        else djconnect.setOutputChoice(controlOutputDeviceCombo.choiceValue(controlOutputDeviceCombo.deviceChoices[index]))
+                        else if (index !== confirmedOutputIndex)
+                            djconnect.setOutputChoice(choiceValue(deviceChoices[index]))
                     }
                 }
 
