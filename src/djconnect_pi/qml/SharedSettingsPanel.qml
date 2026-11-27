@@ -31,6 +31,10 @@ ColumnLayout {
         return list.map(function(value) { return { value: value, label_key: "shared_" + field + "_" + value } })
     }
     function label(item) { return item.label_key ? tr(item.label_key) : item.label }
+    function canChoose(field, item) {
+        return field !== "voice" || item.value.kind === "provider_default" || !draft.gender
+            || draft.gender === "default" || item.gender === draft.gender
+    }
     function selectedIndex(field) {
         var list = options(field)
         for (var i = 0; i < list.length; ++i)
@@ -152,8 +156,13 @@ ColumnLayout {
                     text: editor.label(modelData)
                     font.pixelSize: 24
                     highlighted: choice.highlightedIndex === index
+                    enabled: editor.canChoose(fieldRow.modelData, modelData)
                 }
-                onActivated: function(index) { editor.choose(fieldRow.modelData, model[index].value) }
+                onActivated: function(index) {
+                    const item = model[index]
+                    if (item && editor.canChoose(fieldRow.modelData, item)) editor.choose(fieldRow.modelData, item.value)
+                    else currentIndex = Qt.binding(() => editor.selectedIndex(fieldRow.modelData))
+                }
             }
         }
     }

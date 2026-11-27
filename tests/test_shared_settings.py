@@ -86,6 +86,14 @@ def test_track_insight_style_changes_on_confirmed_profile_revision_only(owner):
     assert client.read()["track_insight_style"] != choices["track_insight_style"]
 
 
+def test_voice_options_project_provider_gender_without_changing_write_values(owner):
+    client, _, _ = owner
+    options = client.read()["options"]["voice"]
+    assert options[0]["value"] == {"kind": "provider_default"}
+    assert [item["gender"] for item in options[1:4]] == ["male", "female", ""]
+    assert all("gender" not in item["value"] for item in options)
+
+
 def test_legacy_unknown_mood_stays_a_proposal_and_requires_six_explicit_choices(
     owner, monkeypatch
 ):

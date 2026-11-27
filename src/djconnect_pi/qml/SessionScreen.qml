@@ -4040,6 +4040,7 @@ Item {
         readonly property var options: (screen.backend.demoMode
             ? screen.owner.demoOptions : screen.backend.sharedSettings.options || {})[field] || []
         readonly property string selectedValue: screen.toolbarValue(field)
+        readonly property string voiceGender: (screen.backend.sharedSettings.values || {}).gender || "default"
         readonly property color selectionColor: MoodTheme.moodColor(screen.toolbarValue("mood"), "gradientStart")
         readonly property color selectedForeground: selectionColor.r * 0.21 + selectionColor.g * 0.72 + selectionColor.b * 0.07 > 0.55
             ? "#101433" : BrandTheme.colors.text
@@ -4054,6 +4055,10 @@ Item {
                 screen.backend.saveSharedSettings(patch)
             }
             close()
+        }
+        function voiceOptionAllowed(option) {
+            return field !== "voice" || option.value.kind === "provider_default"
+                || voiceGender === "default" || option.gender === voiceGender
         }
 
         readonly property bool canSubmit: choices.visible && screen.state.runtime_state === "active"
@@ -4145,9 +4150,9 @@ Item {
                         required property var modelData
                         text: modelData.label_key ? screen.tr(modelData.label_key) : modelData.label || ""
                         checked: choices.selectedValue === modelData.value
-                        enabled: choices.canSubmit
+                        enabled: choices.canSubmit && choices.voiceOptionAllowed(modelData)
                         objectName: "sessionToolbarOption"
-                        onClicked: choices.submit(modelData.value)
+                        onClicked: if (choices.voiceOptionAllowed(modelData)) choices.submit(modelData.value)
                     }
                 }
             }

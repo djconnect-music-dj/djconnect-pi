@@ -350,7 +350,9 @@ class SharedSettingsClient:
                     selection({**snap["defaults"], "voice": value})
                 except SettingsError:
                     continue
-                voices.append({"label": v["name"][:256], "value": value})
+                gender = v.get("gender")
+                voices.append({"label": v["name"][:256], "value": value,
+                               "gender": gender if gender in ("male", "female") else ""})
         options["voice"] = voices
         return {
             "edit_token": self.edit_token(),
