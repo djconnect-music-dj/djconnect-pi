@@ -7054,10 +7054,11 @@ def _music_dna_cards(profile: dict[str, object], ha_url: str) -> list[dict[str, 
         return result
 
     def percentages(items, field, labels):
-        return [{"labelKey": labels.get(str(item[field]).lower(), ""), "title": str(item[field]),
+        return [{"labelKey": labels.get(item[field].strip().casefold(), ""), "title": item[field].strip(),
                  "percent": item["percent"]}
                 for item in items[:7] if isinstance(item, dict) and isinstance(item.get(field), str)
-                and type(item.get("percent")) in (int, float) and 0 <= item["percent"] <= 100] if isinstance(items, list) else []
+                and item[field].strip() and type(item.get("percent")) in (int, float)
+                and 0 <= item["percent"] <= 100] if isinstance(items, list) else []
 
     zones = {zone: "mood_" + zone for zone in ("chill", "groove", "energy", "party")}
     dayparts = {value: "music_dna_card_" + key for key, value in

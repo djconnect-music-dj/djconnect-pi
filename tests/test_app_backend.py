@@ -701,7 +701,7 @@ def test_music_dna_parser_renders_optional_blocks_and_hides_empty_cards() -> Non
                 "listening_rhythm": {"sample_count": 3, "top_daypart": " Avond ", "top_weekday": "vrijdag",
                                      "dayparts": [{"daypart": "avond", "percent": 100}]},
                 "mood_mix": {"sample_count": 4, "average": 45, "top_zone": " Groove ",
-                             "zones": [{"zone": "groove", "percent": 25}]},
+                             "zones": [{"zone": " Groove ", "percent": 25}]},
                 "repeat_magnets": {"eligible": True, "items": [{"title": "Ever Again"}]},
                 "explicit_positives": {"eligible": True, "items": ["Saved favorites"]},
                 "taste_anchors": {"eligible": True, "items": ["Nordic pop"]},
@@ -726,7 +726,7 @@ def test_music_dna_parser_renders_optional_blocks_and_hides_empty_cards() -> Non
     assert headline["subtitleKey"] == "music_dna_card_friday"
     assert meter["labelKey"] == "music_dna_card_evening"
     assert cards["mood_mix"]["valueKey"] == cards["mood_mix"]["icon"] == "mood_groove"
-    assert cards["mood_mix"]["rows"][0]["percent"] == 25
+    assert cards["mood_mix"]["rows"][0] == {"labelKey": "mood_groove", "title": "Groove", "percent": 25}
     assert cards["top_tracks"]["groups"][0]["key"] == "music_dna_card_short_term"
     assert cards["top_tracks"]["groups"][0]["rows"][0]["subtitle"] == "B"
     assert [(group["key"], [row["title"] for row in group["rows"]]) for group in cards["top_artists"]["groups"]] == [

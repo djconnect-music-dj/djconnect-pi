@@ -5367,6 +5367,7 @@ BrandWindow {
         id: meter
         required property real value
         property string label: ""
+        property color tint: BrandTheme.colors.actionAccent
         readonly property real roundedValue: Math.round(value * 10) / 10
         spacing: 5
         RowLayout {
@@ -5389,7 +5390,13 @@ BrandWindow {
             Layout.fillWidth: true
             implicitHeight: 7; radius: 4
             color: "#30FFFFFF"
-            Rectangle { width: parent.width * meter.value / 100; height: parent.height; radius: 4; color: BrandTheme.colors.actionAccent }
+            Rectangle {
+                objectName: "musicDnaMeterFill"
+                width: parent.width * meter.value / 100
+                height: parent.height
+                radius: 4
+                color: meter.tint
+            }
         }
     }
 
@@ -5402,6 +5409,8 @@ BrandWindow {
             : entry.value || (typeof entry.count === "number"
                 ? root.tr("music_dna_card_plays").replace("%1", entry.count) : "")
         readonly property bool percentage: typeof entry.percent === "number"
+        readonly property string moodZone: (entry.labelKey || "").startsWith("mood_")
+            ? MoodTheme.key(entry.labelKey.slice(5)) : "default"
         Layout.fillWidth: true
         spacing: 10
         Text {
@@ -5425,6 +5434,8 @@ BrandWindow {
             Layout.fillWidth: true
             value: dnaRow.percentage ? dnaRow.entry.percent : 0
             label: dnaRow.title
+            tint: dnaRow.moodZone === "default" ? BrandTheme.colors.actionAccent
+                : MoodTheme.moodColor(dnaRow.moodZone, "gradientStart")
         }
         ColumnLayout {
             visible: !dnaRow.percentage
