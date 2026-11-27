@@ -1387,7 +1387,7 @@ BrandWindow {
                                 FeatureIcon {
                                     objectName: "mediaPlayIndicator"
                                     anchors.fill: parent
-                                    visible: panel.trackQueue ? !mediaRow.starting : mediaRow.enabled
+                                    visible: !mediaRow.starting
                                     iconName: "play"
                                 }
                                 BusyIndicator {
