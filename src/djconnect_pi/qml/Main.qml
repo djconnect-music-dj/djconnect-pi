@@ -2619,10 +2619,13 @@ BrandWindow {
             id: musicDnaImportDialog
             objectName: "musicDnaImportDialog"
             property int profileRevision: 0
+            readonly property bool isCurrent: settingsPanel.visible && profileRevision === root.exportProfileRevision
+                && root.canTransferProfileData && djconnect.musicDnaLoaded && djconnect.musicDnaEnabled
+            onIsCurrentChanged: if (!isCurrent && visible) close()
             title: root.tr("music_dna_import")
             options: FileDialog.DontUseNativeDialog
             nameFilters: ["JSON (*.json)"]
-            onAccepted: djconnect.prepareMusicDnaImport(selectedFile, profileRevision)
+            onAccepted: if (isCurrent) djconnect.prepareMusicDnaImport(selectedFile, profileRevision)
         }
 
         GlassPopup {
@@ -3239,6 +3242,7 @@ BrandWindow {
                 Layout.preferredHeight: 58
                 enabled: settingsPanel.canTransferMusicDna
                 onClicked: {
+                    if (!enabled) return
                     musicDnaImportDialog.profileRevision = djconnect.musicDnaContextRevision
                     musicDnaImportDialog.open()
                 }
