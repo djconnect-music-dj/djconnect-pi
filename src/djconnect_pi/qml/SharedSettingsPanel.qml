@@ -11,7 +11,11 @@ ColumnLayout {
     property bool dirty: false
     property var changedFields: ({})
     property bool saving: false
-    readonly property bool progressVisible: backend.sharedSettingsBusy && (saving || !backend.sharedSettings.values)
+    property bool checkingOutcome: false
+    readonly property bool outcomeUncertain: backend.sharedSettings.error === "uncertain"
+        || !!backend.sharedSettings.operation_pending || !!backend.sharedSettings.operation_unknown
+    readonly property bool progressVisible: backend.sharedSettingsBusy
+        && (saving || checkingOutcome || !backend.sharedSettings.values)
     readonly property var allFields: ["persona", "voice", "gender", "mood", "presence", "announcement_output"]
     property var fields: allFields
     readonly property var displayedFields: backend.sharedSettings.selection_required ? allFields : fields
@@ -62,8 +66,7 @@ ColumnLayout {
         if (error === "denied") return tr("shared_error_denied")
         if (error === "conflict") return tr("shared_error_conflict")
         if (error === "selection_required") return tr("shared_selection_required")
-        if (error === "uncertain" || backend.sharedSettings.operation_pending || backend.sharedSettings.operation_unknown)
-            return tr("shared_error_uncertain")
+        if (outcomeUncertain) return tr("shared_error_uncertain")
         if (error === "offline") return tr("shared_error_offline")
         if (error) return tr("shared_error_rejected")
         return ""
@@ -72,6 +75,10 @@ ColumnLayout {
     Connections {
         target: editor.backend
         function onSharedSettingsChanged() {
+            if (editor.checkingOutcome && !editor.backend.sharedSettingsBusy) {
+                editor.checkingOutcome = false
+                if (editor.backend.sharedSettings.available && !editor.outcomeUncertain) editor.loadConfirmed()
+            }
             if (editor.saving && !editor.backend.sharedSettingsBusy) {
                 editor.saving = false
                 if (editor.backend.sharedSettings.available && !editor.backend.sharedSettings.operation_pending &&
@@ -221,14 +228,17 @@ ColumnLayout {
     RowLayout {
         Layout.fillWidth: true
         Button {
-            text: editor.tr("shared_reload")
+            objectName: "sharedReload"
+            text: editor.tr(editor.outcomeUncertain ? "shared_check_outcome" : "shared_reload")
             Layout.fillWidth: true
             Layout.minimumHeight: 54
             font.pixelSize: 22
             enabled: !editor.backend.sharedSettingsBusy
             onClicked: {
-                editor.dirty = false
+                editor.checkingOutcome = editor.outcomeUncertain
+                if (!editor.checkingOutcome) editor.dirty = false
                 editor.backend.pollSharedSettings()
+                if (!editor.backend.sharedSettingsBusy) editor.checkingOutcome = false
             }
         }
         GlassButton {

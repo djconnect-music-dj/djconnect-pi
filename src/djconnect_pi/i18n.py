@@ -1225,6 +1225,13 @@ _SHARED_SETTINGS_TRANSLATIONS = {
         'Actualiser',
         'Actualizar',
     ),
+    'shared_check_outcome': (
+        'Check outcome',
+        'Controleer uitkomst',
+        'Ergebnis prüfen',
+        'Vérifier le résultat',
+        'Comprobar resultado',
+    ),
     'shared_apply': (
         'Confirm choices',
         'Keuzes bevestigen',
@@ -1261,11 +1268,11 @@ _SHARED_SETTINGS_TRANSLATIONS = {
         'Los ajustes o la sesión cambiaron en otro lugar. Actualiza antes de volver a confirmar.',
     ),
     'shared_error_uncertain': (
-        'The result has not been confirmed. Reload to check; your change will not be sent again automatically.',
-        'Het resultaat is nog niet bevestigd. Vernieuw om te controleren; je wijziging wordt niet automatisch opnieuw verstuurd.',
-        'Das Ergebnis ist noch nicht bestätigt. Lade zum Prüfen neu; deine Änderung wird nicht automatisch erneut gesendet.',
-        'Le résultat n’est pas confirmé. Actualisez pour vérifier ; votre modification ne sera pas renvoyée automatiquement.',
-        'El resultado no está confirmado. Actualiza para comprobarlo; el cambio no se enviará otra vez automáticamente.',
+        'The result is still uncertain. Check the outcome in DJ settings.',
+        'De uitkomst is nog onzeker. Controleer deze in de DJ-instellingen.',
+        'Das Ergebnis ist noch unklar. Prüfe es in den DJ-Einstellungen.',
+        'Le résultat est encore incertain. Vérifiez-le dans les réglages DJ.',
+        'El resultado sigue siendo incierto. Compruébalo en los ajustes de DJ.',
     ),
     'shared_error_offline': (
         'Settings are temporarily unreachable. Your last confirmed choices have not been changed.',
