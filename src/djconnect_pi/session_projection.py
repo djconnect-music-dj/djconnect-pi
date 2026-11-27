@@ -1,12 +1,13 @@
 """Closed, ephemeral Session projections. Historical rows never become live grants."""
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 from functools import lru_cache
 from itertools import pairwise
 from urllib.parse import urlsplit
 
-from .session_transport import SessionError, identifier
+from .session_transport import SessionError, identifier, moment_insight_reference
 
 HISTORY_KINDS = {"playback_observed", "dj_moment", "conversation_user", "conversation_dj", "dj_publication", "dj_silence"}
 ARCHIVE_BASES = {"cc0_normalized_fields_v1", "runtime_authored_direction_v1", "owner_metadata_narration_v1", "public_artist_narration_v1"}
@@ -43,8 +44,36 @@ def safe_link(value):
         return ""
 
 
+def track_insight_verified_credit(analysis: dict[str, object]) -> dict[str, str]:
+    if analysis.get("basis") != "qualified_credit_and_interpretation_v1" or analysis.get("measured_audio") is not False:
+        return {}
+    context = analysis.get("verified_context")
+    source = analysis.get("source_attribution")
+    if not isinstance(context, str) or not isinstance(source, dict) or source.get("license") != "CC0-1.0":
+        return {}
+    context = context.strip()
+    if not 1 <= len(context) <= 16_384 or (context[0], context[-1]) in {("{", "}"), ("[", "]")}:
+        return {}
+    provider = source.get("provider")
+    url = safe_link(source.get("url"))
+    if not isinstance(provider, str) or not 1 <= len(provider.strip()) <= 128 or not url:
+        return {}
+    return {"context": context, "provider": provider.strip(), "url": url, "license": "CC0-1.0"}
+
+
 def text(value, maximum=32768):
     return value if isinstance(value, str) and len(value) <= maximum else ""
+
+
+def moment_insight_palette(visual):
+    if (not isinstance(visual, dict) or visual.get("basis") != "decorative_unmeasured_v1"
+            or visual.get("audio_reactive") is not False):
+        return []
+    colors = visual.get("palette")
+    if (not isinstance(colors, list) or len(colors) != 3
+            or not all(isinstance(color, str) and re.fullmatch(r"#[0-9a-fA-F]{6}", color) for color in colors)):
+        return []
+    return colors.copy()
 
 
 def active_session(response):
@@ -119,9 +148,9 @@ def session_playback(session):
     result.update(state=playback["state"], item_id=playback["item_id"], source_url=source,
                   requires_spotify_attribution=bool(source))
     duration, position = playback.get("duration_ms"), playback.get("position_ms")
-    if type(duration) is int and duration > 0 and type(position) is int and position >= 0:
+    if type(duration) is int and 0 < duration <= 2**31 - 1 and type(position) is int and position >= 0:
         current = min(position, duration)
-        result.update(progress=current / duration,
+        result.update(progress=current / duration, position_ms=current, duration_ms=duration,
                       time_label=f"{current // 60000}:{current // 1000 % 60:02d} / {duration // 60000}:{duration // 1000 % 60:02d}")
     return result
 
@@ -215,14 +244,43 @@ def live_moments(session, now=None, *, spotify_attribution_available=False):
             continue
         if grant.get("requires_spotify_attribution") and (not spotify_attribution_available or not current or not links or not any(urlsplit(value).hostname == "open.spotify.com" for value in links)):
             continue
-        result.append({"moment_id": moment_id, "title": text(moment.get("title"), 512),
+        card = {"moment_id": moment_id, "title": text(moment.get("title"), 512),
             "body": moment["content"], "current": current, "source_links": links,
             "source_provider": text(attribution.get("provider"), 128),
             "source_license": text(attribution.get("license"), 256),
             "requires_spotify_attribution": grant.get("requires_spotify_attribution") is True,
             "display_expires_at": grant.get("display_expires_at"),
-            "source_expires_at": grant.get("source_expires_at")})
+            "source_expires_at": grant.get("source_expires_at")}
+        if current and source_expiry is not None and moment.get("type") == "track":
+            navigation = _moment_insight_navigation(moment, grant, now, source_expiry)
+            if navigation:
+                card["insight_navigation"] = navigation
+        result.append(card)
     return result
+
+
+def _moment_insight_navigation(moment, grant, now, source_expiry):
+    actions = grant.get("navigation_actions")
+    published = timestamp(moment.get("created_at"))
+    if not isinstance(actions, list) or len(actions) != 1 or published is None:
+        return {}
+    deadline = min(published + 600, source_expiry)
+    if deadline <= now:
+        return {}
+    offer = actions[0]
+    if not isinstance(offer, dict):
+        return {}
+    session_id, moment_id = moment["session_id"], moment["moment_id"]
+    action_id = "insight-" + moment_id
+    reference = {"schema_version": 1, "session_id": session_id, "moment_id": moment_id, "action_id": action_id}
+    incoming = offer.get("reference")
+    if (type(offer.get("schema_version")) is not int or offer["schema_version"] != 1
+            or offer.get("kind") != "navigation" or offer.get("target") != "track_insight"
+            or offer.get("required_capability") != "moment_track_insight_navigation_v1"
+            or offer.get("action_id") != action_id or not text(offer.get("label"), 256).strip()
+            or not moment_insight_reference(incoming) or incoming != reference):
+        return {}
+    return {"reference": reference, "expires_at": deadline}
 
 
 def history_page(response, *, session_id=None, now=None):

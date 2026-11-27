@@ -4,10 +4,11 @@ import "BrandTheme.js" as BrandTheme
 
 RowLayout {
     required property string label
+    property string iconName: "sparkles"
     spacing: 8
     Layout.fillWidth: true
     FeatureIcon {
-        iconName: "sparkles"
+        iconName: parent.iconName
         Layout.preferredWidth: 20
         Layout.preferredHeight: 20
         Accessible.ignored: true

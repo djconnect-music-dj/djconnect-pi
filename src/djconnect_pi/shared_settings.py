@@ -194,9 +194,11 @@ class SharedSettingsClient:
             raise SettingsError("uncertain" if method == "patch" else "invalid")
         return data
 
-    def read(self) -> dict:
+    def read(self, *, accept_current=False) -> dict:
         with self._lock:
             context = self.context()
+            if accept_current and (context != self._context or self._pending is not None or not self._unknown):
+                raise SettingsError("reload")
             if context != self._context:
                 self._snapshot = None
                 if context[:3] != self._context[:3]:
@@ -211,6 +213,8 @@ class SharedSettingsClient:
                 if context != self.context():
                     raise SettingsError("denied")
                 self._snapshot = data
+                if accept_current:
+                    self._unknown = False
                 self.managed = True
                 return self.projection()
             except SettingsError:
@@ -249,26 +253,19 @@ class SharedSettingsClient:
             raise SettingsError("uncertain")
 
     def edit_token(self) -> str:
+        return self._snapshot_token(("binding", "snapshot", "voice_revision", "allowed_values", "writable_fields"))
+
+    def _snapshot_token(self, fields: tuple[str, ...]) -> str:
         return hashlib.sha256(
             json.dumps(
-                {
-                    k: self._snapshot[k]
-                    for k in (
-                        "binding",
-                        "snapshot",
-                        "voice_revision",
-                        "allowed_values",
-                        "writable_fields",
-                    )
-                    if k in self._snapshot
-                },
+                {key: self._snapshot[key] for key in fields if key in self._snapshot},
                 sort_keys=True,
             ).encode()
         ).hexdigest()
 
     def update(self, patch: dict, edit_token: str) -> dict:
         with self._lock:
-            if self._pending is not None:
+            if self._pending is not None or self._unknown:
                 raise SettingsError("uncertain")
             if self._snapshot is None or self.context() != self._context:
                 raise SettingsError("reload")
@@ -357,10 +354,13 @@ class SharedSettingsClient:
                     selection({**snap["defaults"], "voice": value})
                 except SettingsError:
                     continue
-                voices.append({"label": v["name"][:256], "value": value})
+                gender = v.get("gender")
+                voices.append({"label": v["name"][:256], "value": value,
+                               "gender": gender if gender in ("male", "female") else ""})
         options["voice"] = voices
         return {
             "edit_token": self.edit_token(),
+            "track_insight_style": self._snapshot_token(("binding", "snapshot", "voice_revision")),
             "operation_pending": self._pending is not None,
             "operation_unknown": self._unknown,
             "values": deepcopy((session or {}).get("settings") or snap["defaults"]),

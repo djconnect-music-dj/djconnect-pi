@@ -71,6 +71,29 @@ def test_uuid7_and_owner_read_have_exact_closed_identity(owner):
     assert cfg.mood == 99
 
 
+def test_track_insight_style_changes_on_confirmed_profile_revision_only(owner):
+    client, _, get = owner
+    original = client.read()
+    new_choices = fixture()
+    new_choices["writable_fields"] = []
+    get.return_value = response(new_choices)
+    choices = client.read()
+    assert choices["edit_token"] != original["edit_token"]
+    assert choices["track_insight_style"] == original["track_insight_style"]
+
+    new_choices["snapshot"]["defaults_revision"] += 1
+    get.return_value = response(new_choices)
+    assert client.read()["track_insight_style"] != choices["track_insight_style"]
+
+
+def test_voice_options_project_provider_gender_without_changing_write_values(owner):
+    client, _, _ = owner
+    options = client.read()["options"]["voice"]
+    assert options[0]["value"] == {"kind": "provider_default"}
+    assert [item["gender"] for item in options[1:4]] == ["male", "female", ""]
+    assert all("gender" not in item["value"] for item in options)
+
+
 def test_legacy_unknown_mood_stays_a_proposal_and_requires_six_explicit_choices(
     owner, monkeypatch
 ):
@@ -229,8 +252,37 @@ def test_unresolved_operation_never_issues_a_second_patch(owner, monkeypatch):
         client.update({"mood": "party"}, state["edit_token"])
     current = client.read()
     assert current["operation_pending"] is True
+    with pytest.raises(SettingsError, match="reload"):
+        client.read(accept_current=True)
     with pytest.raises(SettingsError, match="uncertain"):
         client.update({"mood": "chill"}, current["edit_token"])
+    assert patch.call_count == 1
+
+
+def test_unknown_operation_requires_fresh_read_to_use_confirmed_settings(owner, monkeypatch):
+    client, _, get = owner
+    state = client.read()
+    patch = Mock(side_effect=requests.Timeout())
+    monkeypatch.setattr(requests, "patch", patch)
+    monkeypatch.setattr(requests, "post", Mock(return_value=response(
+        {"success": True, "contract_version": 3, "phase": "unknown"}
+    )))
+    with pytest.raises(SettingsError, match="uncertain"):
+        client.update({"mood": "party"}, state["edit_token"])
+    current = client.read()
+    assert current["operation_unknown"] and not current["operation_pending"]
+    with pytest.raises(SettingsError, match="uncertain"):
+        client.update({"mood": "chill"}, current["edit_token"])
+    get.side_effect = requests.Timeout()
+    with pytest.raises(SettingsError):
+        client.read(accept_current=True)
+    get.side_effect = None
+    assert client.read()["operation_unknown"]
+    confirmed = fixture()
+    confirmed["snapshot"]["session"]["settings"]["mood"] = "energy"
+    get.return_value = response(confirmed)
+    assert client.read(accept_current=True)["values"]["mood"] == "energy"
+    assert not client.read()["operation_unknown"]
     assert patch.call_count == 1
 
 

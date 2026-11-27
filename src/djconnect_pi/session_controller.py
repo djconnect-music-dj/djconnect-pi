@@ -3,7 +3,9 @@ from __future__ import annotations
 
 from copy import deepcopy
 from datetime import UTC, datetime
-from math import isfinite
+from math import ceil, isfinite
+from time import monotonic
+from unicodedata import combining, normalize
 from uuid import uuid4
 
 from PySide6.QtCore import (
@@ -30,13 +32,18 @@ from .session_history_delete_control import HistoryDeleteControl
 from .session_history_summary import archive_session_summary, saved_session_summary
 from .session_history_view import (
     accepted_question,
+    ask_dj_context_entry,
     confirmed_question_entry,
+    contribution_question,
     conversation_entries,
+    demo_search_body,
+    demo_search_matches,
     flow_contributions,
     live_presentations,
     opened_entry,
     page_cursor,
     presented_history,
+    retained_contribution_preview,
     search_page,
 )
 from .session_playback_artwork import PlaybackArtwork
@@ -44,10 +51,12 @@ from .session_playback_control import PlaybackControl
 from .session_projection import (
     active_session,
     history_page,
+    moment_insight_palette,
     session_current_idle,
     session_playback,
     text,
     timestamp,
+    track_insight_verified_credit,
 )
 from .session_transport import (
     SessionBinding,
@@ -61,10 +70,28 @@ from .session_transport import (
 from .session_vibecast import VibeCastSender
 from .shared_settings import CHOICES
 
+_HISTORY_READ_ACTIONS = frozenset({
+    "history", "history_more", "history_refresh", "timeline", "timeline_refresh", "timeline_page",
+    "timeline_previous", "timeline_extend", "search", "search_more", "search_refresh", "open_entry",
+})
+_CONNECTION_READ_ACTIONS = _HISTORY_READ_ACTIONS | {"refresh", "archive_search"}
+
+
+def _saved_end_timestamp(session):
+    end_value = session.get("ended_at")
+    if not end_value and session.get("lifecycle_status") == "INTERRUPTED":
+        end_value = session.get("interrupted_at")
+    return timestamp(end_value)
+
+
+def _archive_search_text(value):
+    return "".join(char for char in normalize("NFKD", value.casefold()) if not combining(char))
+
 
 class SessionController(QObject):
     changed = Signal()
     refreshingChanged = Signal()
+    connectionReadChanged = Signal()
     playbackArtworkChanged = Signal()
     forecastImageChanged = Signal()
     forecastImageAboutToChange = Signal()
@@ -75,11 +102,15 @@ class SessionController(QObject):
     flowRowsChanged = Signal()
     newCurrentContribution = Signal()
     entryOpened = Signal()
+    askDjEntryOpenFailed = Signal(str, str)
     questionConfirmed = Signal(str)
     currentReplyReady = Signal()
     pendingQuestionReady = Signal()
     searchUpdated = Signal()
     historyUpdated = Signal()
+    archiveRefreshFinished = Signal(bool)
+    runtimeRefreshFinished = Signal(bool)
+    savedRefreshFinished = Signal(bool)
     archiveInvalidated = Signal()
     archivePositioned = Signal(str, float)
     timelineUpdated = Signal(str)
@@ -87,6 +118,8 @@ class SessionController(QObject):
     selectionInvalidated = Signal()
     contextCleared = Signal()
     ownerScopeChanged = Signal()
+    momentInsightChanged = Signal()
+    _momentInsightReady = Signal(object, object, object)
     _ready = Signal(object)
 
     def __init__(self, backend, *, view_active=True):
@@ -107,11 +140,13 @@ class SessionController(QObject):
         self._forecast = ForecastReceiver()
         self._forecast_dirty = False
         self._moments = []
+        self._moment_insight = None
         self._conversation = []
         self._retained_flow = []
         self._flow_window = None
         self._incomplete_flow_limit = 0
         self._demo_flow = []
+        self._demo_archives = {}
         self._flow_notification = None
         self._pending_question = {}
         self._pending_question_binding = None
@@ -131,6 +166,7 @@ class SessionController(QObject):
         self._saved_summary_binding = None
         self._timeline_trail = []
         self._error = ""
+        self._connection_offline = False
         self._saved_open_retry = None
         self._serial = 0
         self._running = 0
@@ -152,6 +188,7 @@ class SessionController(QObject):
         self._history_trail = []
         self._history_reset = False
         self._search = {}
+        self._archive_search = {}
         self._view_epoch = getattr(self, "_view_epoch", 0) + 1
         self._forecast_images = ForecastImages(self)
         self._forecast_images.changed.connect(self.forecastImageChanged.emit)
@@ -182,6 +219,12 @@ class SessionController(QObject):
         self.changed.connect(self._notify_flow_rows)
         self.contextCleared.connect(self._content_delete.cancel)
         self._ready.connect(self._apply)
+        self._momentInsightReady.connect(self._apply_moment_insight)
+        self.changed.connect(self._reconcile_moment_insight)
+        self._moment_insight_timer = QTimer(self)
+        self._moment_insight_timer.setSingleShot(True)
+        self._moment_insight_timer.setTimerType(Qt.TimerType.PreciseTimer)
+        self._moment_insight_timer.timeout.connect(self._reconcile_moment_insight)
         backend.demoModeChanged.connect(self._demo_changed)
         # Deferred visibility notifications must die with their QObject owner.
         self._visibility_notify = QTimer(self)
@@ -221,7 +264,8 @@ class SessionController(QObject):
             "owner_epoch": self._owner_epoch if bootstrap else 0,
             "owner_profile_id": self._bootstrap_owner if bootstrap else session_profile_id(self.backend.cfg),
             "runtime_state": session.get("runtime_state", ""),
-            "forecast_supported": not revoked and forecast_supported(session, self._caps),
+            "forecast_supported": (session.get("session_id") == "demo-session" and session.get("runtime_state") == "active")
+                if self.backend.demoMode else not revoked and forecast_supported(session, self._caps),
             "mood": session.get("selected_mood", ""),
             "profile_confirmation_required": not (bool(session_profile_id(self.backend.cfg)) or bootstrap),
         }, session, revoked
@@ -242,6 +286,16 @@ class SessionController(QObject):
     def archiveRows(self):
         _, _, revoked = self._runtime_header()
         return [] if revoked else self._archive_view()
+
+    @Property("QVariantMap", notify=changed)
+    def archiveSearchState(self):
+        _, _, revoked = self._runtime_header()
+        if revoked or not self._archive_search:
+            return {}
+        query = self._archive_search["query"]
+        if self._archive_search_expired(self._clock.now()):
+            return {"query": query, "error": "unavailable"}
+        return deepcopy(self._archive_search)
 
     @Property("QVariantList", notify=flowRowsChanged)
     def flowRows(self):
@@ -289,15 +343,20 @@ class SessionController(QObject):
             "started_at": text(session.get("started_at"), 64),
             "playback": self._demo_playback() if self.backend.demoMode else session_playback(session),
             "current_moment_idle": session_current_idle(session),
+            "moment_insight_offer": self.moment_insight_offer(),
             "artwork_prepare": self._artwork_prepare.snapshot(),
             "playback_control": self._playback_control.snapshot(),
             "archive_delete": self._archive_delete.snapshot(),
             "content_delete": self._content_delete.snapshot(),
             "vibecast": self._vibecast.snapshot(),
-            "forecast": {"state": "empty", "sections": []} if revoked else self._forecast.snapshot(),
+            "forecast": self._forecast_view(header, revoked),
             "presence": session.get("selected_presence", ""),
             "persona": session.get("dj_persona", ""),
             "composer_available": self._composer_supported(), "pending_question": {} if revoked else deepcopy(self._pending_question), "current_reply": {} if revoked else deepcopy(self._current_reply), "retained_flow": [] if revoked else deepcopy(flow),
+            "contribution_exploration": not revoked and self._composer_supported() and not self.backend.demoMode
+                and bool(contribution_question(self._caps, self.backend.cfg.language)),
+            "standalone_exploration": not revoked and bool(self._standalone_exploration_question()),
+            "standalone_saved_composer": not revoked and self._standalone_saved_composer(),
             "flow_more": active_history and self._incomplete_flow_limit == 20,
             "flow_history_hint": active_history and self._incomplete_flow_limit == 50,
             **({
@@ -306,9 +365,11 @@ class SessionController(QObject):
                 "sessions": [] if revoked else self._archive_view(),
             } if full_snapshot else {}),
             "selection": {} if revoked else deepcopy(self._selection), "question_status": self._question_status,
+            "selection_preview": {} if revoked else self._selection_preview(),
             "moments": [] if revoked else deepcopy(self._moments),
             "saved_summary": [] if revoked else self._saved_summary(),
             "timeline": {} if revoked else deepcopy(self._timeline), "search": {} if revoked else deepcopy(self._search), "error": self._error,
+            "connection_offline": not revoked and self._connection_offline,
             "saved_open_retry": not revoked and bool(self._saved_open_target()),
             "history_available": self._history_supported(), "search_available": self._search_supported(),
             "loaded": self._loaded and not revoked, "history_loaded": self._history_loaded and not revoked,
@@ -321,7 +382,8 @@ class SessionController(QObject):
             "has_more_sessions": bool(self._history_cursor) and self._history_pages < 5}
 
     @Slot(str, result=str)
-    def formatTimestamp(self, value):
+    @Slot(str, bool, result=str)
+    def formatTimestamp(self, value, omit_today_date=False):
         if timestamp(value) is None:
             return ""
         parsed = QDateTime.fromString(value, Qt.DateFormat.ISODateWithMs)
@@ -330,7 +392,10 @@ class SessionController(QObject):
         if not parsed.isValid():
             return ""
         language = self.backend.cfg.language
-        return QLocale(locale_for_language(language)).toString(parsed.toLocalTime(), translate(language, "session_datetime_format"))
+        local = parsed.toLocalTime()
+        date_format = ("HH:mm" if omit_today_date and local.date() == QDateTime.currentDateTime().date()
+                       else translate(language, "session_datetime_format"))
+        return QLocale(locale_for_language(language)).toString(local, date_format)
 
     @Slot("QVariantMap", result=str)
     def formatSavedDuration(self, session):
@@ -338,10 +403,7 @@ class SessionController(QObject):
         if status not in ("ENDED", "INTERRUPTED"):
             return ""
         start = timestamp(session.get("started_at"))
-        end_stamp = session.get("ended_at")
-        if status == "INTERRUPTED" and not end_stamp:
-            end_stamp = session.get("interrupted_at")
-        end = timestamp(end_stamp)
+        end = _saved_end_timestamp(session)
         if start is None or end is None or end < start:
             return ""
         hours, minutes = divmod(int((end - start) // 60), 60)
@@ -353,6 +415,35 @@ class SessionController(QObject):
         if minutes:
             return translate(language, "session_duration_minutes").replace("%1", str(minutes))
         return translate(language, "session_duration_subminute")
+
+    @Slot("QVariantMap", result=str)
+    def formatArchiveTiming(self, session):
+        timing = self.archiveTiming(session)
+        return "{title} ({start} – {end})".format(**timing) if timing else ""
+
+    @Slot("QVariantMap", result="QVariantMap")
+    def archiveTiming(self, session):
+        language = self.backend.cfg.language
+        locale = QLocale(locale_for_language(language))
+        date_format = translate(language, "session_archive_date_format")
+        started = timestamp(session.get("started_at"))
+        anchor = started if started is not None else timestamp(session.get("created_at"))
+        if anchor is None:
+            return {}
+        date = QDateTime.fromMSecsSinceEpoch(int(anchor * 1000)).toLocalTime()
+        title = locale.toString(date, date_format)
+        duration = self.formatSavedDuration(session)
+        if duration:
+            title += " – " + duration
+        start_label = (locale.toString(date, "HH:mm") if started is not None
+                       else translate(language, "session_archive_start_unknown"))
+        ended = _saved_end_timestamp(session)
+        end_label = translate(language, "session_archive_end_unknown")
+        if ended is not None and (started is None or ended >= started):
+            end = QDateTime.fromMSecsSinceEpoch(int(ended * 1000)).toLocalTime()
+            end_format = "HH:mm" if started is not None and date.date() == end.date() else date_format + " HH:mm"
+            end_label = locale.toString(end, end_format)
+        return {"title": title, "start": start_label, "end": end_label}
 
     @Property("QVariantMap", notify=playbackArtworkChanged)
     def playbackArtwork(self):
@@ -392,6 +483,18 @@ class SessionController(QObject):
     def playbackCommand(self, session_id, item_id, command, transport_epoch=None):
         return self._playback_control.start(session_id, item_id, command, transport_epoch=transport_epoch)
 
+    @Slot(str, str, int, int, str, result=bool)
+    def setPlaybackPosition(self, session_id, item_id, transport_epoch, target_ms, expected_output):
+        return self._playback_control.seek_to(session_id, item_id, transport_epoch, target_ms, expected_output)
+
+    def playback_overlay_observation_changed(self, uri, output_id):
+        if self._playback_control.overlay_observation_changed(uri, output_id):
+            self.changed.emit()
+
+    @Slot(str, str, int, str, result=bool)
+    def readPlaybackOverlay(self, session_id, item_id, transport_epoch, expected_output):
+        return self._playback_control.read_overlay(session_id, item_id, transport_epoch, expected_output)
+
     @Slot(str, str, result=bool)
     def readPlaybackVolume(self, session_id, item_id):
         return self._playback_control.read_volume(session_id, item_id)
@@ -420,6 +523,12 @@ class SessionController(QObject):
     def cancelPlaybackIntent(self):
         # Revocation is immediate; notification must not re-enter a QML state binding.
         self._playback_control.hide()
+        self._visibility_notify.start()
+
+    @Slot()
+    def dismissPlaybackVolume(self):
+        # The display sample expires independently of the writable volume lease.
+        self._playback_control.hide(keep_volume_display=True)
         self._visibility_notify.start()
 
     @Slot()
@@ -564,6 +673,7 @@ class SessionController(QObject):
         self._saved_summary_binding = None
         self._archive_summary_binding = None
         self._search = {}
+        self._archive_search = {}
         self._timeline_trail = []
         self._view_epoch += 1
         if not self._selection_valid():
@@ -616,13 +726,24 @@ class SessionController(QObject):
     def refreshing(self):
         return bool(self._running and self._running_action == "refresh")
 
+    @Property(bool, notify=connectionReadChanged)
+    def connectionReadInFlight(self):
+        return bool(self._running and self._running_action in _CONNECTION_READ_ACTIONS)
+
+    @Property(bool, notify=changed)
+    def searchBusy(self):
+        return bool(self._running and self._running_action in {"search", "search_more", "search_refresh", "archive_search"})
+
     def _set_running(self, serial=0, action="", *, background=False):
         was_refreshing = self.refreshing
+        was_reading_connection = self.connectionReadInFlight
         self._running = serial
         self._running_action = action
         self._background_refresh = background
         if was_refreshing != self.refreshing:
             self.refreshingChanged.emit()
+        if was_reading_connection != self.connectionReadInFlight:
+            self.connectionReadChanged.emit()
 
     @Property(bool, notify=changed)
     def lifecycleBusy(self):
@@ -647,7 +768,9 @@ class SessionController(QObject):
         self._reconcile_question = False
 
     def invalidate(self):
+        self.closeMomentTrackInsight()
         self._last_runtime_read = None
+        self._connection_offline = False
         had_scope = self._bootstrap_binding is not None
         self._contribution_wake_scope = None
         self._owner_epoch += 1
@@ -670,6 +793,7 @@ class SessionController(QObject):
         self._flow_window = None
         self._incomplete_flow_limit = 0
         self._demo_flow = []
+        self._demo_archives = {}
         self._selection = {}
         self._selection_source = "timeline"
         self._question_status = ""
@@ -689,6 +813,7 @@ class SessionController(QObject):
         self._history_trail = []
         self._history_reset = False
         self._search = {}
+        self._archive_search = {}
         self._saved_open_retry = None
         self._view_epoch = getattr(self, "_view_epoch", 0) + 1
         self._error = ""
@@ -703,6 +828,7 @@ class SessionController(QObject):
             return
         self._view_active = active
         if not active:
+            self.closeMomentTrackInsight()
             self._contribution_wake_scope = None
             if self.refreshing:
                 # The queued worker checks its ticket. A response already in flight
@@ -760,23 +886,80 @@ class SessionController(QObject):
                              "dj_persona": self._demo_preferences["persona"]}
             self._append_demo_entry("dj_moment", translate(self.backend.cfg.language, "demo_session_welcome"))
         elif action == "end":
+            if self._session:
+                if self._timeline.get("session", {}).get("session_id") == self._session["session_id"]:
+                    self._timeline = {}
+                sid = "demo-archive-" + uuid4().hex
+                header = {
+                    "session_id": sid, "started_at": self._session["started_at"],
+                    "created_at": self._session["started_at"], "ended_at": datetime.now(UTC).isoformat(),
+                    "lifecycle_status": "ENDED", "read_only": True,
+                }
+                self._demo_archives[sid] = {"session": header,
+                    "entries": [{**row, "session_id": sid} for row in self._demo_flow]}
+                if len(self._demo_archives) > 20:
+                    del self._demo_archives[next(iter(self._demo_archives))]
+                self._archive_search = {}
             self._session = {}
             self._demo_flow = []
+            self._search = {}
         elif action in {"history", "history_more", "history_refresh"}:
+            self._sessions = [record["session"] for record in reversed(self._demo_archives.values())]
             self._history_loaded = True
+        elif action == "timeline" and value in self._demo_archives:
+            self._timeline = deepcopy(self._demo_archives[value])
+        elif action in {"timeline_page", "timeline_refresh"}:
+            timeline = self._visible_demo_timeline(value["session_id"])
+            if not timeline:
+                return
+            self._timeline = deepcopy(timeline)
+            self._timeline.pop("selected_entry_id", None)
+            anchor = value.get("entry_id", "")
+            if not any(row["entry_id"] == anchor for row in self._timeline["entries"]):
+                anchor = ""
+            self.changed.emit()
+            self.timelineUpdated.emit(anchor)
+            return
+        elif action == "search":
+            sid, query = value["session_id"], value["query"]
+            timeline = self._visible_demo_timeline(sid)
+            matches = demo_search_matches(timeline.get("entries", []), query)
+            self._search = {"session_id": sid, "query": query, "matches": matches,
+                            "complete": True, "returned_count": len(matches), "total_count": len(matches)}
+        elif action == "open_entry":
+            sid, eid = value["session_id"], value["entry_id"]
+            timeline = self._visible_demo_timeline(sid)
+            if not any(row["entry_id"] == eid for row in timeline.get("entries", [])):
+                return
+            self._timeline = {**deepcopy(timeline), "selected_entry_id": eid}
+            self.changed.emit()
+            self.entryOpened.emit()
+            return
         self._loaded = True
         self.changed.emit()
 
-    def _append_demo_entry(self, kind, text):
+    def _visible_demo_timeline(self, session_id):
+        if self._session.get("session_id") == session_id:
+            return {"session": self._session, "entries": self._demo_flow}
+        if self._timeline.get("session", {}).get("session_id") == session_id:
+            return self._timeline
+        return {}
+
+    def _append_demo_entry(self, kind, text, **presentation):
         entry_id = uuid4().hex
         self._demo_flow = [*self._demo_flow[-99:], {
             "entry_id": entry_id, "session_id": self._session["session_id"],
-            "kind": kind, "text": text, "occurred_at": datetime.now(UTC).isoformat(),
+            "kind": kind, "text": text, "occurred_at": datetime.now(UTC).isoformat(), **presentation,
         }]
         return entry_id
 
-    def demo_playback_changed(self):
+    def demo_playback_changed(self, *, track_changed=False):
         if self.backend.demoMode and self._session:
+            if track_changed:
+                playback = self.backend.playback
+                details = {"title": playback.title, "artist": playback.artist, "album": playback.album}
+                self._append_demo_entry("playback_observed", "", historical_playback=details,
+                                        playback={**details, "coverage": "observed_playing_not_full_listen"})
             self.changed.emit()
 
     def _demo_playback(self):
@@ -789,6 +972,29 @@ class SessionController(QObject):
                 "state": "playing" if playback.is_playing else "paused",
                 "progress": position / duration if duration else 0,
                 "time_label": f"{position // 60}:{position % 60:02d} / {duration // 60}:{duration % 60:02d}"}
+
+    def _forecast_view(self, header, revoked):
+        empty = {"state": "empty", "sections": []}
+        if revoked:
+            return empty
+        if not self.backend.demoMode:
+            return self._forecast.snapshot()
+        if not header["forecast_supported"]:
+            return empty
+        playback = self._demo_playback()
+        current = " · ".join(value for value in (playback.get("title"), playback.get("artist")) if value)
+        sections = []
+        if current:
+            sections.append({"id": "current", "claim_type": "current",
+                             "title_key": "session_forecast_current", "text": current})
+        sections.extend(
+            {"id": section_id, "claim_type": claim, "title_key": title, "text_key": body}
+            for section_id, claim, title, body in (
+                ("guidance", "intention", "demo_horizon_guidance_title", "demo_horizon_guidance"),
+                ("aim", "conditional_target", "demo_horizon_aim_title", "demo_horizon_aim"),
+            )
+        )
+        return {"state": "ready", "sections": sections, "demo": True}
 
     def _expire_history_headers(self, now):
         expired = {row["session_id"] for row in self._sessions
@@ -815,6 +1021,7 @@ class SessionController(QObject):
 
     def _expire(self):
         now = self._clock.now()
+        self._reconcile_moment_insight()
         headers_expired = self._expire_history_headers(now) or self._history_dirty
         self._history_dirty = False
         if self._history_selection_dirty:
@@ -850,6 +1057,9 @@ class SessionController(QObject):
                 self._search = {}
                 self._error = "unavailable"
                 changed = True
+        if self._archive_search_expired(now):
+            self._archive_search = {"query": self._archive_search["query"], "error": "unavailable"}
+            changed = True
         retained_flow = [row for row in self._retained_flow if (timestamp(row.get("retained_until")) or 0) > now]
         if retained_flow != self._retained_flow:
             self._retained_flow = retained_flow
@@ -876,7 +1086,7 @@ class SessionController(QObject):
             return (bool(self._question_running) and self._foreground and self._composer_supported()
                 and self._pending_question_binding == self.transport.binding()
                 and self._pending_question.get("session_id") == self._session.get("session_id")
-                and self._selection_valid()
+                and (self._pending_question.get("preserve_selection") or self._selection_valid())
                 and (not self._question_reference or self._question_reference == moment_reference(
                     self._session, self._question_reference["selected"], now=self._clock.now())))
         except SessionError:
@@ -907,15 +1117,54 @@ class SessionController(QObject):
             return selected["session_id"] == self._session.get("session_id") and any(row["moment_id"] == selected["moment_id"] for row in live_presentations(self._session, now=self._clock.now()))
         return self._entry_selection_valid(selected, self._selection_source)
 
+    def ask_dj_session_destination(self):
+        if self._foreground and self._composer_supported():
+            return self.runtimeHeader["session_id"]
+        return ""
+
+    def ask_dj_context_entry(self, message_id, context_rows):
+        if not message_id or not self._foreground:
+            return {}
+        rows = context_rows
+        if (self._bootstrap_current() and self._bootstrap_private
+                and self._history_supported() and self._supports_contextual_dialogue(self._caps)):
+            rows = rows + self._retained_flow + self._timeline.get("entries", [])
+        return ask_dj_context_entry(message_id, self._without_withdrawn_entries(rows), now=self._clock.now())
+
     def _entry_selection_valid(self, selected, source):
+        return self._entry_selection_row(selected, source) is not None
+
+    def _entry_selection_row(self, selected, source):
         if source == "flow":
             session_id, rows = self._session.get("session_id"), self._retained_flow
         else:
             session_id, rows = self._timeline.get("session", {}).get("session_id"), self._timeline.get("entries", [])
-        return (selected["session_id"] == session_id
-                and any(row["session_id"] == selected["session_id"] and row["entry_id"] == selected["entry_id"]
-                        and row.get("state") != "source_withdrawn"
-                        and (timestamp(row.get("retained_until")) or 0) > self._clock.now() for row in rows))
+        if selected["session_id"] != session_id:
+            return None
+        now = self._clock.now()
+        return next((row for row in rows
+                     if row["session_id"] == session_id and row["entry_id"] == selected["entry_id"]
+                     and row.get("state") != "source_withdrawn"
+                     and (timestamp(row.get("retained_until")) or 0) > now), None)
+
+    def _selection_preview(self):
+        if (self._selection.get("kind") != "selected_entry"
+                or not self._foreground or not self._composer_supported()):
+            return {}
+        return retained_contribution_preview(self._entry_selection_row(self._selection, self._selection_source))
+
+    def ask_dj_selection_preview(self, selected, context_rows, *, saved):
+        if saved:
+            return retained_contribution_preview(self._entry_selection_row(selected, "timeline"))
+        now = self._clock.now()
+        preview = next((row["preview"] for row in context_rows
+                        if row.get("session_id") == selected["session_id"] and row.get("entry_id") == selected["entry_id"]
+                        and row.get("state") != "source_withdrawn" and row.get("preview")
+                        and (timestamp(row.get("retained_until")) or 0) > now), {})
+        if preview or not (self._bootstrap_current() and self._bootstrap_private):
+            return preview
+        row = self._entry_selection_row(selected, "timeline") or self._entry_selection_row(selected, "flow")
+        return retained_contribution_preview(row)
 
     @Slot()
     def clearSelection(self):
@@ -980,6 +1229,64 @@ class SessionController(QObject):
         self._launch("question", request)
         return bool(self._question_running)
 
+    @Slot(str, str, result=bool)
+    def exploreMoment(self, session_id, moment_id):
+        return self._explore_contribution({"kind": "selected_moment", "session_id": session_id, "moment_id": moment_id})
+
+    @Slot(str, str, result=bool)
+    def exploreFlowEntry(self, session_id, entry_id):
+        return self._explore_entry(session_id, entry_id, "flow")
+
+    @Slot(str, str, result=bool)
+    def exploreSavedEntry(self, session_id, entry_id):
+        return self._explore_entry(session_id, entry_id, "timeline")
+
+    def _explore_entry(self, session_id, entry_id, source):
+        selected = {"kind": "selected_entry", "session_id": session_id, "entry_id": entry_id}
+        if not self._entry_exploration_valid(selected, source):
+            return False
+        return self._explore_contribution(selected, selection_source=source)
+
+    def saved_exploration_question(self, selected):
+        return (self._standalone_exploration_question()
+                if self.saved_question_available(selected) else "")
+
+    def _standalone_saved_composer(self):
+        return (not self.backend.demoMode and self._foreground
+                and not self._session and self._history_supported() and self._supports_contextual_dialogue(self._caps)
+                and private_scope_allowed(self))
+
+    def saved_question_available(self, selected):
+        return (not self.busy and not self._question_running and self._standalone_saved_composer()
+                and self._entry_exploration_valid(selected, "timeline"))
+
+    def _standalone_exploration_question(self):
+        return contribution_question(self._caps, self.backend.cfg.language) if self._standalone_saved_composer() else ""
+
+    def _entry_exploration_valid(self, selected, source):
+        entry = self._entry_selection_row(selected, source)
+        if entry is None:
+            return False
+        if entry["kind"] not in {"dj_moment", "playback_observed", "conversation_dj"}:
+            return False
+        playback = entry.get("historical_playback") or {}
+        return any(text(value).strip()
+                   for value in (entry.get("text"), playback.get("title"), playback.get("artist"), playback.get("album")))
+
+    def _explore_contribution(self, selected, *, selection_source=""):
+        if (self.busy or self._question_running or not self._foreground
+                or (not self._view_active and selection_source != "timeline")
+                or self.backend.demoMode or not self._composer_supported()):
+            return False
+        question = contribution_question(self._caps, self.backend.cfg.language)
+        live_reference = moment_reference(self._session, selected, now=self._clock.now())
+        if not question or (selected["kind"] == "selected_moment" and not live_reference):
+            return False
+        self._launch("question", {"text": question, "client_message_id": "pi-turn-" + uuid4().hex,
+            "session_id": self._session["session_id"], "selected": selected, "live_reference": live_reference,
+            "preserve_selection": True, "selection_source": selection_source})
+        return bool(self._question_running)
+
     def _search_supported(self):
         features = self._caps.get("capabilities", {})
         versions = self._caps.get("contract_versions", {})
@@ -988,10 +1295,258 @@ class SessionController(QObject):
                 and type(versions.get("session_flow_text_search")) is int
                 and versions["session_flow_text_search"] == 1)
 
+    def has_capability_snapshot(self) -> bool:
+        return bool(self._caps)
+
+    def supports_current_track_insight(self, snapshot: dict | None = None) -> bool:
+        caps = self._caps if snapshot is None else snapshot
+        features = caps.get("capabilities", {})
+        versions = caps.get("contract_versions", {})
+        return (isinstance(features, dict) and isinstance(versions, dict)
+                and features.get("current_track_insight_subject_v1") is True
+                and type(versions.get("current_track_insight_subject")) is int
+                and versions["current_track_insight_subject"] == 1)
+
+    def moment_insight_offer(self):
+        header, _, revoked = self._runtime_header()
+        if (revoked or self.backend.demoMode or not self._foreground or not self._view_active
+                or self._connection_offline or header["runtime_state"] != "active"
+                or not private_scope_allowed(self) or not self._moment_insight_supported()):
+            return {}
+        now = self._clock.now()
+        for card in self._moments:
+            offer = card.get("insight_navigation")
+            if not card["current"] or not offer or offer["reference"]["session_id"] != header["session_id"]:
+                continue
+            display_expiry = timestamp(card["display_expires_at"])
+            if display_expiry is not None and now < min(display_expiry, offer["expires_at"]):
+                return deepcopy(offer)
+        return {}
+
+    def _moment_insight_supported(self):
+        features = self._caps.get("capabilities")
+        versions = self._caps.get("contract_versions")
+        return (isinstance(features, dict) and features.get("moment_track_insight_navigation_v1") is True
+                and isinstance(versions, dict) and type(versions.get("moment_track_insight_navigation")) is int
+                and versions["moment_track_insight_navigation"] == 1)
+
+    @Property("QVariantMap", notify=momentInsightChanged)
+    def momentTrackInsight(self):
+        request = self._moment_insight
+        if not request or not self._moment_insight_scope_current(request):
+            return {}
+        if not self._moment_insight_admitted(request):
+            return {"status": "expired"}
+        if request["style"] != self.track_insight_session_style():
+            return {"status": "context_changed", "retryable": True}
+        return deepcopy(request["view"])
+
+    @Slot(str)
+    def openMomentTrackInsight(self, action_id):
+        if self._moment_insight:
+            return
+        offer = self.moment_insight_offer()
+        if not offer or offer["reference"]["action_id"] != action_id:
+            return
+        try:
+            binding = self.transport.binding()
+        except SessionError:
+            return
+        request = {
+            "reference": offer["reference"], "deadline": offer["expires_at"], "binding": binding,
+            "style": self.track_insight_session_style(), "view": {},
+        }
+        self._moment_insight = request
+        if not self._moment_insight_current(request):
+            self._moment_insight = None
+            return
+        self._fetch_moment_insight(request)
+
+    @Slot()
+    def retryMomentTrackInsight(self):
+        self._reconcile_moment_insight()
+        request = self._moment_insight
+        if (request and self._moment_insight_admitted(request)
+                and (request["view"].get("retryable") or request["view"].get("status") == "ready")):
+            request["style"] = self.track_insight_session_style()
+            self._fetch_moment_insight(request, manual=True)
+
+    def _fetch_moment_insight(self, request, *, manual=False):
+        attempt = request["attempt"] = object()
+        request["view"] = {"status": "loading"}
+        self._schedule_moment_insight_expiry(request)
+        self.momentInsightChanged.emit()
+
+        def fetch():
+            if request["attempt"] is not attempt or not self._moment_insight_current(request):
+                return
+            started = self._clock.now()
+            try:
+                data = self.transport.moment_track_insight(request["binding"], request["reference"])
+                result = (data, started, "")
+            except SessionError as error:
+                result = (None, started, error.category)
+            self._momentInsightReady.emit(request, attempt, (*result, manual))
+
+        self.backend._executor.submit(fetch)
+
+    @Slot()
+    def closeMomentTrackInsight(self):
+        if self._moment_insight is not None:
+            self._moment_insight_timer.stop()
+            self._moment_insight = None
+            self.momentInsightChanged.emit()
+
+    def _moment_insight_scope_current(self, request):
+        if (self._moment_insight is not request or not self._foreground or not self._view_active
+                or self._connection_offline or not private_scope_allowed(self)
+                or getattr(self.backend, "versionMismatchVisible", False)
+                or not self._moment_insight_supported()
+                or self._session.get("runtime_state") != "active"
+                or self._session.get("session_id") != request["reference"]["session_id"]):
+            return False
+        try:
+            return request["binding"] == self.transport.binding()
+        except SessionError:
+            return False
+
+    def _moment_insight_current(self, request):
+        return (self._moment_insight_admitted(request)
+                and request["style"] == self.track_insight_session_style())
+
+    def _moment_insight_admitted(self, request):
+        if (not self._moment_insight_scope_current(request) or request["view"].get("status") == "expired"
+                or self._clock.now() >= request["deadline"]):
+            return False
+        reference = request["reference"]
+        authority = (self._session.get("broadcast") or {}).get("native_delivery")
+        if (not isinstance(authority, dict) or authority.get("session_id") != reference["session_id"]
+                or type(authority.get("schema_version")) is not int or authority["schema_version"] != 1
+                or authority.get("revocation_scope") != "session"):
+            return False
+        admissions = authority.get("admissions")
+        if not isinstance(admissions, list):
+            return False
+        matching = [grant for grant in admissions if isinstance(grant, dict) and grant.get("moment_id") == reference["moment_id"]]
+        return (len(matching) == 1 and matching[0].get("qualification") == "qualified"
+                and (timestamp(matching[0].get("source_expires_at")) or 0) > self._clock.now())
+
+    def _schedule_moment_insight_expiry(self, request):
+        remaining = request["deadline"] - self._clock.now()
+        self._moment_insight_timer.start(max(1, ceil(1000 * min(remaining, 600))))
+
+    def _reconcile_moment_insight(self):
+        request = self._moment_insight
+        if not request:
+            return
+        if not self._moment_insight_scope_current(request):
+            self.closeMomentTrackInsight()
+        elif not self._moment_insight_admitted(request):
+            self._moment_insight_timer.stop()
+            if request["view"].get("status") != "expired":
+                request["view"] = {"status": "expired"}
+                self.momentInsightChanged.emit()
+        else:
+            if request["style"] != self.track_insight_session_style() and request["view"].get("status") != "context_changed":
+                request["attempt"] = None
+                request["view"] = {"status": "context_changed", "retryable": True}
+                self.momentInsightChanged.emit()
+            if not self._moment_insight_timer.isActive():
+                self._schedule_moment_insight_expiry(request)
+
+    @Slot(object, object, object)
+    def _apply_moment_insight(self, request, attempt, result):
+        if request.get("attempt") is not attempt:
+            return
+        if not self._moment_insight_current(request):
+            if request is self._moment_insight:
+                self._reconcile_moment_insight()
+            return
+        data, started, error, manual = result
+        if data is None:
+            request["view"] = {
+                "status": "expired" if error in {"denied", "expired"} else "unavailable",
+                "retryable": error in {"rate_limited", "uncertain"},
+            }
+        else:
+            media_identity = data["subject"].get("media_identity")
+            if request.get("media_identity") and media_identity != request["media_identity"]:
+                request["view"] = {"status": "unavailable"}
+                self.momentInsightChanged.emit()
+                return
+            request["deadline"] = min(request["deadline"], started + data["subject"]["expires_in"])
+            self._schedule_moment_insight_expiry(request)
+            if not self._moment_insight_current(request):
+                self._reconcile_moment_insight()
+                return
+            track = data.get("track")
+            analysis = data.get("analysis")
+            title = text(track.get("title"), 2048).strip() if isinstance(track, dict) else ""
+            summary = text(analysis.get("summary")).strip() if isinstance(analysis, dict) else ""
+            if title and summary:
+                request["media_identity"] = media_identity
+                credit = track_insight_verified_credit(analysis)
+                cues = analysis.get("listening_cues")
+                listening_cues = list(dict.fromkeys(
+                    cue for value in cues[:5] if (cue := text(value, 240).strip())
+                )) if credit and isinstance(cues, list) else []
+                request["view"] = {"status": "ready", "title": title, "summary": summary,
+                                   "artist": text(track.get("artist"), 2048).strip(),
+                                   "album": text(track.get("album"), 2048).strip(), "credit": credit,
+                                   "palette": moment_insight_palette(data.get("visual_profile")),
+                                   "listening_cues": listening_cues,
+                                   "unmeasured_audio": analysis.get("measured_audio") is False}
+                if manual:
+                    request["view"]["refreshed"] = True
+            else:
+                request["view"] = {"status": "unavailable"}
+        self.momentInsightChanged.emit()
+
+    def track_insight_session_style(self) -> tuple:
+        session = self._session or {}
+        if not session.get("session_id"):
+            return ()
+        broadcast = session.get("broadcast") or {}
+        broadcast_session = broadcast.get("session") or {}
+        return tuple(session.get(key, broadcast_session.get(key)) for key in (
+            "session_id", "runtime_state", "selected_mood", "mood_revision",
+            "dj_persona", "persona_revision", "selected_presence", "presence_revision",
+        ))
+
+    def ask_dj_help_subject(self):
+        header, session, revoked = self._runtime_header()
+        if (revoked or not header["session_id"] or header["owner_read_only"]
+                or not self._foreground or self._connection_offline or not self._composer_supported()):
+            return None
+        playback = session_playback(session)
+        now = self._clock.now()
+        track = ()
+        features = {"active_session"}
+        if playback:
+            updated = timestamp(session["broadcast"]["playback"].get("updated_at"))
+            if updated is not None and 0 <= now - updated < 30 and playback["title"] and playback["artist"]:
+                track = tuple(playback[key] for key in ("item_id", "state", "title", "artist", "album", "source_url"))
+                features.add("current_track")
+                if playback["album"]:
+                    features.add("current_album")
+                forecast = session["broadcast"].get("session_forecast")
+                anchor = forecast.get("current_anchor") if isinstance(forecast, dict) else None
+                if (isinstance(anchor, dict) and anchor.get("item_id") == track[0]
+                        and self._forecast.session_id == header["session_id"] and self._forecast.deadline > now
+                        and self._forecast.value.get("state") in {"ready", "limited"}):
+                    features.add("forecast_ready")
+        return (header["session_id"], self.track_insight_session_style(), track, frozenset(features))
+
     def _history_supported(self):
         if self._bootstrap_binding is not None and not private_scope_allowed(self):
             return False
         return self._supports_history(self._caps)
+
+    @staticmethod
+    def _supports_contextual_dialogue(caps):
+        version = caps["contract_versions"].get("ask_dj_contextual_dialogue")
+        return (caps["capabilities"].get("ask_dj_contextual_dialogue") is True
+                and type(version) is int and version == 1)
 
     @staticmethod
     def _supports_history(caps):
@@ -1047,8 +1602,11 @@ class SessionController(QObject):
         self.refresh()
 
     @Slot()
-    def refresh(self):
-        self._launch("refresh", background=self._loaded or bool(self._error))
+    @Slot(bool)
+    def refresh(self, manual=False, *, playback_confirmation=False):
+        background = self._loaded or bool(self._error)
+        self._launch("refresh", background=background, manual_refresh=manual,
+                     playback_confirmation=playback_confirmation)
 
     @Slot()
     def poll(self):
@@ -1079,10 +1637,11 @@ class SessionController(QObject):
         self._clear_archive()
 
     def _clear_archive(self, *, notify=True):
-        had = bool(self._sessions or self._history_loaded or self._history_cursor or self._history_trail)
+        had = bool(self._sessions or self._history_loaded or self._history_cursor or self._history_trail or self._archive_search)
         self._view_epoch += 1
         self._saved_open_retry = None
         self._sessions = []
+        self._archive_search = {}
         self._archive_summary_binding = None
         self._history_loaded = False
         self._history_cursor = ""
@@ -1100,8 +1659,12 @@ class SessionController(QObject):
             "scope": self._history_scope, "before": self._history_before, "trail": deepcopy(self._history_trail)}
 
     @Slot()
-    def loadHistory(self):
-        self._launch("history", {"pages": 1, "window_change": True})
+    @Slot(bool)
+    def loadHistory(self, manual=False):
+        request = {"pages": 1, "window_change": True}
+        if manual:
+            request["manual_refresh"] = True
+        self._launch("history", request)
 
     @Slot()
     def moreHistory(self):
@@ -1109,9 +1672,13 @@ class SessionController(QObject):
             self._launch("history_more", self._archive_request(self._history_pages + 1))
 
     @Slot()
-    def refreshArchive(self):
+    @Slot(bool)
+    def refreshArchive(self, manual=False):
         if self._history_loaded and not self._timeline:
-            self._launch("history_refresh", self._archive_request())
+            request = self._archive_request()
+            if manual:
+                request["manual_refresh"] = True
+            self._launch("history_refresh", request)
 
     @Slot(str, float)
     def olderSessions(self, session_id="", offset=0):
@@ -1152,6 +1719,11 @@ class SessionController(QObject):
         self._search = {}
         self._launch("timeline", session_id)
 
+    @Slot(str)
+    def openArchiveSearchResult(self, session_id):
+        if any(row["session_id"] == session_id for row in self.archiveSearchState.get("sessions", [])):
+            self.openSaved(session_id)
+
     def _saved_open_target(self):
         if (not self._saved_open_retry or not self._foreground or not self._history_supported()
                 or self._error not in {"offline", "unavailable"}):
@@ -1183,14 +1755,23 @@ class SessionController(QObject):
             self._launch(retry["action"], retry["value"])
 
     @Slot(str)
-    def refreshSaved(self, anchor_entry_id=""):
+    @Slot(str, bool)
+    def refreshSaved(self, anchor_entry_id="", manual=False):
         sid = self._timeline.get("session", {}).get("session_id")
-        if sid and self._timeline.get("_prefix_pages"):
-            self._launch("timeline_extend", {"session_id": sid, "pages": self._timeline["_prefix_pages"],
-                "reading_anchor": anchor_entry_id, "revalidation": True})
-        elif sid:
-            self._launch("timeline_refresh", {"session_id": sid, "entry_id": anchor_entry_id,
-                "page_cursor": self._timeline.get("_page_cursor")})
+        if not sid:
+            return
+        if self._timeline.get("_prefix_pages"):
+            action = "timeline_extend"
+            request = {"session_id": sid, "pages": self._timeline["_prefix_pages"],
+                "reading_anchor": anchor_entry_id, "revalidation": True}
+        else:
+            action = "timeline_refresh"
+            request = {"session_id": sid, "entry_id": anchor_entry_id,
+                "page_cursor": self._timeline.get("_page_cursor")}
+        if manual:
+            self._launch(action, request, manual_refresh=True)
+        else:
+            self._launch(action, request)
 
     @Slot(str, float)
     def extendEntries(self, anchor_entry_id="", offset=0):
@@ -1305,6 +1886,37 @@ class SessionController(QObject):
         self._launch("search", {"session_id": session_id, "query": query, "cursor": ""})
 
     @Slot()
+    def clearArchiveSearch(self):
+        if not self._archive_search:
+            return
+        self._view_epoch += 1
+        self._archive_search = {}
+        self.changed.emit()
+
+    @Slot(str)
+    def searchArchive(self, query):
+        query = query.strip()
+        if (not self._foreground or self.busy or self._timeline.get("session")
+                or not 1 <= len(query) <= 200):
+            return
+        if self.backend.demoMode:
+            needle = _archive_search_text(query)
+            matches = []
+            for record in reversed(self._demo_archives.values()):
+                header = record["session"]
+                if (needle in _archive_search_text(self.formatArchiveTiming(header))
+                        or any(needle in _archive_search_text(demo_search_body(row)) for row in record["entries"])):
+                    matches.append(header)
+            self._archive_search = {"query": query, "sessions": matches, "complete": True}
+            self.changed.emit()
+            return
+        if not self._search_supported():
+            return
+        self._view_epoch += 1
+        self._archive_search = {"query": query}
+        self._launch("archive_search", query)
+
+    @Slot()
     def moreSearch(self):
         if self._search.get("next_cursor") and self._search.get("_pages", 1) < 5:
             self._launch("search_more", {"session_id": self._search["session_id"],
@@ -1327,7 +1939,7 @@ class SessionController(QObject):
             fresh["_window_reset"] = True
             return fresh
 
-    def _read_history_window(self, binding, value, view_epoch):
+    def _read_history_window(self, binding, value, view_epoch, *, deadline=None):
         start = page_cursor(value.get("start"))
         cursor, rows, cursors, scope = start, [], {start} if start else set(), None
         previous = value.get("before")
@@ -1359,7 +1971,7 @@ class SessionController(QObject):
                 raise SessionError("invalid")
             if cursor:
                 cursors.add(cursor)
-            if not cursor:
+            if not cursor or (deadline is not None and monotonic() >= deadline):
                 break
         return {**page, "sessions": rows, "_pages": number + 1, "_start": start, "_scope": scope,
             "_trail": deepcopy(value.get("trail", [])), "_window_change": value.get("window_change", False),
@@ -1390,6 +2002,66 @@ class SessionController(QObject):
                 break
         return {**page, "matches": rows, "returned_count": len(rows), "_pages": number + 1}
 
+    def _read_archive_search(self, binding, query, view_epoch):
+        deadline = monotonic() + 15
+        history = self._read_history_window(binding, {"pages": 5}, view_epoch, deadline=deadline)
+        complete = not page_cursor(history.get("next_cursor"))
+        matches, requests_left = [], 40
+        needle = _archive_search_text(query)
+
+        def check_scope():
+            if not self._foreground or self._view_epoch != view_epoch or self.transport.binding() != binding:
+                raise SessionError("context_changed")
+
+        for session in history["sessions"]:
+            check_scope()
+            if session.get("read_only") is not True or session["lifecycle_status"] not in {"ENDED", "INTERRUPTED"}:
+                continue
+            if session["_history_deadline"] <= self._clock.now():
+                continue
+            title = self.formatArchiveTiming(session)
+            if session["lifecycle_status"] == "INTERRUPTED":
+                title += " " + translate(binding.language, "session_history_interrupted")
+            if needle and needle in _archive_search_text(title):
+                matches.append(session)
+                continue
+            sid = session["session_id"]
+            cursor, cursors, revision = "", set(), None
+            for _ in range(5):
+                check_scope()
+                if requests_left <= 0 or monotonic() >= deadline:
+                    complete = False
+                    break
+                requests_left -= 1
+                response = self.transport.search(binding, sid, query, cursor=cursor)
+                check_scope()
+                page = search_page(response, sid, query, now=self._clock.now())
+                if revision is not None and page["revision"] != revision:
+                    raise SessionError("conflict")
+                revision = page["revision"]
+                hits = [row for row in self._without_withdrawn_entries(page["matches"])
+                        if row.get("state") != "source_withdrawn" and row.get("highlighted_text")]
+                if hits:
+                    match_expiry = max(timestamp(hit["retained_until"]) for hit in hits)
+                    matches.append({**session, "_archive_search_deadline": match_expiry})
+                    break
+                cursor = page_cursor(page.get("next_cursor"))
+                if not cursor:
+                    break
+                if cursor in cursors:
+                    raise SessionError("invalid")
+                cursors.add(cursor)
+            else:
+                complete = False
+        check_scope()
+        return {"query": query, "sessions": matches, "complete": complete}
+
+    def _archive_search_expired(self, now):
+        if self.backend.demoMode:
+            return False
+        return any(min(row["_history_deadline"], row.get("_archive_search_deadline", float("inf"))) <= now
+                   for row in self._archive_search.get("sessions", []))
+
     @Slot(str, str)
     def openEntry(self, session_id, entry_id):
         if self._interactive_read_or_write:
@@ -1397,7 +2069,14 @@ class SessionController(QObject):
         self._view_epoch += 1
         self._launch("open_entry", {"session_id": session_id, "entry_id": entry_id})
 
-    def _launch(self, action, value="", *, background=False):
+    def open_ask_dj_entry(self, session_id, entry_id, current):
+        if self._interactive_read_or_write or not private_scope_allowed(self):
+            return False
+        self._view_epoch += 1
+        self._launch("open_entry", {"session_id": session_id, "entry_id": entry_id}, entry_guard=current)
+        return self._running_action == "open_entry"
+
+    def _launch(self, action, value="", *, background=False, manual_refresh=False, playback_confirmation=False, entry_guard=None):
         if not self._foreground or (action == "refresh" and not self._view_active):
             return
         if (self._artwork_prepare.running or self._playback_control.running or self._archive_delete.running or self._content_delete.running) and action != "end":
@@ -1418,7 +2097,7 @@ class SessionController(QObject):
         private_owner_known = owner_known and self._bootstrap_private
         archive_bootstrap = (action == "history" and not owner_known and not cfg.private_session
             and cfg.active_profile_id == "" and cfg.explicit_profile_id == "")
-        read_archive_capabilities = action == "history" and not self._caps
+        read_archive_capabilities = (action == "history" or entry_guard is not None) and not self._caps
         if not (session_profile_id(cfg) or private_owner_known or bootstrap or archive_bootstrap):
             self._error = "profile_required"
             self.changed.emit()
@@ -1439,13 +2118,13 @@ class SessionController(QObject):
             return
         if action == "question" and not self._composer_supported():
             return
-        if action in {"search", "search_more", "search_refresh"} and not self._search_supported():
+        if action in {"search", "search_more", "search_refresh", "archive_search"} and not self._search_supported():
             self._error = "unsupported"
             self.changed.emit()
             return
         view_epoch = self._view_epoch
         receipt_snapshot = deepcopy(self._question_receipt)
-        selection_source = self._selection_source
+        selection_source = value.get("selection_source") if action == "question" and value.get("preserve_selection") else self._selection_source
         flow_window = self._flow_window
         expand_session = value if action == "refresh" else ""
         def read_flow(sid, receipt):
@@ -1473,6 +2152,8 @@ class SessionController(QObject):
             self._error = ""
         if action == "question":
             self._pending_question = {"text": value["text"], "session_id": value["session_id"], "client_message_id": value["client_message_id"]}
+            if value.get("preserve_selection"):
+                self._pending_question["preserve_selection"] = True
             self._pending_question_binding = binding
             self._question_reference = deepcopy(value.get("live_reference", {}))
             self._current_reply = {}
@@ -1492,6 +2173,18 @@ class SessionController(QObject):
 
         def worker():
             result = {"serial": serial, "binding": binding, "action": action, "view_epoch": view_epoch, "question_epoch": question_epoch, "raw_binding": raw_binding}
+            if action == "question" and value.get("preserve_selection"):
+                result["preserve_selection"] = True
+            if entry_guard is not None:
+                result["entry_guard"] = entry_guard
+            if action == "refresh" and manual_refresh:
+                result["manual_runtime_refresh"] = True
+            if playback_confirmation:
+                result["playback_confirmation"] = True
+            if manual_refresh and (action == "timeline_refresh" or (action == "timeline_extend" and value.get("revalidation"))):
+                result["manual_saved_refresh"] = True
+            if action in {"history", "history_refresh"} and value.get("manual_refresh"):
+                result["manual_archive_refresh"] = True
             def read_active(*, isolated=False):
                 try:
                     response = self.transport.active(binding, isolated=True) if isolated else self.transport.active(binding)
@@ -1552,6 +2245,8 @@ class SessionController(QObject):
                     # Queued work must validate the original intent without a GUI getter/tick.
                     check_conversation_read()
                     expected_pending = {key: value[key] for key in ("text", "session_id", "client_message_id")}
+                    if value.get("preserve_selection"):
+                        expected_pending["preserve_selection"] = True
                     if (not self._pending_question_valid() or self._pending_question != expected_pending
                             or self._question_reference != value.get("live_reference", {})):
                         raise SessionError("context_changed")
@@ -1653,13 +2348,33 @@ class SessionController(QObject):
                     result["reading_anchor"] = value.get("entry_id", "")
                 elif action in {"search", "search_more", "search_refresh"}:
                     result["search"] = self._read_search(binding, value, view_epoch)
+                elif action == "archive_search":
+                    result["archive_search"] = self._read_archive_search(binding, value, view_epoch)
                 elif action == "open_entry":
+                    if entry_guard is not None and not entry_guard():
+                        raise SessionError("context_changed")
+                    if read_archive_capabilities:
+                        result["archive_capabilities"] = self.transport.capabilities(binding, isolated=True)
+                        if not self._supports_history(result["archive_capabilities"]):
+                            raise SessionError("unsupported")
+                        if not entry_guard():
+                            raise SessionError("context_changed")
                     sid, eid = value["session_id"], value["entry_id"]
-                    opened_entry(self.transport.open_entry(binding, sid, eid), sid, eid, now=self._clock.now())
+                    try:
+                        response = self.transport.open_entry(binding, sid, eid)
+                    except SessionError as exc:
+                        if entry_guard is not None and exc.category == "unavailable" and exc.code == "history_unavailable":
+                            result["withdrawn_ask_dj_entry"] = (sid, eid)
+                        raise
+                    opened_entry(response, sid, eid, now=self._clock.now())
+                    if entry_guard is not None and not entry_guard():
+                        raise SessionError("context_changed")
                     result["timeline"] = presented_history(history_page(self.transport.timeline(binding, sid, window="anchor", anchor_entry_id=eid), session_id=sid, now=self._clock.now()))
                     if not any(row["entry_id"] == eid for row in result["timeline"]["entries"]):
                         raise SessionError("unavailable")
                     result["timeline"]["selected_entry_id"] = eid
+                    if entry_guard is not None:
+                        result["timeline"]["_opened_from_ask_dj"] = True
                 else:
                     if action == "start":
                         self.transport.start(binding, value)
@@ -1745,14 +2460,20 @@ class SessionController(QObject):
         except SessionError:
             self.invalidate()
             return
+        if result.get("entry_guard") is not None and not result["entry_guard"]():
+            self.changed.emit()
+            return
         if result.get("flow_expanded") and result.get("view_epoch") != self._view_epoch:
             self.changed.emit()
             return
+        manual_runtime_refresh = result.get("manual_runtime_refresh") and result["view_epoch"] == self._view_epoch
         if (result.get("receipt_update") and result["question_epoch"] == self._question_epoch
                 and result["receipt_update"].get("client_message_id") == self._question_receipt.get("client_message_id")):
             self._question_receipt = result["receipt_update"]
         if question:
             self._question_receipt = result.get("question_receipt", {})
+            if not result.get("preserve_selection"):
+                self._selection = {}
             # A concurrent current read owns Runtime/capability authority. Reconcile with a new
             # read after it, never overwrite it with the question worker's older snapshot.
             if result.get("error") in {"denied", "unpaired"}:
@@ -1763,7 +2484,6 @@ class SessionController(QObject):
             if result.get("private_response") and "error" not in result:
                 self._question_receipt = {}
                 self._question_reference = {}
-                self._selection = {}
                 self._current_reply = result.get("current_reply", {})
                 self._current_reply_binding = result["binding"]
                 if not self._current_reply_valid():
@@ -1776,7 +2496,6 @@ class SessionController(QObject):
                 return
             if self._last_current_read > result["serial"]:
                 self._question_status = "accepted_unavailable" if result.get("question_accepted") else "uncertain" if result.get("error") == "uncertain" else "failed"
-                self._selection = {}
                 self._reconcile_question = True
                 self.changed.emit()
                 self._reconcile_if_idle()
@@ -1787,14 +2506,12 @@ class SessionController(QObject):
                 self._retained_flow = []
                 self._flow_window = None
                 self._incomplete_flow_limit = 0
-                self._selection = {}
                 if result["error"] not in {"denied", "context_changed", "unpaired"}:
                     self._error = result["error"]
                     self.changed.emit()
                     return
             else:
                 self._question_status = "accepted_unavailable"
-                self._selection = {}
                 # The question's GET is a receipt check, not a replacement Runtime snapshot.
                 self._conversation = self._without_withdrawn_entries(result.get("conversation", []))
                 self._apply_retained_flow(result)
@@ -1804,10 +2521,29 @@ class SessionController(QObject):
                 if confirmed:
                     self.questionConfirmed.emit(confirmed)
                 return
-        history_action = result["action"] in {"history", "history_more", "history_refresh", "timeline", "timeline_refresh", "timeline_page", "timeline_previous", "timeline_extend", "search", "search_more", "search_refresh", "open_entry"}
+        history_action = result["action"] in _HISTORY_READ_ACTIONS
+        if (result["action"] in _CONNECTION_READ_ACTIONS
+                and result.get("view_epoch") == self._view_epoch):
+            if result.get("error") == "offline":
+                self._connection_offline = True
+            elif "error" not in result:
+                self._connection_offline = False
+        if result["action"] == "archive_search":
+            if result.get("view_epoch") != self._view_epoch:
+                self.changed.emit()
+                return
+            if result.get("error") not in {"denied", "context_changed", "unpaired"}:
+                self._archive_search = result.get("archive_search") or {
+                    "query": self._archive_search["query"], "error": result["error"],
+                }
+                self._expire()
+                self.changed.emit()
+                return
         if history_action and result.get("view_epoch") != self._view_epoch:
             self.changed.emit()
             return
+        if result.get("entry_guard") is not None and "error" in result:
+            self.askDjEntryOpenFailed.emit(*result.get("withdrawn_ask_dj_entry", ("", "")))
         if result.get("archive_owner") and "error" not in result:
             owner = result["archive_owner"]
             if (self.backend.cfg.private_session or (self._bootstrap_current() and self._bootstrap_owner != owner)):
@@ -1858,6 +2594,10 @@ class SessionController(QObject):
             self._timeline_trail = []
             self._error = result["error"]
             self.changed.emit()
+            if result.get("manual_archive_refresh"):
+                self.archiveRefreshFinished.emit(False)
+            if result.get("manual_saved_refresh"):
+                self.savedRefreshFinished.emit(False)
             return
         if (result["action"] == "refresh"
                 and (result.get("error") in {"offline", "unavailable"} or result.get("invalid_active_read"))
@@ -1869,6 +2609,8 @@ class SessionController(QObject):
                 # Keep the confirmed view briefly without extending any content grant.
                 self._expire()
                 self.changed.emit()
+                if manual_runtime_refresh:
+                    self.runtimeRefreshFinished.emit(False)
                 self._reconcile_if_idle()
                 return
         if "error" in result:
@@ -1884,6 +2626,7 @@ class SessionController(QObject):
                 self._question_status = question_status
             self._search = {}
             self._session = {}
+            self._archive_search = {}
             self._forecast.reset()
             self._moments = []
             self._conversation = []
@@ -1936,6 +2679,8 @@ class SessionController(QObject):
                         self.flowIdleHeaderAboutToChange.emit()
                 self._loaded = True
                 self._session = self._without_withdrawn_moments(incoming_session)
+                if result.get("playback_confirmation") and result["view_epoch"] == self._view_epoch:
+                    self._playback_control.hide(reset=True)
                 self._moments = live_presentations(self._session, now=self._clock.now())
                 self._caps = result.get("capabilities", self._caps)
                 self._forecast.receive(self._session, self._caps, self._clock.now())
@@ -1994,7 +2739,8 @@ class SessionController(QObject):
                         or "_page_cursor" not in incoming):
                     self._timeline_trail = []
                 sid = incoming.get("session", {}).get("session_id")
-                deadlines = [row["_history_deadline"] for row in self._sessions
+                headers = self._sessions + self._archive_search.get("sessions", [])
+                deadlines = [row["_history_deadline"] for row in headers
                     if row["session_id"] == sid and row.get("_history_deadline") is not None]
                 if self._timeline.get("session", {}).get("session_id") == sid and self._timeline.get("_session_deadline") is not None:
                     deadlines.append(self._timeline["_session_deadline"])
@@ -2016,6 +2762,8 @@ class SessionController(QObject):
         self._expire()
         confirmed = self._confirm_question()
         self.changed.emit()
+        if manual_runtime_refresh:
+            self.runtimeRefreshFinished.emit("session" in result and "error" not in result)
         if "session" in result and "error" not in result:
             self._observe_contribution_wake(result)
         elif "error" in result and not self._session:
@@ -2024,6 +2772,8 @@ class SessionController(QObject):
             self.questionConfirmed.emit(confirmed)
         if "history" in result and "error" not in result:
             self.historyUpdated.emit()
+            if result.get("manual_archive_refresh"):
+                self.archiveRefreshFinished.emit(True)
             if result["history"].get("_window_change"):
                 reading = result["history"].get("_reading", {})
                 if any(row["session_id"] == reading.get("session_id") for row in self._sessions):
@@ -2033,13 +2783,19 @@ class SessionController(QObject):
         if "search" in result and "error" not in result:
             self.searchUpdated.emit()
         if "timeline" in result and "error" not in result:
+            if result.get("manual_saved_refresh"):
+                self.savedRefreshFinished.emit(True)
             reading = result.get("reading_restore", {})
             if reading and any(row["entry_id"] == reading["entry_id"] for row in self._timeline.get("entries", [])):
                 self.timelinePositioned.emit(reading["entry_id"], reading["offset"])
             else:
                 self.timelineUpdated.emit(result.get("reading_anchor", self._timeline.get("selected_entry_id", "")))
         if result["action"] == "open_entry" and "error" not in result:
-            self.entryOpened.emit()
+            anchor = self._timeline.get("selected_entry_id")
+            if anchor and any(row["entry_id"] == anchor for row in self._timeline.get("entries", [])):
+                self.entryOpened.emit()
+            elif result.get("entry_guard") is not None and result["entry_guard"]():
+                self.askDjEntryOpenFailed.emit("", "")
         self._reconcile_if_idle()
 
     def _reconcile_if_idle(self):

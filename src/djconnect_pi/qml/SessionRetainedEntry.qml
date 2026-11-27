@@ -11,6 +11,7 @@ GlassCard {
     property string confirmationMood: ""
     property bool selectionAvailable: false
     property bool selectionBusy: false
+    property bool explorationAvailable: false
     property bool deletionAvailable: false
     property string flowDeletionScope: ""
     property Item flowSurface: null
@@ -19,6 +20,7 @@ GlassCard {
     readonly property bool attributionReady: historySources.ready
     property alias bodyItem: retainedBody
     signal askAbout(string sessionId, string entryId)
+    signal tellMore(string sessionId, string entryId)
     readonly property bool sourceWithdrawn: entry.state === "source_withdrawn"
     readonly property bool canAsk: !sourceWithdrawn && selectionAvailable && historySources.ready
     function askAboutEntry() {
@@ -27,6 +29,9 @@ GlassCard {
     readonly property bool settingsConfirmation: !sourceWithdrawn && entry.kind === "dj_moment"
         && entry.archive_basis === "runtime_accepted_settings_v1"
     readonly property var played: entry.historical_playback || {}
+    readonly property bool canExplore: !sourceWithdrawn && historySources.ready && explorationAvailable
+        && ["dj_moment", "playback_observed", "conversation_dj"].includes(entry.kind)
+        && [entry.text, played.title, played.artist, played.album].some(value => !!String(value || "").trim())
     Layout.fillWidth: true
     RowLayout {
         visible: historySources.ready
@@ -75,15 +80,24 @@ GlassCard {
             color: BrandTheme.colors.text; font.pixelSize: 22
             wrapMode: Text.WordWrap; textFormat: Text.PlainText; Layout.fillWidth: true
             TapHandler {
-                enabled: historyCard.canAsk && !historyCard.selectionBusy
+                enabled: (historyCard.canAsk || historyCard.canExplore) && !historyCard.selectionBusy
                     && ["dj_moment", "playback_observed", "conversation_dj"].includes(historyCard.entry.kind)
-                onTapped: historyCard.askAboutEntry()
+                onTapped: historyCard.canExplore
+                    ? historyCard.tellMore(entry.session_id, entry.entry_id) : historyCard.askAboutEntry()
             }
         }
     }
     Text { visible: historySources.ready && text.length > 0; text: historyCard.played.title || ""; textFormat: Text.PlainText; color: BrandTheme.colors.text; font.pixelSize: 26; font.bold: true; wrapMode: Text.WordWrap; Layout.fillWidth: true }
     Text { visible: historySources.ready && text.length > 0; text: historyCard.played.artist || ""; textFormat: Text.PlainText; color: BrandTheme.colors.muted; font.pixelSize: 23; wrapMode: Text.WordWrap; Layout.fillWidth: true }
     Text { visible: historySources.ready && text.length > 0; text: historyCard.played.album || ""; textFormat: Text.PlainText; color: BrandTheme.colors.muted; font.pixelSize: 19; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+    GlassButton {
+        objectName: "sessionRetainedTellMore"
+        visible: historyCard.canExplore
+        enabled: !historyCard.selectionBusy
+        text: historyCard.translate("ask_dj_tell_more")
+        tertiary: true
+        onClicked: historyCard.tellMore(entry.session_id, entry.entry_id)
+    }
     SessionAttribution { id: historySources; sources: entry.display_sources || []; requiresSpotify: entry.requires_spotify_attribution || false; spotifyURL: entry.spotify_source_url || ""; Layout.fillWidth: true }
     SessionFlowDelete {
         id: deleteAction

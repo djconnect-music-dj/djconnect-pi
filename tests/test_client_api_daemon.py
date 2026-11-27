@@ -27,6 +27,10 @@ def test_client_api_daemon_queue_parser_hides_repeated_current_track() -> None:
     )
 
     assert queue == []
+    positioned = client_api_daemon._parse_queue_items({"queue": [
+        {"title": "Mind Games", "uri": "spotify:track:mind-games", "index": 9},
+    ] * 5})
+    assert [item["index"] for item in positioned] == [9]
 
 
 def test_client_api_daemon_queue_parser_accepts_nested_artist_contract() -> None:
@@ -63,6 +67,7 @@ def test_client_api_daemon_playlist_parser_preserves_owner_aliases() -> None:
                 {
                     "display_title": "Night Drive",
                     "playlist_uri": "spotify:playlist:night-drive",
+                    "id": "catalog-row-night-drive",
                     "owner_name": "DJConnect",
                     "albumImageUrl": "https://example.test/cover.jpg",
                 }
@@ -265,7 +270,7 @@ def test_client_api_daemon_portal_state_requests_playlists_with_safe_limit(tmp_p
             if command == "status":
                 return {"playback": {"title": "Song"}}
             if command == "playlists":
-                return {"playlists": [{"name": "Friday", "uri": "spotify:playlist:1"}]}
+                return {"playlists": [{"name": "Friday", "value": "spotify:playlist:1", "id": "catalog-row-friday"}]}
             return {}
 
         def playback_from_status(self, data: dict[str, object]) -> object:
@@ -285,6 +290,7 @@ def test_client_api_daemon_portal_state_requests_playlists_with_safe_limit(tmp_p
 
     assert calls == [("status", {}), ("devices", {}), ("playlists", {"limit": 100})]
     assert state["playlists"][0]["title"] == "Friday"
+    assert state["playlists"][0]["uri"] == "spotify:playlist:1"
 
 
 def test_systemd_unit_status_normalizes_systemctl_output(monkeypatch) -> None:

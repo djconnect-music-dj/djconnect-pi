@@ -3,7 +3,7 @@ from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from hashlib import sha256
 
-from PySide6.QtCore import QObject, Signal, Slot
+from PySide6.QtCore import QCollator, QLocale, QObject, QTimer, Signal, Slot
 
 from .session_projection import active_session, session_playback, volume_observation
 from .session_transport import SessionError, private_scope_allowed
@@ -11,11 +11,12 @@ from .session_transport import SessionError, private_scope_allowed
 OVERLAY_CAPABILITIES = {
     "seek_back_15": "supports_seek",
     "seek_forward_15": "supports_seek",
+    "seek_to": "supports_seek",
     "shuffle": "supports_shuffle",
     "repeat": "supports_repeat",
     "toggle_favorite": "supports_favorites",
 }
-REPEAT_NEXT = {"off": "context", "context": "track", "track": "off"}
+REPEAT_NEXT = {"off": "track", "track": "context", "context": "off"}
 
 COMMANDS = frozenset({"play", "pause", "previous", "next", "save_current_track"})
 
@@ -23,7 +24,8 @@ COMMANDS = frozenset({"play", "pause", "previous", "next", "save_current_track"}
 VOLUME_COMMANDS = frozenset({"volume_read", "set_volume"})
 FAVORITE_COMMANDS = frozenset({"favorite_read", "set_favorite"})
 OUTPUT_COMMANDS = frozenset({"outputs_read", "set_output"})
-OBSERVATION_COMMANDS = frozenset({"volume_read", "favorite_read", "outputs_read"})
+OBSERVED_OVERLAY_COMMANDS = frozenset({"shuffle", "repeat", "toggle_favorite"})
+OBSERVATION_COMMANDS = frozenset({"volume_read", "favorite_read", "outputs_read", "overlay_read"})
 
 
 def favorite_observation(status, backend):
@@ -88,6 +90,8 @@ def output_choices(payload, backend, revision, origin):
         if not isinstance(name, str) or not 1 <= len(name) <= 256 or any(ord(c) < 32 for c in name):
             raise SessionError("unavailable")
         choice = {"id": row["id"], "name": name, "active": row["active"]}
+        if isinstance(row.get("type"), str) and len(row["type"]) <= 32:
+            choice["type"] = row["type"]
         volume = row.get("volume_percent")
         if row.get("supports_volume") is True and type(volume) is int and 0 <= volume <= 100:
             choice["volume_percent"] = volume
@@ -95,6 +99,14 @@ def output_choices(payload, backend, revision, origin):
     if active != [origin] or len(choices) > 32:
         raise SessionError("unavailable")
     return choices
+
+
+def sorted_output_choices(choices, language):
+    collator = QCollator(QLocale(language))
+    collator.setNumericMode(True)
+    return sorted(choices, key=lambda row: (
+        row.get("cached") is True, collator.sortKey(row["name"]), row.get("id") or row.get("value") or "",
+    ))
 
 
 def reference(owner):
@@ -126,12 +138,19 @@ class PlaybackControl(QObject):
         self.volume = None
         self.volume_serial = 0
         self.volume_status = ""
+        self._volume_display = None
+        self._volume_display_timer = QTimer(self)
+        self._volume_display_timer.setSingleShot(True)
+        self._volume_display_timer.setInterval(10000)
+        self._volume_display_timer.timeout.connect(self._expire_volume_display)
         self.favorite_state = None
         self.favorite_status = ""
         self.outputs = None
         self.outputs_serial = 0
         self.outputs_status = ""
         self.favorite_serial = 0
+        self.overlay_state = None
+        self.overlay_revision = 0
         self._transport_context = None
         self._transport_epoch = 0
         self.ready.connect(self.finish)
@@ -215,14 +234,25 @@ class PlaybackControl(QObject):
             self.request = None
             self.status = ""
 
-    def hide(self, *, reset=False):
+    def _clear_volume_display(self):
+        self._volume_display = None
+        self._volume_display_timer.stop()
+
+    def _expire_volume_display(self):
+        self._clear_volume_display()
+        self.owner.changed.emit()
+
+    def hide(self, *, reset=False, keep_volume_display=False):
         self._transport_context = None
+        self.overlay_state = None
         self.outputs = None
         self.outputs_status = ""
         self.favorite_state = None
         self.favorite_status = ""
         self.volume = None
         self.volume_status = ""
+        if not keep_volume_display:
+            self._clear_volume_display()
         self.request = None
         if reset:
             self.blocked = False
@@ -247,11 +277,24 @@ class PlaybackControl(QObject):
             self._transport_context = context
             self._transport_epoch += 1
         available = context is not None
+        overlay_commands = self.overlay_commands() if available and current[6] else []
+        if self.overlay_state and (
+                self.overlay_state["context"] != context
+                or self.overlay_state["output_id"] != self.owner.backend.outputDeviceId):
+            self.overlay_state = None
+        overlay_state = ({mode: self.overlay_state[mode] for mode in OBSERVED_OVERLAY_COMMANDS.intersection(overlay_commands)
+                  if mode in self.overlay_state} if self.overlay_state else {})
+        if self._volume_display and (self._volume_display["context"] != context or not self.volume_supported()):
+            self._clear_volume_display()
         busy = bool(self.running or self.owner._running or self.owner._question_running or self.owner._artwork_prepare.running
                     or getattr(getattr(self.owner, "_archive_delete", None), "running", False))
+        pending_command = self.request["command"] if self.running and self.request else ""
+        sending = self.running and pending_command != "overlay_read" and self.valid()
         return {"available": available, "enabled": available and not busy and not self.blocked,
                 "transport_epoch": self._transport_epoch if available else 0,
-                "overlay_commands": self.overlay_commands() if available and current[6] else [],
+                "overlay_commands": overlay_commands,
+                "overlay_state": overlay_state, "overlay_output": self.overlay_state["output_id"] if overlay_state else "",
+                "overlay_revision": self.overlay_revision,
                 "favorite": self.favorite_read_supported(), "running": self.running,
                 "favorite_observation": {"liked": self.favorite_state["liked"], "lease": self.favorite_state["serial"]} if self.favorite_valid() else {},
                 "favorite_status": self.favorite_status,
@@ -260,16 +303,48 @@ class PlaybackControl(QObject):
                 "outputs_status": self.outputs_status,
                 "reading_outputs": bool(self.running and self.request and self.request["command"] == "outputs_read"),
                 "reading_favorite": bool(self.running and self.request and self.request["command"] == "favorite_read"),
+                "toggling_favorite": pending_command == "toggle_favorite",
+                "pending_command": pending_command,
                 "volume_supported": self.volume_supported(),
                 "volume": {**self.volume["observation"], "lease": self.volume["serial"]} if self.volume_valid() else {},
+                "display_volume_percent": self._volume_display["percent"] if self._volume_display else None,
+                "pending_volume_percent": self.request["value"] if sending and pending_command == "set_volume" else None,
                 "volume_status": self.volume_status,
                 "reading_volume": bool(self.running and self.request and self.request["command"] == "volume_read"),
-                "status": "sending" if self.running and self.valid() else "uncertain" if self.blocked else self.status}
+                "status": "sending" if sending else "uncertain" if self.blocked else self.status}
 
     def start(self, session_id, item_id, command, *, transport_epoch=None):
-        if not isinstance(command, str) or (command not in COMMANDS and command not in OVERLAY_CAPABILITIES):
+        if not isinstance(command, str) or command == "seek_to" or (command not in COMMANDS and command not in OVERLAY_CAPABILITIES):
             return False
         return self._start(session_id, item_id, command, transport_epoch=transport_epoch)
+
+    def seek_to(self, session_id, item_id, transport_epoch, target_ms, expected_output):
+        duration = session_playback(self.owner._session).get("duration_ms", 0)
+        if (type(transport_epoch) is not int or transport_epoch <= 0 or not output_id(expected_output)
+                or type(target_ms) is not int or not 0 <= target_ms <= duration or duration <= 0):
+            return False
+        return self._start(session_id, item_id, "seek_to",
+                           value=(target_ms, expected_output), transport_epoch=transport_epoch)
+
+    def overlay_observation_changed(self, uri, origin):
+        """Withdraw a possibly stale value and let the open controls request an isolated read."""
+        if (self.closed or not self.visible or not output_id(origin)
+                or origin != self.owner.backend.outputDeviceId
+                or not OBSERVED_OVERLAY_COMMANDS.intersection(self.overlay_commands())):
+            return False
+        current = reference(self.owner)
+        if not current or not current[6] or sha256(uri.strip().encode()).hexdigest()[:24] != current[1]:
+            return False
+        self.overlay_state = None
+        self.overlay_revision += 1
+        return True
+
+    def read_overlay(self, session_id, item_id, transport_epoch, expected_output):
+        if (not output_id(expected_output) or expected_output != self.owner.backend.outputDeviceId
+                or not OBSERVED_OVERLAY_COMMANDS.intersection(self.overlay_commands())):
+            return False
+        return self._start(session_id, item_id, "overlay_read",
+                           value=expected_output, transport_epoch=transport_epoch)
 
     def read_volume(self, session_id, item_id):
         if not self.volume_supported():
@@ -331,15 +406,24 @@ class PlaybackControl(QObject):
             self.request.update(value=value, liked=self.favorite_state["liked"])
         if command == "set_output":
             self.request.update(value=value, origin=self.outputs["origin"])
-        self.outputs = None
-        self.outputs_status = ""
-        self.volume = None
-        self.volume_status = ""
-        self.favorite_state = None
-        self.favorite_status = ""
+        if command in {"seek_to", "overlay_read"}:
+            self.request["value"] = value
+        if command == "overlay_read":
+            self.request["overlay_revision"] = self.overlay_revision
+        if command in OBSERVED_OVERLAY_COMMANDS or command == "set_output":
+            self.overlay_state = None
+            self.overlay_revision += 1
+        if command != "overlay_read":
+            self.outputs = None
+            self.outputs_status = ""
+            self.volume = None
+            self.volume_status = ""
+            self._clear_volume_display()
+            self.favorite_state = None
+            self.favorite_status = ""
+            self.status = ""
         request = deepcopy(self.request)
         self.running = True
-        self.status = ""
         self.owner.changed.emit()
 
         def worker():
@@ -378,7 +462,25 @@ class PlaybackControl(QObject):
                     raise SessionError("unavailable")
                 # Existing global command semantics: no invented Session/item/output CAS fields.
                 if command in OVERLAY_CAPABILITIES:
-                    self._run_overlay_adjustment(binding, request, playback, status, observed)
+                    if self._run_overlay_adjustment(binding, request, playback, status, observed) is False:
+                        result["unchanged"] = True
+                elif command == "overlay_read":
+                    device = self._overlay_device(request, playback, observed)
+                    if device["id"] != request["value"]:
+                        raise SessionError("context_changed")
+                    overlay_state = {}
+                    if isinstance(caps, dict):
+                        shuffle = observed.get("shuffle")
+                        repeat = observed.get("repeat_state")
+                        if caps.get("supports_shuffle") is True and type(shuffle) is bool:
+                            overlay_state["shuffle"] = shuffle
+                        if caps.get("supports_repeat") is True and isinstance(repeat, str) and repeat in REPEAT_NEXT:
+                            overlay_state["repeat"] = repeat
+                    try:
+                        overlay_state["toggle_favorite"] = favorite_observation(status, request["reference"][4])
+                    except SessionError:
+                        pass
+                    result["overlay_state"] = overlay_state
                 elif command in OUTPUT_COMMANDS:
                     origin = output_origin(status, request["reference"][4])
                     if command == "set_output" and origin != request["origin"]:
@@ -429,20 +531,33 @@ class PlaybackControl(QObject):
         self.executor.submit(worker)
         return True
 
-    def _run_overlay_adjustment(self, binding, request, playback, status, observed):
-        command = request["command"]
-        backend = request["reference"][4]
+    @staticmethod
+    def _overlay_device(request, playback, observed):
         target = request["reference"][6]
-        caps = status.get("music_backend_capabilities")
         device = observed.get("device")
-        if (not isinstance(caps, dict) or caps.get(OVERLAY_CAPABILITIES[command]) is not True
-                or not target or playback.get("target_name") != target
+        if (not target or playback.get("target_name") != target
                 or not isinstance(device, dict) or not output_id(device.get("id"))
                 or device.get("name") != target
                 or device.get("active") is not True or device.get("is_restricted") is not False):
             raise SessionError("unavailable")
+        return device
+
+    def _run_overlay_adjustment(self, binding, request, playback, status, observed):
+        command = request["command"]
+        backend = request["reference"][4]
+        caps = status.get("music_backend_capabilities")
+        if not isinstance(caps, dict) or caps.get(OVERLAY_CAPABILITIES[command]) is not True:
+            raise SessionError("unavailable")
+        device = self._overlay_device(request, playback, observed)
         if command == "toggle_favorite":
             wire_command, value = "set_current_track_favorite", not favorite_observation(status, backend)
+        elif command == "seek_to":
+            target_ms, expected_output = request["value"]
+            progress, duration = observed.get("progress_ms"), observed.get("duration_ms")
+            if (device["id"] != expected_output or type(progress) is not int or type(duration) is not int
+                    or not 0 <= progress <= duration or not 0 <= target_ms <= duration or duration <= 0):
+                raise SessionError("context_changed")
+            value = target_ms - progress
         elif command == "shuffle":
             shuffle = observed.get("shuffle")
             if type(shuffle) is not bool:
@@ -459,6 +574,10 @@ class PlaybackControl(QObject):
             raise SessionError("context_changed")
         if command == "toggle_favorite":
             self.owner.transport.playback_favorite(binding, value)
+        elif command == "seek_to":
+            if abs(value) < 500:
+                return False
+            self.owner.transport.playback_seek_offset(binding, value)
         else:
             self.owner.transport.playback_adjustment(binding, wire_command, value)
 
@@ -473,13 +592,19 @@ class PlaybackControl(QObject):
         elif result.get("error") == "denied" or result.get("withdraw_session"):
             self.owner.invalidate()
             self.owner._error = "denied" if result.get("error") == "denied" else "context_changed"
+        elif command == "overlay_read":
+            if (not result.get("error") and self.request["value"] == self.owner.backend.outputDeviceId
+                    and self.request["overlay_revision"] == self.overlay_revision):
+                self.overlay_state = {**result["overlay_state"], "output_id": self.request["value"],
+                              "context": (self.request["reference"], self.request["binding"])}
         elif command == "outputs_read":
             self.status = ""
             self.outputs_status = "unavailable" if result.get("error") else ""
             if not result.get("error"):
                 self.outputs_serial += 1
+                choices = sorted_output_choices(result["choices"], self.owner.backend.cfg.language)
                 self.outputs = {"binding": self.request["binding"], "reference": self.request["reference"],
-                                "serial": self.outputs_serial, "origin": result["origin"], "choices": result["choices"]}
+                                "serial": self.outputs_serial, "origin": result["origin"], "choices": choices}
         elif command == "favorite_read":
             self.status = ""
             self.favorite_status = "unavailable" if result.get("error") else ""
@@ -494,9 +619,14 @@ class PlaybackControl(QObject):
                 self.volume_serial += 1
                 self.volume = {"binding": self.request["binding"], "reference": self.request["reference"],
                                "serial": self.volume_serial, "observation": result["volume"]}
+                self._volume_display = {"context": (self.request["reference"], self.request["binding"]),
+                                        "percent": result["volume"]["percent"]}
+                self._volume_display_timer.start()
         elif result.get("error"):
             self.blocked = True
             self.status = "uncertain"
+        elif result.get("unchanged"):
+            self.status = ""
         else:
             self.status = "accepted"
         self.owner.changed.emit()
@@ -505,19 +635,11 @@ class PlaybackControl(QObject):
             self.owner.refresh()
 
     def refresh(self):
-        if self.running or self.owner.busy:
+        if self.running or self.owner.busy or self.owner.refreshing:
             return
-        self.owner.refresh()
-        if self.owner._running_action == "refresh":
-            self.blocked = False
-            self.status = ""
-            self.request = None
-            self.volume = None
-            self.volume_status = ""
-            self.favorite_state = None
-            self.favorite_status = ""
-            self.outputs = None
-            self.outputs_status = ""
+        self.owner.refresh(playback_confirmation=True)
+        if self.owner.refreshing:
+            self.hide()
             self.owner.changed.emit()
 
     def shutdown(self):

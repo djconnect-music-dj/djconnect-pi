@@ -4,7 +4,7 @@ import logging
 import time
 from dataclasses import dataclass
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlsplit, urlunsplit
 
 import requests
 
@@ -119,6 +119,7 @@ class Playback:
     output_device_details: tuple[dict[str, Any], ...] = ()
     is_favorite: bool = False
     output_device_id: str = ""
+    output_device_active: bool = False
     volume_output_id: str = ""
 
 
@@ -132,6 +133,13 @@ class MusicBackendSummary:
     target_player_id: str = ""
     target_player_name: str = ""
     error: str = ""
+
+
+class StatusObservation(dict):
+    def __init__(self, data, authenticated_origin: str = "", *, via_websocket: bool = False) -> None:
+        super().__init__(data)
+        self.authenticated_origin = authenticated_origin
+        self.via_websocket = via_websocket
 
 
 class HAClient:
@@ -203,10 +211,11 @@ class HAClient:
         url = self._djconnect_url("status")
         _LOGGER.debug("POST %s paired=%s playback_included=%s", url, self.cfg.paired, playback is not None)
         started = time.monotonic()
+        headers = self._headers()
         response = requests.post(
             url,
             json=payload,
-            headers=self._headers(),
+            headers=headers,
             timeout=self.timeout,
         )
         _LOGGER.debug("POST %s returned HTTP %s in %.0fms", url, response.status_code, _elapsed_ms(started))
@@ -214,7 +223,17 @@ class HAClient:
         self.apply_profile_context(data)
         self.update_backend_summary(data)
         self._validate_ha_version(data)
-        return data
+        authorization = headers.get("Authorization")
+        request = getattr(response, "request", None)
+        origin = ""
+        if (data.get("success") is True and authorization and isinstance(request, requests.PreparedRequest)
+                and not response.history and 200 <= response.status_code < 300
+                and request.method == "POST" and request.url == response.url
+                and request.headers.get("Authorization") == authorization):
+            parts = urlsplit(response.url)
+            if parts.scheme in {"http", "https"} and parts.hostname:
+                origin = urlunsplit((parts.scheme, parts.netloc.rsplit("@", 1)[-1], "", "", ""))
+        return StatusObservation(data, origin)
 
     def command(self, command: str, **payload: Any) -> dict[str, Any]:
         body = self._base_payload(command=command, request_source="device_command", **payload)
@@ -229,6 +248,8 @@ class HAClient:
                 self.update_backend_summary(data)
                 self.apply_profile_context(data)
                 self._validate_ha_version(data)
+                if command == "status" and data.get("success") is True and self.cfg.paired and self.cfg.device_token:
+                    return StatusObservation(data, via_websocket=True)
                 return data
         url = self._djconnect_url("command")
         _LOGGER.debug(
@@ -265,6 +286,20 @@ class HAClient:
         self.apply_profile_context(data)
         self.update_backend_summary(data)
         self._validate_ha_version(data)
+        return data
+
+    def ask_dj_history_export(self) -> dict[str, Any]:
+        url = self._djconnect_url("ask_dj/history/export")
+        body = self._ask_dj_payload(conversation_scope="profile")
+        response = requests.post(url, json=body, headers=self._headers(), timeout=self.timeout)
+        data = self._json(response)
+        self._validate_ha_version(data)
+        if (data.get("success") is not True or data.get("format") != "djconnect.ask_dj.history.export"
+                or type(data.get("schema_version")) is not int or data["schema_version"] != 1
+                or data.get("history_scope") != "profile"
+                or data.get("owner_profile_id") != self.cfg.active_profile_id
+                or not self.cfg.active_profile_id or not isinstance(data.get("messages"), list)):
+            raise DJConnectError("invalid_ask_dj_history_export")
         return data
 
     def ask_dj_history_clear(self) -> dict[str, Any]:
@@ -332,6 +367,23 @@ class HAClient:
         data = self._json(response)
         self.apply_profile_context(data)
         self.update_backend_summary(data)
+        self._validate_ha_version(data)
+        return data
+
+    def current_track_insight(self, *, force_refresh: bool = False) -> dict[str, Any]:
+        body = self._base_payload(
+            track_insight_subject={"schema_version": 1, "mode": "current"},
+            force_refresh=force_refresh,
+            include_visual_profile=True,
+            include_raw_response=True,
+            request_source="track_insight",
+        )
+        if self.cfg.music_dna_key:
+            body["music_dna_key"] = self.cfg.music_dna_key
+        timeout_seconds = max(self.timeout, 10.0)
+        response = requests.post(self._djconnect_url("track_insight"), json=body, headers=self._headers(),
+                                 timeout=timeout_seconds)
+        data = self._json(response)
         self._validate_ha_version(data)
         return data
 
@@ -639,6 +691,7 @@ class HAClient:
             ),
             output_device=output_device,
             output_device_id=device_id if isinstance(device_id, str) and device_id.strip() else "",
+            output_device_active=isinstance(device, dict) and device.get("active") is True,
             output_devices=tuple(output_devices),
             output_device_details=tuple(output_device_details),
             volume_output_id=volume_output_id,
@@ -874,7 +927,13 @@ def _response_json_data(response: requests.Response) -> dict[str, Any]:
 def _http_error_response(response: requests.Response, data: dict[str, Any]) -> dict[str, Any]:
     error = str(data.get("error") or data.get("message") or response.text or f"HTTP {response.status_code}")
     _LOGGER.warning("Home Assistant returned HTTP %s: %s", response.status_code, error)
-    if (response.status_code, error) in {(404, "no_track_playing"), (429, "rate_limited")}:
+    if (response.status_code, error) in {
+        (404, "no_track_playing"),
+        (429, "rate_limited"),
+        (404, "current_track_unavailable"),
+        (503, "current_track_unavailable"),
+        (409, "track_insight_context_changed"),
+    }:
         return {**data, "success": False, "error": error}
     if error in PROFILE_ERROR_CODES | {"music_dna_context_changed"}:
         message = str(data.get("message") or error)
@@ -1036,6 +1095,14 @@ def _output_device_details(value: Any) -> list[dict[str, Any]]:
     return [detail] if detail else []
 
 
+def playlist_command_target(item: dict[str, object]) -> str:
+    for key in ("uri", "value", "playlist_uri", "id", "track_uri"):
+        value = item.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return ""
+
+
 def _first_truthy(*values: Any) -> Any:
     return next((value for value in values if value), values[-1] if values else None)
 
@@ -1066,6 +1133,11 @@ def _output_device_detail(value: Any) -> dict[str, Any]:
         for key in ("cached", "first_seen_at", "last_seen_at", "provider", "source"):
             if key in value:
                 detail[key] = value[key]
+        if isinstance(value.get("type"), str) and len(value["type"]) <= 32:
+            detail["type"] = value["type"]
+        volume = value.get("volume_percent")
+        if value.get("cached") is not True and value.get("supports_volume") is True and type(volume) is int and 0 <= volume <= 100:
+            detail["volume_percent"] = volume
         if value.get("is_active") is not None:
             detail["is_active"] = bool(value.get("is_active"))
         if value.get("active") is not None:

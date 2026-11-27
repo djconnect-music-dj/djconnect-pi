@@ -6,6 +6,7 @@ persistent Session cache and never automatically retries a write.
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Callable
 from contextlib import ExitStack
 from dataclasses import dataclass, field, replace
@@ -16,6 +17,7 @@ from uuid import UUID
 
 import requests
 
+from .ask_dj_help import HELP_RESPONSE_BYTES, HELP_ROUTE, HelpObservation, HelpRequest
 from .config import CLIENT_TYPE, PROTOCOL_VERSION
 from .i18n import locale_for_language
 
@@ -29,6 +31,8 @@ JSON_CHUNK_BYTES = 16 * 1024
 
 
 def response_budget(route: str) -> int:
+    if route == HELP_ROUTE:
+        return HELP_RESPONSE_BYTES
     if route in {"session/history", "ask_dj/history"} or (route.startswith("session/history/") and route != "session/history/open"):
         return JSON_HISTORY_BYTES
     if route in {"session/active", "session/broadcast/snapshot", "session/start", "ask_dj/message"}:
@@ -156,6 +160,16 @@ def identifier(value: Any) -> str:
     return value
 
 
+def moment_insight_reference(value: object) -> bool:
+    if (not isinstance(value, dict) or set(value) != {"schema_version", "session_id", "moment_id", "action_id"}
+            or type(value["schema_version"]) is not int or value["schema_version"] != 1):
+        return False
+    identifiers = (value["session_id"], value["moment_id"], value["action_id"])
+    return (all(isinstance(item, str) and 1 <= len(item) <= 128
+                and not any(ord(char) < 32 or ord(char) == 127 for char in item) for item in identifiers)
+            and value["action_id"] == "insight-" + value["moment_id"])
+
+
 class SessionTransport:
     def __init__(self, config: Callable, timeout: float = 8.0, *, owner_scope=None):
         self.config = config
@@ -175,7 +189,7 @@ class SessionTransport:
                                   profile_type="", privacy_mode="", private_authorized=private, owner_epoch=epoch)
         return binding
 
-    def _request(self, binding: SessionBinding, method: str, route: str, payload=None, *, timeout=None, isolated=False, archive_delete=False, content_delete=False, private_probe=False, display_owner=False) -> dict:
+    def _request(self, binding: SessionBinding, method: str, route: str, payload=None, *, timeout=None, isolated=False, archive_delete=False, content_delete=False, private_probe=False, display_owner=False, optional_capabilities=False, help_request=None) -> dict | HelpObservation:
         if binding != self.binding():
             raise SessionError("context_changed")
         if private_probe:
@@ -239,11 +253,13 @@ class SessionTransport:
             "Accept": "application/json", "Cache-Control": "no-store",
             "Accept-Language": locale_for_language(binding.language),
         }
-        if binding.profile_id and not display_owner:
+        if binding.profile_id and not display_owner and help_request is None:
             headers["X-DJConnect-Profile-ID"] = binding.profile_id
         identity = ({"device_id": binding.device_id, "client_type": CLIENT_TYPE}
                     if archive_delete or content_delete else binding.identity())
         body = {**identity, **(payload or {})}
+        if help_request is not None:
+            body = help_request.query()
         if display_owner:
             body = {"contract_version": 1, "identity": {"device_id": binding.device_id,
                     "client_type": CLIENT_TYPE}, **payload}
@@ -272,6 +288,15 @@ class SessionTransport:
                     if private_probe and response.status_code == 403:
                         raise SessionError("private_scope_denied")
                     raise SessionError("denied")
+                if method == "POST" and route == "track_insight":
+                    if response.status_code == 410:
+                        raise SessionError("expired")
+                    if response.status_code == 429:
+                        raise SessionError("rate_limited")
+                if help_request is not None and response.status_code != 200:
+                    raise SessionError("unavailable")
+                if optional_capabilities and method == "GET" and route == "capabilities" and response.status_code == 404:
+                    return {}
                 if 300 <= response.status_code < 400 or (response.status_code >= 500 and not archive_delete):
                     raise SessionError("unavailable" if method == "GET" else "uncertain")
                 # A proxy may return a plain 404 for the current route while HA
@@ -296,11 +321,14 @@ class SessionTransport:
                 if binding != self.binding():
                     raise SessionError("context_changed")
                 try:
-                    data = json.loads(raw)
-                except (ValueError, TypeError, RecursionError):
+                    data = (HelpObservation.decode(raw, help_request) if help_request is not None
+                            else json.loads(raw))
+                except (ValueError, TypeError, RecursionError, OSError):
                     raise SessionError(category) from None
                 if binding != self.binding():
                     raise SessionError("context_changed")
+                if help_request is not None:
+                    return data
                 if not isinstance(data, dict):
                     raise SessionError(category)
                 code = data.get("error") if isinstance(data.get("error"), str) else ""
@@ -312,13 +340,25 @@ class SessionTransport:
                     category = ("conflict" if response.status_code == 409 else "unavailable"
                         if admitted and admitted != "history_delete_outcome_unknown" else "uncertain")
                     raise SessionError(category, admitted)
+                if method == "POST" and route == "ask_dj/message" and data.get("success") is False:
+                    selected_context = body.get("conversation_context")
+                    unavailable = (response.status_code == 404 and code == "history_unavailable"
+                        or response.status_code == 409 and code in {"source_withdrawn", "conversation_source_withdrawn"})
+                    if isinstance(selected_context, dict):
+                        if unavailable and selected_context.get("selected_entry"):
+                            raise SessionError("reference_unavailable")
+                        if (response.status_code == 409 and code == "session_context_changed"
+                                and selected_context.get("session_id")):
+                            raise SessionError("session_changed")
                 if response.status_code in (404, 405, 426) or code == "history_contract_upgrade_required":
                     raise SessionError("unavailable", code if code in {"history_unavailable", "active_session_not_found", "history_contract_upgrade_required"} else "")
                 if response.status_code == 409:
                     if code in {"device_not_mapped", "profile_required", "invalid_profile", "profile_access_denied"}:
                         raise SessionError("profile_unavailable")
                     raise SessionError("conflict")
-                if response.status_code >= 400 or data.get("success") is not True:
+                # Track Insight returns its document directly on HTTP 200.
+                direct_insight = method == "POST" and route == "track_insight" and response.status_code == 200
+                if response.status_code >= 400 or data.get("success", direct_insight) is not True:
                     raise SessionError("unavailable" if method == "GET" or response.status_code >= 400 else "uncertain")
                 # Parsing creates a fresh exclusively owned tree; no second deep-copy allocation.
                 return data
@@ -380,6 +420,41 @@ class SessionTransport:
     def capabilities(self, binding, *, isolated=False):
         return self._request(binding, "GET", "capabilities", isolated=isolated)
 
+    def track_insight_capabilities(self, binding):
+        return self._request(binding, "GET", "capabilities", isolated=True, optional_capabilities=True)
+
+    def moment_track_insight(self, binding, reference):
+        """Read one existing Moment via the private owner route without playback fallback."""
+        if not moment_insight_reference(reference):
+            raise SessionError("invalid")
+        if not binding.profile_id or binding.profile_id != binding.resolved_profile_id:
+            raise SessionError("denied")
+        data = self._request(binding, "POST", "track_insight", {
+            "track_insight_target": dict(reference),
+            "locale": locale_for_language(binding.language),
+            "include_visual_profile": True,
+        }, timeout=max(self.timeout, 10.0), isolated=True)
+        subject = data.get("subject")
+        if (not isinstance(subject, dict) or subject.get("mode") != "explicit"
+                or not moment_insight_reference(subject.get("reference")) or subject["reference"] != reference):
+            raise SessionError("invalid")
+        lifetime = subject.get("expires_in")
+        media = subject.get("media_identity")
+        if (type(lifetime) not in (int, float) or not 0 < lifetime <= 600
+                or not isinstance(media, str) or re.fullmatch(r"spotify:track:[A-Za-z0-9]{22}", media) is None):
+            raise SessionError("invalid")
+        track = data.get("track")
+        if not isinstance(track, dict) or track.get("media_identity") != media or track.get("uri") != media:
+            raise SessionError("invalid")
+        return data
+
+    def ask_dj_help(self, binding, surface, session_id=None) -> HelpObservation:
+        try:
+            request = HelpRequest(surface, binding.language, session_id)
+        except (ValueError, TypeError):
+            raise SessionError("invalid") from None
+        return self._request(binding, "GET", HELP_ROUTE, isolated=True, help_request=request)
+
     def active(self, binding, *, isolated=False):
         return self._request(binding, "GET", "session/active", isolated=isolated)
 
@@ -415,6 +490,13 @@ class SessionTransport:
             raise SessionError("invalid")
         return self._request(binding, "POST", "command", {
             "command": command, "value": value,
+            "request_source": "device_command", "app_version": PROTOCOL_VERSION}, isolated=True)
+
+    def playback_seek_offset(self, binding, milliseconds: int):
+        if type(milliseconds) is not int or milliseconds == 0:
+            raise SessionError("invalid")
+        return self._request(binding, "POST", "command", {
+            "command": "seek_relative", "value": milliseconds,
             "request_source": "device_command", "app_version": PROTOCOL_VERSION}, isolated=True)
 
     def playback_volume(self, binding, value: int, backend: str):
@@ -570,16 +652,46 @@ class SessionTransport:
             raise SessionError("context_changed")
         return result
 
-    def standalone_question(self, binding, text: str, message_id: str, owner: str):
+    def standalone_question(self, binding, text: str, message_id: str, owner: str, *,
+                            selected_entry=None, active_session_id=None):
         if not isinstance(text, str) or not text.strip() or len(text) > 4000:
+            raise SessionError("invalid")
+        contextual = selected_entry is not None or active_session_id is not None
+        context = {"session_id": active_session_id} if contextual else {}
+        context_ids = [message_id]
+        if active_session_id is not None:
+            context_ids.append(active_session_id)
+        if selected_entry is not None:
+            if not isinstance(selected_entry, dict) or set(selected_entry) != {"session_id", "entry_id"}:
+                raise SessionError("invalid")
+            context_ids.extend(selected_entry.values())
+            context["selected_entry"] = dict(selected_entry)
+        if contextual and any(len(identifier(value)) > 128 or value != value.strip() for value in context_ids):
             raise SessionError("invalid")
         result = self._request(binding, "POST", "ask_dj/message", {
             "text": text.strip(), "client_message_id": identifier(message_id),
-            "conversation_context": {}, "conversation_scope": "profile", "profile_id": identifier(owner),
+            "conversation_context": context, "conversation_scope": "profile", "profile_id": identifier(owner),
             "language": locale_for_language(binding.language), "audio_response": "never",
         }, timeout=(8, 120), isolated=True)
         if result.get("owner_profile_id") != owner or result.get("client_message_id") != message_id:
             raise SessionError("uncertain")
+        if contextual:
+            conversation = result.get("conversation")
+            # Core can detach a selected entry when the question names an independent topic.
+            if (result.get("success") is not True or not isinstance(conversation, dict)
+                    or type(conversation.get("schema_version")) is not int or conversation["schema_version"] != 1
+                    or conversation.get("input_type") != "text" or conversation.get("history_scope") != "profile"
+                    or conversation.get("context") not in (context, {"session_id": active_session_id})):
+                raise SessionError("uncertain")
+            entries = conversation.get("entry_ids")
+            if not isinstance(entries, list) or len(entries) != (2 if active_session_id is not None else 0):
+                raise SessionError("uncertain")
+            try:
+                identifier(conversation.get("turn_id"))
+                if len(set(map(identifier, entries))) != len(entries):
+                    raise SessionError("uncertain")
+            except SessionError:
+                raise SessionError("uncertain") from None
 
     def question(self, binding, request):
         body = request["text"].strip() if isinstance(request.get("text"), str) else ""

@@ -121,7 +121,7 @@ def test_qml_has_touch_readable_glass_controls_and_scrollable_settings() -> None
     media_list_component = main_qml[main_qml.index("component MediaListPanel") : main_qml.index("Timer {\n        id: idleTimer")]
     assert "onVisibleChanged:" in media_list_component
     assert "if (visible) mediaRows.positionViewAtBeginning()" in media_list_component
-    assert "else closeSearch()" in media_list_component
+    assert "profileReloadPending = false\n                closeSearch(true)" in media_list_component
     assert "GlassButton {" in games_qml
     assert 'import "MoodTheme.js" as MoodTheme' in main_qml
     assert 'import "MoodTheme.js" as MoodTheme' in games_qml
@@ -147,7 +147,7 @@ def test_qml_has_touch_readable_glass_controls_and_scrollable_settings() -> None
     assert "anchors.topMargin: 16" in now_block
     assert "anchors.rightMargin: 16" in now_block
     assert "PageToolbar {" in now_block
-    assert 'title: root.tr("now_playing")' in now_block
+    assert 'title: root.playbackScreenTitle("now_playing")' in now_block
     assert 'anchors.bottomMargin: root.edge + 96' in now_block
     assert "width: Math.min(parent.width, parent.height)" in now_block
     assert "cache: true" in now_block
@@ -197,14 +197,14 @@ def test_qml_has_touch_readable_glass_controls_and_scrollable_settings() -> None
     assert 'root.tr("music_dna_disable_confirm_title")' in main_qml
     assert 'root.tr("music_dna_disable_confirm_message")' in main_qml
     assert "visible: root.musicDnaDisableConfirmOpen" in main_qml
-    assert "djconnect.setMusicDnaEnabled(false)" in main_qml
+    assert "djconnect.setMusicDnaEnabled(false, root.musicDnaConfirmationRevision)" in main_qml
     assert "root.musicDnaClearConfirmOpen = true" in settings_block
     assert "djconnect.clearMusicDna()" not in settings_block
     assert "id: musicDnaClearConfirmPanel" in main_qml
     assert 'root.tr("music_dna_clear_confirm_title")' in main_qml
     assert 'root.tr("music_dna_clear_confirm_message")' in main_qml
     assert "visible: root.musicDnaClearConfirmOpen" in main_qml
-    assert "djconnect.clearMusicDna()" in main_qml
+    assert "djconnect.clearMusicDna(root.musicDnaConfirmationRevision)" in main_qml
     assert 'root.tr("view_logs")' not in settings_block
     assert 'root.tr("about")' not in settings_block
     assert "djconnect.showLogs()" not in settings_block
@@ -220,8 +220,8 @@ def test_qml_has_touch_readable_glass_controls_and_scrollable_settings() -> None
     assert "ModalBlocker {}" in main_qml
     assert "onClicked: function(mouse)" in main_qml
     assert "onWheel: function(wheel)" in main_qml
-    assert 'root.tr("queue")' in main_qml
-    assert 'root.tr("playlists")' in main_qml
+    assert 'root.playbackScreenTitle("queue")' in main_qml
+    assert 'root.playbackScreenTitle("playlists")' in main_qml
     assert "djconnect.queueItems" in main_qml
     assert "djconnect.playlistItems" in main_qml
     assert 'emptyText: root.tr("empty_queue")' in main_qml
@@ -235,30 +235,32 @@ def test_qml_has_touch_readable_glass_controls_and_scrollable_settings() -> None
     assert "JSON.stringify" in main_qml
     assert "artist: item.artist || \"\"" in main_qml
     assert "album: item.album || \"\"" in main_qml
-    assert "text: mediaRow.modelData.album || \"\"" in main_qml
+    assert "text: panel.trackQueue ? panel.queueSubtitle(mediaRow.modelData)" in main_qml
     assert "djconnect.playMediaItem(panel.playCommand, panel.itemPayload(modelData))" in main_qml
     assert 'onClicked: root.activeScreen = "now"' not in main_qml[main_qml.index('visible: root.activeScreen === "queue"') : main_qml.index('visible: root.activeScreen === "playlists"')]
-    assert "enabled: !!modelData.uri" in main_qml
+    assert 'readonly property bool hasPlayableUri: String(modelData.uri || "").trim().length > 0' in media_list_component
+    assert "enabled: hasPlayableUri && panel.playbackAvailable && !panel.loading && !djconnect.mediaPlaybackBusy" in media_list_component
     assert "visible: panel.matches.length === 0" in main_qml
     assert "djconnect.loadQueue()" in main_qml
     assert "djconnect.loadPlaylists()" in main_qml
-    assert "onRefreshRequested: djconnect.loadQueue()" in main_qml
-    assert "onRefreshRequested: djconnect.loadPlaylists()" in main_qml
+    assert "onRefreshRequested: djconnect.loadQueue(true)" in main_qml
+    assert "onRefreshRequested: djconnect.loadPlaylists(true)" in main_qml
     assert "djconnect.manualRefresh()" in main_qml
     assert "component RefreshIconButton" in main_qml
     assert main_qml.count("RefreshIconButton {") >= 7
     logs_qml = qml_root.joinpath("LogsView.qml").read_text(encoding="utf-8")
-    assert 'iconName: "refresh"' in logs_qml and "view.backend.showLogs()" in logs_qml
+    assert 'iconName: "refresh"' in logs_qml and "view.backend.refreshLogs()" in logs_qml
     assert main_qml.count('text: root.tr("refresh")') == 1
     assert main_qml.count("Layout.preferredHeight: 48") >= 2
     assert "anchors.topMargin: 16" in main_qml
     assert 'djconnect.haUrl.length ? djconnect.haUrl : "http://homeassistant.local:8123"' in main_qml
     assert "djconnect.outputDeviceChoices" in main_qml
     assert 'textRole: "name"' in main_qml
-    assert "choiceName(modelData)" in main_qml
+    assert "controlOutputDeviceCombo.displayName(index)" in main_qml
     assert "property var deviceChoices" in main_qml
     assert 'property string noOutputDeviceLabel: root.tr("none")' in main_qml
     assert "djconnect.setOutputDevice" in main_qml
+    assert "djconnect.setOutputChoice" in main_qml
     assert "controlPanel.adjustVolume(-10)" in main_qml
     assert "controlPanel.adjustVolume(10)" in main_qml
     assert 'text: "-"' in main_qml
@@ -276,7 +278,10 @@ def test_qml_has_touch_readable_glass_controls_and_scrollable_settings() -> None
     assert 'root.tr("control")' in main_qml
     assert "id: controlOutputDeviceCombo" in main_qml
     assert "function selectedIndex()" in main_qml
-    assert "currentIndex: selectedIndex()" in main_qml
+    assert "readonly property int confirmedOutputIndex: selectedIndex()" in main_qml
+    assert "currentIndex = confirmedOutputIndex" in main_qml
+    assert "onModelChanged: Qt.callLater(restoreConfirmedIndex)" in main_qml
+    assert "displayText: confirmedOutputIndex > 0 ? displayName(confirmedOutputIndex)" in main_qml
     assert 'text: "🔊"' not in main_qml
     assert "wrapMode: Text.Wrap" in logs_qml
     assert 'text: view.tr("log") + ": " + view.backend.logFile' in logs_qml
@@ -303,7 +308,9 @@ def test_qml_has_touch_readable_glass_controls_and_scrollable_settings() -> None
     assert 'objectName: "mediaSearchInput"' in main_qml
     assert 'keyboardName: "mediaSearchKeyboard"' in main_qml
     assert "model: panel.matches" in main_qml
-    assert "djconnect.trackProgress" in main_qml
+    assert "component PlaybackPositionControl: RowLayout" in main_qml
+    assert main_qml.count("PlaybackPositionControl {") == 2
+    assert "seekPointer.lease > 0 ? seekPointer.draft : djconnect.positionSeconds" in main_qml
     assert "djconnect.progressLabel" in main_qml
     assert 'iconName: djconnect.playing ? "pause" : "play"' in main_qml
     assert 'iconName: "previous"' in main_qml
@@ -312,7 +319,8 @@ def test_qml_has_touch_readable_glass_controls_and_scrollable_settings() -> None
     assert "repeatOne" in main_qml
     assert "repeatOff" in main_qml
     assert "to: 60" in main_qml
-    assert "Math.round(Math.min(60, djconnect.volume) / 60 * 100) + \"%\"" in main_qml
+    assert 'objectName: "controlVolumePercent"' in main_qml
+    assert 'djconnect.volume + "%" : "–"' in main_qml
     assert "property var timeoutChoices: [30, 60, 90, 120, 180, 240, 300, 600]" in main_qml
     assert "returnToNowBox" not in main_qml
     logs = files("djconnect_pi.qml").joinpath("LogsView.qml").read_text(encoding="utf-8")
@@ -373,24 +381,26 @@ def test_qml_ask_dj_screen_keeps_history_actions_and_text_composer() -> None:
     assert "focused: askDjButton.activeFocus" in action_button
     assert "djconnect.refreshAskDjHistory()" in ask_dj_block
     assert "id: askDjRefreshButton" in ask_dj_block
+    assert "loading: djconnect.askDjBusy" in ask_dj_block
     assert "RefreshIconButton" in ask_dj_block
     assert "id: askDjClearButton" in ask_dj_block
     assert 'ToolTip.text: root.tr("ask_dj_clear_chat")' in ask_dj_block
     assert 'iconName: "trash"' in ask_dj_block
-    assert "enabled: !djconnect.askDjBusy && djconnect.askDjMessages.length > 0" in ask_dj_block
+    assert "enabled: !askDjPanel.historyOffline && !djconnect.askDjBusy && djconnect.askDjMessages.length > 0" in ask_dj_block
     assert "root.askDjClearConfirmOpen = true" in ask_dj_block
     assert "id: askDjClearConfirmPanel" in main_qml
     assert "visible: root.askDjClearConfirmOpen" in main_qml
     assert 'root.tr("ask_dj_clear_confirm_title")' in main_qml
     assert 'root.tr("ask_dj_clear_confirm_message")' in main_qml
-    assert "djconnect.clearAskDjHistory()" in main_qml
+    assert "djconnect.clearAskDjHistory(root.askDjClearConfirmationRevision)" in main_qml
     assert "visible: djconnect.askDjBusy" in main_qml
     assert "enabled: !djconnect.askDjBusy" in main_qml
     assert "root.askDjClearConfirmOpen && djconnect.askDjMessages.length === 0" in main_qml
     assert 'root.tr("ask_dj_readonly_hint")' not in ask_dj_block
     assert "djconnect.sendAskDjAction(modelData.payload" in ask_dj_block
     assert 'objectName: "askDjChatBar"' in ask_dj_block
-    assert "djconnect.sendAskDjQuestion(askDjChatInput.text)" in ask_dj_block
+    assert "const question = askDjChatInput.text.trim()" in ask_dj_block
+    assert "djconnect.sendAskDjQuestion(question)" in ask_dj_block
     assert 'keyboardName: "askDjChatKeyboard"' in ask_dj_block
     assert 'objectName: "askDjSearchInput"' in ask_dj_block
     assert 'root.tr("ask_dj_input_placeholder")' not in ask_dj_block
@@ -470,7 +480,8 @@ def test_qml_control_screen_has_favorite_icon_between_shuffle_and_repeat() -> No
     assert 'iconName: djconnect.currentTrackFavorite ? "heartFilled" : "heart"' in control_block
     assert 'iconName: djconnect.repeat === "track" ? "repeatOne" : djconnect.repeat === "context" ? "repeat" : "repeatOff"' in control_block
     assert "enabled: djconnect.favoriteAvailable && !djconnect.favoriteBusy" in control_block
-    assert "onClicked: djconnect.saveCurrentTrack()" in control_block
+    assert "if (djconnect.currentTrackFavorite) djconnect.removeCurrentTrackFavorite()" in control_block
+    assert "else djconnect.saveCurrentTrack()" in control_block
     assert control_block.index('iconName: "shuffle"') < control_block.index('iconName: djconnect.currentTrackFavorite ? "heartFilled" : "heart"')
     assert control_block.index('iconName: djconnect.currentTrackFavorite ? "heartFilled" : "heart"') < control_block.index('iconName: djconnect.repeat === "track"')
     assert 'control.iconName === "heart" || control.iconName === "heartFilled"' in main_qml
@@ -478,12 +489,14 @@ def test_qml_control_screen_has_favorite_icon_between_shuffle_and_repeat() -> No
 
 def test_qml_track_insight_panel_renders_contract_fields() -> None:
     main_qml = files("djconnect_pi.qml").joinpath("Main.qml").read_text(encoding="utf-8")
-    panel = main_qml[main_qml.index("id: trackInsightPanel") : main_qml.index("id: musicDiscoveryPanel")]
+    panel = main_qml[main_qml.index("id: trackInsightPanel") : main_qml.index("component DiscoveryArtwork")]
 
     assert 'visible: root.activeScreen === "trackinsight"' in main_qml
-    assert "property bool autoInsightRequested: false" in panel
-    assert "onVisibleChanged:" in panel
-    assert "visible && !autoInsightRequested && (djconnect.playing || djconnect.demoMode)" in panel
+    assert 'property string requestedInsightKey: ""' in panel
+    assert "onAutoInsightKeyChanged: {" in panel
+    assert "Qt.callLater(requestInsightIfVisible)" in panel
+    assert "onAutoInsightSurfaceActiveChanged: if (!autoInsightSurfaceActive) requestedInsightKey" in panel
+    assert "autoInsightKey === requestedInsightKey" in panel
     assert "djconnect.openTrackInsight()" in panel
     assert "function trackInsightLabel(value)" in main_qml
     assert '"summary": "track_insight_summary"' in main_qml
@@ -500,6 +513,9 @@ def test_qml_track_insight_panel_renders_contract_fields() -> None:
     assert 'columns: root.wallProfile ? 1 : 2' in panel
     assert 'width: Math.max(0, trackInsightScroll.availableWidth)' in panel
     assert "Layout.fillHeight: true" in panel
+    assert 'objectName: "trackInsightRefresh"' in panel
+    assert "loading: djconnect.trackInsightLoading" in panel
+    assert "LoadingSpinner {" not in panel
     assert "djconnect.refreshTrackInsight()" in panel
     assert 'root.tr("track_insight_empty")' in panel
     assert "djconnect.trackInsightError" in panel
@@ -548,8 +564,10 @@ def test_qml_music_discovery_nav_and_panel() -> None:
     assert "loading: djconnect.musicDiscoveryBusy" in discover_block
     assert "djconnect.refreshMusicDiscovery()" in discover_block
     assert "id: discoveryMusicDnaDisabledColumn" in discover_block
-    assert "(!djconnect.musicDnaEnabled || djconnect.musicDiscoveryConsentRejected)" in discover_block
-    assert "&& djconnect.musicDiscoveryError.length === 0 && !djconnect.musicDiscoveryBusy" in discover_block
+    assert "djconnect.musicDnaLoaded ? !djconnect.musicDnaEnabled" in discover_block
+    assert ": djconnect.musicDiscoveryDnaDisabled" in discover_block
+    assert "sections.length === 0 && !djconnect.musicDiscoveryBusy" in discover_block
+    assert "&& djconnect.musicDiscoveryError.length === 0" in discover_block
     assert 'root.tr("music_dna_disabled")' in discover_block
     assert 'text: root.tr("music_discovery_enable")' in discover_block
     assert "orientation: ListView.Horizontal" in discover_block
@@ -561,7 +579,7 @@ def test_qml_music_discovery_nav_and_panel() -> None:
     assert "discoveryDetail.item.playable" in detail
     assert "djconnect.musicDiscoveryFeedbackSupported" in detail
     assert "djconnect.sendMusicDiscoveryFeedback(item.payload, value)" in detail
-    assert "discoveryDetail.item.reasonSources" in detail
+    assert 'labelsForCodes(item.reasonSources, "music_discovery_source_")' in detail
     assert "item.qualityScore" in detail
     assert "modelData.relevance" not in discover_block
 
@@ -581,24 +599,26 @@ def test_qml_music_dna_enable_is_available_in_disabled_screen() -> None:
     assert "djconnect.refreshMusicDna()" in music_dna_block
     assert "visible: !djconnect.musicDnaEnabled" in music_dna_block
     assert 'objectName: "musicDnaOptInHero"' in music_dna_block
-    assert 'iconName: "heart"' in music_dna_block
+    assert 'iconName: "lock"' in music_dna_block
+    assert 'iconName: "sparkles"' in music_dna_block
     assert 'text: root.tr("music_dna_enable")' in music_dna_block
     assert "enabled: !djconnect.musicDnaBusy" in music_dna_block
     assert "Layout.preferredHeight: 56" in music_dna_block
     assert 'root.tr("music_dna_enabled")' not in music_dna_block
     assert "id: musicDnaRefreshButton" in music_dna_block
+    assert "loading: djconnect.musicDnaBusy" in music_dna_block
     assert "RefreshIconButton" in music_dna_block
 
 
 def test_qml_music_dna_opt_in_submits_only_in_confirmation_sheet() -> None:
     main = files("djconnect_pi.qml").joinpath("Main.qml").read_text(encoding="utf-8")
     sheet = main[main.index("id: musicDnaOptIn") : main.index("id: clearLogsConfirmPanel")]
-    assert main.count("djconnect.setMusicDnaEnabled(true)") == 1
-    assert main.count("djconnect.acceptMusicDiscoveryConsent()") == 1
-    assert "musicDnaOptIn.profileId === djconnect.activeProfileId" in sheet
+    assert main.count("djconnect.setMusicDnaEnabled(true, revision)") == 1
+    assert main.count("djconnect.acceptMusicDiscoveryConsent(revision)") == 1
+    assert "profileRevision === djconnect.musicDnaContextRevision" in sheet
     assert "if (!musicDnaOptIn.opened || !enabled) return" in sheet
-    assert "if (discoveryConsent) djconnect.acceptMusicDiscoveryConsent()" in sheet
-    assert "else djconnect.setMusicDnaEnabled(true)" in sheet
+    assert "if (discoveryConsent) djconnect.acceptMusicDiscoveryConsent(revision)" in sheet
+    assert "else djconnect.setMusicDnaEnabled(true, revision)" in sheet
 
 
 def test_qml_stop_demo_button_returns_to_pairing_flow() -> None:

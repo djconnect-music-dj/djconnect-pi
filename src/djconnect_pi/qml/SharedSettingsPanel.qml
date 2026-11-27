@@ -11,9 +11,15 @@ ColumnLayout {
     property bool dirty: false
     property var changedFields: ({})
     property bool saving: false
+    property bool checkingOutcome: false
+    readonly property bool outcomeUncertain: backend.sharedSettings.error === "uncertain"
+        || !!backend.sharedSettings.operation_pending || !!backend.sharedSettings.operation_unknown
+    readonly property bool progressVisible: backend.sharedSettingsBusy
+        && (saving || checkingOutcome || !backend.sharedSettings.values)
     readonly property var allFields: ["persona", "voice", "gender", "mood", "presence", "announcement_output"]
     property var fields: allFields
     readonly property var displayedFields: backend.sharedSettings.selection_required ? allFields : fields
+    readonly property bool textOnly: draft.announcement_output === "text_only"
     spacing: 12
 
     function tr(key) { backend.translationVersion; return backend.t(key) }
@@ -30,6 +36,10 @@ ColumnLayout {
         return list.map(function(value) { return { value: value, label_key: "shared_" + field + "_" + value } })
     }
     function label(item) { return item.label_key ? tr(item.label_key) : item.label }
+    function canChoose(field, item) {
+        return field !== "voice" || item.value.kind === "provider_default" || !draft.gender
+            || draft.gender === "default" || item.gender === draft.gender
+    }
     function selectedIndex(field) {
         var list = options(field)
         for (var i = 0; i < list.length; ++i)
@@ -56,8 +66,7 @@ ColumnLayout {
         if (error === "denied") return tr("shared_error_denied")
         if (error === "conflict") return tr("shared_error_conflict")
         if (error === "selection_required") return tr("shared_selection_required")
-        if (error === "uncertain" || backend.sharedSettings.operation_pending || backend.sharedSettings.operation_unknown)
-            return tr("shared_error_uncertain")
+        if (outcomeUncertain) return tr("shared_error_uncertain")
         if (error === "offline") return tr("shared_error_offline")
         if (error) return tr("shared_error_rejected")
         return ""
@@ -66,6 +75,10 @@ ColumnLayout {
     Connections {
         target: editor.backend
         function onSharedSettingsChanged() {
+            if (editor.checkingOutcome && !editor.backend.sharedSettingsBusy) {
+                editor.checkingOutcome = false
+                if (editor.backend.sharedSettings.available && !editor.outcomeUncertain) editor.loadConfirmed()
+            }
             if (editor.saving && !editor.backend.sharedSettingsBusy) {
                 editor.saving = false
                 if (editor.backend.sharedSettings.available && !editor.backend.sharedSettings.operation_pending &&
@@ -123,6 +136,7 @@ ColumnLayout {
         delegate: ColumnLayout {
             id: fieldRow
             required property string modelData
+            visible: !editor.textOnly || !["voice", "gender"].includes(modelData)
             Layout.fillWidth: true
             spacing: 6
             Label {
@@ -140,7 +154,7 @@ ColumnLayout {
                 currentIndex: editor.selectedIndex(fieldRow.modelData)
                 displayText: currentIndex >= 0 ? editor.label(model[currentIndex]) : editor.tr("shared_unavailable_selection")
                 enabled: !!editor.backend.sharedSettings.available && !editor.backend.sharedSettingsBusy &&
-                         !editor.backend.sharedSettings.operation_pending &&
+                         !editor.outcomeUncertain &&
                          (editor.backend.sharedSettings.writable || []).indexOf(fieldRow.modelData) >= 0
                 Accessible.name: editor.tr("shared_field_" + fieldRow.modelData)
                 delegate: ItemDelegate {
@@ -150,8 +164,13 @@ ColumnLayout {
                     text: editor.label(modelData)
                     font.pixelSize: 24
                     highlighted: choice.highlightedIndex === index
+                    enabled: editor.canChoose(fieldRow.modelData, modelData)
                 }
-                onActivated: function(index) { editor.choose(fieldRow.modelData, model[index].value) }
+                onActivated: function(index) {
+                    const item = model[index]
+                    if (item && editor.canChoose(fieldRow.modelData, item)) editor.choose(fieldRow.modelData, item.value)
+                    else currentIndex = Qt.binding(() => editor.selectedIndex(fieldRow.modelData))
+                }
             }
         }
     }
@@ -163,8 +182,8 @@ ColumnLayout {
         wrapMode: Text.WordWrap
     }
     Label {
-        visible: !!editor.backend.sharedSettings.values && !editor.backend.sharedSettings.speaker_available &&
-                 ["ha_speaker", "both"].indexOf((editor.backend.sharedSettings.values || {}).announcement_output) >= 0
+        visible: !editor.backend.sharedSettings.speaker_available
+            && ["ha_speaker", "both"].includes(editor.draft.announcement_output)
         text: editor.tr("dj_announcement_speaker_unavailable")
         color: BrandTheme.colors.muted
         font.pixelSize: 18
@@ -172,34 +191,65 @@ ColumnLayout {
         wrapMode: Text.WordWrap
     }
     Label {
-        visible: !!editor.backend.sharedSettings.values && !editor.backend.sharedSettings.voice_available
+        visible: !!editor.backend.sharedSettings.values && !editor.textOnly && !editor.backend.sharedSettings.voice_available
         text: editor.tr("shared_voice_unavailable")
         color: BrandTheme.colors.muted
         font.pixelSize: 18
         Layout.fillWidth: true
         wrapMode: Text.WordWrap
     }
+    Label {
+        objectName: "sharedVoicePreserved"
+        visible: editor.textOnly
+        text: editor.tr("shared_voice_preserved_text_only")
+        color: BrandTheme.colors.muted
+        font.pixelSize: 18
+        Layout.fillWidth: true
+        wrapMode: Text.WordWrap
+    }
+    RowLayout {
+        visible: editor.progressVisible
+        Layout.fillWidth: true
+
+        BusyIndicator {
+            running: editor.progressVisible
+            Layout.preferredWidth: 24
+            Layout.preferredHeight: 24
+        }
+        Label {
+            objectName: "sharedSettingsProgress"
+            text: editor.tr(editor.saving ? "shared_saving" : "loading")
+            color: BrandTheme.colors.muted
+            font.pixelSize: 18
+            Layout.fillWidth: true
+            wrapMode: Text.WordWrap
+        }
+    }
     RowLayout {
         Layout.fillWidth: true
         Button {
-            text: editor.tr("shared_reload")
+            objectName: "sharedReload"
+            text: editor.tr(editor.outcomeUncertain ? "shared_check_outcome" : "shared_reload")
             Layout.fillWidth: true
             Layout.minimumHeight: 54
             font.pixelSize: 22
             enabled: !editor.backend.sharedSettingsBusy
             onClicked: {
-                editor.dirty = false
+                editor.checkingOutcome = editor.outcomeUncertain
+                if (!editor.checkingOutcome) editor.dirty = false
                 editor.backend.pollSharedSettings()
+                if (!editor.backend.sharedSettingsBusy) editor.checkingOutcome = false
             }
         }
         GlassButton {
+            objectName: "sharedApply"
             primary: true
             text: editor.tr("shared_apply")
             Layout.fillWidth: true
             Layout.minimumHeight: 54
             font.pixelSize: 22
             enabled: !!editor.backend.sharedSettings.available && !editor.backend.sharedSettingsBusy &&
-                     !editor.backend.sharedSettings.operation_pending && editor.editToken.length > 0 &&
+                     !editor.outcomeUncertain && editor.editToken.length > 0 &&
                      (editor.dirty || editor.backend.sharedSettings.selection_required)
             onClicked: {
                 var patch = {}
@@ -208,7 +258,21 @@ ColumnLayout {
                 patch._edit_token = editor.editToken
                 editor.saving = true
                 editor.backend.saveSharedSettings(patch)
+                if (!editor.backend.sharedSettingsBusy) editor.saving = false
             }
+        }
+    }
+    GlassButton {
+        objectName: "sharedUseConfirmed"
+        visible: !!editor.backend.sharedSettings.operation_unknown
+        enabled: !editor.backend.sharedSettingsBusy
+        text: editor.tr("shared_use_confirmed")
+        wrapText: true
+        Layout.fillWidth: true
+        onClicked: {
+            editor.checkingOutcome = true
+            editor.backend.useConfirmedSharedSettings()
+            if (!editor.backend.sharedSettingsBusy) editor.checkingOutcome = false
         }
     }
 }

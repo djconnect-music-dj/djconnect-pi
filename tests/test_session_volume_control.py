@@ -4,6 +4,7 @@ from unittest.mock import Mock
 
 import pytest
 import requests
+from PySide6.QtTest import QTest
 from test_session_playback_control import ITEM_ID, setup
 
 from djconnect_pi.session_playback_control import volume_observation
@@ -37,6 +38,28 @@ def read_ready(owner, backend):
     assert observation and not owner.busy
     assert not backend.jobs  # No independent refresh is invented for an observation.
     return observation
+
+
+@pytest.mark.parametrize("withdrawal", ["timer", "output", "hide"])
+def test_closed_volume_keeps_a_short_display_sample_without_a_write_lease(controller, withdrawal):
+    owner, backend, _ = setup_volume(controller, percent=0)
+    observation = read_ready(owner, backend)
+    owner.dismissPlaybackVolume()
+
+    control = owner.state["playback_control"]
+    assert control["display_volume_percent"] == 0
+    assert not control["volume"]
+    assert not owner.setPlaybackVolume(SID, ITEM_ID, observation["lease"], 20)
+    assert not backend.jobs
+
+    if withdrawal == "timer":
+        owner._playback_control._volume_display_timer.start(1)
+        QTest.qWait(20)
+    elif withdrawal == "output":
+        owner._session["broadcast"]["playback"]["target_name"] = "Replacement output"
+    else:
+        owner.setPlaybackControlsVisible(False)
+    assert owner.state["playback_control"]["display_volume_percent"] is None
 
 
 @pytest.mark.parametrize("provider", ["spotify_direct", "music_assistant"])

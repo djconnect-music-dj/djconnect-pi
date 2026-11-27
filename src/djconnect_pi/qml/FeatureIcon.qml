@@ -8,6 +8,21 @@ Canvas {
         property real strokeWidth: 2.4
         property bool heroGradient: false
         property real whiteSweep: -1
+        property string outputType: ""
+        readonly property string outputGlyph: {
+            switch (outputType.trim().toLowerCase()) {
+            case "computer":
+            case "tv":
+                return "output"
+            case "headphones":
+                return "headphones"
+            case "phone":
+            case "smartphone":
+                return "phone"
+            default:
+                return "speaker"
+            }
+        }
 
         DJSessionMenuSymbol {
             anchors.fill: parent
@@ -17,11 +32,13 @@ Canvas {
         implicitWidth: 32
         implicitHeight: 32
         onIconNameChanged: requestPaint()
+        onOutputGlyphChanged: if (iconName === "output_device") requestPaint()
         onIconColorChanged: requestPaint()
         onStrokeWidthChanged: requestPaint()
         onHeroGradientChanged: requestPaint()
         onWhiteSweepChanged: requestPaint()
         onPaint: {
+            const iconName = menuIcon.iconName === "output_device" ? outputGlyph : menuIcon.iconName
             var ctx = getContext("2d")
             var w = width
             var h = height
@@ -114,13 +131,19 @@ Canvas {
             } else if (iconName === "next") {
                 transportTriangle(1, 0.05); transportTriangle(1, -0.17)
                 ctx.fillRect(px(16) + s * 0.23, py(16) - s * 0.24, s * 0.07, s * 0.48)
-            } else if (iconName === "repeat") {
+            } else if (iconName === "repeat" || iconName === "repeat_one") {
                 line(6, 10, 26, 10)
                 line(22, 6, 26, 10)
                 line(22, 14, 26, 10)
                 line(26, 22, 6, 22)
                 line(10, 18, 6, 22)
                 line(10, 26, 6, 22)
+                if (iconName === "repeat_one") {
+                    ctx.font = "bold " + Math.max(8, s * 0.29) + "px sans-serif"
+                    ctx.textAlign = "center"
+                    ctx.textBaseline = "middle"
+                    ctx.fillText("1", px(16), py(16))
+                }
             } else if (iconName === "shuffle") {
                 line(5, 9, 10, 9)
                 line(10, 9, 23, 23)
@@ -190,8 +213,17 @@ Canvas {
                 circle(16, 16, 11, false); line(16, 9, 16, 16); line(16, 16, 21, 19)
             } else if (iconName === "forecast_target") {
                 circle(16, 16, 11, false); circle(16, 16, 6, false); circle(16, 16, 2, true)
+            } else if (iconName === "forecast_horizon") {
+                ctx.beginPath()
+                ctx.arc(px(16), py(20), 7 * s / 32, Math.PI, Math.PI * 2)
+                ctx.stroke()
+                line(4, 20, 28, 20)
+                line(9, 25, 23, 25)
+                line(16, 6, 16, 9)
+                line(6, 10, 8, 12)
+                line(26, 10, 24, 12)
             } else if (iconName === "history") {
-                ctx.beginPath(); ctx.arc(px(16), py(16), 10, -Math.PI * 0.8, Math.PI * 0.8); ctx.stroke()
+                ctx.beginPath(); ctx.arc(px(16), py(16), 10 * s / 32, -Math.PI * 0.8, Math.PI * 0.8); ctx.stroke()
                 line(8, 5, 7, 12); line(7, 12, 13, 11)
                 line(16, 10, 16, 16); line(16, 16, 21, 19)
             } else if (iconName === "persona") {
@@ -200,6 +232,20 @@ Canvas {
             } else if (iconName === "output") {
                 roundRect(4, 5, 24, 17, 2)
                 line(10, 27, 22, 27); line(16, 22, 16, 27)
+            } else if (iconName === "headphones") {
+                ctx.beginPath()
+                ctx.arc(px(16), py(16), 10 * s / 32, Math.PI, Math.PI * 2)
+                ctx.stroke()
+                line(6, 16, 6, 23); line(26, 16, 26, 23)
+                roundRect(5, 17, 6, 10, 2)
+                roundRect(21, 17, 6, 10, 2)
+            } else if (iconName === "phone") {
+                roundRect(9, 3, 14, 26, 3)
+                line(14, 25, 18, 25)
+            } else if (iconName === "speaker") {
+                roundRect(8, 4, 16, 24, 2)
+                circle(16, 11, 2, true)
+                circle(16, 20, 4, false)
             } else if (iconName === "vibecast") {
                 line(4, 5, 26, 5); line(26, 5, 26, 17)
                 line(4, 5, 4, 21); line(4, 21, 15, 21)
@@ -207,11 +253,15 @@ Canvas {
                 ctx.beginPath(); ctx.arc(px(24), py(28), 6 * s / 32, -2.45, -0.69); ctx.stroke()
                 ctx.beginPath(); ctx.arc(px(24), py(28), 3 * s / 32, -2.35, -0.79); ctx.stroke()
                 circle(24, 28, 1, true)
-            } else if (iconName === "voice") {
+            } else if (iconName === "voice" || iconName === "voice_muted") {
                 line(6, 13, 11, 13); line(11, 13, 17, 8); line(17, 8, 17, 24)
                 line(17, 24, 11, 19); line(11, 19, 6, 19); line(6, 19, 6, 13)
-                ctx.beginPath(); ctx.arc(px(18), py(16), 6 * s / 32, -1, 1); ctx.stroke()
-                ctx.beginPath(); ctx.arc(px(18), py(16), 10 * s / 32, -1, 1); ctx.stroke()
+                if (iconName === "voice_muted") {
+                    line(21, 13, 27, 19); line(27, 13, 21, 19)
+                } else {
+                    ctx.beginPath(); ctx.arc(px(18), py(16), 6 * s / 32, -1, 1); ctx.stroke()
+                    ctx.beginPath(); ctx.arc(px(18), py(16), 10 * s / 32, -1, 1); ctx.stroke()
+                }
             } else if (iconName === "music") {
                 line(13, 10, 13, 23)
                 line(13, 10, 22, 7)
@@ -246,6 +296,20 @@ Canvas {
                 ctx.quadraticCurveTo(px(22), py(4), px(16), py(9))
                 ctx.lineTo(px(16), py(26))
                 ctx.stroke()
+            } else if (iconName === "newspaper") {
+                roundRect(5, 6, 22, 20, 2)
+                line(9, 11, 23, 11)
+                roundRect(9, 15, 5, 6, 1)
+                line(18, 15, 23, 15)
+                line(18, 21, 23, 21)
+            } else if (iconName === "lock") {
+                ctx.beginPath()
+                ctx.arc(px(16), py(12), 6 * s / 32, Math.PI, Math.PI * 2)
+                ctx.stroke()
+                line(10, 12, 10, 15)
+                line(22, 12, 22, 15)
+                roundRect(7, 15, 18, 13, 3)
+                circle(16, 21, 1.4, true)
             } else if (iconName === "sparkles") {
                 star(19, 19, 11); star(8, 8, 5); star(23, 5, 3)
             } else if (iconName === "playlists") {
@@ -290,7 +354,21 @@ Canvas {
                 star(21, 7, 4.5)
                 star(7, 19, 3.7)
                 star(11, 25, 2.4)
-            } else if (iconName === "heart") {
+            } else if (iconName === "thumbs_down") {
+                roundRect(23, 6, 5, 12, 1)
+                ctx.beginPath()
+                ctx.moveTo(px(23), py(8))
+                ctx.lineTo(px(20), py(5))
+                ctx.lineTo(px(9), py(5))
+                ctx.quadraticCurveTo(px(6), py(5), px(5), py(8))
+                ctx.lineTo(px(4), py(15))
+                ctx.quadraticCurveTo(px(4), py(18), px(7), py(18))
+                ctx.lineTo(px(13), py(18))
+                ctx.lineTo(px(12), py(24))
+                ctx.quadraticCurveTo(px(12), py(29), px(16), py(26))
+                ctx.lineTo(px(23), py(17))
+                ctx.stroke()
+            } else if (iconName === "heart" || iconName === "heart_filled") {
                 ctx.beginPath()
                 ctx.moveTo(px(16), py(25))
                 ctx.bezierCurveTo(px(7), py(19), px(5), py(13), px(8.5), py(9.5))
@@ -298,7 +376,8 @@ Canvas {
                 ctx.bezierCurveTo(px(17), py(8.5), px(20.5), py(6.5), px(23.5), py(9.5))
                 ctx.bezierCurveTo(px(27), py(13), px(25), py(19), px(16), py(25))
                 ctx.closePath()
-                ctx.stroke()
+                if (iconName === "heart_filled") ctx.fill()
+                else ctx.stroke()
             } else if (iconName === "mood") {
                 circle(16, 16, 10, false)
                 circle(12, 13, 1.4, true)
@@ -352,6 +431,27 @@ Canvas {
             } else if (iconName === "copy") {
                 roundRect(11, 4, 15, 20, 2)
                 line(8, 10, 6, 10); line(6, 10, 6, 28); line(6, 28, 20, 28)
+            } else if (iconName === "text_cursor") {
+                line(16, 7, 16, 25)
+                line(12, 7, 20, 7)
+                line(12, 25, 20, 25)
+            } else if (iconName === "external_link") {
+                ctx.beginPath()
+                ctx.moveTo(px(15), py(8))
+                ctx.lineTo(px(7), py(8))
+                ctx.lineTo(px(7), py(25))
+                ctx.lineTo(px(24), py(25))
+                ctx.lineTo(px(24), py(17))
+                ctx.stroke()
+                line(15, 17, 26, 6)
+                line(18, 6, 26, 6); line(26, 6, 26, 14)
+            } else if (iconName === "share") {
+                ctx.beginPath()
+                ctx.moveTo(px(11), py(13)); ctx.lineTo(px(7), py(13)); ctx.lineTo(px(7), py(27))
+                ctx.lineTo(px(25), py(27)); ctx.lineTo(px(25), py(13)); ctx.lineTo(px(21), py(13))
+                ctx.stroke()
+                line(16, 18, 16, 5)
+                line(11, 10, 16, 5); line(16, 5, 21, 10)
             } else if (iconName === "document") {
                 roundRect(8, 4, 16, 24, 2)
                 line(12, 11, 20, 11); line(12, 16, 20, 16); line(12, 21, 17, 21)
@@ -360,6 +460,9 @@ Canvas {
                 line(16, 11, 16, 21)
             } else if (iconName === "back") {
                 line(20, 7, 11, 16); line(11, 16, 20, 25)
+            } else if (iconName === "chevron_right") {
+                ctx.beginPath(); ctx.moveTo(px(12), py(7)); ctx.lineTo(px(21), py(16))
+                ctx.lineTo(px(12), py(25)); ctx.stroke()
             } else if (iconName === "arrow_up") {
                 line(16, 25, 16, 7)
                 line(8, 15, 16, 7); line(16, 7, 24, 15)
@@ -389,14 +492,23 @@ Canvas {
                 ctx.beginPath(); ctx.moveTo(px(8), py(23)); ctx.quadraticCurveTo(px(16), py(19), px(24), py(23)); ctx.stroke()
                 ctx.beginPath(); ctx.moveTo(px(16), py(5)); ctx.bezierCurveTo(px(8), py(10), px(8), py(22), px(16), py(27)); ctx.stroke()
                 ctx.beginPath(); ctx.moveTo(px(16), py(5)); ctx.bezierCurveTo(px(24), py(10), px(24), py(22), px(16), py(27)); ctx.stroke()
+            } else if (iconName === "close") {
+                line(9, 9, 23, 23)
+                line(23, 9, 9, 23)
             } else if (iconName === "end") {
                 ctx.strokeStyle = BrandTheme.colors.danger
                 circle(16, 16, 10, false)
                 line(12, 12, 20, 20); line(20, 12, 12, 20)
             } else if (iconName === "refresh") {
-                ctx.beginPath(); ctx.arc(px(16), py(17), s * 0.28, -Math.PI * 0.65, Math.PI * 1.1); ctx.stroke()
-                line(19, 5, 23, 10); line(23, 10, 17, 11)
-
+                const radius = 10.5
+                const tipX = 16 + radius * Math.SQRT1_2
+                const tipY = 17 - radius * Math.SQRT1_2
+                ctx.beginPath()
+                ctx.arc(px(16), py(17), radius * s / 32, Math.PI / 10, Math.PI * 7 / 4)
+                ctx.moveTo(px(tipX), py(tipY - 6))
+                ctx.lineTo(px(tipX), py(tipY))
+                ctx.lineTo(px(tipX - 6), py(tipY))
+                ctx.stroke()
             }
 
             if (heroGradient && whiteSweep >= 0) {

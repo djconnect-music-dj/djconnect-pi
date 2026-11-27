@@ -9,6 +9,7 @@ from typing import Any
 from unittest.mock import patch
 
 import pytest
+import requests
 
 from djconnect_pi.config import Config
 from djconnect_pi.ha import (
@@ -109,7 +110,7 @@ def test_client_contract_does_not_use_raw_ask_dj_or_old_search_aliases() -> None
     ]
     forbidden_patterns = {
         "raw Ask DJ route": re.compile(r"/api/djconnect/v1/ask_dj(?:[\"'`\s]|$)"),
-        "HA Ask DJ service": re.compile(r"\bdjconnect\.ask_dj\b"),
+        "HA Ask DJ service": re.compile(r"\bdjconnect\.ask_dj\b(?!\.history\.export\b)"),
         "spotify search alias": re.compile(r"\bspotify_search_query\b"),
         "last spotify search alias": re.compile(r"\blast_spotify_search\b"),
     }
@@ -185,13 +186,18 @@ def test_status_uses_bearer_token_and_playback_fields() -> None:
     )
     client = HAClient(cfg)
     captured: dict[str, Any] = {}
+    redirected = False
 
     def fake_post(url: str, **kwargs: Any) -> FakeResponse:
         captured.update(kwargs)
-        return FakeResponse(200, {"success": True})
+        response = FakeResponse(200, {"success": True})
+        response.request = requests.Request("POST", url + "?fixture=redacted", headers=kwargs["headers"]).prepare()
+        response.url = response.request.url
+        response.history = [FakeResponse(307)] if redirected else []
+        return response
 
     with patch("djconnect_pi.ha.requests.post", side_effect=fake_post):
-        client.status(
+        status = client.status(
             Playback(
                 title="Alive",
                 artist="Pearl Jam",
@@ -205,6 +211,7 @@ def test_status_uses_bearer_token_and_playback_fields() -> None:
             queue_items=[{"title": "Next up"}],
         )
 
+    assert status.authenticated_origin == "http://ha"
     assert captured["headers"]["Authorization"] == "Bearer token-1"
     assert captured["headers"]["X-DJConnect-Device-ID"] == "djconnect-raspberry-pi-ABCDEF123456"
     assert captured["json"]["last_track"] == "Alive"
@@ -229,6 +236,10 @@ def test_status_uses_bearer_token_and_playback_fields() -> None:
     assert captured["json"]["queue"] == {"items": [{"title": "Next up"}]}
     for esp_only in ("battery", "wifi_rssi", "screen_state", "led_state", "screen_brightness", "screen_timeout", "speaker_volume"):
         assert esp_only not in captured["json"]
+
+    redirected = True
+    with patch("djconnect_pi.ha.requests.post", side_effect=fake_post):
+        assert client.status().authenticated_origin == ""
 
 
 def test_playback_from_status_reads_current_track_favorite_aliases() -> None:
@@ -515,6 +526,34 @@ def test_track_insight_no_track_and_rate_limit_are_retryable_states() -> None:
 
     assert no_track["error"] == "no_track_playing"
     assert limited["error"] == "rate_limited"
+
+
+def test_current_track_insight_posts_closed_selector_without_catalog_or_provider_hints() -> None:
+    cfg = Config(ha_url="http://ha.local:8123", device_id="fixture", device_token="fixture-token",
+                 music_backend="spotify", music_target_player={"id": "fixture-player"}, music_dna_key="dna-fixture")
+    client = HAClient(cfg)
+    response = {"success": True, "subject": {"schema_version": 1, "mode": "current"}}
+
+    with patch("djconnect_pi.ha.requests.post", return_value=FakeResponse(200, response)) as post:
+        assert client.current_track_insight(force_refresh=True) == response
+
+    assert post.call_args.args == ("http://ha.local:8123/api/djconnect/v1/track_insight",)
+    body = post.call_args.kwargs["json"]
+    assert body["track_insight_subject"] == {"schema_version": 1, "mode": "current"}
+    assert body["force_refresh"] is True and body["music_dna_key"] == "dna-fixture"
+    assert not {"track", "title", "artist", "album", "uri", "player_id", "music_backend"} & body.keys()
+
+
+@pytest.mark.parametrize(("status", "code"), [
+    (404, "current_track_unavailable"),
+    (503, "current_track_unavailable"),
+    (409, "track_insight_context_changed"),
+])
+def test_current_track_insight_preserves_typed_unavailable_result(status: int, code: str) -> None:
+    client = HAClient(Config(ha_url="http://ha.local:8123", device_token="fixture-token", paired=True))
+    data = {"success": False, "error": code}
+    with patch("djconnect_pi.ha.requests.post", return_value=FakeResponse(status, data)):
+        assert client.current_track_insight() == data
 
 
 def test_track_insight_logging_omits_tokens_and_temporary_urls(caplog) -> None:
@@ -1638,6 +1677,28 @@ def test_music_dna_export_import_remain_http_only_when_websocket_routes_advertis
     ]
     assert captured[0][1]["music_dna_key"] == "dna-1"
     assert captured[1][1]["profile"] == {"summary": "Imported"}
+
+
+def test_ask_dj_history_export_requests_the_profile_export_route() -> None:
+    cfg = Config(ha_url="http://ha.local:8123", device_id="fixture", device_token="fixture-token", paired=True,
+                 active_profile_id="profile-fixture")
+    client = HAClient(cfg)
+    export = {"success": True, "format": "djconnect.ask_dj.history.export", "schema_version": 1,
+              "history_scope": "profile", "owner_profile_id": "profile-fixture", "messages": []}
+
+    with patch("djconnect_pi.ha.requests.post", return_value=FakeResponse(200, export)) as post:
+        assert client.ask_dj_history_export() == export
+
+    assert post.call_args.args == ("http://ha.local:8123/api/djconnect/v1/ask_dj/history/export",)
+    assert post.call_args.kwargs["json"]["conversation_scope"] == "profile"
+    assert post.call_args.kwargs["json"]["identity"]["device_id"] == cfg.device_id
+
+    for invalid in ({"schema_version": True}, {"owner_profile_id": "another-profile"}):
+        with (
+            patch("djconnect_pi.ha.requests.post", return_value=FakeResponse(200, {**export, **invalid})),
+            pytest.raises(DJConnectError, match="invalid_ask_dj_history_export"),
+        ):
+            client.ask_dj_history_export()
 
 
 def test_music_dna_uses_advertised_http_fallback_path_when_websocket_command_missing() -> None:

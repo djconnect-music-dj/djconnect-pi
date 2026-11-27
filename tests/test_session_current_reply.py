@@ -49,6 +49,30 @@ def test_selected_live_credit_renders_current_text_without_history_read_or_media
     assert set(reply) == {"text", "question_text", "reply_id", "session_id", "reference", "display_sources", "requires_spotify_attribution", "spotify_source_url"}
 
 
+def test_tell_more_keeps_the_composer_selection_and_pins_the_moment(controller):
+    owner, backend = controller
+    _, fixture, _ = setup_reply(owner)
+    saved = owner.state["selection"]
+    key = "ask_dj_contextual_exploration"
+    owner._caps["capabilities"][key] = True
+    owner._caps["contract_versions"][key] = 1
+    owner._caps[key] = {
+        "version": 1, "operation": "ask_dj/message", "context": ["selected_entry", "selected_moment"],
+        "generic_questions": {"en": "Tell me more"}, "attribute_required": False, "effect": "informational",
+        "subject_authority": "qualified_selected_public_context", "unqualified_context": "existing_source_unavailable_response",
+        "client_gesture_owner": "client", "maximum_agent_calls": 3,
+    }
+    backend.cfg.language = "en"
+    assert not owner.exploreMoment("old-session", "m1")
+    assert owner.exploreMoment("s1", "m1")
+    assert not owner.exploreMoment("s1", "m1")
+    backend.jobs.pop()()
+    owner.transport.question.assert_called_once()
+    assert owner.transport.question.call_args.args[1]["selected"] == saved
+    assert owner.state["selection"] == saved
+    assert owner.state["current_reply"]["text"] == fixture["body"]["text"]
+
+
 @pytest.mark.parametrize("mutation", ["revision", "style", "expiry", "withdrawal", "foreground", "new_question", "end"])
 def test_current_reply_does_not_survive_source_or_scope_withdrawal(controller, mutation):
     owner, backend = controller

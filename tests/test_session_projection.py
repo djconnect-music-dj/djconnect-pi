@@ -9,6 +9,7 @@ from djconnect_pi.session_projection import (
     history_page,
     live_moments,
     session_current_idle,
+    timestamp,
 )
 from djconnect_pi.session_transport import SessionError
 
@@ -78,6 +79,31 @@ def test_current_grant_expires_independently_of_historical_permission():
     assert live_moments(data,now=9999999999)==[]
     data['broadcast']['native_delivery']['revocation_scope']='subscription'
     assert live_moments(data,now=0)==[]
+
+
+def test_track_insight_navigation_requires_the_original_live_track_and_source():
+    data = live_fixture()
+    wire = data["broadcast"]
+    moment = wire["dj_moments"][0]
+    moment.update(type="track", created_at="2026-10-20T00:00:00Z")
+    grant = wire["native_delivery"]["admissions"][0]
+    grant["source_expires_at"] = "2026-10-20T00:30:00Z"
+    reference = {"schema_version": 1, "session_id": "s1", "moment_id": "m1", "action_id": "insight-m1"}
+    offer = {"schema_version": 1, "kind": "navigation", "target": "track_insight", "label": "View Track Insight",
+             "required_capability": "moment_track_insight_navigation_v1", "action_id": "insight-m1",
+             "reference": reference}
+    grant["navigation_actions"] = [offer]
+    published = timestamp(moment["created_at"])
+    card, = live_moments(data, now=published + 1)
+    assert card["insight_navigation"] == {"reference": reference, "expires_at": published + 600}
+    assert "insight_navigation" not in live_moments(data, now=published + 600)[0]
+    wire["native_delivery"]["current_moment_id"] = None
+    assert "insight_navigation" not in live_moments(data, now=published + 1)[0]
+    wire["native_delivery"]["current_moment_id"] = "m1"
+    grant["navigation_actions"] = [offer, offer]
+    assert "insight_navigation" not in live_moments(data, now=published + 1)[0]
+    grant["navigation_actions"] = [{**offer, "reference": {**reference, "session_id": "s2"}}]
+    assert "insight_navigation" not in live_moments(data, now=published + 1)[0]
 
 
 @pytest.mark.parametrize('mutation',[

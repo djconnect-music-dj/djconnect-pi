@@ -85,7 +85,7 @@ def test_presentation_selection_does_not_use_primary_action_gradient():
     assert 'primary:' not in mode_strip
     toolbar_choices = qml.split("id: choices", 1)[1].split("id: vibeCastPanel", 1)[0]
     assert 'checked: choices.selectedValue === modelData' in toolbar_choices
-    assert 'checked: choices.selectedValue === modelData.value' in toolbar_choices
+    assert 'checked: choices.isSelected(modelData)' in toolbar_choices
     assert 'primary:' not in toolbar_choices
     outputs = qml.split('id: outputsPanel', 1)[1].split('id: composerPanel', 1)[0]
     assert 'checked: modelData.active' in outputs

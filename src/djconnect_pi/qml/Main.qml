@@ -1,6 +1,7 @@
 import QtQuick
 import "BrandTheme.js" as BrandTheme
 import QtQuick.Controls
+import QtQuick.Dialogs
 import QtQuick.Layouts
 import QtQuick.Window
 import "MoodTheme.js" as MoodTheme
@@ -47,8 +48,15 @@ BrandWindow {
     }
     Connections {
         target: djconnect
-        function onProfileChanged() { root.trackArtworkOpen = false; root.syncVibeScape(); musicDnaOptIn.close(); root.closeDiscoveryDetail() }
-        function onPairedChanged() { root.trackArtworkOpen = false; root.syncVibeScape(); musicDnaOptIn.close(); root.closeDiscoveryDetail() }
+        function onProfileChanged() { root.trackArtworkOpen = false; root.syncVibeScape(); musicDnaOptIn.close(); root.closeMusicDnaConfirmation(); root.closeDiscoveryDetail() }
+        function onPairedChanged() { root.trackArtworkOpen = false; root.syncVibeScape(); musicDnaOptIn.close(); root.closeMusicDnaConfirmation(); root.closeDiscoveryDetail() }
+        function onDemoModeChanged() { musicDnaOptIn.close(); root.closeMusicDnaConfirmation() }
+        function onMusicDnaChanged() {
+            if (root.musicDnaConfirmationRevision !== djconnect.musicDnaContextRevision)
+                root.closeMusicDnaConfirmation()
+            if (musicDnaOptIn.visible && !musicDnaOptIn.currentProfile)
+                musicDnaOptIn.close()
+        }
     }
     function openVibeScape(pickerTop) {
         if (!vibeScapeAllowed) return
@@ -175,13 +183,40 @@ BrandWindow {
     property bool shutdownConfirmOpen: false
     property bool clearLogsConfirmOpen: false
     property bool askDjClearConfirmOpen: false
+    property int askDjClearConfirmationRevision: -1
+    property string askDjDraft: ""
+    property string askDjPendingQuestion: ""
+    property var askDjPendingAnswerContext: null
+    property var askDjDraftAnswerContext: null
+    onAskDjPendingQuestionChanged: if (!askDjPendingQuestion) askDjPendingAnswerContext = null
+    onAskDjDraftChanged: {
+        if (askDjDraftAnswerContext && askDjDraftAnswerContext.text !== askDjDraft)
+            askDjDraftAnswerContext = null
+    }
+    property var pendingMediaStart: null
+    property var askDjHistoryReturnReading: null
+    property var pendingAskDjSavedContext: null
+    readonly property int askDjDraftContextRevision: djconnect.musicDnaContextRevision
+    onAskDjDraftContextRevisionChanged: { askDjDraft = ""; askDjPendingQuestion = ""; pendingAskDjSavedContext = null }
+    Connections {
+        target: djconnect
+        function onProfileChanged() { root.askDjDraft = ""; root.askDjPendingQuestion = ""; root.pendingMediaStart = null; root.askDjHistoryReturnReading = null }
+        function onPairedChanged() { root.askDjDraft = ""; root.askDjPendingQuestion = ""; root.pendingMediaStart = null; root.askDjHistoryReturnReading = null }
+        function onDemoModeChanged() { root.askDjDraft = ""; root.askDjPendingQuestion = ""; root.pendingMediaStart = null; root.askDjHistoryReturnReading = null }
+        function onMediaActivityChanged() {
+            if (!djconnect.mediaPlaybackBusy) root.pendingMediaStart = null
+        }
+    }
     property bool musicDnaDisableConfirmOpen: false
     property bool musicDnaClearConfirmOpen: false
+    property int musicDnaConfirmationRevision: -1
     property bool forceScreenAwake: false
     property bool forceBrightnessFull: false
     property bool suppressNextNowPanelTap: false
     property bool trackArtworkOpen: false
     property bool trackArtworkControlsOpen: false
+    property Item trackArtworkOpeningControl: null
+    property string trackArtworkOpeningScope: ""
     readonly property bool trackArtworkCanControl: trackArtworkOpen && sessionTrackArtwork
         && trackArtworkViewOpen && !!sharedSessionScreen.state.playback_control.available
     onTrackArtworkCanControlChanged: if (!trackArtworkCanControl) trackArtworkControlsOpen = false
@@ -194,8 +229,32 @@ BrandWindow {
     onTrackArtworkViewOpenChanged: if (!trackArtworkViewOpen) trackArtworkOpen = false
     readonly property bool overlayTrackAvailable: sessionTrackArtwork ? sharedSessionScreen.trackArtworkAvailable : djconnect.hasTrackTitle
     onOverlayTrackAvailableChanged: if (!overlayTrackAvailable) trackArtworkOpen = false
-    onTrackArtworkOpenChanged: if (!trackArtworkOpen) trackArtworkDismissTimer.stop()
-    onScreenBlankedChanged: if (screenBlanked) trackArtworkOpen = false
+    onTrackArtworkOpenChanged: {
+        if (trackArtworkOpen) return
+        trackArtworkDismissTimer.stop()
+        const source = trackArtworkOpeningControl
+        const scope = trackArtworkOpeningScope
+        trackArtworkOpeningControl = null
+        trackArtworkOpeningScope = ""
+        if (source) Qt.callLater(function() {
+            if (source && !root.trackArtworkOpen && root.trackArtworkViewOpen
+                    && scope === sharedSessionScreen.playbackMenuScope && source.visible && source.enabled)
+                source.forceActiveFocus(Qt.PopupFocusReason)
+        })
+    }
+    onActiveChanged: if (!active) {
+        pendingMediaStart = null
+        askDjPendingQuestion = ""
+        askDjDraftAnswerContext = null
+    }
+    onScreenBlankedChanged: {
+        if (screenBlanked) {
+            trackArtworkOpen = false
+            pendingMediaStart = null
+            askDjPendingQuestion = ""
+            askDjDraftAnswerContext = null
+        }
+    }
     function showTrackArtwork(fromSession, automatic) {
         if (!trackArtworkViewOpen || (automatic && trackArtworkOpen && !trackArtworkDismissTimer.running))
             return
@@ -211,9 +270,11 @@ BrandWindow {
         trackArtworkDismissTimer.stop()
         trackArtworkControlsOpen = !trackArtworkControlsOpen
     }
-    function openTrackArtwork() {
-        if (sharedSessionScreen.trackArtworkAvailable)
-            showTrackArtwork(true)
+    function openTrackArtwork(source) {
+        if (!trackArtworkViewOpen || !sharedSessionScreen.trackArtworkAvailable) return
+        trackArtworkOpeningControl = source
+        trackArtworkOpeningScope = sharedSessionScreen.playbackMenuScope
+        showTrackArtwork(true)
     }
     property double lastWakeDisplayAt: 0
     property int wakeDisplayDebounceMs: 800
@@ -252,13 +313,53 @@ BrandWindow {
     function openMusicDnaPrompt(discoveryConsent) {
         if (musicDnaOptIn.visible || djconnect.musicDnaBusy || djconnect.musicDiscoveryBusy) return
         musicDnaOptIn.discoveryConsent = discoveryConsent
-        musicDnaOptIn.profileId = djconnect.activeProfileId
+        musicDnaOptIn.profileRevision = djconnect.musicDnaContextRevision
         musicDnaOptIn.open()
+    }
+
+    function closeMusicDnaConfirmation() {
+        root.musicDnaDisableConfirmOpen = false
+        root.musicDnaClearConfirmOpen = false
     }
 
     function tr(key) {
         root.trVersion
         return djconnect.t(key)
+    }
+
+    function playbackScreenTitle(key) {
+        const title = root.tr(key)
+        return djconnect.demoMode ? title + " · " + root.tr("demo_mode") : title
+    }
+
+    function leaveDemoMode() {
+        if (!djconnect.demoMode) return
+        djconnect.exitDemoMode()
+        root.activeScreen = "now"
+    }
+
+    component AppPageToolbar: PageToolbar {
+        readonly property string connectionProblem: {
+            if (djconnect.demoMode || !djconnect.paired) return ""
+            if (djconnect.versionMismatchVisible) return "version_mismatch_title"
+            if (!djconnect.haUrl.trim()) return "session_connection_address_missing"
+            if (!djconnect.backendAvailable) return "ha_connection_unavailable"
+            if (djconnect.musicBackendId && !djconnect.musicBackendAvailable) return "backend_unavailable"
+            return ""
+        }
+        connectionText: djconnect.demoMode ? root.tr("demo_mode")
+            : connectionProblem ? root.tr(connectionProblem) : djconnect.connectionType
+        connectionDetail: connectionProblem === "backend_unavailable"
+            ? djconnect.connectionType + "\n" + root.tr("music_backend_retry_notice") : ""
+        connectionIcon: connectionProblem ? "info" : "globe"
+        connectionIconColor: connectionProblem === "ha_connection_unavailable" ? BrandTheme.colors.danger
+            : connectionProblem ? BrandTheme.colors.warning : BrandTheme.colors.text
+        aboutLabel: root.tr("about")
+        stopDemoLabel: djconnect.demoMode ? root.tr("exit_demo") : ""
+        pairAgainLabel: connectionProblem === "session_connection_address_missing" ? root.tr("reset_pairing") : ""
+        onAboutRequested: root.aboutOpen = true
+        onStopDemoRequested: root.leaveDemoMode()
+        onPairAgainRequested: if (pairAgainLabel.length) root.resetPairingConfirmOpen = true
     }
 
     function trackInsightLabel(value) {
@@ -330,6 +431,8 @@ BrandWindow {
     }
 
     onActiveScreenChanged: {
+        if (activeScreen !== "askdj" && activeScreen !== "session-history") askDjHistoryReturnReading = null
+        if (activeScreen !== "askdj") pendingAskDjSavedContext = null
         root.trackArtworkOpen = false
         if (root.wallProfile && (root.activeScreen === "now" || root.activeScreen === "control")) {
             root.closeVibeScape()
@@ -339,10 +442,6 @@ BrandWindow {
         root.restartIdleTimer()
         if (root.activeScreen === "askdj") {
             root.scrollAskDjToTop()
-        } else if (root.activeScreen === "musicdna") {
-            djconnect.loadMusicDna()
-        } else if (root.activeScreen === "discover") {
-            djconnect.loadMusicDiscovery()
         }
     }
 
@@ -360,8 +459,7 @@ BrandWindow {
         root.clearLogsConfirmOpen = false
         root.askDjClearConfirmOpen = false
         if (askDjLoader.item) askDjLoader.item.closeSearch()
-        root.musicDnaDisableConfirmOpen = false
-        root.musicDnaClearConfirmOpen = false
+        root.closeMusicDnaConfirmation()
         root.closeDiscoveryDetail()
         musicDnaOptIn.close()
     }
@@ -477,7 +575,6 @@ BrandWindow {
         ToolTip.visible: hovered
         ToolTip.text: text
         Accessible.name: text
-        Accessible.description: text
         Layout.preferredWidth: 48
         Layout.preferredHeight: 48
         background: GlassSurface { tertiary: true; interactive: true; pressed: refreshControl.down; focused: refreshControl.activeFocus }
@@ -767,12 +864,14 @@ BrandWindow {
         property string iconName: "play"
         property bool primary: false
         property bool active: false
+        property bool waiting: false
 
         Layout.fillWidth: true
         Layout.fillHeight: true
         contentItem: Canvas {
             id: iconCanvas
             anchors.fill: parent
+            visible: !control.waiting
             antialiasing: true
             onPaint: {
                 var ctx = getContext("2d")
@@ -881,6 +980,16 @@ BrandWindow {
                 function onDownChanged() { iconCanvas.requestPaint() }
             }
         }
+        Loader {
+            anchors.centerIn: parent
+            width: 42
+            height: width
+            active: control.waiting
+            sourceComponent: BusyIndicator {
+                objectName: "playbackControlFavoriteSpinner"
+                running: true
+            }
+        }
         background: GlassSurface {
             radius: control.primary ? height / 2 : root.standardButtonRadius
             interactive: true
@@ -894,26 +1003,120 @@ BrandWindow {
         }
     }
 
+    component MediaOverflowText: Item {
+        id: overflowLabel
+        property alias text: label.text
+        property alias color: label.color
+        property alias font: label.font
+        property int stationaryLines: 1
+        property bool queueLabel: false
+        property bool inViewport: false
+        property bool reduceMotion: GlassStyle.reduceMotion
+        property real shift: 0
+        readonly property real overflow: Math.max(0, metrics.advanceWidth - width)
+        readonly property bool scrolling: queueLabel && root.active && GlassStyle.awake && !reduceMotion && overflow > 1
+        implicitHeight: label.implicitHeight
+        clip: scrolling
+
+        TextMetrics { id: metrics; text: label.text; font: label.font }
+        Text {
+            id: label
+            objectName: "mediaOverflowLabel"
+            x: -overflowLabel.shift
+            width: overflowLabel.scrolling ? Math.ceil(metrics.advanceWidth) : overflowLabel.width
+            textFormat: Text.PlainText
+            wrapMode: overflowLabel.scrolling ? Text.NoWrap : Text.Wrap
+            maximumLineCount: overflowLabel.queueLabel && overflowLabel.reduceMotion ? 2147483647
+                : overflowLabel.scrolling ? 1 : overflowLabel.stationaryLines
+            elide: overflowLabel.scrolling || (overflowLabel.queueLabel && overflowLabel.reduceMotion)
+                ? Text.ElideNone : Text.ElideRight
+        }
+        SequentialAnimation {
+            running: overflowLabel.scrolling && overflowLabel.inViewport && overflowLabel.visible
+            loops: Animation.Infinite
+            onRunningChanged: if (!running) overflowLabel.shift = 0
+            PauseAnimation { duration: 1250 }
+            NumberAnimation {
+                target: overflowLabel; property: "shift"
+                from: 0; to: overflowLabel.overflow
+                duration: Math.round(overflowLabel.overflow * 1000 / 28)
+            }
+            PauseAnimation { duration: 1250 }
+            NumberAnimation {
+                target: overflowLabel; property: "shift"
+                from: overflowLabel.overflow; to: 0
+                duration: Math.round(overflowLabel.overflow * 1000 / 28)
+            }
+        }
+    }
+
+    component PageFindShortcut: Shortcut {
+        required property bool pageReady
+        sequences: [StandardKey.Find]
+        enabled: pageReady && root.active && !root.screenBlanked && !root.splashVisible
+            && !root.trackArtworkOpen && !djconnect.logsVisible
+    }
+
     component MediaListPanel: Rectangle {
         id: panel
         property string heading: ""
         property string emptyText: ""
+        property string loadErrorText: ""
+        property bool loadFailed: false
         property string searchLabel: ""
+        property string refreshLabel: root.tr("refresh")
         property string iconName: "queue"
         property string playCommand: "play_context_at"
         property bool loading: false
         property var items: []
         property bool searching: false
         property bool keyboardOpen: false
+        property var refreshReading: null
+        property int selectedMatchIndex: 0
+        readonly property int mediaProfileRevision: djconnect.musicDnaContextRevision
+        property bool profileReloadPending: false
         readonly property bool compact: width < 900
-        readonly property var matches: filterItems(items, searchInput.text)
+        readonly property bool playbackAvailable: djconnect.demoMode || (djconnect.paired && djconnect.backendAvailable
+            && djconnect.musicBackendAvailable && !djconnect.versionMismatchVisible)
+        readonly property bool canReloadForProfile: playbackAvailable && !loading
+        readonly property bool refreshAvailable: !loading && (playbackAvailable
+            || (loadFailed && djconnect.paired && !djconnect.versionMismatchVisible))
+        readonly property bool trackQueue: playCommand === "play_context_at"
+        readonly property string query: searchInput.text.trim()
+        readonly property var matches: filterItems(items, query)
         signal refreshRequested()
+        signal profileReloadRequested()
+
+        function reloadForProfile() {
+            if (!profileReloadPending || !visible || !root.active || root.screenBlanked
+                    || root.splashVisible || !canReloadForProfile || djconnect.demoMode) return
+            profileReloadPending = false
+            profileReloadRequested()
+        }
+        onMediaProfileRevisionChanged: {
+            profileReloadPending = visible && !djconnect.demoMode
+            if (profileReloadPending) Qt.callLater(reloadForProfile)
+        }
+        onCanReloadForProfileChanged: if (canReloadForProfile && profileReloadPending) Qt.callLater(reloadForProfile)
+
+        function queueSubtitle(item) {
+            var artist = (item.artist || item.subtitle || "").trim()
+            var album = (item.album || "").trim()
+            if (!artist) return album
+            return album && artist.toLowerCase() !== album.toLowerCase() ? artist + " • " + album : artist
+        }
 
         function filterItems(source, query) {
             var term = searchText(query.trim())
             if (!term) return source
             return source.filter(function(item) {
-                return [item.title, item.subtitle, item.artist, item.album].some(function(value) {
+                var values = [item.title, item.subtitle, item.artist, item.album, item.uri]
+                if (panel.trackQueue) {
+                    var artist = (item.artist || item.subtitle || "").trim()
+                    if (item.title && artist) values.push(item.title + " - " + artist)
+                    values.push(panel.queueSubtitle(item))
+                }
+                return values.some(function(value) {
                     return searchText(value || "").indexOf(term) >= 0
                 })
             })
@@ -922,14 +1125,65 @@ BrandWindow {
             return String(value).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
         }
         function moveMatch(delta) {
-            if (!matches.length || !searchInput.text.trim()) return
-            mediaRows.currentIndex = (mediaRows.currentIndex + delta + matches.length) % matches.length
-            mediaRows.positionViewAtIndex(mediaRows.currentIndex, ListView.Contain)
+            if (!matches.length || !query) return false
+            selectedMatchIndex = (selectedMatchIndex + delta + matches.length) % matches.length
+            centerMatch()
+            return true
         }
-        function closeSearch() {
+        function centerMatch() {
+            if (!visible || !query || !matches.length) return
+            mediaRows.positionViewAtIndex(selectedMatchIndex, ListView.Center)
+        }
+        function refreshList() {
+            if (!refreshAvailable) return
+            if (!query && mediaRows.count) {
+                const y = mediaRows.contentY
+                const first = mediaRows.indexAt(1, y)
+                const index = first >= 0 ? first : mediaRows.indexAt(1, y + mediaRows.spacing)
+                const row = mediaRows.itemAtIndex(index)
+                if (row) refreshReading = {index: index, item: row.modelData, offset: row.y - y}
+            }
+            refreshRequested()
+            if (!loading) refreshReading = null
+        }
+        function restoreMediaReading(anchor) {
+            if (!visible || query || !matches.length) return
+            const match = matches.findIndex(item => item.uri && item.uri === anchor.item.uri
+                && (!trackQueue || queueIndex(item) === queueIndex(anchor.item)))
+            const index = match < 0 ? Math.min(anchor.index, matches.length - 1) : match
+            mediaRows.positionViewAtIndex(index, ListView.Beginning)
+            mediaRows.forceLayout()
+            const row = mediaRows.itemAtIndex(index)
+            if (row) mediaRows.contentY = Math.max(mediaRows.originY, Math.min(row.y - anchor.offset,
+                mediaRows.originY + Math.max(0, mediaRows.contentHeight - mediaRows.height)))
+        }
+        function openSearch(showKeyboard) {
+            if (!searchToggle.enabled) return
+            searching = true
+            keyboardOpen = showKeyboard
+            searchInput.forceActiveFocus()
+        }
+        function closeSearch(resetReading) {
+            const restoreFocus = !resetReading && searching && visible
+            if (resetReading) refreshReading = null
             keyboardOpen = false
             searching = false
             searchInput.clear()
+            if (restoreFocus && searchToggle.enabled) searchToggle.forceActiveFocus()
+        }
+
+        function isPendingMediaItem(item) {
+            const start = root.pendingMediaStart
+            if (!start || start.command !== playCommand) return false
+            const pending = start.item
+            if (pending === item) return true
+            if (playCommand === "start_playlist") return !!pending.uri && pending.uri === item.uri
+            return trackQueue && Number.isInteger(queueIndex(pending))
+                && queueIndex(pending) === queueIndex(item) && pending.uri === item.uri && pending.contextUri === item.contextUri
+        }
+
+        function queueIndex(item) {
+            return Number.isInteger(item.index) && item.index >= 0 ? item.index : item.sourceIndex
         }
 
         function itemPayload(item) {
@@ -944,7 +1198,7 @@ BrandWindow {
                 context_uri: item.context_uri || "",
                 queueContext: item.queueContext || "",
                 queue_context: item.queue_context || "",
-                index: typeof item.index === "number" ? item.index : null
+                index: trackQueue ? queueIndex(item) : null
             })
         }
 
@@ -953,21 +1207,44 @@ BrandWindow {
         z: 16
         onVisibleChanged: {
             if (visible) mediaRows.positionViewAtBeginning()
-            else closeSearch()
+            else {
+                profileReloadPending = false
+                closeSearch(true)
+            }
         }
         onMatchesChanged: {
-            mediaRows.currentIndex = 0
-            mediaRows.positionViewAtBeginning()
+            selectedMatchIndex = Math.max(0, Math.min(selectedMatchIndex, matches.length - 1))
+            if (query) Qt.callLater(centerMatch)
+            else if (refreshReading) {
+                Qt.callLater(restoreMediaReading, refreshReading)
+                refreshReading = null
+            }
+            else mediaRows.positionViewAtBeginning()
+        }
+        onLoadingChanged: if (!loading) refreshReading = null
+        onQueryChanged: {
+            selectedMatchIndex = 0
+            if (query) Qt.callLater(centerMatch)
         }
         Connections {
             target: djconnect
-            function onProfileChanged() { panel.closeSearch() }
-            function onPairedChanged() { panel.closeSearch() }
+            function onProfileChanged() { panel.closeSearch(true) }
+            function onPairedChanged() { panel.closeSearch(true) }
         }
         Connections {
             target: root
-            function onActiveChanged() { if (!root.active) panel.closeSearch() }
-            function onScreenBlankedChanged() { if (root.screenBlanked) panel.closeSearch() }
+            function onActiveChanged() {
+                if (!root.active) panel.closeSearch(true)
+                else if (panel.profileReloadPending) Qt.callLater(panel.reloadForProfile)
+            }
+            function onScreenBlankedChanged() {
+                if (root.screenBlanked) panel.closeSearch(true)
+                else if (panel.profileReloadPending) Qt.callLater(panel.reloadForProfile)
+            }
+        }
+        PageFindShortcut {
+            pageReady: panel.visible && searchToggle.enabled
+            onActivated: panel.openSearch(false)
         }
 
         ModalBlocker {}
@@ -978,7 +1255,7 @@ BrandWindow {
             anchors.bottomMargin: panel.keyboardOpen ? 8 : 132
             spacing: panel.compact ? 10 : 16
 
-            PageToolbar {
+            AppPageToolbar {
                 title: panel.heading
                 showLeading: panel.playCommand === "start_playlist"
                 leading: [ GlassButton {
@@ -988,29 +1265,30 @@ BrandWindow {
                 } ]
                 showConnection: true
                 connectionLabel: root.tr("connection_type")
-                connectionText: djconnect.connectionType
 
                 GlassButton {
+                    id: searchToggle
                     objectName: "mediaSearchOpen"
+                    readonly property string actionLabel: panel.searching ? root.tr("close_search") : panel.searchLabel
                     iconName: "search"
                     tertiary: true
                     implicitWidth: 52
                     foregroundColor: panel.searching ? BrandTheme.colors.actionAccent : BrandTheme.colors.text
-                    Accessible.name: panel.searchLabel
+                    Accessible.name: actionLabel
+                    ToolTip.visible: hovered
+                    ToolTip.text: actionLabel
                     enabled: panel.searching || panel.items.length > 0
                     onClicked: {
                         if (panel.searching) panel.closeSearch()
-                        else {
-                            panel.searching = true
-                            panel.keyboardOpen = true
-                            searchInput.forceActiveFocus()
-                        }
+                        else panel.openSearch(true)
                     }
                 }
                 RefreshIconButton {
                     objectName: "mediaRefresh"
+                    text: panel.refreshLabel
                     loading: panel.loading
-                    onClicked: if (!loading) panel.refreshRequested()
+                    enabled: panel.refreshAvailable
+                    onClicked: panel.refreshList()
                 }
             }
             Control {
@@ -1037,22 +1315,34 @@ BrandWindow {
                             if (panel.keyboardOpen) panel.keyboardOpen = false
                             else panel.moveMatch(1)
                         }
+                        Keys.onUpPressed: function(event) { event.accepted = panel.moveMatch(-1) }
+                        Keys.onDownPressed: function(event) { event.accepted = panel.moveMatch(1) }
                         Keys.onEscapePressed: if (panel.keyboardOpen) panel.keyboardOpen = false; else panel.closeSearch()
                     }
+                    Text {
+                        objectName: "mediaSearchMatchCount"
+                        visible: panel.query.length > 0 && panel.matches.length > 0
+                        text: (panel.selectedMatchIndex + 1) + " / " + panel.matches.length
+                        color: BrandTheme.colors.muted
+                        font.pixelSize: 16
+                    }
                     GlassButton {
+                        objectName: "mediaSearchPreviousMatch"
                         iconName: "arrow_up"; tertiary: true
                         Accessible.name: root.tr("logs_previous_match")
                         enabled: panel.matches.length > 0 && searchInput.text.trim().length > 0
                         onClicked: panel.moveMatch(-1)
                     }
                     GlassButton {
+                        objectName: "mediaSearchNextMatch"
                         iconName: "arrow_down"; tertiary: true
                         Accessible.name: root.tr("logs_next_match")
                         enabled: panel.matches.length > 0 && searchInput.text.trim().length > 0
                         onClicked: panel.moveMatch(1)
                     }
                     GlassButton {
-                        iconName: "end"; tertiary: true; Accessible.name: root.tr("close")
+                        objectName: "mediaSearchClose"
+                        iconName: "close"; tertiary: true; Accessible.name: root.tr("close_search")
                         onClicked: panel.closeSearch()
                     }
                 }
@@ -1065,16 +1355,27 @@ BrandWindow {
                     id: mediaRows
                     objectName: "mediaRows"
                     anchors.fill: parent
-                    visible: panel.matches.length > 0
                     model: panel.matches
                     clip: true
+                    flickableDirection: Flickable.VerticalFlick
                     spacing: panel.compact ? 10 : 14
                     ScrollBar.vertical: ScrollBar {}
+
+                    PullToRefresh {
+                        objectName: "mediaPullToRefresh"
+                        flickable: mediaRows
+                        canRefresh: panel.visible && root.active && !root.screenBlanked
+                            && panel.refreshAvailable && !djconnect.demoMode
+                        onRefreshRequested: if (canRefresh) panel.refreshList()
+                    }
+
                     delegate: Button {
                         id: mediaRow
                         required property var modelData
                         required property int index
                         objectName: "mediaItemRow-" + index
+                        readonly property bool starting: djconnect.mediaPlaybackBusy && panel.isPendingMediaItem(modelData)
+                        readonly property bool hasPlayableUri: String(modelData.uri || "").trim().length > 0
                         width: mediaRows.width
                         implicitHeight: Math.max(panel.compact ? 86 : 100, contentItem.implicitHeight + 2 * verticalPadding)
                         topPadding: panel.compact ? 9 : 13
@@ -1083,15 +1384,21 @@ BrandWindow {
                         rightPadding: leftPadding
                         text: modelData.title || ""
                         Accessible.name: text
-                        enabled: !!modelData.uri && !djconnect.mediaPlaybackBusy
-                        opacity: enabled ? 1 : 0.58
-                        onClicked: djconnect.playMediaItem(panel.playCommand, panel.itemPayload(modelData))
+                        Accessible.description: starting ? root.tr("loading") : ""
+                        enabled: hasPlayableUri && panel.playbackAvailable && !panel.loading && !djconnect.mediaPlaybackBusy
+                        opacity: enabled || starting ? 1 : 0.58
+                        onClicked: {
+                            if (djconnect.mediaPlaybackBusy) return
+                            root.pendingMediaStart = {command: panel.playCommand, item: modelData}
+                            djconnect.playMediaItem(panel.playCommand, panel.itemPayload(modelData))
+                            if (!djconnect.mediaPlaybackBusy) root.pendingMediaStart = null
+                        }
                         background: GlassSurface {
                             introduction: true
                             radius: panel.compact ? 24 : 34
                             pressed: mediaRow.down
-                            focused: mediaRow.activeFocus || (searchInput.text.trim().length > 0
-                                && mediaRows.currentIndex === mediaRow.index)
+                            focused: mediaRow.activeFocus || (panel.query.length > 0
+                                && panel.selectedMatchIndex === mediaRow.index)
                         }
                         contentItem: RowLayout {
                             spacing: panel.compact ? 12 : 17
@@ -1123,51 +1430,57 @@ BrandWindow {
                             }
                             ColumnLayout {
                                 id: mediaText
+                                readonly property bool onScreen: mediaRow.y + mediaRow.height > mediaRows.contentY
+                                    && mediaRow.y < mediaRows.contentY + mediaRows.height
                                 Layout.fillWidth: true
                                 spacing: 3
-                                Text {
+                                MediaOverflowText {
+                                    objectName: "mediaTrackTitle"
                                     text: mediaRow.text
-                                    textFormat: Text.PlainText
                                     color: BrandTheme.colors.text
                                     font.pixelSize: panel.compact ? 20 : 24
                                     font.weight: Font.DemiBold
-                                    wrapMode: Text.Wrap
-                                    maximumLineCount: 2
-                                    elide: Text.ElideRight
+                                    stationaryLines: 2
+                                    queueLabel: panel.trackQueue
+                                    inViewport: mediaText.onScreen
                                     Layout.fillWidth: true
                                 }
-                                Text {
-                                    text: mediaRow.modelData.subtitle || ""
-                                    textFormat: Text.PlainText
+                                MediaOverflowText {
+                                    objectName: "mediaTrackSubtitle"
+                                    text: panel.trackQueue ? panel.queueSubtitle(mediaRow.modelData) : ""
                                     visible: text.length > 0
                                     color: BrandTheme.colors.muted
                                     font.pixelSize: panel.compact ? 16 : 19
-                                    elide: Text.ElideRight
-                                    Layout.fillWidth: true
-                                }
-                                Text {
-                                    text: mediaRow.modelData.album || ""
-                                    textFormat: Text.PlainText
-                                    visible: text.length > 0 && text !== (mediaRow.modelData.subtitle || "")
-                                    color: BrandTheme.colors.muted
-                                    font.pixelSize: panel.compact ? 14 : 16
-                                    elide: Text.ElideRight
+                                    queueLabel: panel.trackQueue
+                                    inViewport: mediaText.onScreen
                                     Layout.fillWidth: true
                                 }
                             }
-                            FeatureIcon {
-                                objectName: "mediaPlayIndicator"
-                                visible: mediaRow.enabled
-                                iconName: "play"
+                            Item {
+                                visible: mediaRow.hasPlayableUri
                                 Layout.preferredWidth: panel.compact ? 28 : 34
                                 Layout.preferredHeight: Layout.preferredWidth
                                 Accessible.ignored: true
+                                FeatureIcon {
+                                    objectName: "mediaPlayIndicator"
+                                    anchors.fill: parent
+                                    visible: !mediaRow.starting
+                                    iconName: "play"
+                                }
+                                BusyIndicator {
+                                    objectName: "mediaPlaySpinner"
+                                    anchors.fill: parent
+                                    visible: mediaRow.starting
+                                    running: visible
+                                }
                             }
                         }
                     }
                 }
                 ColumnLayout {
-                    anchors.centerIn: parent
+                    objectName: "mediaEmptyState"
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    y: Math.max(0, (Math.min(parent.height, 360) - height) / 2)
                     width: parent.width
                     visible: panel.matches.length === 0
                     spacing: 14
@@ -1179,13 +1492,24 @@ BrandWindow {
                         Layout.preferredHeight: Layout.preferredWidth
                     }
                     Text {
-                        text: panel.items.length > 0 ? root.tr("media_no_matches") : panel.emptyText
+                        objectName: "mediaEmptyStateMessage"
+                        text: panel.items.length > 0 ? root.tr("media_no_matches")
+                            : panel.loading ? root.tr("loading") : panel.loadFailed ? panel.loadErrorText : panel.emptyText
                         textFormat: Text.PlainText
-                        color: BrandTheme.colors.muted
+                        color: !panel.items.length && !panel.loading && panel.loadFailed
+                            ? BrandTheme.colors.warning : BrandTheme.colors.muted
                         font.pixelSize: panel.compact ? 20 : 24
                         horizontalAlignment: Text.AlignHCenter
                         wrapMode: Text.Wrap
                         Layout.fillWidth: true
+                    }
+                    GlassButton {
+                        objectName: "mediaRetry"
+                        visible: !panel.items.length && panel.loadFailed && panel.refreshAvailable
+                        text: panel.refreshLabel
+                        iconName: "refresh"
+                        Layout.alignment: Qt.AlignHCenter
+                        onClicked: panel.refreshList()
                     }
                 }
             }
@@ -1259,14 +1583,22 @@ BrandWindow {
             }
         }
         function onAskDjChanged() {
+            if (!djconnect.askDjBusy) root.askDjPendingQuestion = ""
             const panel = askDjLoader.item
             if (panel && djconnect.askDjMessages.length === 0 && panel.searchOpen)
                 panel.closeSearch()
-            if (root.activeScreen === "askdj" && panel && !panel.searchOpen)
-                root.scrollAskDjToTop()
             if (root.askDjClearConfirmOpen && djconnect.askDjMessages.length === 0) {
                 root.askDjClearConfirmOpen = false
             }
+        }
+        function onAskDjUnsentDraft(text) {
+            if (!root.active || root.screenBlanked || root.askDjPendingQuestion !== text || root.askDjDraft) return
+            const panel = askDjLoader.item
+            if (panel && panel.answerContext) return
+            root.askDjDraft = text
+            if (root.askDjPendingAnswerContext)
+                root.askDjDraftAnswerContext = {text: text, context: root.askDjPendingAnswerContext}
+            if (panel) panel.restoreUnsentDraft(text)
         }
         function onScreenshotRequested() {
             root.temporaryWake(10, false)
@@ -1283,8 +1615,7 @@ BrandWindow {
             root.rebootConfirmOpen = false
             root.shutdownConfirmOpen = false
             root.askDjClearConfirmOpen = false
-            root.musicDnaDisableConfirmOpen = false
-            root.musicDnaClearConfirmOpen = false
+            root.closeMusicDnaConfirmation()
             if (screen === "logs") {
                 djconnect.showLogs()
                 return
@@ -1332,10 +1663,131 @@ BrandWindow {
         onPressed: function(mouse) { root.recordActivity(); mouse.accepted = false }
     }
 
+    readonly property bool compactPlaybackActionsAvailable: djconnect.demoMode
+        || (djconnect.paired && djconnect.backendAvailable && !djconnect.versionMismatchVisible)
+    readonly property bool playbackSeekActionsAvailable: compactPlaybackActionsAvailable
+        && djconnect.durationSeconds > 0 && !djconnect.busy
+        && (djconnect.demoMode || (djconnect.musicBackendAvailable && djconnect.playbackSeekOutputKnown))
+
+    component PlaybackSeekStepButton: GlassButton {
+        id: stepButton
+        required property int offsetMs
+        property bool showInSurface: true
+        iconName: offsetMs < 0 ? "seek_back_15" : "seek_forward_15"
+        Accessible.name: root.tr(iconName)
+        visible: showInSurface && (djconnect.demoMode || djconnect.musicBackendSupportsSeek)
+        enabled: root.playbackSeekActionsAvailable
+        onClicked: djconnect.seekPlayback(stepButton.offsetMs)
+    }
+
+    component PlaybackPositionControl: RowLayout {
+        id: playbackPosition
+        property bool controlPage: false
+        objectName: controlPage ? "controlPlaybackPosition" : "nowPlaybackPosition"
+        visible: djconnect.hasTrackTitle && djconnect.durationSeconds > 0
+        spacing: 10
+        PlaybackSeekStepButton {
+            objectName: "controlSeekBack"
+            offsetMs: -15000
+            showInSurface: playbackPosition.controlPage
+            Layout.preferredWidth: 52
+            Layout.preferredHeight: 50
+            padding: 0
+        }
+        Slider {
+            id: positionSlider
+            objectName: playbackPosition.controlPage ? "controlPlaybackProgress" : "nowPlaybackProgress"
+            Layout.fillWidth: true
+            Layout.preferredHeight: 44
+            from: 0
+            to: djconnect.durationSeconds
+            stepSize: 1
+            enabled: root.playbackSeekActionsAvailable && (djconnect.demoMode || djconnect.musicBackendSupportsSeek)
+            Accessible.name: root.tr("session_playback_position")
+            onEnabledChanged: if (!enabled && seekPointer && seekPointer.lease) djconnect.cancelPlaybackSeek()
+            onMoved: if (!seekPointer.pressed) {
+                const lease = djconnect.beginPlaybackSeek()
+                if (lease) djconnect.commitPlaybackSeek(lease, Math.round(value))
+            }
+            Binding {
+                target: positionSlider; property: "value"
+                value: seekPointer.lease > 0 ? seekPointer.draft : djconnect.positionSeconds
+                restoreMode: Binding.RestoreNone
+            }
+            background: Rectangle {
+                x: positionSlider.leftPadding
+                y: (positionSlider.height - height) / 2
+                width: positionSlider.availableWidth
+                height: 6; radius: 3
+                color: BrandTheme.alpha(BrandTheme.colors.text, "30")
+                Rectangle {
+                    width: parent.width * positionSlider.visualPosition
+                    height: parent.height
+                    radius: 3
+                    color: BrandTheme.colors.text
+                }
+            }
+            handle: Rectangle {
+                width: 16; height: 16; radius: 8
+                visible: positionSlider.enabled
+                x: positionSlider.leftPadding + positionSlider.visualPosition * (positionSlider.availableWidth - width)
+                y: (positionSlider.height - height) / 2
+                color: BrandTheme.colors.text
+            }
+            MouseArea {
+                id: seekPointer
+                anchors.fill: parent
+                property int lease: 0
+                property int draft: 0
+                Connections {
+                    target: djconnect
+                    function onPlaybackSeekCancelled() { seekPointer.lease = 0 }
+                }
+                function targetAt(x) {
+                    const inset = positionSlider.leftPadding + positionSlider.handle.width / 2
+                    const travel = Math.max(1, positionSlider.availableWidth - positionSlider.handle.width)
+                    return Math.round(positionSlider.valueAt(Math.max(0, Math.min(1, (x - inset) / travel))))
+                }
+                onPressed: function(mouse) {
+                    lease = djconnect.beginPlaybackSeek()
+                    draft = targetAt(mouse.x)
+                }
+                onPositionChanged: function(mouse) { if (lease) draft = targetAt(mouse.x) }
+                onReleased: function(mouse) {
+                    const ticket = lease
+                    lease = 0
+                    if (ticket) djconnect.commitPlaybackSeek(ticket, targetAt(mouse.x))
+                }
+                onCanceled: {
+                    if (lease) djconnect.cancelPlaybackSeek()
+                    lease = 0
+                }
+            }
+        }
+        Text {
+            objectName: playbackPosition.controlPage ? "controlPlaybackTime" : "nowPlaybackTime"
+            text: seekPointer.lease > 0
+                ? Math.floor(seekPointer.draft / 60) + ":" + ("0" + seekPointer.draft % 60).slice(-2)
+                    + " / " + djconnect.progressLabel.split("/")[1]
+                : djconnect.progressLabel.replace("/", " / ")
+            color: BrandTheme.colors.muted
+            font.pixelSize: 18
+        }
+        PlaybackSeekStepButton {
+            objectName: "controlSeekForward"
+            offsetMs: 15000
+            showInSurface: playbackPosition.controlPage
+            Layout.preferredWidth: 52
+            Layout.preferredHeight: 50
+            padding: 0
+        }
+    }
+
     CompactPageLoader {
         id: nowLoader
         visible: root.activeScreen === "now"
         z: 5
+        onVisibleChanged: if (!visible) djconnect.cancelPlaybackSeek()
         sourceComponent: NowPlayingPage {}
     }
 
@@ -1343,6 +1795,7 @@ BrandWindow {
         id: nowPanel
         objectName: "nowPanel"
         readonly property alias artworkTint: nowArtworkPalette.tint
+        readonly property bool playbackActionsAvailable: root.compactPlaybackActionsAvailable
 
         AppBackground {}
 
@@ -1354,11 +1807,10 @@ BrandWindow {
             anchors.bottomMargin: root.edge + 96
             spacing: 10
 
-            PageToolbar {
-                title: root.tr("now_playing")
+            AppPageToolbar {
+                title: root.playbackScreenTitle("now_playing")
                 showConnection: true
                 connectionLabel: root.tr("connection_type")
-                connectionText: djconnect.connectionType
                 Layout.fillWidth: true
 
                 BusyIndicator {
@@ -1408,8 +1860,15 @@ BrandWindow {
                         active: !root.screenBlanked
                         leaseKey: djconnect.activeProfileId + "|" + djconnect.title + "|" + djconnect.artist
                     }
+                    VinylPlaceholder {
+                        objectName: "nowArtworkPlaceholder"
+                        anchors.fill: parent
+                        radius: artFrame.radius
+                        visible: albumArt.opacity < 1
+                    }
                     Image {
                         id: albumArt
+                        objectName: "nowArtworkImage"
                         anchors.fill: parent
                         source: djconnect.imageUrl
                         sourceSize.width: width
@@ -1423,11 +1882,12 @@ BrandWindow {
                     }
 
                     Rectangle {
+                        objectName: "nowPlaybackTextBackdrop"
                         anchors.left: parent.left
                         anchors.right: parent.right
                         anchors.bottom: parent.bottom
                         z: 2
-                        height: Math.max(112, parent.height * 0.34)
+                        height: Math.min(parent.height, Math.max(112, parent.height * 0.34, nowPlaybackText.implicitHeight + 48))
                         gradient: Gradient {
                             orientation: Gradient.Vertical
                             GradientStop { position: 0.0; color: "#00000000" }
@@ -1437,6 +1897,7 @@ BrandWindow {
                     }
 
                     ColumnLayout {
+                        id: nowPlaybackText
                         anchors.left: parent.left
                         anchors.right: parent.right
                         anchors.bottom: parent.bottom
@@ -1445,43 +1906,34 @@ BrandWindow {
                         spacing: 4
 
                         Text {
+                            objectName: "nowPlaybackTitle"
                             text: djconnect.title
+                            textFormat: Text.PlainText
                             color: BrandTheme.colors.text
                             font.pixelSize: 34
                             font.bold: true
                             horizontalAlignment: Text.AlignHCenter
                             elide: Text.ElideRight
-                            maximumLineCount: 1
+                            maximumLineCount: 2
+                            wrapMode: Text.Wrap
                             style: Text.Raised
                             styleColor: "#aa000000"
                             Layout.fillWidth: true
                         }
 
                         Text {
+                            objectName: "nowPlaybackArtist"
                             text: djconnect.artist
+                            textFormat: Text.PlainText
                             color: BrandTheme.colors.muted
                             font.pixelSize: 24
                             horizontalAlignment: Text.AlignHCenter
                             elide: Text.ElideRight
-                            maximumLineCount: 1
+                            maximumLineCount: 2
+                            wrapMode: Text.Wrap
                             style: Text.Raised
                             styleColor: "#aa000000"
                             Layout.fillWidth: true
-                        }
-                    }
-
-                    Rectangle {
-                        anchors.fill: parent
-                        z: 1
-                        color: BrandTheme.colors.background
-                        opacity: albumArt.status === Image.Ready ? 0 : 1
-
-                        Text {
-                            anchors.centerIn: parent
-                            text: "DJConnect"
-                            color: BrandTheme.colors.text
-                            font.pixelSize: 42
-                            font.bold: true
                         }
                     }
 
@@ -1498,6 +1950,124 @@ BrandWindow {
                 }
             }
 
+            PlaybackPositionControl {
+                Layout.alignment: Qt.AlignHCenter
+                Layout.preferredWidth: Math.min(parent.width, 416)
+            }
+
+            GlassSurface {
+                objectName: "nowPlaybackControls"
+                Layout.alignment: Qt.AlignHCenter
+                Layout.preferredWidth: Math.min(parent.width, 416)
+                Layout.preferredHeight: 76
+                radius: height / 2
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.margins: 10
+                    spacing: 10
+                    PlaybackSeekStepButton {
+                        objectName: "nowSeekBack"
+                        Layout.fillWidth: true
+                        offsetMs: -15000
+                    }
+                    GlassButton {
+                        objectName: "nowPreviousTrack"
+                        Layout.fillWidth: true
+                        iconName: "previous"
+                        Accessible.name: root.tr("session_playback_previous_track")
+                        enabled: nowPanel.playbackActionsAvailable
+                        onClicked: djconnect.previous()
+                    }
+                    GlassButton {
+                        objectName: "nowTogglePlayback"
+                        Layout.fillWidth: true
+                        iconName: djconnect.playing ? "pause" : "play"
+                        Accessible.name: root.tr(djconnect.playing ? "pause" : "play")
+                        primary: true
+                        enabled: nowPanel.playbackActionsAvailable
+                        onClicked: djconnect.togglePlay()
+                    }
+                    GlassButton {
+                        objectName: "nowNextTrack"
+                        Layout.fillWidth: true
+                        iconName: "next"
+                        Accessible.name: root.tr("session_playback_next_track")
+                        enabled: nowPanel.playbackActionsAvailable
+                        onClicked: djconnect.next()
+                    }
+                    PlaybackSeekStepButton {
+                        objectName: "nowSeekForward"
+                        Layout.fillWidth: true
+                        offsetMs: 15000
+                    }
+                }
+            }
+
+            RowLayout {
+                Layout.alignment: Qt.AlignHCenter
+                visible: djconnect.demoMode || djconnect.musicBackendSupportsShuffle || djconnect.musicBackendSupportsRepeat
+                GlassButton {
+                    objectName: "nowShuffle"
+                    readonly property string modeLabel: root.tr(djconnect.shuffle ? "shuffle_on" : "shuffle_off")
+                    iconName: "shuffle"
+                    visible: djconnect.demoMode || djconnect.musicBackendSupportsShuffle
+                    checked: djconnect.shuffle
+                    enabled: nowPanel.playbackActionsAvailable && !djconnect.busy && !djconnect.playbackModePending
+                        && (djconnect.demoMode || djconnect.musicBackendAvailable)
+                    Accessible.name: root.tr("shuffle")
+                    Accessible.description: modeLabel
+                    ToolTip.text: modeLabel
+                    ToolTip.visible: hovered
+                    onClicked: djconnect.toggleShuffle()
+                }
+                GlassButton {
+                    objectName: "nowRepeat"
+                    readonly property string modeLabel: root.tr(djconnect.repeat === "track" ? "repeat_one"
+                        : djconnect.repeat === "context" ? "repeat_context" : "repeat_off")
+                    iconName: djconnect.repeat === "track" ? "repeat_one" : "repeat"
+                    visible: djconnect.demoMode || djconnect.musicBackendSupportsRepeat
+                    checked: djconnect.repeat !== "off"
+                    enabled: nowPanel.playbackActionsAvailable && !djconnect.busy && !djconnect.playbackModePending
+                        && (djconnect.demoMode || djconnect.musicBackendAvailable)
+                    Accessible.name: root.tr("repeat")
+                    Accessible.description: modeLabel
+                    ToolTip.text: modeLabel
+                    ToolTip.visible: hovered
+                    onClicked: djconnect.cycleRepeat()
+                }
+            }
+
+            GlassButton {
+                objectName: "nowPlaybackOutput"
+                readonly property string reportedOutput: djconnect.outputDevice.trim()
+                visible: nowPanel.playbackActionsAvailable || reportedOutput.length > 0 || djconnect.outputDeviceChoices.length > 0
+                Layout.alignment: Qt.AlignHCenter
+                Layout.preferredWidth: Math.min(parent.width, 416)
+                Layout.preferredHeight: 52
+                readonly property var reportedChoice: djconnect.outputDeviceId
+                    ? djconnect.outputDeviceChoices.find(choice => choice.value === djconnect.outputDeviceId && choice.cached !== true)
+                    : null
+                iconName: "output_device"
+                outputType: reportedChoice && typeof reportedChoice.type === "string" ? reportedChoice.type : ""
+                text: reportedOutput || root.tr("session_output_choose")
+                Accessible.name: reportedOutput ? root.tr("output_device") + ": " + reportedOutput : text
+                onClicked: root.activeScreen = "control"
+            }
+
+            Text {
+                objectName: "nowOutputSwitching"
+                visible: djconnect.pendingOutputChoiceName.length > 0 || djconnect.outputChoiceUnconfirmed
+                Layout.alignment: Qt.AlignHCenter
+                Layout.maximumWidth: parent.width
+                text: djconnect.outputChoiceUnconfirmed ? root.tr("session_output_switch_unconfirmed")
+                    : root.tr("session_output_switching").replace("%1", () => djconnect.pendingOutputChoiceName)
+                textFormat: Text.PlainText
+                color: BrandTheme.colors.muted
+                font.pixelSize: 17
+                wrapMode: Text.Wrap
+                horizontalAlignment: Text.AlignHCenter
+            }
+
         }
 
     }
@@ -1505,7 +2075,13 @@ BrandWindow {
     CompactPageLoader {
         visible: root.activeScreen === "control"
         z: 10
-        onVisibleChanged: if (!visible) djconnect.cancelControlVolume()
+        onVisibleChanged: {
+            if (visible && !root.wallProfile) djconnect.refreshControlOutputs(false)
+            else {
+                djconnect.cancelControlVolume()
+                djconnect.cancelPlaybackSeek()
+            }
+        }
         sourceComponent: PlaybackControlPage {}
     }
 
@@ -1530,11 +2106,10 @@ BrandWindow {
             anchors.bottomMargin: root.edge + 112
             spacing: 10
 
-            PageToolbar {
-                title: root.tr("control")
+            AppPageToolbar {
+                title: root.playbackScreenTitle("control")
                 showConnection: true
                 connectionLabel: root.tr("connection_type")
-                connectionText: djconnect.connectionType
                 Layout.fillWidth: true
 
                 BusyIndicator {
@@ -1580,59 +2155,34 @@ BrandWindow {
             RowLayout {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 178
+                enabled: root.compactPlaybackActionsAvailable
+                opacity: enabled ? 1 : 0.55
                 spacing: 18
 
                 IconButton {
+                    objectName: "controlPreviousTrack"
                     iconName: "previous"
                     onClicked: djconnect.previous()
                 }
 
                 IconButton {
+                    objectName: "controlTogglePlayback"
                     iconName: djconnect.playing ? "pause" : "play"
                     primary: true
                     onClicked: djconnect.togglePlay()
                 }
 
                 IconButton {
+                    objectName: "controlNextTrack"
                     iconName: "next"
                     onClicked: djconnect.next()
                 }
             }
 
-            RowLayout {
+            PlaybackPositionControl {
+                controlPage: true
                 Layout.fillWidth: true
                 Layout.preferredHeight: 54
-                spacing: 12
-
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 18
-                    Layout.alignment: Qt.AlignVCenter
-                    radius: 8
-                    color: BrandTheme.alpha(BrandTheme.colors.surface, "55")
-                    border.color: BrandTheme.colors.surfaceRaised
-                    border.width: 1
-
-                    Rectangle {
-                        width: parent.width * djconnect.trackProgress
-                        height: parent.height
-                        radius: parent.radius
-                        gradient: Gradient {
-                            orientation: Gradient.Horizontal
-                            GradientStop { position: 0.0; color: root.moodColor("sliderStart") }
-                            GradientStop { position: 1.0; color: root.moodColor("sliderEnd") }
-                        }
-                    }
-                }
-
-                Text {
-                    text: djconnect.progressLabel
-                    color: BrandTheme.colors.text
-                    font.pixelSize: 24
-                    font.bold: true
-                    horizontalAlignment: Text.AlignRight
-                    Layout.preferredWidth: 128
-                }
             }
 
             RowLayout {
@@ -1750,7 +2300,9 @@ BrandWindow {
                 }
 
                 Text {
-                    text: Math.round(Math.min(60, djconnect.volume) / 60 * 100) + "%"
+                    objectName: "controlVolumePercent"
+                    text: djconnect.controlVolumeKnown && (djconnect.demoMode || djconnect.backendAvailable)
+                        ? djconnect.volume + "%" : "–"
                     color: BrandTheme.colors.text
                     font.pixelSize: 26
                     font.bold: true
@@ -1766,8 +2318,16 @@ BrandWindow {
 
                 BrandComboBox {
                     id: controlOutputDeviceCombo
+                    objectName: "controlOutputDeviceCombo"
                     property string noOutputDeviceLabel: root.tr("none")
-                    property var deviceChoices: [{ "name": noOutputDeviceLabel, "value": "" }].concat(djconnect.outputDeviceChoices.length > 0 ? djconnect.outputDeviceChoices : (djconnect.outputDevice.length > 0 ? [{ "name": djconnect.outputDevice, "value": djconnect.outputDevice }] : []))
+                    readonly property int confirmedOutputIndex: selectedIndex()
+                    property var deviceChoices: {
+                        root.trVersion
+                        const choices = djconnect.outputDeviceChoices
+                        const selected = djconnect.outputDevice
+                        return [{ "name": noOutputDeviceLabel, "value": "" }].concat(choices.length > 0 ? choices
+                            : selected.length > 0 ? [{ "name": selected, "value": selected }] : [])
+                    }
                     function choiceName(choice) {
                         if (typeof choice === "string") return choice
                         return ((choice && choice.name) || (choice && choice.value) || "").toString()
@@ -1776,67 +2336,195 @@ BrandWindow {
                         if (typeof choice === "string") return choice
                         return ((choice && choice.value) || (choice && choice.name) || "").toString()
                     }
+                    function displayName(index) {
+                        const name = choiceName(deviceChoices[index])
+                        if (index <= 0) return name
+                        let count = 0
+                        let ordinal = 0
+                        for (let i = 1; i < deviceChoices.length; i++) {
+                            if (choiceName(deviceChoices[i]) !== name) continue
+                            count++
+                            if (i === index) ordinal = count
+                        }
+                        return count > 1 ? name + " (" + ordinal + ")" : name
+                    }
                     function selectedIndex() {
+                        const selectedId = djconnect.outputDeviceId
                         var selected = (djconnect.outputDevice || "").trim()
                         if (selected.length === 0) return 0
-                        for (var i = 0; i < deviceChoices.length; i++) {
-                            if (choiceName(deviceChoices[i]).trim() === selected || choiceValue(deviceChoices[i]).trim() === selected) return i
+                        if (selectedId) {
+                            for (var index = 1; index < deviceChoices.length; index++) {
+                                if (choiceValue(deviceChoices[index]) === selectedId) return index
+                            }
+                            return 0
                         }
-                        return 0
+                        let match = 0
+                        for (var i = 0; i < deviceChoices.length; i++) {
+                            if (choiceName(deviceChoices[i]).trim() !== selected) continue
+                            if (match > 0) return 0
+                            match = i
+                        }
+                        return match
                     }
                     model: deviceChoices
                     textRole: "name"
-                    visible: count > 1 || djconnect.outputDevice.length === 0
-                    currentIndex: selectedIndex()
+                    displayText: confirmedOutputIndex > 0 ? displayName(confirmedOutputIndex)
+                        : djconnect.outputDevice.trim() || noOutputDeviceLabel
+                    enabled: djconnect.pendingOutputChoiceName.length === 0 && !djconnect.controlOutputsRefreshing
+                    visible: djconnect.outputDeviceChoices.length > 0
+                    function restoreConfirmedIndex() {
+                        currentIndex = confirmedOutputIndex
+                    }
+                    // ComboBox resets currentIndex during model replacement.
+                    onModelChanged: Qt.callLater(restoreConfirmedIndex)
+                    onConfirmedOutputIndexChanged: Qt.callLater(restoreConfirmedIndex)
+                    Component.onCompleted: Qt.callLater(restoreConfirmedIndex)
                     font.pixelSize: 26
                     delegate: ItemDelegate {
+                        id: controlOutputRow
+                        required property int index
+                        readonly property var choice: controlOutputDeviceCombo.deviceChoices[index]
+                        readonly property bool confirmedOutput: index > 0 && index === controlOutputDeviceCombo.confirmedOutputIndex
                         width: controlOutputDeviceCombo.width
-                        text: controlOutputDeviceCombo.choiceName(modelData)
+                        text: controlOutputDeviceCombo.displayName(index)
                         font.pixelSize: 28
+                        highlighted: confirmedOutput || index === controlOutputDeviceCombo.highlightedIndex
+                        contentItem: RowLayout {
+                            spacing: 12
+                            FeatureIcon {
+                                objectName: "controlOutputChoiceIcon"
+                                visible: controlOutputRow.index > 0
+                                iconName: "output_device"
+                                outputType: controlOutputRow.choice && typeof controlOutputRow.choice.type === "string"
+                                    ? controlOutputRow.choice.type : ""
+                                Layout.preferredWidth: 24
+                                Layout.preferredHeight: 24
+                            }
+                            Text {
+                                text: controlOutputRow.text
+                                textFormat: Text.PlainText
+                                font: controlOutputRow.font
+                                color: BrandTheme.colors.text
+                                elide: Text.ElideRight
+                                Layout.fillWidth: true
+                            }
+                            Text {
+                                objectName: "controlOutputChoiceStatus"
+                                readonly property var percent: controlOutputRow.choice && controlOutputRow.choice.volume_percent
+                                readonly property bool cached: !!controlOutputRow.choice && controlOutputRow.choice.cached === true
+                                visible: controlOutputRow.index > 0
+                                text: cached ? root.tr("playback_output_recently_seen")
+                                    : typeof percent === "number" ? percent + "%" : "–"
+                                textFormat: Text.PlainText
+                                color: BrandTheme.colors.muted
+                                font.pixelSize: 18
+                                elide: Text.ElideRight
+                                Layout.maximumWidth: controlOutputRow.width * 0.45
+                            }
+                            Text {
+                                objectName: "controlOutputChoiceCurrent"
+                                visible: controlOutputRow.confirmedOutput
+                                text: "✓"
+                                color: BrandTheme.colors.actionAccent
+                                font.pixelSize: 22
+                            }
+                        }
                     }
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     onActivated: function(index) {
-                        var value = controlOutputDeviceCombo.choiceName(controlOutputDeviceCombo.deviceChoices[index])
-                        if (value === controlOutputDeviceCombo.noOutputDeviceLabel) value = ""
-                        djconnect.setOutputDevice(value)
+                        if (index === 0) djconnect.setOutputDevice("")
+                        else if (index !== confirmedOutputIndex)
+                            djconnect.setOutputChoice(choiceValue(deviceChoices[index]))
+                        Qt.callLater(restoreConfirmedIndex)
                     }
                 }
 
                 Text {
-                    text: root.tr("output_device")
-                    visible: controlOutputDeviceCombo.count <= 1 && djconnect.outputDevice.length > 0
+                    objectName: "controlOutputInventoryState"
+                    text: djconnect.controlOutputsRefreshing ? root.tr("loading")
+                        : djconnect.controlOutputsStatus === "unavailable" ? root.tr("session_output_unavailable")
+                        : djconnect.controlOutputsStatus === "ready" ? root.tr(djconnect.outputDevice.length > 0
+                            ? "session_output_empty" : "playback_outputs_none_found")
+                        : djconnect.outputDevice || root.tr("output_device")
+                    visible: !controlOutputDeviceCombo.visible
                     color: BrandTheme.colors.muted
                     font.pixelSize: 24
+                    wrapMode: Text.Wrap
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignVCenter
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                 }
+
+                GlassButton {
+                    id: controlRefreshOutputs
+                    objectName: "controlRefreshOutputs"
+                    iconName: djconnect.controlOutputsRefreshing ? "" : "refresh"
+                    Accessible.name: root.tr("session_output_refresh")
+                    enabled: (djconnect.demoMode || (djconnect.paired && djconnect.backendAvailable))
+                        && !djconnect.controlOutputsRefreshing && djconnect.pendingOutputChoiceName.length === 0
+                    opacity: enabled || djconnect.controlOutputsRefreshing ? 1 : 0.4
+                    onClicked: djconnect.refreshControlOutputs()
+                    BusyIndicator {
+                        anchors.centerIn: parent
+                        width: 26; height: 26
+                        visible: djconnect.controlOutputsRefreshing
+                        running: visible
+                    }
+                }
+            }
+
+            Text {
+                objectName: "controlOutputSwitching"
+                visible: djconnect.pendingOutputChoiceName.length > 0 || djconnect.outputChoiceUnconfirmed
+                Layout.fillWidth: true
+                text: djconnect.outputChoiceUnconfirmed ? root.tr("session_output_switch_unconfirmed")
+                    : root.tr("session_output_switching").replace("%1", () => djconnect.pendingOutputChoiceName)
+                textFormat: Text.PlainText
+                color: BrandTheme.colors.muted
+                horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.Wrap
+                font.pixelSize: 17
             }
 
             RowLayout {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 126
+                enabled: root.compactPlaybackActionsAvailable
+                opacity: enabled ? 1 : 0.55
                 spacing: 18
 
                 IconButton {
+                    objectName: "playbackControlShuffle"
                     iconName: "shuffle"
                     active: djconnect.shuffle
+                    enabled: !djconnect.busy && !djconnect.playbackModePending
+                        && (djconnect.demoMode || (djconnect.musicBackendAvailable && djconnect.musicBackendSupportsShuffle))
                     onClicked: djconnect.toggleShuffle()
                 }
 
                 IconButton {
+                    objectName: "playbackControlFavorite"
                     iconName: djconnect.currentTrackFavorite ? "heartFilled" : "heart"
                     active: djconnect.currentTrackFavorite
+                    Accessible.name: root.tr(djconnect.currentTrackFavorite ? "session_favorite_remove" : "session_favorite_add")
                     enabled: djconnect.favoriteAvailable && !djconnect.favoriteBusy
-                    opacity: djconnect.favoriteAvailable ? (djconnect.favoriteBusy ? 0.55 : 1.0) : 0.0
-                    onClicked: djconnect.saveCurrentTrack()
+                        && (!djconnect.currentTrackFavorite || djconnect.favoriteRemovalAvailable)
+                    waiting: djconnect.favoriteAvailable && djconnect.favoriteBusy
+                    opacity: djconnect.favoriteAvailable ? 1.0 : 0.0
+                    onClicked: {
+                        if (djconnect.currentTrackFavorite) djconnect.removeCurrentTrackFavorite()
+                        else djconnect.saveCurrentTrack()
+                    }
                 }
 
                 IconButton {
+                    objectName: "playbackControlRepeat"
                     iconName: djconnect.repeat === "track" ? "repeatOne" : djconnect.repeat === "context" ? "repeat" : "repeatOff"
                     active: djconnect.repeat !== "off"
+                    enabled: !djconnect.busy && !djconnect.playbackModePending
+                        && (djconnect.demoMode || (djconnect.musicBackendAvailable && djconnect.musicBackendSupportsRepeat))
                     onClicked: djconnect.cycleRepeat()
                 }
             }
@@ -1866,20 +2554,426 @@ BrandWindow {
 
         }
 
+    property string askDjExportStatus: ""
+    property string musicDnaExportStatus: ""
+    readonly property int exportProfileRevision: djconnect.musicDnaContextRevision
+    readonly property bool canTransferProfileData: djconnect.paired && djconnect.personalProfileExportAllowed
+        && djconnect.backendAvailable && !djconnect.demoMode && !djconnect.versionMismatchVisible
+    onExportProfileRevisionChanged: clearExportStatus()
+    onCanTransferProfileDataChanged: if (!canTransferProfileData) clearExportStatus()
+
+    function clearExportStatus() {
+        askDjExportStatus = ""
+        musicDnaExportStatus = ""
+    }
+    Connections {
+        target: djconnect
+        function onProfileExportProgress(revision, musicDna, status) {
+            if (revision !== root.exportProfileRevision || !root.canTransferProfileData) return
+            if (musicDna) root.musicDnaExportStatus = status
+            else root.askDjExportStatus = status
+        }
+    }
+
     CompactPageLoader {
         visible: root.settingsOpen && (djconnect.paired || djconnect.demoMode)
         z: 10
         sourceComponent: SettingsPage {}
     }
 
+    component AboutCopyValue: RowLayout {
+        id: aboutCopyValue
+        required property string text
+        required property string labelKey
+        spacing: 8
+        Layout.fillWidth: true
+
+        TextEdit {
+            id: aboutCopyText
+            objectName: "aboutCopyValueText"
+            text: aboutCopyValue.text
+            textFormat: TextEdit.PlainText
+            color: BrandTheme.colors.text
+            font.pixelSize: 20
+            wrapMode: TextEdit.Wrap
+            readOnly: true
+            selectByMouse: true
+            verticalAlignment: TextEdit.AlignVCenter
+            Layout.fillWidth: true
+        }
+
+        GlassButton {
+            objectName: "aboutCopyValueAction"
+            readonly property string copyLabel: root.tr(labelKey)
+            iconName: "copy"
+            tertiary: true
+            padding: 5
+            implicitWidth: 40
+            implicitHeight: 40
+            Accessible.name: copyLabel
+            ToolTip.text: copyLabel
+            ToolTip.visible: hovered
+            enabled: aboutCopyText.text.length > 0
+            onClicked: {
+                aboutCopyText.selectAll()
+                aboutCopyText.copy()
+                aboutCopyText.deselect()
+                djconnect.showToastForContext(root.tr("copied"), "connectivity")
+            }
+        }
+    }
+
+    component ProfileExportStatusLabel: Text {
+        required property string status
+        required property string keyPrefix
+        readonly property bool sharedStatus: status === "saving" || status === "read_failed"
+        text: !status ? "" : root.tr((sharedStatus ? "profile_export" : keyPrefix) + "_" + status)
+        textFormat: Text.PlainText
+        color: status === "failed" || status === "read_failed" ? BrandTheme.colors.danger
+            : (status === "saved" ? BrandTheme.colors.success : BrandTheme.colors.muted)
+        visible: status.length > 0
+        font.pixelSize: 17
+        wrapMode: Text.WordWrap
+        Layout.fillWidth: true
+    }
+
     component SettingsPage: Rectangle {
         id: settingsPanel
         objectName: "settingsPanel"
+        property bool logDisableFailed: false
         color: "transparent"
+        readonly property bool canChangeMusicDna: djconnect.musicDnaLoaded && !djconnect.musicDnaBusy
+            && (djconnect.paired || djconnect.demoMode)
+        readonly property bool canTransferMusicDna: root.canTransferProfileData && canChangeMusicDna && djconnect.musicDnaEnabled
+        readonly property bool canExportAskDj: root.canTransferProfileData && !djconnect.askDjBusy
+
+        GlassPopup {
+            id: disableLoggingPopup
+            anchors.centerIn: parent
+            width: Math.min(parent.width - 40, 520)
+            padding: 24
+            modal: true
+            readonly property bool canDisable: settingsPanel.visible && djconnect.logLevel !== "OFF"
+            onCanDisableChanged: if (!canDisable) close()
+
+            contentItem: ColumnLayout {
+                spacing: 16
+                Text {
+                    objectName: "disableLoggingTitle"
+                    text: root.tr("disable_logging_title")
+                    color: BrandTheme.colors.text
+                    font.bold: true
+                    font.pixelSize: 24
+                    wrapMode: Text.WordWrap
+                    Layout.fillWidth: true
+                }
+                Text {
+                    text: root.tr("disable_logging_message")
+                    color: BrandTheme.colors.muted
+                    font.pixelSize: 18
+                    wrapMode: Text.WordWrap
+                    Layout.fillWidth: true
+                }
+                DangerButton {
+                    objectName: "disableLoggingConfirm"
+                    text: root.tr("disable_logging_confirm")
+                    enabled: disableLoggingPopup.canDisable
+                    Layout.fillWidth: true
+                    onClicked: {
+                        disableLoggingPopup.close()
+                        settingsPanel.logDisableFailed = !djconnect.setLogLevel("OFF")
+                    }
+                }
+                GlassButton {
+                    objectName: "disableLoggingCancel"
+                    text: root.tr("cancel")
+                    Layout.fillWidth: true
+                    onClicked: disableLoggingPopup.close()
+                }
+            }
+        }
+
+        GlassPopup {
+            id: profileExportPreview
+            objectName: "profileExportPreview"
+            anchors.centerIn: parent
+            width: Math.min(parent.width - 40, 560)
+            padding: 24
+            modal: true
+            property int profileRevision: 0
+            property bool musicDna: false
+            property url proposedDestination: ""
+            readonly property bool isCurrent: settingsPanel.visible && profileRevision === djconnect.musicDnaContextRevision
+                && root.canTransferProfileData && (!musicDna || djconnect.musicDnaEnabled)
+            onIsCurrentChanged: if (!isCurrent) close()
+            onClosed: proposedDestination = ""
+            function review(exportMusicDna) {
+                musicDna = exportMusicDna
+                profileRevision = djconnect.musicDnaContextRevision
+                if (!isCurrent) return
+                proposedDestination = djconnect.profileExportDestination(profileExportDialog.currentFolder, musicDna)
+                open()
+            }
+            contentItem: ColumnLayout {
+                spacing: 16
+                Text {
+                    text: root.tr(profileExportPreview.musicDna ? "music_dna_export" : "ask_dj_export")
+                    textFormat: Text.PlainText
+                    color: BrandTheme.colors.text
+                    font.bold: true
+                    font.pixelSize: 24
+                    wrapMode: Text.WordWrap
+                    Layout.fillWidth: true
+                }
+                Text {
+                    objectName: "profileExportDescription"
+                    text: root.tr(profileExportPreview.musicDna ? "music_dna_export_review" : "ask_dj_export_review")
+                    textFormat: Text.PlainText
+                    color: BrandTheme.colors.muted
+                    font.pixelSize: 18
+                    wrapMode: Text.WordWrap
+                    Layout.fillWidth: true
+                }
+                Text {
+                    objectName: "profileExportFilename"
+                    text: String(profileExportPreview.proposedDestination).split("/").pop()
+                    visible: text.length > 0
+                    textFormat: Text.PlainText
+                    color: BrandTheme.colors.text
+                    font.pixelSize: 18
+                    wrapMode: Text.Wrap
+                    Layout.fillWidth: true
+                }
+                GlassButton {
+                    objectName: "profileExportChooseFile"
+                    text: root.tr("profile_export_choose_file")
+                    Layout.fillWidth: true
+                    primary: true
+                    enabled: profileExportPreview.isCurrent && (profileExportPreview.musicDna
+                        ? settingsPanel.canTransferMusicDna : settingsPanel.canExportAskDj)
+                    onClicked: {
+                        if (!enabled) return
+                        profileExportDialog.musicDna = profileExportPreview.musicDna
+                        profileExportDialog.profileRevision = profileExportPreview.profileRevision
+                        profileExportDialog.selectedFile = profileExportPreview.proposedDestination
+                        profileExportPreview.close()
+                        profileExportDialog.open()
+                    }
+                }
+                GlassButton {
+                    objectName: "profileExportCancel"
+                    text: root.tr("cancel")
+                    Layout.fillWidth: true
+                    onClicked: profileExportPreview.close()
+                }
+            }
+        }
+
+        FileDialog {
+            id: profileExportDialog
+            objectName: "profileExportDialog"
+            property int profileRevision: 0
+            property bool musicDna: false
+            readonly property bool isCurrent: settingsPanel.visible && profileRevision === root.exportProfileRevision
+                && root.canTransferProfileData && (!musicDna || djconnect.musicDnaEnabled)
+            onIsCurrentChanged: if (!isCurrent && visible) close()
+            title: root.tr(musicDna ? "music_dna_export" : "ask_dj_export")
+            fileMode: FileDialog.SaveFile
+            options: FileDialog.DontUseNativeDialog
+            defaultSuffix: "json"
+            nameFilters: ["JSON (*.json)"]
+            onAccepted: {
+                if (!isCurrent) return
+                if (musicDna) djconnect.exportMusicDna(selectedFile, profileRevision)
+                else djconnect.exportAskDjHistory(selectedFile, profileRevision)
+            }
+        }
+
+        FileDialog {
+            id: musicDnaImportDialog
+            objectName: "musicDnaImportDialog"
+            property int profileRevision: 0
+            readonly property bool isCurrent: settingsPanel.visible && profileRevision === root.exportProfileRevision
+                && root.canTransferProfileData && djconnect.musicDnaLoaded && djconnect.musicDnaEnabled
+            onIsCurrentChanged: if (!isCurrent && visible) close()
+            title: root.tr("music_dna_import")
+            options: FileDialog.DontUseNativeDialog
+            nameFilters: ["JSON (*.json)"]
+            onAccepted: if (isCurrent) djconnect.prepareMusicDnaImport(selectedFile, profileRevision)
+        }
+
+        GlassPopup {
+            id: musicDnaImportPreview
+            objectName: "musicDnaImportPreview"
+            readonly property bool finished: djconnect.musicDnaImportSaved || djconnect.musicDnaImportFailureKey.length > 0
+            anchors.centerIn: parent
+            width: Math.min(parent.width - 40, 560)
+            padding: 24
+            modal: true
+            closePolicy: Popup.NoAutoClose
+            visible: settingsPanel.visible && !!djconnect.musicDnaImportPreview.filename
+            contentItem: ColumnLayout {
+                spacing: 16
+                Text {
+                    text: djconnect.musicDnaImportPreview.filename || ""
+                    textFormat: Text.PlainText
+                    color: BrandTheme.colors.text
+                    font.pixelSize: 24
+                    wrapMode: Text.Wrap
+                    Layout.fillWidth: true
+                }
+                Text {
+                    objectName: "musicDnaImportUpdatedAt"
+                    readonly property string updatedTime: {
+                        root.trVersion
+                        return djconnect.djSession.formatTimestamp(djconnect.musicDnaImportPreview.updatedAt || "", true)
+                    }
+                    visible: updatedTime.length > 0
+                    text: root.tr("music_dna_updated_at").replace("%1", updatedTime)
+                    textFormat: Text.PlainText
+                    color: BrandTheme.colors.muted
+                    font.pixelSize: 18
+                    Layout.fillWidth: true
+                }
+                Text {
+                    objectName: "musicDnaImportExportedAt"
+                    readonly property string exportedTime: {
+                        root.trVersion
+                        return djconnect.djSession.formatTimestamp(djconnect.musicDnaImportPreview.exportedAt || "", true)
+                    }
+                    visible: exportedTime.length > 0
+                    text: root.tr("music_dna_exported_at").replace("%1", exportedTime)
+                    textFormat: Text.PlainText
+                    color: BrandTheme.colors.muted
+                    font.pixelSize: 18
+                    Layout.fillWidth: true
+                }
+                Text {
+                    objectName: "musicDnaImportExportOrigin"
+                    readonly property string clientLabel: djconnect.musicDnaImportPreview.exportClientLabel || ""
+                    visible: clientLabel.length > 0
+                    text: visible ? root.tr("music_dna_export_origin").replace("%1", root.tr(clientLabel)) : ""
+                    textFormat: Text.PlainText
+                    color: BrandTheme.colors.muted
+                    font.pixelSize: 18
+                    Layout.fillWidth: true
+                }
+                GridLayout {
+                    id: importCounts
+                    objectName: "musicDnaImportCounts"
+                    readonly property var counts: djconnect.musicDnaImportPreview.counts || []
+                    columns: 2
+                    rowSpacing: 8
+                    columnSpacing: 10
+                    Layout.fillWidth: true
+
+                    Repeater {
+                        model: ["music_dna_card_tracks", "music_dna_card_artists",
+                            "music_dna_card_genres", "music_dna_import_generation"]
+                        delegate: Rectangle {
+                            objectName: "musicDnaImportStat"
+                            required property string modelData
+                            readonly property var value: {
+                                if (modelData === "music_dna_import_generation")
+                                    return djconnect.musicDnaImportPreview.generation
+                                return importCounts.counts.find(count => count.label === modelData)?.value
+                            }
+                            radius: 7
+                            color: BrandTheme.alpha(BrandTheme.colors.text, "14")
+                            implicitHeight: importStatLabels.implicitHeight + 12
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            Layout.preferredWidth: 1
+                            ColumnLayout {
+                                id: importStatLabels
+                                anchors.fill: parent
+                                anchors.margins: 6
+                                spacing: 2
+                                Text {
+                                    objectName: "musicDnaImportCountLabel"
+                                    text: root.tr(modelData)
+                                    textFormat: Text.PlainText
+                                    color: BrandTheme.colors.muted
+                                    font.pixelSize: 16
+                                    wrapMode: Text.WordWrap
+                                    Layout.fillWidth: true
+                                }
+                                Text {
+                                    objectName: "musicDnaImportCountValue"
+                                    text: typeof value === "number" ? value.toLocaleString(Qt.locale(djconnect.language), "f", 0) : "–"
+                                    textFormat: Text.PlainText
+                                    color: BrandTheme.colors.text
+                                    font.bold: true
+                                    font.pixelSize: 22
+                                    wrapMode: Text.WrapAnywhere
+                                    Layout.fillWidth: true
+                                }
+                            }
+                        }
+                    }
+                }
+                Text {
+                    objectName: "musicDnaImportMessage"
+                    readonly property string failureKey: djconnect.musicDnaImportFailureKey
+                    text: {
+                        if (failureKey) return root.tr(failureKey)
+                        if (djconnect.musicDnaImportSaved) return root.tr("music_dna_import_saved")
+                        return root.tr(djconnect.musicDnaImportUploading ? "music_dna_import_uploading" : "music_dna_import_confirm")
+                    }
+                    color: failureKey ? BrandTheme.colors.danger
+                                      : (djconnect.musicDnaImportSaved ? BrandTheme.colors.success : BrandTheme.colors.muted)
+                    textFormat: Text.PlainText
+                    font.pixelSize: 20
+                    wrapMode: Text.WordWrap
+                    Layout.fillWidth: true
+                }
+                GlassButton {
+                    id: importConfirm
+                    objectName: "musicDnaImportConfirm"
+                    readonly property bool uploading: djconnect.musicDnaImportUploading
+                    text: root.tr("music_dna_import_upload")
+                    wrapText: true
+                    leftPadding: uploading ? 50 : padding
+                    primary: true
+                    visible: !musicDnaImportPreview.finished
+                    enabled: visible && settingsPanel.canTransferMusicDna
+                    opacity: enabled || uploading ? 1 : 0.5
+                    Layout.fillWidth: true
+                    onClicked: djconnect.confirmMusicDnaImport()
+                    BusyIndicator {
+                        objectName: "musicDnaImportSpinner"
+                        anchors.left: parent.left
+                        anchors.leftMargin: 14
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: 26
+                        height: width
+                        visible: importConfirm.uploading
+                        running: visible
+                    }
+                }
+                GlassButton {
+                    objectName: "musicDnaImportClose"
+                    text: root.tr(djconnect.musicDnaImportSaved ? "done"
+                        : (musicDnaImportPreview.finished ? "close" : "cancel"))
+                    primary: musicDnaImportPreview.finished
+                    enabled: musicDnaImportPreview.finished || !djconnect.musicDnaBusy
+                    Layout.fillWidth: true
+                    onClicked: djconnect.cancelMusicDnaImport()
+                }
+            }
+        }
+
+        ProfileReadOnOpen {
+            surfaceVisible: settingsPanel.visible
+            busy: djconnect.musicDnaBusy
+            loaded: djconnect.musicDnaLoaded
+            onRequested: djconnect.loadMusicDna()
+        }
+
         onVisibleChanged: {
             if (visible && settingsScroll.contentItem) {
                 settingsScroll.contentItem.contentY = 0
-            }
+            } else if (!visible) djconnect.cancelMusicDnaImport()
         }
 
         function languageIndex() {
@@ -1969,8 +3063,7 @@ BrandWindow {
                     Layout.fillWidth: true
                     onClicked: {
                         if (djconnect.demoMode) {
-                            djconnect.exitDemoMode()
-                            root.activeScreen = "now"
+                            root.leaveDemoMode()
                         } else {
                             djconnect.enterDemoMode()
                             root.activeScreen = "now"
@@ -2183,6 +3276,7 @@ BrandWindow {
 
                 BrandComboBox {
                     id: logLevelBox
+                    objectName: "settingsLogLevel"
                     font.pixelSize: 28
                     model: ["OFF", "DEBUG", "INFO", "WARNING", "ERROR"]
                     currentIndex: model.indexOf(djconnect.logLevel)
@@ -2193,8 +3287,52 @@ BrandWindow {
                         font.pixelSize: 30
                     }
                     Layout.fillWidth: true
-                    onActivated: djconnect.setLogLevel(model[currentIndex])
+                    onActivated: function(index) {
+                        settingsPanel.logDisableFailed = false
+                        const level = model[index]
+                        if (level === "OFF" && disableLoggingPopup.canDisable) {
+                            currentIndex = Qt.binding(() => model.indexOf(djconnect.logLevel))
+                            disableLoggingPopup.open()
+                        } else {
+                            djconnect.setLogLevel(level)
+                        }
+                    }
                 }
+            }
+
+            Text {
+                objectName: "settingsLogDisableFailed"
+                visible: settingsPanel.logDisableFailed && djconnect.logLevel !== "OFF"
+                text: root.tr("disable_logging_failed")
+                color: BrandTheme.colors.danger
+                wrapMode: Text.WordWrap
+                font.pixelSize: 18
+                Layout.fillWidth: true
+            }
+
+            Text {
+                objectName: "settingsProfileHeading"
+                text: root.tr("settings_profile")
+                color: BrandTheme.colors.text
+                font.pixelSize: 26
+                font.bold: true
+                Layout.fillWidth: true
+                Layout.topMargin: 8
+            }
+
+            PurpleButton {
+                objectName: "askDjExportButton"
+                text: root.tr("ask_dj_export")
+                font.pixelSize: 24
+                Layout.fillWidth: true
+                Layout.preferredHeight: 58
+                enabled: settingsPanel.canExportAskDj
+                onClicked: profileExportPreview.review(false)
+            }
+            ProfileExportStatusLabel {
+                objectName: "askDjExportStatus"
+                status: root.askDjExportStatus
+                keyPrefix: "ask_dj_export"
             }
 
             Text {
@@ -2219,7 +3357,15 @@ BrandWindow {
                 }
 
                 Text {
-                    text: djconnect.musicDnaEnabled ? root.tr("music_dna_settings_enabled_description") : root.tr("music_dna_settings_disabled_description")
+                    objectName: "musicDnaSettingsStatusText"
+                    text: {
+                        if (!djconnect.musicDnaLoaded) {
+                            return djconnect.musicDnaBusy ? root.tr("music_dna_loading_profile")
+                                : djconnect.musicDnaError || root.tr("music_dna_profile_unavailable")
+                        }
+                        return djconnect.musicDnaEnabled ? root.tr("music_dna_settings_enabled_description")
+                            : root.tr("music_dna_settings_disabled_description")
+                    }
                     color: BrandTheme.colors.muted
                     font.pixelSize: 22
                     font.bold: true
@@ -2244,14 +3390,16 @@ BrandWindow {
                 Item { Layout.fillWidth: true }
 
                 PurpleButton {
+                    objectName: "musicDnaSettingsToggle"
                     text: djconnect.musicDnaEnabled ? root.tr("music_dna_disable") : root.tr("music_dna_enable")
                     primary: !djconnect.musicDnaEnabled
-                    enabled: !djconnect.musicDnaBusy
+                    enabled: settingsPanel.canChangeMusicDna
                     font.pixelSize: 22
                     Layout.preferredWidth: 190
                     Layout.preferredHeight: 52
                     onClicked: {
                         if (djconnect.musicDnaEnabled) {
+                            root.musicDnaConfirmationRevision = djconnect.musicDnaContextRevision
                             root.musicDnaDisableConfirmOpen = true
                         } else {
                             root.openMusicDnaPrompt(false)
@@ -2261,6 +3409,7 @@ BrandWindow {
             }
 
             RowLayout {
+                visible: djconnect.musicDnaEnabled
                 Layout.fillWidth: true
                 spacing: 14
 
@@ -2275,20 +3424,54 @@ BrandWindow {
                 Item { Layout.fillWidth: true }
 
                 DangerButton {
+                    objectName: "musicDnaSettingsClear"
                     text: root.tr("music_dna_clear")
-                    enabled: djconnect.musicDnaEnabled && !djconnect.musicDnaBusy
+                    enabled: djconnect.musicDnaEnabled && settingsPanel.canChangeMusicDna
                     font.pixelSize: 22
                     Layout.preferredWidth: 150
                     Layout.preferredHeight: 52
-                    onClicked: root.musicDnaClearConfirmOpen = true
+                    onClicked: {
+                        root.musicDnaConfirmationRevision = djconnect.musicDnaContextRevision
+                        root.musicDnaClearConfirmOpen = true
+                    }
                 }
             }
 
             PurpleButton {
-                text: root.tr("check_updates")
+                objectName: "musicDnaExportButton"
+                text: root.tr("music_dna_export")
                 font.pixelSize: 24
                 Layout.fillWidth: true
                 Layout.preferredHeight: 58
+                enabled: settingsPanel.canTransferMusicDna
+                onClicked: profileExportPreview.review(true)
+            }
+            ProfileExportStatusLabel {
+                objectName: "musicDnaExportStatus"
+                status: root.musicDnaExportStatus
+                keyPrefix: "music_dna_export"
+            }
+
+            PurpleButton {
+                objectName: "musicDnaImportButton"
+                text: root.tr("music_dna_import")
+                font.pixelSize: 24
+                Layout.fillWidth: true
+                Layout.preferredHeight: 58
+                enabled: settingsPanel.canTransferMusicDna
+                onClicked: {
+                    if (!enabled) return
+                    musicDnaImportDialog.profileRevision = djconnect.musicDnaContextRevision
+                    musicDnaImportDialog.open()
+                }
+            }
+
+            PurpleButton {
+                text: djconnect.updateCheckRunning ? root.tr("checking_updates") : root.tr("check_updates")
+                font.pixelSize: 24
+                Layout.fillWidth: true
+                Layout.preferredHeight: 58
+                enabled: !djconnect.updateCheckRunning
                 onClicked: djconnect.checkForUpdates()
             }
 
@@ -2297,6 +3480,7 @@ BrandWindow {
                 spacing: 12
 
                 DangerButton {
+                    objectName: "settingsPairAgain"
                     text: root.tr("reset_pairing")
                     Layout.fillWidth: true
                     Layout.preferredHeight: 58
@@ -2324,13 +3508,17 @@ BrandWindow {
         z: 16
         sourceComponent: MediaListPanel {
             objectName: "queuePanel"
-            heading: root.tr("queue")
+            heading: root.playbackScreenTitle("queue")
             emptyText: root.tr("empty_queue")
+            loadErrorText: root.tr("queue_update_failed")
+            loadFailed: djconnect.queueLoadFailed
             searchLabel: root.tr("media_search_queue")
+            refreshLabel: root.tr("refresh_queue")
             playCommand: "play_context_at"
             items: djconnect.queueItems
             loading: djconnect.queueLoading
-            onRefreshRequested: djconnect.loadQueue()
+            onRefreshRequested: djconnect.loadQueue(true)
+            onProfileReloadRequested: djconnect.loadQueue()
         }
     }
 
@@ -2341,14 +3529,18 @@ BrandWindow {
         z: 16
         sourceComponent: MediaListPanel {
             objectName: "playlistsPanel"
-            heading: root.tr("playlists")
+            heading: root.playbackScreenTitle("playlists")
             emptyText: root.tr("empty_playlists")
+            loadErrorText: root.tr("playlists_update_failed")
+            loadFailed: djconnect.playlistsLoadFailed
             searchLabel: root.tr("media_search_playlists")
+            refreshLabel: root.tr("refresh_playlists")
             iconName: "playlists"
             playCommand: "start_playlist"
             items: djconnect.playlistItems
             loading: djconnect.playlistsLoading
-            onRefreshRequested: djconnect.loadPlaylists()
+            onRefreshRequested: djconnect.loadPlaylists(true)
+            onProfileReloadRequested: djconnect.loadPlaylists()
         }
     }
 
@@ -2468,23 +3660,460 @@ BrandWindow {
         readonly property string visualMood: root.trackInsightVisualMood
         readonly property alias artworkTint: trackInsightArtworkFrame.artworkTint
         readonly property bool hasLiveSession: root.trackInsightHasLiveSession
+        readonly property bool hasAnalysis: djconnect.trackInsightText.length > 0
+            || djconnect.trackInsightItems.length > 0 || djconnect.trackInsightSections.length > 0
+        readonly property bool canRequestAnalysis: visible && root.active && !root.screenBlanked && !root.splashVisible
+            && !djconnect.versionMismatchVisible && djconnect.paired && !djconnect.demoMode
+            && djconnect.hasTrackTitle && !djconnect.askDjBusy
         readonly property bool canChooseVisualMood: visible && root.active && !root.screenBlanked && !hasLiveSession
+        readonly property bool canChooseSessionMood: visible && root.active && !root.screenBlanked
+            && !root.splashVisible && !djconnect.logsVisible && !djconnect.versionMismatchVisible
+            && root.sessionHeader.runtime_state === "active" && !!root.sessionHeader.session_id
+            && (djconnect.demoMode || (djconnect.paired && !root.sessionHeader.profile_confirmation_required
+                && !root.sessionHeader.owner_read_only))
         onCanChooseVisualMoodChanged: if (!canChooseVisualMood) trackInsightMoodPopup.close()
-        property bool autoInsightRequested: false
+        readonly property bool autoInsightSurfaceActive: visible && root.active && !root.screenBlanked && !root.splashVisible
+            && (djconnect.paired || djconnect.demoMode)
+        readonly property bool canShareInsight: visible && (root.active || insightSaveDialog.visible)
+            && !root.screenBlanked && !root.splashVisible && !djconnect.versionMismatchVisible
+            && (djconnect.demoMode || djconnect.backendAvailable) && !!djconnect.trackInsightShareText
+        onCanShareInsightChanged: if (!canShareInsight && insightSharePopup) insightSharePopup.close()
+        readonly property bool canAutoRequestAnalysis: autoInsightSurfaceActive && !djconnect.askDjBusy
+            && (djconnect.demoMode || (canRequestAnalysis && djconnect.playing
+                && djconnect.backendAvailable && djconnect.musicBackendAvailable))
+        readonly property string autoInsightKey: djconnect.hasTrackTitle
+            ? JSON.stringify([djconnect.activeProfileId, djconnect.demoMode ? "" : djconnect.language,
+                djconnect.trackInsightPlaybackItemId || [djconnect.title, djconnect.artist],
+                djconnect.demoMode ? null : (djconnect.outputDeviceId
+                    ? ["id", djconnect.outputDeviceId] : ["label", djconnect.outputDevice])]) : ""
+        property string requestedInsightKey: ""
+        property int renewalDelay: 3000
+        readonly property bool shouldRetryRenewal: canAutoRequestAnalysis && djconnect.trackInsightRenewalNeeded
+            && requestedInsightKey === autoInsightKey
         color: "transparent"
-        Component.onCompleted: requestInsightIfVisible()
-        onVisibleChanged: requestInsightIfVisible()
+        Component.onCompleted: Qt.callLater(requestInsightIfVisible)
+        onCanAutoRequestAnalysisChanged: if (canAutoRequestAnalysis) Qt.callLater(requestInsightIfVisible)
+        onAutoInsightKeyChanged: {
+            if (insightSharePopup) insightSharePopup.close()
+            renewalDelay = 3000
+            Qt.callLater(requestInsightIfVisible)
+        }
+        onAutoInsightSurfaceActiveChanged: if (!autoInsightSurfaceActive) requestedInsightKey = ""
+        onShouldRetryRenewalChanged: {
+            if (shouldRetryRenewal) trackInsightRenewalRetry.restart()
+            else trackInsightRenewalRetry.stop()
+        }
 
-        function requestInsightIfVisible() {
-            if (visible && !autoInsightRequested && (djconnect.playing || djconnect.demoMode)) {
-                autoInsightRequested = true
+        Timer {
+            id: trackInsightRenewalRetry
+            objectName: "trackInsightRenewalRetry"
+            interval: trackInsightPanel.renewalDelay
+            onTriggered: {
+                if (!trackInsightPanel.shouldRetryRenewal) return
+                trackInsightPanel.renewalDelay = Math.min(trackInsightPanel.renewalDelay * 2, 30000)
                 djconnect.openTrackInsight()
-            } else if (!visible) {
-                autoInsightRequested = false
             }
         }
 
+        Connections {
+            target: djconnect
+            function onTrackInsightObservationChanged() {
+                trackInsightPanel.requestedInsightKey = ""
+                trackInsightPanel.renewalDelay = 3000
+                Qt.callLater(trackInsightPanel.requestInsightIfVisible)
+            }
+        }
+
+        function requestInsightIfVisible() {
+            if (!canAutoRequestAnalysis || !autoInsightKey || autoInsightKey === requestedInsightKey) return
+            requestedInsightKey = autoInsightKey
+            djconnect.openTrackInsight()
+        }
+
         ModalBlocker {}
+
+        GlassPopup {
+            id: insightSharePopup
+            objectName: "trackInsightSharePopup"
+            anchors.centerIn: Overlay.overlay
+            width: Math.min(trackInsightPanel.width - 40, 740)
+            height: Math.min(implicitHeight, Overlay.overlay.height - 24)
+            modal: true
+            padding: 20
+            property bool storyCard: true
+            property bool animatedPreview: false
+            property bool clipSelected: false
+            property bool renderingCard: false
+            readonly property bool clipRunning: djconnect.trackInsightClipRunning
+            readonly property bool exportBusy: renderingCard || clipRunning
+            readonly property bool exportClip: clipSelected && djconnect.trackInsightClipSupported
+            property real clipProgress: 0
+            property int exportGeneration: 0
+            property string exportNoticeKey: ""
+            property color exportNoticeColor: BrandTheme.colors.muted
+            property bool copiedShareText: false
+            property string saveIntent: ""
+            property url exportFile: ""
+            property url savedFile: ""
+            readonly property string savedFileName: String(savedFile)
+                ? decodeURIComponent(String(savedFile).split("/").pop()) : ""
+            readonly property string exportSelection: JSON.stringify([trackInsightPanel.autoInsightKey,
+                djconnect.trackInsightShareText, djconnect.trackInsightImageUrl, djconnect.trackInsightShareDescriptors,
+                djconnect.trackInsightShareMeters, djconnect.language, djconnect.demoMode, storyCard, exportClip])
+            onExportSelectionChanged: {
+                exportFile = ""
+                savedFile = ""
+                if ((saveIntent && saveIntent !== exportSelection) || exportBusy) {
+                    saveIntent = ""
+                    exportGeneration += 1
+                    renderingCard = false
+                    djconnect.cancelTrackInsightClip()
+                    if (insightSaveDialog && insightSaveDialog.visible) insightSaveDialog.close()
+                    if (opened && trackInsightPanel.canShareInsight) {
+                        exportNoticeKey = "track_insight_export_preview_changed"
+                        exportNoticeColor = BrandTheme.colors.muted
+                    }
+                } else if (exportNoticeKey !== "track_insight_export_preview_changed") exportNoticeKey = ""
+            }
+            onAboutToShow: {
+                storyCard = true
+                animatedPreview = false
+                clipSelected = false
+                exportNoticeKey = ""
+                copiedShareText = false
+                const flickable = insightShareScroll.contentItem
+                flickable.cancelFlick()
+                flickable.contentY = flickable.originY
+            }
+            onAboutToHide: {
+                saveIntent = ""
+                exportFile = ""
+                savedFile = ""
+                exportGeneration += 1
+                renderingCard = false
+                djconnect.cancelTrackInsightClip()
+                if (insightSaveDialog.visible) insightSaveDialog.close()
+            }
+            function selectPreset(story, clip) {
+                if (storyCard === story && clipSelected === clip) return
+                const cancelled = exportBusy
+                storyCard = story
+                clipSelected = clip
+                exportNoticeKey = cancelled ? "track_insight_export_cancelled" : ""
+                exportNoticeColor = BrandTheme.colors.muted
+            }
+            Connections {
+                target: djconnect
+                function onTrackInsightChanged() {
+                    insightSharePopup.copiedShareText = false
+                }
+                function onTrackInsightExportFinished(key, saved) {
+                    if (!insightSharePopup.opened || !trackInsightPanel.canShareInsight) return
+                    const popup = insightSharePopup
+                    popup.exportNoticeKey = key
+                    popup.exportNoticeColor = saved ? BrandTheme.colors.success : BrandTheme.colors.danger
+                    popup.savedFile = saved ? popup.exportFile : ""
+                    popup.exportFile = ""
+                }
+                function onTrackInsightClipFrameRequested(phase) {
+                    if (!insightSharePopup.opened || !trackInsightPanel.canShareInsight) {
+                        djconnect.cancelTrackInsightClip()
+                        return
+                    }
+                    const popup = insightSharePopup
+                    const generation = popup.exportGeneration
+                    popup.clipProgress = phase
+                    shareCard.motionPhase = phase
+                    if (!shareCard.grabToImage(function(result) {
+                        if (popup && popup.opened && popup.exportGeneration === generation && popup.clipRunning)
+                            djconnect.supplyTrackInsightClipFrame(result.image)
+                    }, Qt.size(1080, popup.storyCard ? 1920 : 1080)))
+                        djconnect.cancelTrackInsightClip()
+                }
+            }
+
+            function saveCard(destination) {
+                if (!trackInsightPanel.canShareInsight || exportBusy) return
+                exportNoticeKey = ""
+                savedFile = ""
+                exportFile = destination
+                if (exportClip) {
+                    exportGeneration += 1
+                    clipProgress = 0
+                    djconnect.startTrackInsightClip(destination, storyCard, djconnect.trackInsightShareText)
+                    return
+                }
+                const key = exportSelection
+                const text = djconnect.trackInsightShareText
+                const story = storyCard
+                const popup = insightSharePopup
+                const generation = ++exportGeneration
+                renderingCard = true
+                const accepted = shareCard.grabToImage(function(result) {
+                    if (!popup || popup.exportGeneration !== generation) return
+                    popup.renderingCard = false
+                    if (popup.opened && trackInsightPanel.canShareInsight && popup.storyCard === story
+                            && popup.exportSelection === key)
+                        djconnect.saveTrackInsightCard(result.image, destination, text)
+                }, Qt.size(1080, story ? 1920 : 1080))
+                if (!accepted) {
+                    renderingCard = false
+                    exportFile = ""
+                    exportNoticeKey = "track_insight_card_save_failed"
+                    exportNoticeColor = BrandTheme.colors.danger
+                }
+            }
+
+            FileDialog {
+                id: insightSaveDialog
+                objectName: "trackInsightSaveDialog"
+                title: root.tr(insightSharePopup.exportClip ? "track_insight_save_clip" : "track_insight_save_card")
+                fileMode: FileDialog.SaveFile
+                defaultSuffix: insightSharePopup.exportClip ? "mp4" : "png"
+                nameFilters: insightSharePopup.exportClip ? [root.tr("track_insight_mp4_files") + " (*.mp4)"]
+                    : [root.tr("track_insight_png_files") + " (*.png)"]
+                options: FileDialog.DontUseNativeDialog
+                onAccepted: {
+                    const intent = insightSharePopup.saveIntent
+                    insightSharePopup.saveIntent = ""
+                    if (intent && intent === insightSharePopup.exportSelection)
+                        insightSharePopup.saveCard(selectedFile)
+                }
+                onRejected: insightSharePopup.saveIntent = ""
+            }
+
+            contentItem: ColumnLayout {
+                spacing: 12
+                Text {
+                    text: root.tr("track_insight_share")
+                    textFormat: Text.PlainText; color: BrandTheme.colors.text
+                    font.pixelSize: 24; font.bold: true
+                    Layout.fillWidth: true
+                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    GlassButton {
+                        objectName: "trackInsightShareStory"
+                        text: root.tr("track_insight_share_story")
+                        checked: insightSharePopup.storyCard
+                        Layout.fillWidth: true; Layout.preferredWidth: 1
+                        onClicked: insightSharePopup.selectPreset(true, insightSharePopup.clipSelected)
+                    }
+                    GlassButton {
+                        objectName: "trackInsightShareSquare"
+                        text: root.tr("track_insight_share_square")
+                        checked: !insightSharePopup.storyCard
+                        Layout.fillWidth: true; Layout.preferredWidth: 1
+                        onClicked: insightSharePopup.selectPreset(false, insightSharePopup.clipSelected)
+                    }
+                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    visible: djconnect.trackInsightClipSupported
+                    GlassButton {
+                        objectName: "trackInsightShareImage"
+                        text: root.tr("track_insight_share_image_type")
+                        checked: !insightSharePopup.exportClip
+                        Layout.fillWidth: true; Layout.preferredWidth: 1
+                        onClicked: insightSharePopup.selectPreset(insightSharePopup.storyCard, false)
+                    }
+                    GlassButton {
+                        objectName: "trackInsightShareClip"
+                        text: root.tr("track_insight_share_clip_type")
+                        checked: insightSharePopup.exportClip
+                        Layout.fillWidth: true; Layout.preferredWidth: 1
+                        onClicked: insightSharePopup.selectPreset(insightSharePopup.storyCard, true)
+                    }
+                }
+                GlassButton {
+                    objectName: "trackInsightShareAnimate"
+                    text: root.tr("track_insight_share_animate")
+                    checked: insightSharePopup.animatedPreview
+                    visible: !djconnect.trackInsightClipSupported
+                    enabled: !GlassStyle.reduceMotion && !insightSharePopup.renderingCard
+                    Layout.fillWidth: true
+                    onClicked: insightSharePopup.animatedPreview = !insightSharePopup.animatedPreview
+                }
+                Text {
+                    objectName: "trackInsightClipUnavailable"
+                    visible: !djconnect.trackInsightClipSupported
+                    text: root.tr("track_insight_clip_unavailable")
+                    textFormat: Text.PlainText
+                    wrapMode: Text.WordWrap
+                    color: BrandTheme.colors.muted
+                    font.pixelSize: 17
+                    Layout.fillWidth: true
+                }
+                ScrollView {
+                    id: insightShareScroll
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    Layout.minimumHeight: Math.min(insightShareContent.implicitHeight, 72)
+                    Layout.preferredHeight: Math.min(insightShareContent.implicitHeight, trackInsightPanel.height <= 760
+                        ? (insightSharePopup.exportBusy ? 250 : 320) : 380)
+                    contentWidth: availableWidth; clip: true
+                    ColumnLayout {
+                        id: insightShareContent
+                        width: insightShareScroll.availableWidth
+                        spacing: 16
+                        TrackInsightShareCard {
+                            id: shareCard
+                            objectName: "trackInsightShareCard"
+                            visible: trackInsightPanel.canShareInsight
+                            story: insightSharePopup.storyCard
+                            animate: visible && (insightSharePopup.animatedPreview || insightSharePopup.exportClip) && insightSharePopup.opened
+                                && root.active && GlassStyle.awake && !GlassStyle.reduceMotion
+                                && !insightSharePopup.renderingCard && !insightSharePopup.clipRunning && !insightSaveDialog.visible
+                            Layout.alignment: Qt.AlignHCenter
+                            Layout.preferredWidth: Math.min(insightShareContent.width, story ? 190 : 280)
+                            Layout.preferredHeight: Layout.preferredWidth * (story ? 16 / 9 : 1)
+                            trackTitle: visible ? djconnect.trackInsightTitle : ""
+                            artist: visible ? djconnect.trackInsightArtist : ""
+                            summary: visible ? djconnect.trackInsightText : ""
+                            genre: visible ? djconnect.trackInsightShareDescriptors.genre || "" : ""
+                            vibe: visible ? djconnect.trackInsightShareDescriptors.vibe || "" : ""
+                            meters: visible ? djconnect.trackInsightShareMeters.map(item => ({
+                                label: root.trackInsightLabel(item.title), fraction: item.shareFraction
+                            })) : []
+                            artworkUrl: visible ? djconnect.trackInsightImageUrl : ""
+                            badge: root.tr(djconnect.demoMode ? "demo_mode" : "track_insight")
+                            creditLabel: visible && djconnect.trackInsightVerifiedCredit.url
+                                ? [djconnect.trackInsightVerifiedCredit.provider, djconnect.trackInsightVerifiedCredit.license,
+                                   djconnect.trackInsightVerifiedCredit.url].filter(Boolean).join(" · ") : ""
+                        }
+                        Text {
+                            objectName: "trackInsightShareSummary"
+                            Layout.fillWidth: true
+                            text: trackInsightPanel.canShareInsight ? djconnect.trackInsightShareText : ""
+                            textFormat: Text.PlainText; wrapMode: Text.Wrap
+                            color: BrandTheme.colors.text; font.pixelSize: 20
+                        }
+                    }
+                }
+                RowLayout {
+                    visible: insightSharePopup.clipRunning
+                    Layout.fillWidth: true
+                    ColumnLayout {
+                        spacing: 6
+                        Layout.fillWidth: true
+                        Text {
+                            objectName: "trackInsightClipProgressLabel"
+                            text: root.tr("track_insight_clip_progress").replace("%1",
+                                Math.floor(insightSharePopup.clipProgress * 100).toLocaleString(Qt.locale(djconnect.language), "f", 0))
+                            color: BrandTheme.colors.muted
+                            font.pixelSize: 18
+                            wrapMode: Text.WordWrap
+                            Layout.fillWidth: true
+                        }
+                        ProgressBar {
+                            value: insightSharePopup.clipProgress
+                            Layout.fillWidth: true
+                        }
+                    }
+                    GlassButton {
+                        objectName: "trackInsightClipCancel"
+                        text: root.tr("track_insight_cancel_export")
+                        tertiary: true
+                        onClicked: {
+                            insightSharePopup.exportGeneration += 1
+                            insightSharePopup.exportFile = ""
+                            djconnect.cancelTrackInsightClip()
+                            insightSharePopup.exportNoticeKey = "track_insight_clip_cancelled"
+                            insightSharePopup.exportNoticeColor = BrandTheme.colors.muted
+                        }
+                    }
+                }
+                RowLayout {
+                    objectName: "trackInsightCardExportProgress"
+                    visible: insightSharePopup.renderingCard
+                    Layout.fillWidth: true
+                    BusyIndicator {
+                        running: parent.visible
+                        Layout.preferredWidth: 26
+                        Layout.preferredHeight: 26
+                    }
+                    Text {
+                        objectName: "trackInsightCardExportProgressLabel"
+                        text: root.tr("track_insight_preparing_card")
+                        textFormat: Text.PlainText
+                        wrapMode: Text.WordWrap
+                        color: BrandTheme.colors.muted
+                        font.pixelSize: 18
+                        Layout.fillWidth: true
+                    }
+                }
+                Text {
+                    objectName: "trackInsightExportNotice"
+                    visible: insightSharePopup.exportNoticeKey.length > 0
+                    text: {
+                        if (!visible) return ""
+                        const notice = root.tr(insightSharePopup.exportNoticeKey)
+                        return insightSharePopup.savedFileName ? notice + "\n" + insightSharePopup.savedFileName : notice
+                    }
+                    textFormat: Text.PlainText
+                    wrapMode: Text.Wrap
+                    color: insightSharePopup.exportNoticeColor
+                    font.pixelSize: 18
+                    Layout.fillWidth: true
+                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    GlassButton {
+                        objectName: "trackInsightCopyShareText"
+                        text: root.tr("track_insight_copy_share_text"); iconName: "copy"
+                        Layout.fillWidth: true; enabled: trackInsightPanel.canShareInsight
+                        onClicked: insightSharePopup.copiedShareText = djconnect.copyTrackInsight()
+                    }
+                    GlassButton {
+                        objectName: "trackInsightSaveCard"
+                        text: root.tr(insightSharePopup.exportClip ? "track_insight_save_clip" : "track_insight_save_card")
+                        iconName: "document"
+                        Layout.fillWidth: true
+                        enabled: trackInsightPanel.canShareInsight && !insightSharePopup.exportBusy
+                        onClicked: {
+                            insightSharePopup.exportNoticeKey = ""
+                            insightSharePopup.saveIntent = insightSharePopup.exportSelection
+                            insightSaveDialog.selectedFile = djconnect.trackInsightExportDestination(
+                                insightSaveDialog.currentFolder, insightSharePopup.storyCard, insightSharePopup.exportClip)
+                            insightSaveDialog.open()
+                        }
+                    }
+                }
+                Text {
+                    objectName: "trackInsightShareCopied"
+                    visible: insightSharePopup.copiedShareText
+                    text: root.tr("copied")
+                    textFormat: Text.PlainText
+                    color: BrandTheme.colors.success
+                    font.pixelSize: 18
+                    Layout.fillWidth: true
+                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    GlassButton {
+                        objectName: "trackInsightOpenSavedFile"
+                        visible: !!insightSharePopup.savedFileName
+                        enabled: trackInsightPanel.canShareInsight && !insightSharePopup.exportBusy
+                        text: root.tr("track_insight_open_saved_file")
+                        Layout.fillWidth: true
+                        onClicked: {
+                            if (Qt.openUrlExternally(insightSharePopup.savedFile)) {
+                                insightSharePopup.exportNoticeKey = insightSharePopup.exportClip
+                                    ? "track_insight_clip_saved" : "track_insight_card_saved"
+                                insightSharePopup.exportNoticeColor = BrandTheme.colors.success
+                            } else {
+                                insightSharePopup.exportNoticeKey = "track_insight_open_saved_file_failed"
+                                insightSharePopup.exportNoticeColor = BrandTheme.colors.danger
+                            }
+                        }
+                    }
+                    GlassButton {
+                        text: root.tr("close"); tertiary: true; Layout.fillWidth: true
+                        onClicked: insightSharePopup.close()
+                    }
+                }
+            }
+        }
 
         ColumnLayout {
             anchors.fill: parent
@@ -2494,20 +4123,27 @@ BrandWindow {
             anchors.bottomMargin: root.edge + 126
             spacing: 12
 
-            PageToolbar {
-                title: root.tr("track_insight")
-                showLeading: !trackInsightPanel.hasLiveSession
+            AppPageToolbar {
+                title: root.playbackScreenTitle("track_insight")
+                showLeading: !trackInsightPanel.hasLiveSession || trackInsightPanel.canChooseSessionMood
                 leading: [
                     GlassButton {
                         id: trackInsightMoodButton
-                        objectName: "trackInsightVisualMoodToggle"
-                        iconName: "mood_" + trackInsightPanel.visualMood
+                        objectName: trackInsightPanel.hasLiveSession ? "trackInsightSessionMoodToggle" : "trackInsightVisualMoodToggle"
+                        iconName: trackInsightPanel.hasLiveSession ? sharedSessionScreen.toolbarIcon("mood")
+                            : "mood_" + trackInsightPanel.visualMood
                         tertiary: true
                         implicitWidth: 52
-                        enabled: trackInsightPanel.canChooseVisualMood
-                        Accessible.name: root.tr("shared_field_mood")
-                        Accessible.description: root.tr("shared_mood_" + trackInsightPanel.visualMood)
+                        enabled: trackInsightPanel.canChooseVisualMood || trackInsightPanel.canChooseSessionMood
+                        Accessible.name: trackInsightPanel.hasLiveSession ? sharedSessionScreen.toolbarChoiceLabel("mood")
+                            : root.tr("shared_field_mood")
+                        Accessible.description: trackInsightPanel.hasLiveSession ? ""
+                            : root.tr("shared_mood_" + trackInsightPanel.visualMood)
                         onClicked: {
+                            if (trackInsightPanel.canChooseSessionMood) {
+                                sharedSessionScreen.openChoice("mood", trackInsightMoodButton, trackInsightPanel)
+                                return
+                            }
                             if (!trackInsightPanel.canChooseVisualMood)
                                 return
                             const anchor = trackInsightMoodButton.mapToItem(trackInsightPanel, 0, trackInsightMoodButton.height)
@@ -2520,42 +4156,67 @@ BrandWindow {
                 ]
                 showConnection: true
                 connectionLabel: root.tr("connection_type")
-                connectionText: djconnect.connectionType
                 Layout.fillWidth: true
 
-                LoadingSpinner {
-                    visible: djconnect.askDjBusy
-                    running: visible
-                    Layout.preferredWidth: 38
-                    Layout.preferredHeight: 38
-                }
-
                 RefreshIconButton {
-                    enabled: djconnect.paired && !djconnect.askDjBusy
+                    objectName: "trackInsightRefresh"
+                    text: root.tr("refresh_track_insight")
+                    loading: djconnect.trackInsightLoading
+                    enabled: trackInsightPanel.canRequestAnalysis
                     onClicked: djconnect.refreshTrackInsight()
+                }
+                GlassButton {
+                    objectName: "trackInsightShareOpen"
+                    iconName: "share"; tertiary: true
+                    visible: trackInsightPanel.canShareInsight
+                    Accessible.name: root.tr("track_insight_share")
+                    ToolTip.text: Accessible.name
+                    ToolTip.visible: hovered
+                    onClicked: insightSharePopup.open()
                 }
             }
 
             ScrollView {
                 id: trackInsightScroll
+                objectName: "trackInsightScroll"
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 clip: true
                 ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
                 contentWidth: availableWidth
+                PullToRefresh {
+                    objectName: "trackInsightPullToRefresh"
+                    flickable: trackInsightScroll.contentItem
+                    canRefresh: trackInsightPanel.canRequestAnalysis
+                        && (trackInsightSubject.visible || djconnect.trackInsightText.length > 0
+                            || djconnect.trackInsightItems.length > 0 || djconnect.trackInsightSections.length > 0)
+                    onRefreshRequested: djconnect.refreshTrackInsight()
+                }
 
                 ColumnLayout {
                     width: Math.max(0, trackInsightScroll.availableWidth)
                     spacing: root.wallProfile ? 18 : 10
 
-                    Text {
+                    GlassCard {
                         visible: djconnect.trackInsightError.length > 0
-                        text: djconnect.trackInsightError
-                        textFormat: Text.PlainText
-                        color: BrandTheme.colors.muted
-                        font.pixelSize: 20
-                        wrapMode: Text.WordWrap
                         Layout.fillWidth: true
+                        Text {
+                            text: djconnect.trackInsightError
+                            textFormat: Text.PlainText
+                            color: BrandTheme.colors.muted
+                            font.pixelSize: 20
+                            wrapMode: Text.WordWrap
+                            Layout.fillWidth: true
+                        }
+                        GlassButton {
+                            objectName: "trackInsightRetry"
+                            visible: djconnect.hasTrackTitle && djconnect.paired && !djconnect.demoMode
+                            enabled: trackInsightPanel.canRequestAnalysis
+                            text: root.tr("track_insight_retry_action")
+                            iconName: "refresh"
+                            Layout.alignment: Qt.AlignLeft
+                            onClicked: djconnect.refreshTrackInsight()
+                        }
                     }
 
                     IntroductionCard {
@@ -2564,17 +4225,25 @@ BrandWindow {
                         iconName: "trackInsight"
                         title: root.tr("track_insight")
                         message: root.tr("track_insight_empty")
-                        visible: djconnect.trackInsightError.length === 0 && djconnect.trackInsightText.length === 0
-                                 && djconnect.trackInsightItems.length === 0 && djconnect.trackInsightSections.length === 0
-                                 && !trackInsightSubject.visible && !trackInsightVisualizer.visible && !djconnect.askDjBusy
+                        visible: djconnect.trackInsightError.length === 0 && !trackInsightPanel.hasAnalysis
+                                 && !trackInsightSubject.visible && !trackInsightVisualizer.visible && !djconnect.trackInsightLoading
                     }
 
                     GlassCard {
                         id: trackInsightSubject
                         objectName: "trackInsightSubjectHero"
+                        readonly property bool hasInsightSubject: djconnect.trackInsightTitle.length > 0
+                            || djconnect.trackInsightArtist.length > 0 || djconnect.trackInsightImageUrl.length > 0
+                        readonly property bool hasPlaybackSubject: djconnect.hasTrackTitle && (djconnect.paired || djconnect.demoMode)
+                        readonly property string subjectTitle: hasInsightSubject ? djconnect.trackInsightTitle : djconnect.title
+                        readonly property string subjectArtist: hasInsightSubject ? djconnect.trackInsightArtist : djconnect.artist
+                        readonly property string subjectAlbum: hasInsightSubject && djconnect.trackInsightAlbum.length > 0
+                            ? djconnect.trackInsightAlbum
+                            : (hasPlaybackSubject && (!hasInsightSubject || djconnect.trackInsightMatchesPlayback) ? djconnect.album : "")
+                        readonly property string artworkUrl: hasInsightSubject ? djconnect.trackInsightImageUrl : djconnect.imageUrl
                         hero: true
                         artworkTint: trackInsightArtworkFrame.artworkTint
-                        visible: djconnect.trackInsightTitle.length > 0 || djconnect.trackInsightArtist.length > 0 || djconnect.trackInsightImageUrl.length > 0
+                        visible: hasInsightSubject || hasPlaybackSubject
                         Layout.fillWidth: true
                         padding: root.wallProfile ? 32 : 12
                         background: GlassSurface {
@@ -2595,19 +4264,29 @@ BrandWindow {
                                 objectName: "trackInsightArtworkFrame"
                                 backend: djconnect; imageItem: trackInsightArtworkImage
                                 active: !root.screenBlanked
-                                leaseKey: djconnect.activeProfileId + "|" + djconnect.trackInsightTitle + "|" + djconnect.trackInsightArtist
-                                visible: djconnect.trackInsightImageUrl.length > 0
+                                leaseKey: [djconnect.activeProfileId, djconnect.trackInsightPlaybackItemId,
+                                    trackInsightSubject.subjectTitle, trackInsightSubject.subjectArtist].join("|")
                                 Layout.alignment: Qt.AlignHCenter
                                 Layout.preferredWidth: root.wallProfile ? 228 : 76
                                 Layout.preferredHeight: Layout.preferredWidth
                                 radius: root.wallProfile ? 32 : 16
+                                FeatureIcon {
+                                    objectName: "trackInsightArtworkPlaceholder"
+                                    anchors.centerIn: parent
+                                    width: Math.min(parent.width, parent.height) * 0.56
+                                    height: width
+                                    iconName: "trackInsight"
+                                    iconColor: BrandTheme.colors.text
+                                    visible: trackInsightArtworkImage.status !== Image.Ready
+                                    Accessible.ignored: true
+                                }
                                 Image {
                                     id: trackInsightArtworkImage
                                     objectName: "trackInsightArtworkImage"
                                     sourceSize: root.lowMemoryProfile ? Qt.size(192, 192) : Qt.size(0, 0)
                                     asynchronous: root.lowMemoryProfile
-                                    source: djconnect.trackInsightImageUrl
-                                    visible: source.toString().length > 0
+                                    source: trackInsightSubject.visible ? trackInsightSubject.artworkUrl : ""
+                                    visible: status === Image.Ready
                                     anchors.fill: parent
                                     fillMode: Image.PreserveAspectCrop
                                     smooth: true
@@ -2620,7 +4299,8 @@ BrandWindow {
                                 spacing: 4
 
                                 Text {
-                                    text: djconnect.trackInsightTitle
+                                    objectName: "trackInsightSubjectTitle"
+                                    text: trackInsightSubject.subjectTitle
                                     textFormat: Text.PlainText
                                     color: BrandTheme.colors.text
                                     font.pixelSize: root.wallProfile ? 32 : 22
@@ -2631,7 +4311,9 @@ BrandWindow {
                                 }
 
                                 Text {
-                                    text: [djconnect.trackInsightArtist, djconnect.trackInsightAlbum].filter(function(v) { return v && v.length > 0 }).join(" · ")
+                                    objectName: "trackInsightSubjectMetadata"
+                                    text: [trackInsightSubject.subjectArtist, trackInsightSubject.subjectAlbum]
+                                        .filter(function(v) { return v && v.length > 0 }).join(" · ")
                                     color: BrandTheme.colors.muted
                                     font.pixelSize: root.wallProfile ? 21 : 17
                                     textFormat: Text.PlainText
@@ -2639,13 +4321,44 @@ BrandWindow {
                                     wrapMode: Text.Wrap
                                     Layout.fillWidth: true
                                 }
+                                GlassSurface {
+                                    objectName: "trackInsightPlaybackTime"
+                                    visible: trackInsightSubject.hasPlaybackSubject && djconnect.durationSeconds > 0
+                                        && (!trackInsightSubject.hasInsightSubject || djconnect.trackInsightMatchesPlayback)
+                                    Layout.alignment: root.wallProfile ? Qt.AlignHCenter : Qt.AlignLeft
+                                    implicitWidth: insightTime.implicitWidth + 20
+                                    implicitHeight: insightTime.implicitHeight + 10
+                                    radius: height / 2
+                                    Text {
+                                        id: insightTime
+                                        objectName: "trackInsightPlaybackTimeLabel"
+                                        anchors.centerIn: parent
+                                        text: djconnect.progressLabel.replace("/", " / ")
+                                        color: BrandTheme.colors.muted
+                                        font.pixelSize: root.wallProfile ? 18 : 15
+                                        font.bold: true
+                                    }
+                                }
                             }
                         }
+                    }
+
+                    GlassButton {
+                        objectName: "trackInsightAnalyze"
+                        text: root.tr(djconnect.trackInsightLoading ? "loading" : "track_insight_analyze")
+                        iconName: "sparkles"
+                        primary: true
+                        Layout.alignment: Qt.AlignHCenter
+                        visible: trackInsightSubject.hasPlaybackSubject && !djconnect.demoMode
+                            && !trackInsightPanel.hasAnalysis && djconnect.trackInsightError.length === 0
+                        enabled: trackInsightPanel.canRequestAnalysis
+                        onClicked: djconnect.refreshTrackInsight()
                     }
 
                     GlassSurface {
                         border.color: root.moodColor("focus")
                         id: trackInsightVisualizer
+                        objectName: "trackInsightVisualizer"
                         visible: djconnect.trackInsightVisualizer.available === true
                         Layout.fillWidth: true
                         Layout.preferredHeight: 164
@@ -2751,11 +4464,80 @@ BrandWindow {
                     }
 
                     GlassCard {
+                        id: verifiedCreditsCard
+                        objectName: "trackInsightVerifiedCredits"
+                        readonly property var credit: djconnect.trackInsightVerifiedCredit
+                        visible: !!credit.context
+                        Layout.fillWidth: true
+                        Text {
+                            text: root.tr("track_insight_verified_credits")
+                            textFormat: Text.PlainText
+                            color: BrandTheme.colors.text
+                            font.bold: true
+                            font.pixelSize: 21
+                            Layout.fillWidth: true
+                            Accessible.role: Accessible.Heading
+                        }
+                        Text {
+                            objectName: "trackInsightVerifiedContext"
+                            text: verifiedCreditsCard.credit.context || ""
+                            textFormat: Text.PlainText
+                            color: BrandTheme.colors.text
+                            font.pixelSize: 21
+                            wrapMode: Text.WordWrap
+                            Layout.fillWidth: true
+                        }
+                        SessionAttribution {
+                            sources: verifiedCreditsCard.credit.url ? [{
+                                provider: verifiedCreditsCard.credit.provider,
+                                links: [verifiedCreditsCard.credit.url],
+                                license: verifiedCreditsCard.credit.license
+                            }] : []
+                            Layout.fillWidth: true
+                        }
+                        Text {
+                            visible: djconnect.trackInsightAudioNotice
+                                && djconnect.trackInsightText === djconnect.trackInsightVerifiedCredit.context
+                            text: root.tr("track_insight_unmeasured_audio")
+                            textFormat: Text.PlainText
+                            color: BrandTheme.colors.muted
+                            font.pixelSize: 17
+                            wrapMode: Text.WordWrap
+                            Layout.fillWidth: true
+                        }
+                    }
+                    GlassCard {
+                        id: trackAnalysisCard
                         objectName: "trackInsightAnalysisCard"
+                        readonly property bool accompaniesCredit: !!verifiedCreditsCard.credit.context
                         visible: djconnect.trackInsightText.length > 0
+                            && djconnect.trackInsightText !== djconnect.trackInsightVerifiedCredit.context
                         Layout.fillWidth: true
 
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 10
+                            FeatureIcon {
+                                iconName: trackAnalysisCard.accompaniesCredit ? "chat" : "trackInsight"
+                                Layout.preferredWidth: 24
+                                Layout.preferredHeight: 24
+                                Accessible.ignored: true
+                            }
+                            Text {
+                                objectName: "trackInsightAnalysisHeading"
+                                text: root.tr(trackAnalysisCard.accompaniesCredit
+                                    ? "track_insight_interpretation" : "track_insight_analysis_heading")
+                                textFormat: Text.PlainText
+                                color: BrandTheme.colors.text
+                                font.pixelSize: 21
+                                font.bold: true
+                                wrapMode: Text.Wrap
+                                Layout.fillWidth: true
+                                Accessible.role: Accessible.Heading
+                            }
+                        }
                         Text {
+                            objectName: "trackInsightAnalysisText"
                             text: djconnect.trackInsightText
                             textFormat: Text.PlainText
                             color: BrandTheme.colors.text
@@ -2763,20 +4545,40 @@ BrandWindow {
                             wrapMode: Text.Wrap
                             Layout.fillWidth: true
                         }
+                        Text {
+                            objectName: "trackInsightUnmeasuredNotice"
+                            visible: djconnect.trackInsightAudioNotice
+                            text: root.tr("track_insight_unmeasured_audio")
+                            textFormat: Text.PlainText
+                            color: BrandTheme.colors.muted
+                            font.pixelSize: 17
+                            wrapMode: Text.WordWrap
+                            Layout.fillWidth: true
+                        }
                     }
 
-                    Flow {
+                    GridLayout {
+                        objectName: "trackInsightMetricsGrid"
                         visible: djconnect.trackInsightItems.length > 0
-                        spacing: 8
+                        columns: Math.max(1, Math.min(3, djconnect.trackInsightItems.length,
+                            Math.floor((trackInsightScroll.availableWidth + columnSpacing) / (172 + columnSpacing))))
+                        rowSpacing: 8
+                        columnSpacing: 8
                         Layout.fillWidth: true
 
                         Repeater {
                             model: djconnect.trackInsightItems
 
                             GlassSurface {
+                                required property var modelData
+                                required property int index
+                                objectName: "trackInsightMetric-" + index
                                 border.color: root.moodColor("focus")
-                                width: Math.max(132, trackMetricContent.implicitWidth + 24)
-                                height: 64
+                                Layout.fillWidth: true
+                                Layout.preferredWidth: 1
+                                Layout.minimumWidth: 0
+                                Layout.preferredHeight: Math.max(64, trackMetricContent.implicitHeight + 16)
+                                Layout.alignment: Qt.AlignTop
                                 radius: root.standardButtonRadius
 
                                 ColumnLayout {
@@ -2787,20 +4589,25 @@ BrandWindow {
 
                                     Text {
                                         text: root.trackInsightLabel(modelData.title || modelData.kind || "")
+                                        textFormat: Text.PlainText
+                                        wrapMode: Text.Wrap
                                         color: BrandTheme.colors.text
                                         font.pixelSize: 15
                                         font.bold: true
-                                        elide: Text.ElideRight
                                         Layout.fillWidth: true
+                                        Layout.minimumWidth: 0
                                     }
 
                                     Text {
                                         text: modelData.value || ""
+                                        visible: text.length > 0
+                                        textFormat: Text.PlainText
+                                        wrapMode: Text.Wrap
                                         color: BrandTheme.colors.muted
                                         font.pixelSize: 19
                                         font.bold: true
-                                        elide: Text.ElideRight
                                         Layout.fillWidth: true
+                                        Layout.minimumWidth: 0
                                     }
                                 }
                             }
@@ -2811,6 +4618,9 @@ BrandWindow {
                         model: djconnect.trackInsightSections
 
                         GlassSurface {
+                            required property var modelData
+                            required property int index
+                            objectName: "trackInsightSection-" + index
                             border.color: root.moodColor("focus")
                             Layout.fillWidth: true
                             Layout.preferredHeight: trackSectionContent.implicitHeight + 18
@@ -2824,6 +4634,7 @@ BrandWindow {
 
                                 Text {
                                     text: root.trackInsightLabel(modelData.title || modelData.kind || modelData.id || "")
+                                    textFormat: Text.PlainText
                                     color: BrandTheme.colors.muted
                                     font.pixelSize: 18
                                     font.bold: true
@@ -2834,6 +4645,7 @@ BrandWindow {
                                 Text {
                                     visible: modelData.body && modelData.body.length > 0
                                     text: modelData.body || ""
+                                    textFormat: Text.PlainText
                                     color: BrandTheme.colors.text
                                     font.pixelSize: 17
                                     wrapMode: Text.WordWrap
@@ -2844,11 +4656,23 @@ BrandWindow {
                                     model: modelData.details || []
                                     Text {
                                         text: "- " + modelData
+                                        textFormat: Text.PlainText
                                         color: BrandTheme.colors.muted
                                         font.pixelSize: 16
                                         wrapMode: Text.WordWrap
                                         Layout.fillWidth: true
                                     }
+                                }
+                                Text {
+                                    objectName: "trackInsightSectionSource"
+                                    readonly property string sourceLabel: modelData.source || ""
+                                    visible: sourceLabel.length > 0
+                                    text: root.tr("sources") + " · " + sourceLabel
+                                    textFormat: Text.PlainText
+                                    color: BrandTheme.colors.muted
+                                    font.pixelSize: 15
+                                    wrapMode: Text.WordWrap
+                                    Layout.fillWidth: true
                                 }
                             }
                         }
@@ -2910,7 +4734,8 @@ BrandWindow {
         imageItem: cover
         active: visible && (root.activeScreen === "discover" || root.activeScreen === "musicdna") && !root.screenBlanked
         leaseKey: djconnect.activeProfileId + "|" + (recommendation.payload || "")
-        property string displayIcon: "discover"
+        property string displayIcon: djconnect.demoMode ? "music" : "discover"
+        property bool playbackPending: false
         readonly property real expiresAt: recommendation.imageExpiresAt || 0
         property bool expired: false
         function checkImageExpiry() {
@@ -2929,10 +4754,11 @@ BrandWindow {
         clip: true
 
         FeatureIcon {
+            objectName: "discoveryArtworkFallback"
             anchors.centerIn: parent
             width: Math.min(42, parent.width * 0.7); height: width
             iconName: artwork.displayIcon
-            visible: cover.status !== Image.Ready
+            visible: cover.status === Image.Null || cover.status === Image.Error
         }
         Image {
             id: cover
@@ -2958,26 +4784,77 @@ BrandWindow {
             Accessible.name: "Spotify"
             TapHandler { onTapped: Qt.openUrlExternally(artwork.recommendation.imageSourceUrl) }
         }
+        Rectangle {
+            anchors.fill: parent
+            radius: Math.max(0, artwork.radius - artwork.contentInset)
+            color: "#5c000000"
+            visible: artwork.active && artwork.playbackPending
+        }
+        LoadingSpinner {
+            objectName: "discoveryArtworkSpinner"
+            anchors.centerIn: parent
+            visible: artwork.active && (artwork.playbackPending || cover.status === Image.Loading)
+            running: visible
+        }
     }
 
-    component DiscoveryChips: RowLayout {
-        id: chips
+    component DiscoveryFeedbackOption: MenuItem {
+        implicitHeight: Math.max(48, implicitBackgroundHeight + topInset + bottomInset,
+                                 implicitContentHeight + topPadding + bottomPadding)
+    }
+
+    component DiscoveryChipStrip: Flickable {
+        id: strip
         property var values: []
-        spacing: 6
-        Repeater {
-            model: chips.values
-            delegate: GlassSurface {
-                required property string modelData
-                radius: 14
-                implicitWidth: chipText.implicitWidth + 16
-                implicitHeight: chipText.implicitHeight + 10
-                Text {
-                    id: chipText
-                    anchors.centerIn: parent
-                    text: parent.modelData.replace(/_/g, " ")
-                    textFormat: Text.PlainText
-                    color: BrandTheme.colors.muted
-                    font.pixelSize: 15
+        property string accessibleLabel: ""
+        visible: values.length > 0
+        activeFocusOnTab: visible && contentWidth > width
+        Accessible.role: Accessible.Pane
+        Accessible.name: accessibleLabel
+        implicitHeight: chips.implicitHeight + 8
+        contentWidth: chips.implicitWidth
+        contentHeight: height
+        flickableDirection: Flickable.HorizontalFlick
+        boundsBehavior: Flickable.StopAtBounds
+        clip: true
+
+        Keys.onLeftPressed: strip.scrollLabels(-1)
+        Keys.onRightPressed: strip.scrollLabels(1)
+        ScrollBar.horizontal: ScrollBar {
+            policy: strip.activeFocus ? ScrollBar.AlwaysOn : ScrollBar.AlwaysOff
+        }
+
+        function scrollLabels(direction) {
+            cancelFlick()
+            contentX = Math.max(originX, Math.min(contentX + direction * width / 2,
+                                                 originX + Math.max(0, contentWidth - width)))
+        }
+        function resetLabelScroll() {
+            cancelFlick()
+            contentX = originX
+        }
+
+        RowLayout {
+            id: chips
+            y: 4
+            width: implicitWidth
+            height: implicitHeight
+            spacing: 6
+            Repeater {
+                model: strip.values
+                delegate: GlassSurface {
+                    required property string modelData
+                    radius: 14
+                    implicitWidth: chipText.implicitWidth + 16
+                    implicitHeight: chipText.implicitHeight + 10
+                    Text {
+                        id: chipText
+                        anchors.centerIn: parent
+                        text: parent.modelData
+                        textFormat: Text.PlainText
+                        color: BrandTheme.colors.muted
+                        font.pixelSize: 15
+                    }
                 }
             }
         }
@@ -3002,9 +4879,75 @@ BrandWindow {
         function closeDetail() { discoveryDetail.close() }
         color: "transparent"
 
+        readonly property bool requiresMusicDna: djconnect.musicDnaLoaded ? !djconnect.musicDnaEnabled
+            : djconnect.musicDiscoveryDnaDisabled
+        readonly property bool showEmptyFeed: sections.length === 0 && !djconnect.musicDiscoveryBusy
+        readonly property int profileRevision: djconnect.musicDnaContextRevision
+        property var shelfReading: new Map()
+        property var feedReading: null
+        onProfileRevisionChanged: {
+            closeDetail()
+            renewedArtworkThrough = 0
+            clearDiscoveryReading()
+        }
+        onRequiresMusicDnaChanged: if (requiresMusicDna) clearDiscoveryReading()
+        Connections {
+            target: djconnect
+            function onDemoModeChanged() { musicDiscoveryPanel.clearDiscoveryReading() }
+        }
+        readonly property bool canRenewArtwork: visible && root.active && !root.screenBlanked
+            && !root.splashVisible && djconnect.paired && !djconnect.demoMode
+            && !djconnect.versionMismatchVisible && !djconnect.musicDiscoveryBusy
+            && !requiresMusicDna
+        property real renewedArtworkThrough: 0
+        readonly property var visibleRecommendations: requiresMusicDna ? [] : djconnect.musicDiscoveryItems.filter(function(item) {
+            return item.sectionId && item.sectionTitle && item.discoveryItemId && item.title
+        })
+        readonly property real nextArtworkExpiry: {
+            let deadline = 0
+            for (const item of visibleRecommendations) {
+                if (item.imageUrl && item.imageExpiresAt > renewedArtworkThrough
+                        && (deadline === 0 || item.imageExpiresAt < deadline))
+                    deadline = item.imageExpiresAt
+            }
+            return deadline
+        }
+        onCanRenewArtworkChanged: Qt.callLater(scheduleArtworkRenewal)
+        onNextArtworkExpiryChanged: Qt.callLater(scheduleArtworkRenewal)
+        Component.onCompleted: Qt.callLater(scheduleArtworkRenewal)
+
+        function scheduleArtworkRenewal() {
+            artworkRenewalTimer.stop()
+            if (!canRenewArtwork || nextArtworkExpiry === 0) return
+            artworkRenewalTimer.interval = Math.max(1000, Math.ceil(nextArtworkExpiry - Date.now() + 200))
+            artworkRenewalTimer.start()
+        }
+
+        Timer {
+            id: artworkRenewalTimer
+            onTriggered: {
+                if (!musicDiscoveryPanel.canRenewArtwork || musicDiscoveryPanel.nextArtworkExpiry === 0) return
+                const now = Date.now()
+                if (now < musicDiscoveryPanel.nextArtworkExpiry) {
+                    musicDiscoveryPanel.scheduleArtworkRenewal()
+                    return
+                }
+                // A failed read can leave the same leases in the feed.
+                musicDiscoveryPanel.renewedArtworkThrough = now
+                djconnect.loadMusicDiscovery()
+            }
+        }
+
+        ProfileReadOnOpen {
+            surfaceVisible: musicDiscoveryPanel.visible && !(djconnect.musicDnaLoaded && !djconnect.musicDnaEnabled)
+            busy: djconnect.musicDiscoveryBusy
+            loaded: djconnect.musicDiscoveryLoaded
+            onRequested: djconnect.openMusicDiscovery()
+        }
+
         readonly property var sections: {
             const groups = []
-            for (const item of djconnect.musicDiscoveryItems) {
+            for (const item of visibleRecommendations) {
                 const last = groups[groups.length - 1]
                 if (last && last.id === item.sectionId)
                     last.items.push(item)
@@ -3012,6 +4955,79 @@ BrandWindow {
                     groups.push({id: item.sectionId, title: item.sectionTitle, items: [item]})
             }
             return groups
+        }
+        onSectionsChanged: {
+            const visibleIds = new Set(sections.map(section => section.id))
+            for (const id of shelfReading.keys())
+                if (!visibleIds.has(id)) shelfReading.delete(id)
+            if (feedReading && feedReadingRestore) feedReadingRestore.restart()
+        }
+
+        function clearDiscoveryReading() {
+            shelfReading.clear()
+            feedReading = null
+            if (feedReadingRestore) feedReadingRestore.stop()
+            if (discoveryFlick) discoveryFlick.contentY = discoveryFlick.originY
+        }
+
+        function rememberFeedReading() {
+            if (!visible || !discoveryShelves || !feedReadingRestore || feedReadingRestore.running) return
+            const y = discoveryFlick.contentY
+            feedReading = null
+            if (y <= discoveryFlick.originY + 1) return
+            for (let index = 0; index < discoveryShelves.count; ++index) {
+                const row = discoveryShelves.itemAt(index)
+                if (row && row.y + row.height > y && row.y < y + discoveryFlick.height) {
+                    feedReading = {id: row.modelData.id, offset: y - row.y, index: index}
+                    return
+                }
+            }
+        }
+
+        Timer {
+            id: feedReadingRestore
+            interval: 32
+            onTriggered: {
+                const anchor = musicDiscoveryPanel.feedReading
+                if (!anchor || !musicDiscoveryPanel.visible || discoveryFlick.moving || !discoveryShelves.count) return
+                discoveryContent.ensurePolished()
+                const found = musicDiscoveryPanel.sections.findIndex(section => section.id === anchor.id)
+                const index = found >= 0 ? found : Math.min(anchor.index, discoveryShelves.count - 1)
+                const row = discoveryShelves.itemAt(index)
+                const origin = discoveryFlick.originY
+                if (row) discoveryFlick.contentY = Math.max(origin,
+                    Math.min(row.y + anchor.offset, origin + Math.max(0, discoveryFlick.contentHeight - discoveryFlick.height)))
+            }
+        }
+
+        function rememberShelfReading(view, sectionId, userMovement) {
+            const x = view.contentX
+            if (x <= view.originX + 1) {
+                if (userMovement) shelfReading.delete(sectionId)
+                return
+            }
+            let index = view.indexAt(x + 1, 1)
+            if (index < 0) index = view.indexAt(x + view.spacing + 1, 1)
+            const card = view.itemAtIndex(index)
+            if (card) shelfReading.set(sectionId, {id: card.modelData.discoveryItemId, offset: x - card.x, index: index})
+        }
+
+        function restoreShelfReading(view, sectionId) {
+            const anchor = shelfReading.get(sectionId)
+            if (!anchor || !visible || !view || view.moving || !view.count) return
+            const found = view.model.findIndex(candidate => candidate.discoveryItemId === anchor.id)
+            const index = found >= 0 ? found : Math.min(anchor.index, view.count - 1)
+            view.positionViewAtIndex(index, ListView.Beginning)
+            view.forceLayout()
+            const card = view.itemAtIndex(index)
+            if (card) view.contentX = Math.max(view.originX,
+                Math.min(card.x + anchor.offset, view.originX + Math.max(0, view.contentWidth - view.width)))
+        }
+
+        function recommendationStarting(recommendation) {
+            return !!recommendation && djconnect.musicDiscoveryPlayingId.length > 0
+                && djconnect.musicDiscoveryPlayingId === recommendation.discoveryItemId
+                && djconnect.musicDiscoveryPlayingSectionId === recommendation.sectionId
         }
 
         function kindLabel(kind) {
@@ -3036,17 +5052,18 @@ BrandWindow {
             anchors.bottomMargin: root.edge + 126
             spacing: root.wallProfile ? 22 : 10
 
-            PageToolbar {
-                title: root.tr("music_discovery")
+            AppPageToolbar {
+                title: root.playbackScreenTitle("music_discovery")
                 Layout.preferredHeight: compact ? implicitHeight : 140
                 showConnection: true
                 connectionLabel: root.tr("connection_type")
-                connectionText: djconnect.connectionType
                 Layout.fillWidth: true
 
                 RefreshIconButton {
                     id: discoveryRefreshButton
-                    loading: djconnect.musicDiscoveryBusy
+                    objectName: "discoveryRefreshButton"
+                    text: root.tr("refresh_discovery")
+                    loading: djconnect.musicDiscoveryBusy || (musicDiscoveryPanel.requiresMusicDna && djconnect.musicDnaBusy)
                     enabled: !loading
                     onClicked: djconnect.refreshMusicDiscovery()
                 }
@@ -3066,16 +5083,16 @@ BrandWindow {
                     contentHeight: discoveryContent.implicitHeight
                     boundsBehavior: Flickable.DragOverBounds
                     flickableDirection: Flickable.VerticalFlick
-                    property bool refreshArmed: false
-                    onDragStarted: refreshArmed = false
-                    onVerticalOvershootChanged: {
-                        if (dragging && verticalOvershoot < -64)
-                            refreshArmed = true
-                    }
-                    onDragEnded: {
-                        if (refreshArmed && !djconnect.musicDiscoveryBusy && djconnect.musicDiscoveryItems.length > 0)
-                            djconnect.refreshMusicDiscovery()
-                        refreshArmed = false
+                    onContentYChanged: musicDiscoveryPanel.rememberFeedReading()
+
+                    PullToRefresh {
+                        objectName: "discoveryPullToRefresh"
+                        flickable: discoveryFlick
+                        canRefresh: musicDiscoveryPanel.visible && root.active && !root.screenBlanked
+                            && !musicDiscoveryPanel.detailVisible && djconnect.paired && !djconnect.demoMode
+                            && !musicDiscoveryPanel.requiresMusicDna
+                            && !djconnect.musicDiscoveryBusy && musicDiscoveryPanel.sections.length > 0
+                        onRefreshRequested: djconnect.refreshMusicDiscovery()
                     }
 
                     ColumnLayout {
@@ -3092,10 +5109,9 @@ BrandWindow {
                         }
 
                         GlassSurface {
+                            objectName: "discoveryMusicDnaGate"
                             hero: true
-                            visible: djconnect.musicDiscoveryItems.length === 0
-                                     && djconnect.musicDiscoveryError.length === 0 && !djconnect.musicDiscoveryBusy
-                                     && (!djconnect.musicDnaEnabled || djconnect.musicDiscoveryConsentRejected)
+                            visible: musicDiscoveryPanel.requiresMusicDna && djconnect.musicDiscoveryError.length === 0
                             Layout.fillWidth: true
                             Layout.preferredHeight: discoveryMusicDnaDisabledColumn.implicitHeight + 28
                             radius: root.standardButtonRadius
@@ -3106,13 +5122,24 @@ BrandWindow {
                                 anchors.margins: 14
                                 spacing: 10
 
-                                Text {
-                                    text: root.tr("music_dna_disabled")
-                                    color: BrandTheme.colors.text
-                                    font.pixelSize: 21
-                                    font.bold: true
-                                    wrapMode: Text.WordWrap
+                                RowLayout {
                                     Layout.fillWidth: true
+                                    spacing: 10
+                                    FeatureIcon {
+                                        objectName: "discoveryMusicDnaLock"
+                                        iconName: "lock"
+                                        iconColor: BrandTheme.colors.actionAccent
+                                        Layout.preferredWidth: 28
+                                        Layout.preferredHeight: 28
+                                    }
+                                    Text {
+                                        text: root.tr("music_dna_disabled")
+                                        color: BrandTheme.colors.text
+                                        font.pixelSize: 21
+                                        font.bold: true
+                                        wrapMode: Text.WordWrap
+                                        Layout.fillWidth: true
+                                    }
                                 }
 
                                 Text {
@@ -3123,8 +5150,11 @@ BrandWindow {
                                     Layout.fillWidth: true
                                 }
 
-                                PurpleButton {
+                                GlassButton {
+                                    objectName: "discoveryEnableMusicDna"
                                     text: root.tr("music_discovery_enable")
+                                    iconName: "sparkles"
+                                    wrapText: true
                                     primary: true
                                     enabled: !djconnect.musicDnaBusy && !djconnect.musicDiscoveryBusy
                                     font.pixelSize: 19
@@ -3136,11 +5166,16 @@ BrandWindow {
                         }
 
                         Text {
-                            visible: (djconnect.musicDnaEnabled || djconnect.musicDiscoveryError.length > 0)
-                                     && djconnect.musicDiscoveryItems.length === 0 && !djconnect.musicDiscoveryBusy
-                                     && !djconnect.musicDiscoveryConsentRejected
+                            objectName: "discoveryEmptyFeedText"
+                            visible: !djconnect.musicDiscoveryBusy && (djconnect.musicDiscoveryError.length > 0
+                                || (musicDiscoveryPanel.showEmptyFeed && !musicDiscoveryPanel.requiresMusicDna))
                             textFormat: Text.PlainText
-                            text: djconnect.musicDiscoveryError.length > 0 ? djconnect.musicDiscoveryError : (djconnect.musicDiscoveryEmptyText.length > 0 ? djconnect.musicDiscoveryEmptyText : root.tr("music_discovery_empty"))
+                            text: {
+                                if (djconnect.musicDiscoveryError.length > 0) return djconnect.musicDiscoveryError
+                                if (!djconnect.musicDiscoveryDnaDisabled && djconnect.musicDiscoveryEmptyText.length > 0)
+                                    return djconnect.musicDiscoveryEmptyText
+                                return root.tr("music_discovery_empty")
+                            }
                             color: BrandTheme.colors.muted
                             font.pixelSize: 20
                             horizontalAlignment: Text.AlignHCenter
@@ -3150,12 +5185,13 @@ BrandWindow {
                         }
 
                         Repeater {
+                            id: discoveryShelves
                             model: musicDiscoveryPanel.sections
 
                             delegate: GlassSurface {
                                 id: shelf
                                 required property var modelData
-                                objectName: "discoveryShelf"
+                                objectName: "discoveryShelf-" + shelf.modelData.id
                                 Layout.fillWidth: true
                                 implicitHeight: shelfContent.implicitHeight + 2 * inset
                                 radius: root.standardButtonRadius
@@ -3182,14 +5218,44 @@ BrandWindow {
                                         id: shelfItems
                                         objectName: "discoveryShelfItems"
                                         readonly property int tileWidth: root.wallProfile ? 192 : 142
+                                        readonly property int textSpacing: 4
+                                        property bool readingReady: false
+                                        function scheduleReadingRestore() {
+                                            readingReady = false
+                                            if (shelfReadingRestore) shelfReadingRestore.restart()
+                                        }
                                         Layout.fillWidth: true
-                                        Layout.preferredHeight: tileWidth + 108
+                                        Layout.preferredHeight: tileWidth
+                                            + 2 * Math.ceil(Math.max(titleMetrics.height, titleMetrics.lineSpacing))
+                                            + 3 * Math.ceil(Math.max(captionMetrics.height, captionMetrics.lineSpacing))
+                                            + Math.ceil(kindMetrics.height) + 4 * textSpacing
                                         orientation: ListView.Horizontal
                                         boundsBehavior: Flickable.StopAtBounds
                                         clip: true
                                         spacing: 12
                                         model: shelf.modelData.items
-                                        ScrollBar.horizontal: ScrollBar {}
+                                        Component.onCompleted: scheduleReadingRestore()
+                                        onModelChanged: scheduleReadingRestore()
+                                        onContentXChanged: if (readingReady)
+                                            musicDiscoveryPanel.rememberShelfReading(shelfItems, shelf.modelData.id,
+                                                                                    moving || shelfScrollBar.pressed)
+                                        ScrollBar.horizontal: ScrollBar { id: shelfScrollBar }
+                                        Timer {
+                                            id: shelfReadingRestore
+                                            interval: 32
+                                            onTriggered: {
+                                                musicDiscoveryPanel.restoreShelfReading(shelfItems, shelf.modelData.id)
+                                                shelfItems.readingReady = true
+                                            }
+                                        }
+                                        FontMetrics { id: titleMetrics; font.pixelSize: 18; font.bold: true }
+                                        FontMetrics { id: captionMetrics; font.pixelSize: 15 }
+                                        FontMetrics {
+                                            id: kindMetrics
+                                            font.pixelSize: 14
+                                            font.bold: true
+                                            font.capitalization: Font.AllUppercase
+                                        }
 
                                         delegate: Button {
                                             id: recommendationCard
@@ -3204,24 +5270,19 @@ BrandWindow {
 
                                             contentItem: ColumnLayout {
                                                 id: recommendationContent
-                                                spacing: 4
+                                                spacing: shelfItems.textSpacing
                                                 DiscoveryArtwork {
+                                                    objectName: "discoveryCardArtwork"
                                                     recommendation: recommendationCard.modelData
                                                     Layout.fillWidth: true
                                                     Layout.preferredHeight: shelfItems.tileWidth
-                                                    LoadingSpinner {
-                                                        anchors.centerIn: parent
-                                                        visible: djconnect.musicDiscoveryPlayingId.length > 0
-                                                            && djconnect.musicDiscoveryPlayingId === recommendationCard.modelData.discoveryItemId
-                                                        running: visible
-                                                    }
+                                                    playbackPending: musicDiscoveryPanel.recommendationStarting(recommendationCard.modelData)
                                                 }
                                                 Text {
                                                     text: recommendationCard.modelData.title
                                                     textFormat: Text.PlainText
                                                     color: BrandTheme.colors.text
-                                                    font.pixelSize: 18
-                                                    font.bold: true
+                                                    font: titleMetrics.font
                                                     maximumLineCount: 2
                                                     wrapMode: Text.Wrap
                                                     elide: Text.ElideRight
@@ -3233,7 +5294,7 @@ BrandWindow {
                                                         && text.trim().toLowerCase() === "artist")
                                                     textFormat: Text.PlainText
                                                     color: BrandTheme.colors.muted
-                                                    font.pixelSize: 15
+                                                    font: captionMetrics.font
                                                     elide: Text.ElideRight
                                                     Layout.fillWidth: true
                                                 }
@@ -3242,20 +5303,20 @@ BrandWindow {
                                                     visible: text.length > 0
                                                     textFormat: Text.PlainText
                                                     color: BrandTheme.colors.muted
-                                                    font.pixelSize: 15
+                                                    font: captionMetrics.font
                                                     maximumLineCount: 2
                                                     wrapMode: Text.Wrap
                                                     elide: Text.ElideRight
                                                     Layout.fillWidth: true
                                                 }
                                                 Text {
+                                                    objectName: "discoveryCardKind"
                                                     text: musicDiscoveryPanel.kindLabel(recommendationCard.modelData.kind)
                                                     visible: text.length > 0 && recommendationCard.modelData.kind !== "artist"
                                                         && !(recommendationCard.modelData.sectionId === "rediscover"
                                                             && recommendationCard.modelData.kind === "track")
-                                                    color: BrandTheme.colors.muted
-                                                    font.pixelSize: 14
-                                                    font.bold: true
+                                                    color: BrandTheme.colors.text
+                                                    font: kindMetrics.font
                                                     Layout.fillWidth: true
                                                 }
                                             }
@@ -3273,8 +5334,8 @@ BrandWindow {
             id: discoveryDetail
             objectName: "discoveryDetail"
             property var selected: null
-            readonly property var item: selected ? djconnect.musicDiscoveryItems.find(function(candidate) {
-                return candidate.payload === selected.payload && candidate.title === selected.title
+            readonly property var item: selected ? musicDiscoveryPanel.visibleRecommendations.find(function(candidate) {
+                return candidate.sectionId === selected.sectionId && candidate.discoveryItemId === selected.discoveryItemId
             }) : null
             readonly property bool actionBusy: djconnect.musicDiscoveryBusy || djconnect.musicDiscoveryPlayingId.length > 0
             readonly property var qualityChips: {
@@ -3283,9 +5344,19 @@ BrandWindow {
                 const score = item.qualityScore
                 if (typeof score === "number" && Number.isInteger(score) && score >= 0 && score <= 100)
                     chips.push(score + "/100")
-                return chips.concat(Array.from(item.qualityFactors || []).filter(function(factor) {
-                    return typeof factor === "string" && factor.length > 0
-                }))
+                return chips.concat(labelsForCodes(item.qualityFactors, "music_discovery_quality_"))
+            }
+            readonly property var sourceChips: item ? labelsForCodes(item.reasonSources, "music_discovery_source_") : []
+
+            function labelsForCodes(codes, prefix) {
+                const labels = []
+                for (const code of Array.from(codes || [])) {
+                    if (typeof code !== "string" || !/^[a-z_]+$/.test(code)) continue
+                    const key = prefix + code
+                    const label = root.tr(key)
+                    if (label !== key) labels.push(label)
+                }
+                return labels
             }
             anchors.centerIn: Overlay.overlay
             width: Math.min(root.width - 40, 520)
@@ -3295,12 +5366,33 @@ BrandWindow {
             padding: 16
             closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
             background: GlassSurface { popover: true; elevated: true }
-            onItemChanged: if (!item) close()
+            onItemChanged: if (!item) Qt.callLater(closeUnavailableRecommendation)
+            onOpened: {
+                recommendationQualityStrip.resetLabelScroll()
+                recommendationSourceStrip.resetLabelScroll()
+                closeRecommendationButton.forceActiveFocus(Qt.PopupFocusReason)
+            }
             onClosed: selected = null
 
+            function closeUnavailableRecommendation() {
+                if (!item) close()
+            }
+
             function showRecommendation(recommendation) {
-                selected = recommendation
+                selected = {sectionId: recommendation.sectionId, discoveryItemId: recommendation.discoveryItemId}
                 if (item) open()
+            }
+
+            function revealFocusedControl(control) {
+                if (!control.activeFocus) return
+                const flick = detailScroll.contentItem
+                const top = control.mapToItem(flick.contentItem, 0, 0).y
+                const bottom = top + control.height
+                if (top < flick.contentY)
+                    flick.contentY = Math.max(flick.originY, top)
+                else if (bottom > flick.contentY + flick.height)
+                    flick.contentY = Math.min(bottom - flick.height,
+                                              flick.originY + Math.max(0, flick.contentHeight - flick.height))
             }
 
             Connections {
@@ -3315,6 +5407,7 @@ BrandWindow {
 
             contentItem: ScrollView {
                 id: detailScroll
+                objectName: "discoveryDetailScroll"
                 clip: true
                 contentWidth: availableWidth
                 ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
@@ -3328,13 +5421,16 @@ BrandWindow {
                         Layout.fillWidth: true
                         spacing: 12
                         DiscoveryArtwork {
+                            objectName: "discoveryDetailArtwork"
                             recommendation: discoveryDetail.item || ({})
+                            playbackPending: musicDiscoveryPanel.recommendationStarting(discoveryDetail.item)
                             Layout.preferredWidth: 96
                             Layout.preferredHeight: 96
                         }
                         ColumnLayout {
                             Layout.fillWidth: true
                             Text {
+                                objectName: "discoveryDetailTitle"
                                 text: discoveryDetail.item ? discoveryDetail.item.title : ""
                                 textFormat: Text.PlainText
                                 color: BrandTheme.colors.text
@@ -3361,9 +5457,12 @@ BrandWindow {
                             }
                         }
                         GlassButton {
-                            iconName: "end"
+                            id: closeRecommendationButton
+                            objectName: "closeDiscoveryDetail"
+                            iconName: "close"
                             Accessible.name: root.tr("close")
                             Layout.alignment: Qt.AlignTop
+                            onActiveFocusChanged: discoveryDetail.revealFocusedControl(closeRecommendationButton)
                             onClicked: discoveryDetail.close()
                         }
                     }
@@ -3374,31 +5473,30 @@ BrandWindow {
                         textFormat: Text.PlainText
                         color: BrandTheme.colors.text
                         font.pixelSize: 18
-                        wrapMode: Text.WordWrap
+                        wrapMode: Text.Wrap
                         Layout.fillWidth: true
                     }
 
-                    ScrollView {
-                        visible: discoveryDetail.qualityChips.length > 0
+                    DiscoveryChipStrip {
+                        id: recommendationQualityStrip
+                        objectName: "discoveryQualityStrip"
+                        values: discoveryDetail.qualityChips
+                        accessibleLabel: root.tr("music_discovery_quality_labels")
                         Layout.fillWidth: true
-                        Layout.preferredHeight: qualityRow.implicitHeight + 8
-                        contentHeight: qualityRow.implicitHeight
-                        clip: true
-                        ScrollBar.vertical.policy: ScrollBar.AlwaysOff
-                        DiscoveryChips { id: qualityRow; values: discoveryDetail.qualityChips }
+                        onActiveFocusChanged: discoveryDetail.revealFocusedControl(recommendationQualityStrip)
                     }
 
-                    ScrollView {
-                        visible: !!discoveryDetail.item && sourceRow.values.length > 0
+                    DiscoveryChipStrip {
+                        id: recommendationSourceStrip
+                        objectName: "discoverySourceStrip"
+                        values: discoveryDetail.sourceChips
+                        accessibleLabel: root.tr("music_discovery_source_labels")
                         Layout.fillWidth: true
-                        Layout.preferredHeight: sourceRow.implicitHeight + 8
-                        contentHeight: sourceRow.implicitHeight
-                        clip: true
-                        ScrollBar.vertical.policy: ScrollBar.AlwaysOff
-                        DiscoveryChips { id: sourceRow; values: discoveryDetail.item ? discoveryDetail.item.reasonSources || [] : [] }
+                        onActiveFocusChanged: discoveryDetail.revealFocusedControl(recommendationSourceStrip)
                     }
 
                     GlassButton {
+                        id: playRecommendationButton
                         objectName: "discoveryDetailPlay"
                         text: root.tr("play_now")
                         iconName: "play"
@@ -3408,10 +5506,12 @@ BrandWindow {
                         font.pixelSize: 18
                         Layout.fillWidth: true
                         Layout.preferredHeight: 52
+                        onActiveFocusChanged: discoveryDetail.revealFocusedControl(playRecommendationButton)
                         onClicked: if (discoveryDetail.item) djconnect.playMusicDiscoveryItem(discoveryDetail.item.payload)
                     }
 
                     Text {
+                        objectName: "discoveryDetailError"
                         visible: djconnect.musicDiscoveryError.length > 0
                         text: djconnect.musicDiscoveryError
                         textFormat: Text.PlainText
@@ -3421,28 +5521,43 @@ BrandWindow {
                         Layout.fillWidth: true
                     }
 
-                    PurpleButton {
+                    GlassButton {
+                        id: feedbackRecommendationButton
                         objectName: "discoveryDetailFeedback"
                         text: root.tr("feedback")
+                        iconName: "thumbs_down"
+                        cornerRadius: root.standardButtonRadius
                         visible: djconnect.musicDiscoveryFeedbackSupported
                         enabled: !discoveryDetail.actionBusy
                         font.pixelSize: 18
                         Layout.fillWidth: true
                         Layout.preferredHeight: 48
+                        onActiveFocusChanged: discoveryDetail.revealFocusedControl(feedbackRecommendationButton)
                         onClicked: discoveryFeedbackMenu.open()
 
                         Menu {
                             id: discoveryFeedbackMenu
-                            y: parent.height
-                            MenuItem {
+                            objectName: "discoveryFeedbackMenu"
+                            margins: 8
+                            onAboutToShow: {
+                                const button = feedbackRecommendationButton
+                                const bottom = button.mapToItem(root.contentItem, 0, button.height).y
+                                y = bottom + implicitHeight + margins <= root.contentItem.height
+                                    ? button.height : -implicitHeight
+                            }
+                            onOpened: currentIndex = 0
+                            DiscoveryFeedbackOption {
+                                objectName: "discoveryFeedbackFirstOption"
                                 text: root.tr("music_discovery_not_for_me")
                                 onTriggered: discoveryDetail.sendFeedback("not_for_me")
                             }
-                            MenuItem {
+                            DiscoveryFeedbackOption {
+                                objectName: "discoveryFeedbackMiddleOption"
                                 text: root.tr("music_discovery_less_like_this")
                                 onTriggered: discoveryDetail.sendFeedback("less_like_this")
                             }
-                            MenuItem {
+                            DiscoveryFeedbackOption {
+                                objectName: "discoveryFeedbackLastOption"
                                 text: root.tr("music_discovery_hide_artist")
                                 onTriggered: discoveryDetail.sendFeedback("hide_artist")
                             }
@@ -3452,10 +5567,8 @@ BrandWindow {
             }
 
             function sendFeedback(value) {
-                if (item && !actionBusy && djconnect.musicDiscoveryFeedbackSupported) {
+                if (item && !actionBusy && djconnect.musicDiscoveryFeedbackSupported)
                     djconnect.sendMusicDiscoveryFeedback(item.payload, value)
-                    close()
-                }
             }
         }
     }
@@ -3468,10 +5581,16 @@ BrandWindow {
         sourceComponent: MusicDnaPage {}
     }
 
+    function musicDnaPercent(value) {
+        const rounded = Math.round(value * 10) / 10
+        return rounded.toLocaleString(Qt.locale(djconnect.language), "f", Number.isInteger(rounded) ? 0 : 1) + "%"
+    }
+
     component MusicDnaMeter: ColumnLayout {
         id: meter
         required property real value
         property string label: ""
+        property color tint: BrandTheme.colors.actionAccent
         spacing: 5
         RowLayout {
             Layout.fillWidth: true
@@ -3483,28 +5602,49 @@ BrandWindow {
                 Layout.fillWidth: true
                 wrapMode: Text.Wrap
             }
-            Text { text: Number(meter.value.toFixed(1)).toLocaleString(Qt.locale(djconnect.language)) + "%"; color: BrandTheme.colors.text; font.bold: true; font.pixelSize: 17 }
+            Text {
+                text: root.musicDnaPercent(meter.value)
+                color: BrandTheme.colors.text; font.bold: true; font.pixelSize: 17
+            }
         }
         Rectangle {
             Layout.fillWidth: true
             implicitHeight: 7; radius: 4
             color: "#30FFFFFF"
-            Rectangle { width: parent.width * meter.value / 100; height: parent.height; radius: 4; color: BrandTheme.colors.actionAccent }
+            Rectangle {
+                objectName: "musicDnaMeterFill"
+                width: parent.width * meter.value / 100
+                height: parent.height
+                radius: 4
+                color: meter.tint
+            }
         }
     }
 
     component MusicDnaRow: RowLayout {
         id: dnaRow
         required property var entry
+        property bool trackArtwork: false
         readonly property string title: entry.labelKey ? root.tr(entry.labelKey) : entry.title || ""
         readonly property string value: entry.valueKey ? root.tr(entry.valueKey)
             : entry.value || (typeof entry.count === "number"
                 ? root.tr("music_dna_card_plays").replace("%1", entry.count) : "")
         readonly property bool percentage: typeof entry.percent === "number"
+        readonly property string moodZone: (entry.labelKey || "").startsWith("mood_")
+            ? MoodTheme.key(entry.labelKey.slice(5)) : "default"
         Layout.fillWidth: true
         spacing: 10
+        Text {
+            visible: typeof dnaRow.entry.rank === "number"
+            text: visible ? dnaRow.entry.rank + "." : ""
+            color: BrandTheme.colors.actionAccent
+            font.pixelSize: 16; font.bold: true
+            Layout.preferredWidth: 20
+            Layout.alignment: Qt.AlignTop
+        }
         DiscoveryArtwork {
-            visible: !!dnaRow.entry.imageUrl
+            objectName: "musicDnaTrackArtwork"
+            visible: dnaRow.trackArtwork || !!dnaRow.entry.imageUrl
             recommendation: dnaRow.entry
             displayIcon: "music"
             padding: 0; radius: 12
@@ -3515,6 +5655,8 @@ BrandWindow {
             Layout.fillWidth: true
             value: dnaRow.percentage ? dnaRow.entry.percent : 0
             label: dnaRow.title
+            tint: dnaRow.moodZone === "default" ? BrandTheme.colors.actionAccent
+                : MoodTheme.moodColor(dnaRow.moodZone, "gradientStart")
         }
         ColumnLayout {
             visible: !dnaRow.percentage
@@ -3529,7 +5671,8 @@ BrandWindow {
             }
             Text {
                 visible: text.length > 0
-                text: dnaRow.entry.labelKey ? dnaRow.entry.title || dnaRow.value : dnaRow.entry.subtitle || ""
+                text: dnaRow.entry.subtitleKey ? root.tr(dnaRow.entry.subtitleKey)
+                    : dnaRow.entry.labelKey ? dnaRow.entry.title || dnaRow.value : dnaRow.entry.subtitle || ""
                 textFormat: Text.PlainText
                 color: BrandTheme.colors.muted; font.pixelSize: 15
                 Layout.fillWidth: true; wrapMode: Text.Wrap
@@ -3543,10 +5686,52 @@ BrandWindow {
         }
     }
 
+    component ProfileReadOnOpen: QtObject {
+        required property bool surfaceVisible
+        required property bool busy
+        required property bool loaded
+        signal requested()
+
+        readonly property bool profileViewActive: surfaceVisible && root.active && !root.screenBlanked
+            && !root.splashVisible && djconnect.paired && !djconnect.demoMode && !djconnect.versionMismatchVisible
+        readonly property bool canLoadProfile: profileViewActive && !busy
+        readonly property int profileRevision: djconnect.musicDnaContextRevision
+        property int requestedProfileRevision: -1
+        onProfileViewActiveChanged: if (!profileViewActive) requestedProfileRevision = -1
+        onCanLoadProfileChanged: if (canLoadProfile) Qt.callLater(loadProfileIfCurrent)
+        onProfileRevisionChanged: Qt.callLater(loadProfileIfCurrent)
+        Component.onCompleted: Qt.callLater(loadProfileIfCurrent)
+
+        function loadProfileIfCurrent() {
+            if (!canLoadProfile || requestedProfileRevision === profileRevision) return
+            const alreadyLoaded = requestedProfileRevision >= 0 && loaded
+            requestedProfileRevision = profileRevision
+            if (!alreadyLoaded) requested()
+        }
+    }
+
     component MusicDnaPage: Rectangle {
         id: musicDnaPanel
         objectName: "musicDnaPanel"
         color: "transparent"
+        readonly property bool showProfile: djconnect.musicDnaLoaded && djconnect.musicDnaEnabled
+            && (djconnect.musicDnaError.length === 0 || djconnect.musicDnaNeedsRecovery)
+
+        ProfileReadOnOpen {
+            id: musicDnaProfileRead
+            surfaceVisible: musicDnaPanel.visible
+            busy: djconnect.musicDnaBusy
+            loaded: djconnect.musicDnaLoaded
+            onRequested: djconnect.loadMusicDna()
+        }
+
+        Timer {
+            objectName: "musicDnaRecoveryTimer"
+            interval: 30000
+            running: musicDnaProfileRead.canLoadProfile && djconnect.musicDnaNeedsRecovery
+            repeat: true
+            onTriggered: djconnect.loadMusicDna()
+        }
 
         ModalBlocker {}
 
@@ -3558,53 +5743,85 @@ BrandWindow {
             anchors.bottomMargin: root.edge + 126
             spacing: 14
 
-            PageToolbar {
-                title: root.tr("music_dna")
+            AppPageToolbar {
+                title: root.playbackScreenTitle("music_dna")
                 leading: [ GlassButton { iconName: "back"; tertiary: true; implicitWidth: 52; Accessible.name: root.tr("more"); onClicked: root.activeScreen = "more" } ]
                 showConnection: true
                 connectionLabel: root.tr("connection_type")
-                connectionText: djconnect.connectionType
                 Layout.fillWidth: true
-
-                LoadingSpinner {
-                    visible: djconnect.musicDnaBusy
-                    running: visible
-                    Layout.preferredWidth: 38
-                    Layout.preferredHeight: 38
-                }
 
                 RefreshIconButton {
                     id: musicDnaRefreshButton
                     objectName: "musicDnaRefreshButton"
-                    enabled: !djconnect.musicDnaBusy
+                    text: root.tr("refresh_music_dna")
+                    loading: djconnect.musicDnaBusy
+                    enabled: !loading && djconnect.paired && !djconnect.demoMode && !djconnect.versionMismatchVisible
                     onClicked: djconnect.refreshMusicDna()
                 }
             }
 
             GlassCard {
                 objectName: "musicDnaErrorCard"
-                visible: djconnect.musicDnaError.length > 0
+                visible: (musicDnaPanel.showProfile && djconnect.musicDnaNeedsRecovery)
+                    || (!djconnect.musicDnaBusy && (djconnect.musicDnaError.length > 0 || !djconnect.musicDnaLoaded))
                 Layout.fillWidth: true
                 Text {
-                    text: djconnect.musicDnaError
+                    objectName: "musicDnaUnavailableText"
+                    text: djconnect.musicDnaError || root.tr("music_dna_profile_unavailable")
                     textFormat: Text.PlainText
                     color: BrandTheme.colors.text
                     font.pixelSize: 22
                     wrapMode: Text.WordWrap
                     Layout.fillWidth: true
                 }
+                GlassButton {
+                    objectName: "musicDnaReloadProfile"
+                    text: root.tr("music_dna_reload_profile")
+                    iconName: "refresh"
+                    enabled: musicDnaRefreshButton.enabled
+                    Layout.alignment: Qt.AlignLeft
+                    onClicked: djconnect.refreshMusicDna()
+                }
+            }
+
+            GlassCard {
+                objectName: "musicDnaLoadingCard"
+                visible: !djconnect.musicDnaLoaded && djconnect.musicDnaBusy
+                Layout.fillWidth: true
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 12
+                    BusyIndicator {
+                        running: visible
+                        Layout.preferredWidth: 36
+                        Layout.preferredHeight: 36
+                        Accessible.ignored: true
+                    }
+                    Text {
+                        objectName: "musicDnaLoadingText"
+                        text: root.tr("music_dna_loading_profile")
+                        textFormat: Text.PlainText
+                        color: BrandTheme.colors.text
+                        font.pixelSize: 20
+                        wrapMode: Text.WordWrap
+                        Layout.fillWidth: true
+                    }
+                }
             }
 
             IntroductionCard {
                 objectName: "musicDnaOptInHero"
                 compact: root.width < 900
-                iconName: "heart"
-                title: root.tr("music_dna")
+                iconName: "lock"
+                title: root.tr("music_dna_disabled")
                 message: root.tr("music_dna_opt_in")
-                visible: !djconnect.musicDnaEnabled && djconnect.musicDnaError.length === 0
+                visible: !djconnect.musicDnaEnabled && djconnect.musicDnaLoaded && djconnect.musicDnaError.length === 0
 
-                PurpleButton {
+                GlassButton {
+                    objectName: "musicDnaEnableFromPage"
                     text: root.tr("music_dna_enable")
+                    iconName: "sparkles"
+                    wrapText: true
                     primary: true
                     enabled: !djconnect.musicDnaBusy
                     font.pixelSize: 22
@@ -3616,28 +5833,114 @@ BrandWindow {
 
             ScrollView {
                 id: musicDnaScroll
-                visible: djconnect.musicDnaError.length === 0 && djconnect.musicDnaEnabled
+                objectName: "musicDnaScroll"
+                visible: musicDnaPanel.showProfile
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 clip: true
                 ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
                 contentWidth: availableWidth
 
+                PullToRefresh {
+                    objectName: "musicDnaPullToRefresh"
+                    flickable: musicDnaScroll.contentItem
+                    canRefresh: musicDnaScroll.visible && root.active && !root.screenBlanked
+                        && djconnect.paired && !djconnect.demoMode && !djconnect.musicDnaBusy
+                        && (djconnect.musicDnaSections.length > 0 || djconnect.musicDnaSummary.length > 0)
+                    onRefreshRequested: djconnect.refreshMusicDna()
+                }
+
                 GridLayout {
+                    id: musicDnaGrid
                     width: Math.max(0, musicDnaScroll.availableWidth)
                     columns: Math.max(1, Math.floor((width + columnSpacing) / (310 + columnSpacing)))
                     columnSpacing: 14
                     rowSpacing: 14
 
+                    MusicDnaProfileHero {
+                        objectName: "musicDnaActiveHero"
+                        Layout.columnSpan: musicDnaGrid.columns
+                        Layout.fillWidth: true
+                        compact: root.width < 900
+                        mood: root.appearanceMood
+                        description: root.tr("music_dna_hero_description")
+                        animate: musicDnaScroll.visible && root.active && GlassStyle.awake && !GlassStyle.reduceMotion
+                            && y + height > musicDnaScroll.contentItem.contentY
+                    }
+
+                    GlassCard {
+                        objectName: "musicDnaNoProfile"
+                        visible: !djconnect.musicDnaBusy && djconnect.musicDnaSections.length === 0
+                            && djconnect.musicDnaSummary.length === 0
+                        Layout.columnSpan: musicDnaGrid.columns
+                        Layout.fillWidth: true
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 10
+                            FeatureIcon {
+                                iconName: "waveform"
+                                Layout.preferredWidth: 24
+                                Layout.preferredHeight: 24
+                                Accessible.ignored: true
+                            }
+                            Text {
+                                objectName: "musicDnaNoProfileHeading"
+                                text: root.tr("music_dna_no_profile_yet")
+                                textFormat: Text.PlainText
+                                color: BrandTheme.colors.text
+                                font.pixelSize: 22
+                                font.bold: true
+                                wrapMode: Text.WordWrap
+                                Accessible.role: Accessible.Heading
+                                Layout.fillWidth: true
+                            }
+                        }
+                        Text {
+                            objectName: "musicDnaNoProfileDetail"
+                            text: root.tr("music_dna_building_profile")
+                            textFormat: Text.PlainText
+                            color: BrandTheme.colors.muted
+                            font.pixelSize: 18
+                            wrapMode: Text.WordWrap
+                            Layout.fillWidth: true
+                        }
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 8
+                            FeatureIcon {
+                                iconName: "history"
+                                Layout.preferredWidth: 20
+                                Layout.preferredHeight: 20
+                                Layout.alignment: Qt.AlignTop
+                                Accessible.ignored: true
+                            }
+                            Text {
+                                objectName: "musicDnaNoProfileSignals"
+                                text: root.tr("music_dna_profile_signals_hint")
+                                textFormat: Text.PlainText
+                                color: BrandTheme.colors.muted
+                                font.pixelSize: 16
+                                wrapMode: Text.WordWrap
+                                Layout.fillWidth: true
+                            }
+                        }
+                    }
+
                     Repeater {
-                        model: djconnect.musicDnaSections.length ? djconnect.musicDnaSections
-                            : djconnect.musicDnaSummary ? [{
-                                key: "music_dna_card_summary", icon: "waveform", value: djconnect.musicDnaSummary
-                            }] : []
+                        model: {
+                            const sections = djconnect.musicDnaSections
+                            const summary = djconnect.musicDnaSummary
+                            if (!summary || sections.some(section => section.key === "music_dna_card_summary"))
+                                return sections
+                            return [{key: "music_dna_card_summary", icon: "waveform", value: summary}].concat(sections)
+                        }
 
                         GlassCard {
                             id: dnaCard
                             required property var modelData
+                            readonly property bool showsTrackArtwork: [
+                                "music_dna_card_recent_tracks", "music_dna_card_recent_favorites", "music_dna_card_top_tracks"
+                            ].includes(modelData.key)
                             objectName: modelData.key
                             Layout.fillWidth: true
                             Layout.preferredWidth: 1
@@ -3663,7 +5966,8 @@ BrandWindow {
                             }
                             Text {
                                 visible: text.length > 0
-                                text: dnaCard.modelData.value || ""
+                                text: dnaCard.modelData.valueKey ? root.tr(dnaCard.modelData.valueKey)
+                                    : dnaCard.modelData.value || ""
                                 textFormat: Text.PlainText
                                 color: BrandTheme.colors.text
                                 font.pixelSize: 23; font.bold: true
@@ -3710,7 +6014,8 @@ BrandWindow {
                                 }
                                 Text {
                                     visible: typeof dnaCard.modelData.count === "number"
-                                    text: visible ? root.tr("music_dna_card_signals").replace("%1", dnaCard.modelData.count) : ""
+                                    text: visible ? root.tr(dnaCard.modelData.key === "music_dna_card_energy"
+                                        ? "music_dna_card_analyses" : "music_dna_card_signals").replace("%1", dnaCard.modelData.count) : ""
                                     textFormat: Text.PlainText
                                     color: BrandTheme.colors.muted
                                     font.pixelSize: 17
@@ -3729,13 +6034,19 @@ BrandWindow {
                             }
                             Repeater {
                                 model: dnaCard.modelData.rows || []
-                                MusicDnaRow { entry: modelData }
+                                MusicDnaRow {
+                                    required property var modelData
+                                    entry: modelData
+                                    trackArtwork: dnaCard.showsTrackArtwork
+                                }
                             }
                             Repeater {
                                 model: dnaCard.modelData.groups || []
                                 ColumnLayout {
                                     id: dnaGroup
                                     required property var modelData
+                                    readonly property bool weekdays: modelData.key === "music_dna_card_weekdays"
+                                    readonly property bool tiles: weekdays || modelData.key === "music_dna_card_genres"
                                     Layout.fillWidth: true
                                     spacing: 8
                                     Text {
@@ -3747,7 +6058,7 @@ BrandWindow {
                                         wrapMode: Text.Wrap
                                     }
                                     ListView {
-                                        visible: dnaGroup.modelData.shelf
+                                        visible: dnaGroup.modelData.shelf && dnaGroup.modelData.rows.length > 0
                                         Layout.fillWidth: true
                                         Layout.preferredHeight: 118
                                         orientation: ListView.Horizontal
@@ -3777,18 +6088,99 @@ BrandWindow {
                                             }
                                         }
                                     }
+                                    Text {
+                                        objectName: "musicDnaArtistPeriodEmpty"
+                                        visible: dnaGroup.modelData.shelf && dnaGroup.modelData.rows.length === 0
+                                        text: visible ? root.tr("music_dna_not_enough_signals") : ""
+                                        textFormat: Text.PlainText
+                                        color: BrandTheme.colors.muted
+                                        font.pixelSize: 16
+                                        Layout.fillWidth: true
+                                        wrapMode: Text.WordWrap
+                                    }
+                                    GridLayout {
+                                        objectName: dnaGroup.weekdays ? "musicDnaWeekdayGrid"
+                                            : dnaGroup.tiles ? "musicDnaGenreGrid" : ""
+                                        visible: dnaGroup.tiles
+                                        Layout.fillWidth: true
+                                        columns: Math.max(1, Math.floor((width + columnSpacing) / (118 + columnSpacing)))
+                                        columnSpacing: 8
+                                        rowSpacing: 8
+                                        Repeater {
+                                            model: dnaGroup.tiles ? dnaGroup.modelData.rows : []
+                                            Rectangle {
+                                                objectName: dnaGroup.weekdays ? "musicDnaWeekdayTile" : "musicDnaGenreTile"
+                                                required property var modelData
+                                                radius: 7
+                                                color: BrandTheme.alpha(BrandTheme.colors.text, "14")
+                                                implicitHeight: tileLabels.implicitHeight + 16
+                                                Layout.alignment: Qt.AlignTop
+                                                Layout.fillWidth: true
+                                                Layout.preferredWidth: 1
+                                                ColumnLayout {
+                                                    id: tileLabels
+                                                    anchors.fill: parent
+                                                    anchors.leftMargin: 10
+                                                    anchors.rightMargin: 10
+                                                    anchors.topMargin: 8
+                                                    anchors.bottomMargin: 8
+                                                    spacing: 2
+                                                    Text {
+                                                        text: modelData.labelKey ? root.tr(modelData.labelKey) : modelData.title
+                                                        textFormat: Text.PlainText
+                                                        color: BrandTheme.colors.text
+                                                        font.pixelSize: 16
+                                                        font.bold: true
+                                                        Layout.fillWidth: true
+                                                        wrapMode: Text.Wrap
+                                                    }
+                                                    Text {
+                                                        visible: text.length > 0
+                                                        text: typeof modelData.percent === "number" ? root.musicDnaPercent(modelData.percent)
+                                                            : modelData.value || (typeof modelData.count === "number"
+                                                                ? root.tr("music_dna_card_plays").replace("%1", modelData.count) : "")
+                                                        textFormat: Text.PlainText
+                                                        color: BrandTheme.colors.muted
+                                                        font.pixelSize: 15
+                                                        Layout.fillWidth: true
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
                                     Repeater {
-                                        model: dnaGroup.modelData.shelf ? [] : dnaGroup.modelData.rows
-                                        MusicDnaRow { entry: modelData }
+                                        model: dnaGroup.modelData.shelf || dnaGroup.tiles ? [] : dnaGroup.modelData.rows
+                                        MusicDnaRow {
+                                            required property var modelData
+                                            entry: modelData
+                                            trackArtwork: dnaCard.showsTrackArtwork
+                                        }
                                     }
                                 }
                             }
                         }
                     }
+                    Text {
+                        objectName: "musicDnaUpdatedFooter"
+                        readonly property string updatedTime: {
+                            root.trVersion
+                            return djconnect.djSession.formatTimestamp(djconnect.musicDnaUpdatedAt, true)
+                        }
+                        visible: updatedTime.length > 0
+                        text: root.tr("music_dna_updated_at").replace("%1", updatedTime)
+                        textFormat: Text.PlainText
+                        color: BrandTheme.colors.muted
+                        horizontalAlignment: Text.AlignHCenter
+                        font.pixelSize: 15
+                        wrapMode: Text.WordWrap
+                        Layout.columnSpan: musicDnaGrid.columns
+                        Layout.fillWidth: true
+                        Layout.bottomMargin: 8
+                    }
                 }
             }
             Item {
-                visible: !djconnect.musicDnaEnabled || djconnect.musicDnaError.length > 0
+                visible: !musicDnaPanel.showProfile
                 Layout.fillWidth: true; Layout.fillHeight: true
             }
         }
@@ -3800,6 +6192,10 @@ BrandWindow {
         visible: root.activeScreen === "askdj"
         z: 17
         sourceComponent: Component { AskDjPage {} }
+        onLoaded: {
+            item.consumeSavedContext()
+            item.restoreDraftAnswerContext()
+        }
     }
 
     component AskDjPage: Rectangle {
@@ -3807,34 +6203,311 @@ BrandWindow {
         objectName: "askDjPanel"
         color: "transparent"
         property bool chatKeyboardOpen: false
+        property bool helpOpen: false
+        property int draftEditRevision: 0
+        property string feedbackMessageId: ""
+        readonly property var feedbackAnswer: feedbackMessageId && !historyOffline ? djconnect.askDjMessages.find(message =>
+            message.id === feedbackMessageId && message.role === "assistant" && message.text) : null
+        onFeedbackAnswerChanged: if (!feedbackAnswer) Qt.callLater(function() {
+            if (!askDjPanel.feedbackAnswer && askDjFeedbackPopup.opened) askDjFeedbackPopup.close()
+        })
+        readonly property int profileContextRevision: djconnect.musicDnaContextRevision
+        onProfileContextRevisionChanged: clearQuestionUi(false)
+        readonly property bool historyOffline: !djconnect.demoMode
+            && (!djconnect.paired || !djconnect.backendAvailable || djconnect.versionMismatchVisible)
+        readonly property bool questionActionsReady: !historyOffline && !djconnect.askDjBusy
+            && !djconnect.askDjDestinationLoading && !djconnect.askDjDestinationUnavailable
+
+        GlassPopup {
+            id: askDjFeedbackPopup
+            objectName: "askDjFeedbackPopup"
+            anchors.centerIn: Overlay.overlay
+            width: Math.min(askDjPanel.width - 40, 620)
+            modal: true
+            padding: 20
+            property Item keyboardTarget: null
+            property string originalAnswer: ""
+            onAboutToShow: {
+                originalAnswer = askDjPanel.feedbackAnswer ? askDjPanel.feedbackAnswer.text : ""
+                answerText.text = originalAnswer
+            }
+            onClosed: {
+                askDjPanel.feedbackMessageId = ""
+                keyboardTarget = null
+                originalAnswer = ""
+                feedbackNote.clear()
+                answerText.clear()
+            }
+            contentItem: ColumnLayout {
+                spacing: 12
+                RowLayout {
+                    Layout.fillWidth: true
+                    Text {
+                        text: root.tr("ask_dj_feedback_title"); textFormat: Text.PlainText
+                        color: BrandTheme.colors.text; font.pixelSize: 24; font.bold: true
+                        wrapMode: Text.Wrap; Layout.fillWidth: true
+                    }
+                    RefreshIconButton {
+                        objectName: "askDjFeedbackRestoreAnswer"
+                        text: root.tr("ask_dj_feedback_restore_answer")
+                        visible: !askDjFeedbackPopup.keyboardTarget
+                        enabled: !!askDjPanel.feedbackAnswer && answerText.text !== askDjFeedbackPopup.originalAnswer
+                        onClicked: answerText.text = askDjFeedbackPopup.originalAnswer
+                    }
+                }
+                ScrollView {
+                    id: answerScroll
+                    visible: !!askDjPanel.feedbackAnswer
+                        && (!askDjFeedbackPopup.keyboardTarget || askDjFeedbackPopup.keyboardTarget === answerText)
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: Math.max(56, Math.min(answerText.implicitHeight, askDjFeedbackPopup.keyboardTarget ? 112 : 180))
+                    contentWidth: availableWidth; clip: true
+                    TextArea {
+                        id: answerText
+                        objectName: "askDjFeedbackAnswer"
+                        width: answerScroll.availableWidth
+                        textFormat: TextEdit.PlainText; wrapMode: TextEdit.Wrap
+                        selectByMouse: true
+                        Accessible.name: root.tr("ask_dj_feedback_edit_answer")
+                        color: BrandTheme.colors.text; font.pixelSize: 20
+                        background: GlassSurface { radius: 18; interactive: true; focused: answerText.activeFocus }
+                        TapHandler { onTapped: askDjFeedbackPopup.keyboardTarget = answerText }
+                    }
+                }
+                Text {
+                    visible: !askDjFeedbackPopup.keyboardTarget
+                    text: root.tr("ask_dj_feedback_review"); textFormat: Text.PlainText
+                    color: BrandTheme.colors.muted; font.pixelSize: 18
+                    wrapMode: Text.Wrap; Layout.fillWidth: true
+                }
+                TextField {
+                    id: feedbackNote
+                    objectName: "askDjFeedbackNote"
+                    visible: !!askDjPanel.feedbackAnswer
+                        && (!askDjFeedbackPopup.keyboardTarget || askDjFeedbackPopup.keyboardTarget === feedbackNote)
+                    placeholderText: root.tr("ask_dj_feedback_note_prompt")
+                    Accessible.name: placeholderText
+                    maximumLength: 1200
+                    selectByMouse: true
+                    background: GlassSurface { radius: 18; interactive: true; focused: feedbackNote.activeFocus }
+                    Layout.fillWidth: true
+                    Layout.minimumHeight: 48
+                    onAccepted: askDjFeedbackPopup.keyboardTarget = null
+                    TapHandler { onTapped: askDjFeedbackPopup.keyboardTarget = feedbackNote }
+                }
+                SearchKeyboardDock {
+                    visible: !!askDjFeedbackPopup.keyboardTarget
+                    Layout.fillWidth: true
+                    backend: djconnect
+                    target: askDjFeedbackPopup.keyboardTarget
+                    keyboardName: "askDjFeedbackNoteKeyboard"
+                    onSubmitted: askDjFeedbackPopup.keyboardTarget = null
+                    onDismissed: askDjFeedbackPopup.keyboardTarget = null
+                }
+                GlassButton {
+                    objectName: "askDjFeedbackCopy"
+                    visible: !askDjFeedbackPopup.keyboardTarget
+                    iconName: "copy"; text: root.tr(feedbackNote.text.trim().length ? "ask_dj_feedback_copy_with_note" : "ask_dj_feedback_copy")
+                    Layout.fillWidth: true
+                    enabled: !!askDjPanel.feedbackAnswer && !!(answerText.text.trim() || feedbackNote.text.trim())
+                    onClicked: djconnect.copyAskDjFeedbackAnswer(askDjPanel.feedbackMessageId, feedbackNote.text, answerText.text)
+                }
+                GlassButton {
+                    objectName: "askDjFeedbackOpenIssue"
+                    visible: !askDjFeedbackPopup.keyboardTarget
+                    iconName: "globe"; text: root.tr("feedback_open")
+                    Layout.fillWidth: true; enabled: !!askDjPanel.feedbackAnswer
+                    onClicked: {
+                        if (!djconnect.openFeedbackIssue("ask_dj"))
+                            djconnect.showToastForContext(root.tr("feedback_unavailable"), "connectivity")
+                    }
+                }
+                GlassButton {
+                    visible: !askDjFeedbackPopup.keyboardTarget
+                    text: root.tr("close"); tertiary: true; Layout.fillWidth: true
+                    onClicked: askDjFeedbackPopup.close()
+                }
+            }
+        }
+
+        function useMessageAsDraft(messageText) {
+            const draft = (messageText || "").trim()
+            if (!draft || historyOffline || !visible || !askDjChatInput.enabled) return
+            closeHelp()
+            if (searchOpen) closeSearch(false)
+            askDjChatInput.text = draft
+            askDjChatInput.forceActiveFocus()
+            askDjChatInput.cursorPosition = askDjChatInput.text.length
+            chatKeyboardOpen = true
+        }
 
         function clearChatDraft() {
+            root.askDjDraft = ""
             chatKeyboardOpen = false
             askDjChatInput.clear()
             askDjChatInput.focus = false
         }
 
+        function restoreUnsentDraft(text) {
+            if (askDjChatInput.text && askDjChatInput.text !== text) return
+            askDjChatInput.text = text
+            askDjChatInput.cursorPosition = text.length
+            restoreDraftAnswerContext()
+        }
+
+        function rememberDraftAnswerContext(text) {
+            if (visible && root.active && !root.screenBlanked && answerContext && text.trim())
+                root.askDjDraftAnswerContext = {text: text, context: answerContext}
+        }
+
+        function restoreDraftAnswerContext() {
+            const draft = root.askDjDraftAnswerContext
+            if (!visible || !draft || askDjChatInput.text !== draft.text || answerContext) return
+            answerContext = draft.context
+        }
+
         function sendQuestion() {
-            if (askDjSend.enabled && djconnect.sendAskDjQuestion(askDjChatInput.text)) {
+            const question = askDjChatInput.text.trim()
+            if (!askDjSend.enabled) return
+            restoreDraftAnswerContext()
+            const accepted = answerContext
+                ? (answerContext.saved
+                    ? djconnect.sendAskDjSavedQuestion(question, answerContext.reference.session_id, answerContext.reference.entry_id)
+                    : djconnect.sendAskDjQuestion(question, answerContext.messageId,
+                        answerContext.reference.session_id, answerContext.reference.entry_id))
+                : djconnect.sendAskDjQuestion(question)
+            if (accepted) {
+                if (djconnect.askDjBusy) {
+                    root.askDjPendingQuestion = question
+                    root.askDjPendingAnswerContext = answerContext
+                }
+                answerContext = null
                 clearChatDraft()
                 Qt.callLater(scrollToTop)
             }
         }
 
+        function selectAnswerContext(messageId, reference) {
+            const fresh = djconnect.askDjContextEntry(messageId)
+            if (fresh.session_id !== reference.session_id || fresh.entry_id !== reference.entry_id) return
+            root.askDjDraftAnswerContext = null
+            answerContext = {messageId: messageId, reference: fresh}
+            closeSearch(false)
+            closeHelp()
+            askDjChatInput.forceActiveFocus()
+        }
+
+        function consumeSavedContext() {
+            const reference = root.pendingAskDjSavedContext
+            if (!reference || !visible) return
+            root.pendingAskDjSavedContext = null
+            if (!djconnect.canAskAboutSavedEntry(reference.session_id, reference.entry_id)) return
+            root.askDjDraftAnswerContext = null
+            answerContext = {saved: true, reference: reference}
+            closeSearch(false)
+            closeHelp()
+            askDjChatInput.forceActiveFocus()
+        }
+
+        function clearQuestionUi(clearDraft) {
+            root.askDjClearConfirmOpen = false
+            feedbackMessageId = ""
+            answerContext = null
+            readingAnchor = null
+            closeHelp()
+            if (clearDraft) clearChatDraft()
+            else chatKeyboardOpen = false
+        }
+
+        function closeHelp() {
+            if (!helpOpen) return
+            helpOpen = false
+            djconnect.closeAskDjHelp()
+        }
+
         Connections {
             target: djconnect
-            function onProfileChanged() { askDjPanel.clearChatDraft() }
-            function onPairedChanged() { askDjPanel.clearChatDraft() }
-            function onDemoModeChanged() { askDjPanel.clearChatDraft() }
+            function onProfileChanged() { askDjPanel.clearQuestionUi(true) }
+            function onPairedChanged() { askDjPanel.clearQuestionUi(true) }
+            function onDemoModeChanged() { askDjPanel.clearQuestionUi(true) }
+            function onAskDjChanged() {
+                askDjPanel.updateMessages()
+                askDjPanel.answerContextRevision += 1
+            }
+            function onAskDjHelpSelected(text, placeholder, revision) {
+                if (!askDjPanel.helpOpen || revision !== askDjPanel.draftEditRevision
+                        || askDjChatInput.text !== "" || !askDjChatInput.enabled) return
+                askDjPanel.closeHelp()
+                askDjChatInput.text = text
+                if (!placeholder) {
+                    askDjPanel.sendQuestion()
+                    return
+                }
+                const start = text.indexOf(placeholder)
+                askDjPanel.chatKeyboardOpen = true
+                askDjChatInput.forceActiveFocus()
+                askDjChatInput.select(start, start + placeholder.length)
+            }
+            function onAskDjSuggestionSelected(text, revision) {
+                if (!askDjPanel.helpOpen || revision !== askDjPanel.draftEditRevision
+                        || askDjChatInput.text !== "" || !askDjChatInput.enabled) return
+                askDjPanel.closeHelp()
+                askDjChatInput.text = text
+                askDjChatInput.forceActiveFocus()
+                askDjChatInput.cursorPosition = text.length
+            }
+        }
+        Connections {
+            target: djconnect.djSession
+            function onChanged() { askDjPanel.answerContextRevision += 1 }
+        }
+        Connections {
+            target: root
+            function onActiveChanged() {
+                if (root.active) return
+                askDjPanel.answerContext = null
+                askDjPanel.feedbackMessageId = ""
+                askDjPanel.closeHelp()
+            }
+            function onScreenBlankedChanged() {
+                if (!root.screenBlanked) return
+                askDjPanel.answerContext = null
+                askDjPanel.feedbackMessageId = ""
+                askDjPanel.closeHelp()
+            }
         }
 
         property bool searchOpen: false
         property bool searchKeyboardOpen: false
+        property bool returnFocusToChat: false
         property int selectedMatch: -1
         property string selectedMessageId: ""
+        property var displayedMessages: []
+        property var answerContext: null
+        onAnswerContextChanged: if (askDjChatInput) rememberDraftAnswerContext(askDjChatInput.text)
+        property int answerContextRevision: 0
+        property var readingAnchor: null
+        readonly property string searchQuery: searchOpen ? askDjSearchInput.text.trim() : ""
+        property real messageClock: Date.now()
+        Timer {
+            interval: 60000
+            running: askDjPanel.visible && root.active && !root.screenBlanked
+            repeat: true
+            triggeredOnStart: true
+            onTriggered: askDjPanel.messageClock = Date.now()
+        }
+        Component.onCompleted: {
+            updateMessages()
+            if (visible && root.askDjHistoryReturnReading) historyReturnRestore.restart()
+        }
+        Timer {
+            id: historyReturnRestore
+            interval: 75
+            onTriggered: askDjPanel.restoreHistoryReturnReading()
+        }
         readonly property var matches: {
-            const query = searchText(askDjSearchInput.text.trim())
-            const messages = djconnect.askDjMessages
+            const query = searchText(searchQuery)
+            const messages = displayedMessages
             const results = []
             if (query) {
                 for (let i = 0; i < messages.length; i++) {
@@ -3846,7 +6519,23 @@ BrandWindow {
         }
         readonly property int selectedRow: matches[selectedMatch] ? matches[selectedMatch].row : -1
 
-        onVisibleChanged: if (!visible) { closeSearch(); clearChatDraft() }
+        PageFindShortcut {
+            pageReady: askDjPanel.visible && askDjSearchToggle.enabled && !root.askDjClearConfirmOpen
+            onActivated: askDjPanel.openSearch(false)
+        }
+
+        onVisibleChanged: {
+            if (visible) {
+                if (root.pendingAskDjSavedContext) Qt.callLater(consumeSavedContext)
+                if (root.askDjDraftAnswerContext) Qt.callLater(restoreDraftAnswerContext)
+                if (root.askDjHistoryReturnReading) historyReturnRestore.restart()
+            } else {
+                historyReturnRestore.stop()
+                djconnect.cancelAskDjHistoryOpen()
+                closeSearch()
+                clearQuestionUi(false)
+            }
+        }
         onMatchesChanged: {
             if (!searchOpen)
                 return
@@ -3857,26 +6546,74 @@ BrandWindow {
         }
 
         function scrollToTop() {
+            readingAnchor = null
+            searchKeyboardOpen = false
             askDjMessagesView.positionViewAtBeginning()
+        }
+
+        function currentReadingAnchor() {
+            const view = askDjMessagesView
+            // The top of the viewport can fall in the spacing between message rows.
+            let index = view.indexAt(view.width / 2, view.contentY)
+            if (index < 0) index = view.indexAt(view.width / 2, view.contentY + view.spacing + 1)
+            const row = view.itemAtIndex(index)
+            const message = displayedMessages[index]
+            return row && message && message.id ? {id: message.id, offset: view.contentY - row.y} : null
+        }
+
+        function restoreHistoryReturnReading() {
+            if (!visible || !root.askDjHistoryReturnReading) return
+            readingAnchor = root.askDjHistoryReturnReading
+            root.askDjHistoryReturnReading = null
+            restoreReadingAnchor()
+        }
+
+        function updateMessages() {
+            const view = askDjMessagesView
+            if (visible && !searchOpen && !readingAnchor && !view.atYBeginning && !view.moving)
+                readingAnchor = currentReadingAnchor()
+            displayedMessages = djconnect.askDjMessages
+            if (readingAnchor) Qt.callLater(restoreReadingAnchor)
+        }
+
+        function restoreReadingAnchor() {
+            const anchor = readingAnchor
+            readingAnchor = null
+            if (!anchor || !visible || searchOpen || askDjMessagesView.moving) return
+            const index = displayedMessages.findIndex(message => message.id === anchor.id)
+            if (index < 0) return
+            const view = askDjMessagesView
+            view.positionViewAtIndex(index, ListView.Beginning)
+            view.forceLayout()
+            const row = view.itemAtIndex(index)
+            if (row) view.contentY = row.y + anchor.offset
+            view.returnToBounds()
         }
 
         function searchText(value) {
             return String(value).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
         }
 
-        function openSearch() {
+        function openSearch(showKeyboard) {
+            closeHelp()
+            if (!searchOpen) returnFocusToChat = !showKeyboard && askDjChatInput.activeFocus
             chatKeyboardOpen = false
             searchOpen = true
-            searchKeyboardOpen = true
+            searchKeyboardOpen = showKeyboard
             askDjSearchInput.forceActiveFocus()
         }
 
-        function closeSearch() {
+        function closeSearch(restoreFocus) {
             searchOpen = false
             searchKeyboardOpen = false
             selectedMatch = -1
             selectedMessageId = ""
             askDjSearchInput.clear()
+            if (restoreFocus) {
+                if (returnFocusToChat && askDjChatInput.enabled) askDjChatInput.forceActiveFocus()
+                else if (askDjSearchToggle.enabled) askDjSearchToggle.forceActiveFocus()
+            }
+            returnFocusToChat = false
         }
 
         function selectMatch(position) {
@@ -3900,11 +6637,23 @@ BrandWindow {
             Qt.callLater(centerSelectedMatch)
         }
 
+        readonly property bool canRefreshHistory: djconnect.paired && !djconnect.demoMode
+            && !djconnect.versionMismatchVisible && !djconnect.askDjBusy
+
+        function refreshHistory() {
+            if (!canRefreshHistory) return
+            chatKeyboardOpen = false
+            if (searchKeyboardOpen) dismissSearchKeyboard()
+            if (helpOpen) djconnect.openAskDjHelp()
+            djconnect.refreshAskDjHistory()
+        }
+
         function moveMatch(offset) {
             if (!matches.length)
-                return
+                return false
             selectMatch((selectedMatch + offset + matches.length) % matches.length)
             centerSelectedMatch()
+            return true
         }
 
         ModalBlocker {}
@@ -3915,48 +6664,51 @@ BrandWindow {
             anchors.bottomMargin: 130
             spacing: 10
 
-            PageToolbar {
-                title: root.tr("ask_dj")
+            AppPageToolbar {
+                title: root.playbackScreenTitle("ask_dj")
                 showConnection: true
                 connectionLabel: root.tr("connection_type")
-                connectionText: djconnect.connectionType
                 Layout.fillWidth: true
 
-                BusyIndicator {
-                    running: djconnect.askDjBusy
-                    visible: djconnect.askDjBusy
-                    implicitWidth: 30
-                    implicitHeight: 30
-                }
-
                 GlassButton {
+                    id: askDjSearchToggle
                     objectName: "askDjSearchToggle"
+                    readonly property string actionLabel: askDjPanel.searchOpen ? root.tr("close_search") : root.tr("ask_dj_search_history")
                     iconName: "search"
                     tertiary: true
                     checkable: true
                     checked: askDjPanel.searchOpen
                     enabled: askDjPanel.searchOpen || djconnect.askDjMessages.length > 0
-                    Accessible.name: root.tr("ask_dj_search_history")
-                    onClicked: askDjPanel.searchOpen ? askDjPanel.closeSearch() : askDjPanel.openSearch()
+                    Accessible.name: actionLabel
+                    ToolTip.visible: hovered
+                    ToolTip.text: actionLabel
+                    onClicked: askDjPanel.searchOpen ? askDjPanel.closeSearch(true) : askDjPanel.openSearch(true)
                 }
 
                 RefreshIconButton {
                     id: askDjRefreshButton
-                    enabled: !djconnect.askDjBusy
-                    onClicked: djconnect.refreshAskDjHistory()
+                    objectName: "askDjRefreshButton"
+                    text: root.tr("refresh_ask_dj")
+                    loading: djconnect.askDjBusy
+                    enabled: askDjPanel.canRefreshHistory
+                    onClicked: askDjPanel.refreshHistory()
                 }
 
                 leading: [
                 GlassButton { iconName: "back"; tertiary: true; implicitWidth: 52; Accessible.name: root.tr("more"); onClicked: root.activeScreen = "more" },
                 Button {
                     id: askDjClearButton
-                    enabled: !djconnect.askDjBusy && djconnect.askDjMessages.length > 0
+                    objectName: "askDjClearButton"
+                    enabled: !askDjPanel.historyOffline && !djconnect.askDjBusy && djconnect.askDjMessages.length > 0
                     ToolTip.visible: hovered
                     ToolTip.text: root.tr("ask_dj_clear_chat")
                     Accessible.name: root.tr("ask_dj_clear_chat")
                     Layout.preferredWidth: 48
                     Layout.preferredHeight: 48
-                    onClicked: root.askDjClearConfirmOpen = true
+                    onClicked: {
+                        root.askDjClearConfirmationRevision = askDjPanel.profileContextRevision
+                        root.askDjClearConfirmOpen = true
+                    }
                     contentItem: MenuIcon {
                         iconName: "trash"
                         iconColor: askDjClearButton.enabled ? BrandTheme.colors.text : BrandTheme.colors.disabledText
@@ -4003,17 +6755,22 @@ BrandWindow {
                             else
                                 askDjPanel.moveMatch(1)
                         }
+                        Keys.onUpPressed: function(event) { event.accepted = askDjPanel.moveMatch(-1) }
+                        Keys.onDownPressed: function(event) { event.accepted = askDjPanel.moveMatch(1) }
                         Keys.onEscapePressed: {
                             if (askDjPanel.searchKeyboardOpen)
                                 askDjPanel.dismissSearchKeyboard()
                             else
-                                askDjPanel.closeSearch()
+                                askDjPanel.closeSearch(true)
                         }
                     }
                     Text {
                         objectName: "askDjSearchCount"
                         visible: askDjSearchInput.text.trim().length > 0
-                        text: (askDjPanel.selectedMatch + 1) + "/" + askDjPanel.matches.length
+                        text: askDjPanel.matches.length === 0 ? "0"
+                            : (askDjPanel.selectedMatch + 1) + "/" + askDjPanel.matches.length
+                        Accessible.role: Accessible.StaticText
+                        Accessible.name: askDjPanel.matches.length === 0 ? root.tr("media_no_matches") : text
                         color: BrandTheme.colors.muted
                         font.pixelSize: root.width < 900 ? 14 : 18
                     }
@@ -4033,8 +6790,8 @@ BrandWindow {
                     }
                     GlassButton {
                         objectName: "askDjSearchClose"
-                        iconName: "end"; tertiary: true; Accessible.name: root.tr("close")
-                        onClicked: askDjPanel.closeSearch()
+                        iconName: "close"; tertiary: true; Accessible.name: root.tr("close_search")
+                        onClicked: askDjPanel.closeSearch(true)
                     }
                 }
             }
@@ -4051,9 +6808,22 @@ BrandWindow {
                 ListView {
                     id: askDjMessagesView
                     objectName: "askDjMessagesView"
-                    model: djconnect.askDjMessages
+                    model: askDjPanel.displayedMessages
                     spacing: 10
                     cacheBuffer: root.lowMemoryProfile ? 160 : 320
+                    onDragStarted: {
+                        askDjPanel.chatKeyboardOpen = false
+                        askDjPanel.searchKeyboardOpen = false
+                    }
+
+                    PullToRefresh {
+                        objectName: "askDjPullToRefresh"
+                        flickable: askDjMessagesView
+                        canRefresh: askDjPanel.visible && root.active && !root.screenBlanked
+                            && askDjPanel.canRefreshHistory
+                            && djconnect.askDjMessages.length > 0
+                        onRefreshRequested: askDjPanel.refreshHistory()
+                    }
 
                     header: ColumnLayout {
                         width: askDjMessagesView.width
@@ -4091,6 +6861,7 @@ BrandWindow {
                             border.color: root.moodColor("focus")
                             focused: askDjPanel.searchOpen && askDjPanel.selectedRow === index
                             property bool userBubble: modelData.role === "user"
+                            readonly property string messageId: modelData.id || ""
                             property bool systemBubble: modelData.role === "system" || modelData.role === "status" || modelData.messageKind === "system" || modelData.messageKind === "status"
 
                             width: bubble.userBubble ? Math.min(parent.width * 0.78, 520) : parent.width
@@ -4112,8 +6883,13 @@ BrandWindow {
                                 spacing: 8
 
                                 Text {
-                                    text: modelData.displayTime || ""
-                                    visible: modelData.displayTime && modelData.displayTime.length > 0
+                                    objectName: "askDjMessageTime"
+                                    text: {
+                                        root.trVersion
+                                        return djconnect.formatAskDjTimestamp(modelData.created_at || "", askDjPanel.messageClock)
+                                            || modelData.displayTime || ""
+                                    }
+                                    visible: text.length > 0
                                     color: bubble.systemBubble ? BrandTheme.colors.muted : (bubble.userBubble ? BrandTheme.colors.muted : BrandTheme.colors.purple)
                                     opacity: 0.82
                                     font.pixelSize: 14
@@ -4123,13 +6899,184 @@ BrandWindow {
                                 }
 
                                 Text {
-                                    text: modelData.text
-                                    textFormat: Text.PlainText
+                                    objectName: "askDjMessageBody"
+                                    readonly property string highlighted: askDjPanel.searchQuery
+                                        ? djconnect.highlightAskDjMessage(modelData.text || "", askDjPanel.searchQuery) : ""
+                                    text: highlighted || modelData.text
+                                    textFormat: highlighted ? Text.StyledText : Text.PlainText
                                     color: BrandTheme.colors.text
                                     font.pixelSize: bubble.systemBubble ? 19 : 22
                                     font.weight: Font.Normal
                                     wrapMode: Text.Wrap
                                     Layout.fillWidth: true
+                                }
+
+                                RowLayout {
+                                    visible: !askDjPanel.historyOffline && !bubble.systemBubble && !!(modelData.text || "").trim()
+                                    Layout.alignment: Qt.AlignRight
+                                    GlassButton {
+                                        objectName: "askDjOpenCurrentTrackInsight"
+                                        visible: modelData.role === "assistant"
+                                            && String(modelData.origin || "").trim().toLowerCase() === "play_now"
+                                        enabled: !djconnect.askDjBusy && (djconnect.demoMode || djconnect.paired)
+                                        iconName: "trackInsight"
+                                        text: root.tr("track_insight")
+                                        tertiary: true
+                                        onClicked: {
+                                            if (!visible || !enabled || askDjPanel.historyOffline) return
+                                            askDjPanel.chatKeyboardOpen = false
+                                            root.activeScreen = "trackinsight"
+                                            djconnect.openTrackInsight(true)
+                                        }
+                                    }
+                                    GlassButton {
+                                        id: askDjAnswerContextButton
+                                        objectName: "askDjSelectAnswerContext"
+                                        readonly property var reference: {
+                                            void askDjPanel.answerContextRevision
+                                            return modelData.contextEligible ? djconnect.askDjContextEntry(modelData.id) : ({})
+                                        }
+                                        visible: !!reference.entry_id
+                                        enabled: askDjChatInput.enabled
+                                        iconName: "chat"
+                                        tertiary: true
+                                        checked: !!askDjPanel.answerContext
+                                            && askDjPanel.answerContext.messageId === modelData.id
+                                        Accessible.name: root.tr("session_ask_about")
+                                        ToolTip.text: Accessible.name
+                                        ToolTip.visible: hovered
+                                        onClicked: askDjPanel.selectAnswerContext(modelData.id, reference)
+                                    }
+                                    GlassButton {
+                                        objectName: "askDjUseMessageAsDraft"
+                                        enabled: askDjChatInput.enabled
+                                        iconName: "text_cursor"; tertiary: true
+                                        readonly property string actionLabel: root.tr(askDjChatInput.text.trim().length
+                                            ? "ask_dj_replace_draft" : "ask_dj_use_as_draft")
+                                        Accessible.name: actionLabel
+                                        ToolTip.text: actionLabel
+                                        ToolTip.visible: hovered
+                                        onClicked: askDjPanel.useMessageAsDraft(modelData.text)
+                                    }
+                                    GlassButton {
+                                        objectName: "askDjAnswerFeedback"
+                                        visible: modelData.role === "assistant" && !!modelData.id
+                                        iconName: "chat"; tertiary: true
+                                        Accessible.name: root.tr("ask_dj_feedback_title")
+                                        ToolTip.text: Accessible.name
+                                        ToolTip.visible: hovered
+                                        onClicked: {
+                                            askDjPanel.chatKeyboardOpen = false
+                                            askDjPanel.feedbackMessageId = modelData.id
+                                            if (askDjPanel.feedbackAnswer) askDjFeedbackPopup.open()
+                                        }
+                                    }
+                                }
+
+                                GlassButton {
+                                    objectName: "askDjTellMore"
+                                    visible: !askDjPanel.historyOffline && !bubble.systemBubble
+                                        && !!askDjAnswerContextButton.reference.entry_id
+                                        && djconnect.askDjContributionQuestion.length > 0
+                                    enabled: askDjChatInput.enabled && askDjPanel.questionActionsReady
+                                    text: root.tr("ask_dj_tell_more")
+                                    tertiary: true
+                                    Layout.alignment: Qt.AlignLeft
+                                    onClicked: {
+                                        const ref = askDjAnswerContextButton.reference
+                                        if (!djconnect.exploreAskDjAnswer(bubble.messageId, ref.session_id, ref.entry_id)) return
+                                        root.askDjPendingQuestion = djconnect.askDjContributionQuestion
+                                        askDjPanel.closeSearch(false)
+                                        askDjPanel.chatKeyboardOpen = false
+                                        Qt.callLater(askDjPanel.scrollToTop)
+                                    }
+                                }
+
+                                Repeater {
+                                    model: modelData.historicalMatches || []
+                                    GlassCard {
+                                        id: historicalMatch
+                                        objectName: "askDjHistoryMatch"
+                                        required property var modelData
+                                        property bool expired: true
+                                        Layout.fillWidth: true
+                                        visible: !expired && !askDjPanel.historyOffline && historyMatchSource.ready
+                                        padding: 12
+                                        onModelDataChanged: Qt.callLater(checkExpiry)
+                                        Component.onCompleted: checkExpiry()
+
+                                        function checkExpiry() {
+                                            const remaining = modelData.expires_at - djconnect.askDjHistoryClock()
+                                            expired = !(remaining > 0)
+                                            if (expired) historyMatchExpiry.stop()
+                                            else {
+                                                historyMatchExpiry.interval = Math.max(1, Math.ceil(Math.min(remaining, 86400) * 1000))
+                                                historyMatchExpiry.restart()
+                                            }
+                                        }
+                                        Timer {
+                                            id: historyMatchExpiry
+                                            onTriggered: historicalMatch.checkExpiry()
+                                        }
+                                        Text {
+                                            objectName: "askDjHistoryMatchTitle"
+                                            text: historicalMatch.expired ? "" : (historicalMatch.modelData.title || "")
+                                            textFormat: Text.PlainText
+                                            color: BrandTheme.colors.text
+                                            font.pixelSize: 20; font.bold: true
+                                            wrapMode: Text.Wrap
+                                            Layout.fillWidth: true
+                                        }
+                                        Text {
+                                            visible: text.length > 0
+                                            text: historicalMatch.expired ? "" : [historicalMatch.modelData.artist, historicalMatch.modelData.album]
+                                                .filter(value => !!value).join(" · ")
+                                            textFormat: Text.PlainText
+                                            color: BrandTheme.colors.muted
+                                            font.pixelSize: 17
+                                            wrapMode: Text.Wrap
+                                            Layout.fillWidth: true
+                                        }
+                                        Text {
+                                            text: {
+                                                djconnect.translationVersion
+                                                return historicalMatch.expired ? "" : djconnect.djSession.formatTimestamp(historicalMatch.modelData.occurred_at)
+                                            }
+                                            textFormat: Text.PlainText
+                                            color: BrandTheme.colors.muted
+                                            font.pixelSize: 16
+                                            Layout.fillWidth: true
+                                        }
+                                        Text {
+                                            objectName: "askDjHistoryMatchCoverage"
+                                            text: root.tr("session_search_playback_coverage")
+                                            textFormat: Text.PlainText
+                                            color: BrandTheme.colors.muted
+                                            font.pixelSize: 16
+                                            wrapMode: Text.WordWrap
+                                            Layout.fillWidth: true
+                                        }
+                                        SessionAttribution {
+                                            id: historyMatchSource
+                                            objectName: "askDjHistoryMatchSource"
+                                            Layout.fillWidth: true
+                                            requiresSpotify: historicalMatch.modelData.requires_spotify_attribution === true
+                                            spotifyURL: historicalMatch.expired ? "" : historicalMatch.modelData.spotify_source_url || ""
+                                        }
+                                        GlassButton {
+                                            objectName: "askDjOpenHistoryMatch"
+                                            visible: historicalMatch.modelData.can_open === true
+                                            enabled: !djconnect.djSession.busy
+                                            text: root.tr("ask_dj_open_saved_session")
+                                            tertiary: true
+                                            Layout.alignment: Qt.AlignLeft
+                                            onClicked: {
+                                                if (historicalMatch.visible && !historicalMatch.expired)
+                                                    djconnect.openAskDjHistoryMatch(bubble.messageId,
+                                                        historicalMatch.modelData.session_id, historicalMatch.modelData.entry_id)
+                                            }
+                                        }
+                                    }
                                 }
 
                                 Flow {
@@ -4746,6 +7693,171 @@ BrandWindow {
                 }
             }
 
+            GlassButton {
+                parent: askDjScroll
+                objectName: "askDjJumpTop"
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                anchors.margins: 12
+                z: 2
+                width: 52
+                height: width
+                iconName: "arrow_up"
+                visible: askDjMessagesView.count > 0 && !askDjMessagesView.atYBeginning
+                    && !askDjPanel.chatKeyboardOpen
+                Accessible.name: root.tr("session_back_top")
+                ToolTip.visible: hovered
+                ToolTip.text: root.tr("session_back_top")
+                onClicked: askDjPanel.scrollToTop()
+            }
+
+            GlassSurface {
+                objectName: "askDjOfflineNotice"
+                visible: askDjPanel.historyOffline
+                Layout.fillWidth: true
+                implicitHeight: offlineNoticeContent.implicitHeight + 20
+                radius: 22
+
+                RowLayout {
+                    id: offlineNoticeContent
+                    anchors.fill: parent
+                    anchors.margins: 10
+                    spacing: 10
+
+                    FeatureIcon {
+                        iconName: "info"
+                        Layout.preferredWidth: 24
+                        Layout.preferredHeight: 24
+                    }
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 2
+                        Text {
+                            text: root.tr("ask_dj_offline_title")
+                            color: BrandTheme.colors.text
+                            font.pixelSize: 17
+                            font.bold: true
+                            wrapMode: Text.WordWrap
+                            Layout.fillWidth: true
+                        }
+                        Text {
+                            objectName: "askDjOfflineHistory"
+                            visible: djconnect.askDjMessages.length > 0
+                            text: root.tr("ask_dj_offline_history")
+                            color: BrandTheme.colors.muted
+                            font.pixelSize: 15
+                            wrapMode: Text.WordWrap
+                            Layout.fillWidth: true
+                        }
+                    }
+                }
+            }
+
+            GlassCard {
+                objectName: "askDjSelectedAnswerContext"
+                visible: !askDjPanel.searchOpen && askDjPanel.answerContext !== null
+                Layout.fillWidth: true
+                padding: 8
+                ContributionSelection {
+                    id: askDjSelection
+                    Layout.fillWidth: true
+                    property int expiryRevision: 0
+                    previewObjectName: "askDjSelectedContributionPreview"
+                    translate: root.tr
+                    preview: {
+                        void askDjPanel.answerContextRevision
+                        void expiryRevision
+                        const selected = askDjPanel.answerContext
+                        return selected ? djconnect.askDjSelectedContributionPreview(selected.messageId || "",
+                            selected.reference.session_id, selected.reference.entry_id) : ({})
+                    }
+                    onCleared: {
+                        root.askDjDraftAnswerContext = null
+                        askDjPanel.answerContext = null
+                    }
+                    Timer {
+                        running: askDjSelection.visible && !!askDjSelection.preview.expires_at
+                        interval: askDjSelection.preview.expires_at ? Math.max(1, Math.min(2147483647, Math.ceil(
+                            (askDjSelection.preview.expires_at - djconnect.askDjHistoryClock()) * 1000))) : 1
+                        onTriggered: askDjSelection.expiryRevision += 1
+                    }
+                }
+            }
+
+            GlassSurface {
+                objectName: "askDjPendingQuestion"
+                visible: !askDjPanel.searchOpen && root.askDjPendingQuestion.length > 0
+                Layout.fillWidth: true
+                implicitHeight: pendingQuestionContent.implicitHeight + 20
+                radius: 22
+
+                ColumnLayout {
+                    id: pendingQuestionContent
+                    anchors.fill: parent
+                    anchors.margins: 10
+                    spacing: 4
+                    Text {
+                        objectName: "askDjPendingQuestionText"
+                        text: root.askDjPendingQuestion
+                        textFormat: Text.PlainText
+                        color: BrandTheme.colors.text
+                        font.pixelSize: 18
+                        maximumLineCount: 3
+                        wrapMode: Text.Wrap
+                        elide: Text.ElideRight
+                        Layout.fillWidth: true
+                    }
+                    Text {
+                        text: root.tr("session_question_sending")
+                        color: BrandTheme.colors.muted
+                        font.pixelSize: 15
+                        Layout.fillWidth: true
+                    }
+                }
+            }
+
+            GlassCard {
+                id: askDjDeliveryNotice
+                objectName: "askDjDeliveryNotice"
+                readonly property string statusKey: djconnect.askDjDestinationUnavailable
+                    ? "ask_dj_destination_unavailable" : djconnect.askDjDeliveryKey
+                visible: statusKey.length > 0 && !askDjPanel.searchOpen
+                    && (!askDjPanel.chatKeyboardOpen || djconnect.askDjDestinationUnavailable)
+                Layout.fillWidth: true
+                padding: 12
+                spacing: 8
+                Text {
+                    objectName: "askDjDeliveryStatus"
+                    text: visible && askDjDeliveryNotice.statusKey ? root.tr(askDjDeliveryNotice.statusKey) : ""
+                    textFormat: Text.PlainText
+                    color: BrandTheme.colors.muted
+                    font.pixelSize: 17
+                    wrapMode: Text.WordWrap
+                    Layout.fillWidth: true
+                }
+                GlassButton {
+                    objectName: "askDjDeliveryRefresh"
+                    iconName: "refresh"
+                    text: root.tr("refresh_ask_dj")
+                    enabled: askDjPanel.canRefreshHistory && !djconnect.askDjBusy
+                    Layout.fillWidth: true
+                    onClicked: askDjPanel.refreshHistory()
+                }
+            }
+
+            AskDjExamples {
+                objectName: "askDjHelpPanel"
+                visible: askDjPanel.helpOpen
+                Layout.fillWidth: true
+                Layout.preferredHeight: Math.min(340, askDjPanel.height * 0.36)
+                backend: djconnect
+                canChoose: askDjChatInput.enabled && askDjPanel.questionActionsReady && askDjChatInput.text === ""
+                onRefreshRequested: djconnect.openAskDjHelp()
+                onCloseRequested: askDjPanel.closeHelp()
+                onExampleChosen: entryId => djconnect.selectAskDjHelp(entryId, askDjPanel.draftEditRevision)
+                onSuggestionChosen: entryId => djconnect.selectAskDjSuggestion(entryId, askDjPanel.draftEditRevision)
+            }
+
             GlassSurface {
                 objectName: "askDjChatBar"
                 visible: !askDjPanel.searchOpen
@@ -4759,8 +7871,17 @@ BrandWindow {
                     TextField {
                         id: askDjChatInput
                         objectName: "askDjChatInput"
+                        property bool draftReady: false
+                        text: root.askDjDraft
+                        onTextChanged: {
+                            if (!draftReady) return
+                            askDjPanel.draftEditRevision += 1
+                            askDjPanel.rememberDraftAnswerContext(text)
+                            if (text !== root.askDjDraft) root.askDjDraft = text
+                        }
+                        Component.onCompleted: draftReady = true
                         Layout.fillWidth: true; Layout.fillHeight: true
-                        enabled: (djconnect.paired || djconnect.demoMode) && !djconnect.askDjBusy
+                        enabled: djconnect.paired || djconnect.demoMode
                         maximumLength: 4000
                         placeholderText: root.tr("session_question_placeholder")
                         Accessible.name: placeholderText
@@ -4771,12 +7892,40 @@ BrandWindow {
                         onAccepted: askDjPanel.sendQuestion()
                     }
                     GlassButton {
+                        objectName: "askDjHelpToggle"
+                        iconName: "info"; tertiary: true
+                        Accessible.name: root.tr("ask_dj_example_questions")
+                        Layout.preferredWidth: 48; Layout.fillHeight: true
+                        enabled: djconnect.paired || djconnect.demoMode
+                        onClicked: {
+                            if (askDjPanel.helpOpen) {
+                                askDjPanel.closeHelp()
+                            } else {
+                                askDjPanel.chatKeyboardOpen = false
+                                askDjPanel.helpOpen = true
+                                djconnect.openAskDjHelp()
+                            }
+                        }
+                    }
+                    GlassButton {
                         id: askDjSend
                         objectName: "askDjSend"
-                        iconName: "send"; Accessible.name: root.tr("session_send")
+                        readonly property bool waiting: djconnect.askDjDestinationLoading
+                            || (djconnect.askDjBusy && root.askDjPendingQuestion.length > 0)
+                        iconName: waiting ? "" : "send"
+                        Accessible.name: root.tr(waiting ? "loading" : "session_send")
                         primary: true
                         Layout.preferredWidth: 52; Layout.fillHeight: true
-                        enabled: askDjChatInput.enabled && askDjChatInput.text.trim().length > 0
+                        enabled: askDjPanel.questionActionsReady
+                            && askDjChatInput.enabled && askDjChatInput.text.trim().length > 0
+                        BusyIndicator {
+                            objectName: "askDjSendSpinner"
+                            anchors.centerIn: parent
+                            width: 26
+                            height: 26
+                            visible: running
+                            running: askDjSend.waiting
+                        }
                         onClicked: askDjPanel.sendQuestion()
                     }
                 }
@@ -4815,20 +7964,36 @@ BrandWindow {
             id: sharedSessionScreen
             anchors.fill: parent
             backend: djconnect
+            trackInsightMoodSurface: trackInsightLoader.item && trackInsightLoader.item.canChooseSessionMood
+                ? trackInsightLoader.item : null
             pollingAllowed: root.active && !root.screenBlanked && !root.splashVisible && !vibeScapeLoader.active
                 && !djconnect.logsVisible && !djconnect.versionMismatchVisible
+            vibeScapeActive: vibeScapeLoader.active
             historical: root.activeScreen === "history" || root.activeScreen === "session-history"
             currentHistory: root.activeScreen === "session-history"
-            onExpandTrackArtwork: root.openTrackArtwork()
+            onExpandTrackArtwork: function(source) { root.openTrackArtwork(source) }
             onOpenVibeScape: function(pickerTop) { root.openVibeScape(pickerTop) }
-            onNavigate: function(destination) { root.activeScreen = destination }
+            onPairingRecoveryRequested: root.resetPairingConfirmOpen = true
+            onAskAboutSavedInChat: function(sessionId, entryId) {
+                if (!djconnect.canAskAboutSavedEntry(sessionId, entryId)) return
+                root.pendingAskDjSavedContext = {session_id: sessionId, entry_id: entryId}
+                root.activeScreen = "askdj"
+            }
+            onNavigate: function(destination) {
+                if (destination === "session-history" && root.activeScreen === "askdj"
+                        && sharedSessionScreen.returnToAskDj && askDjLoader.item)
+                    root.askDjHistoryReturnReading = askDjLoader.item.currentReadingAnchor()
+                if (destination === "about") root.aboutOpen = true
+                else root.activeScreen = destination
+            }
         }
     }
 
     GamesPanel {
         id: gamesPanel
         anchors.fill: parent
-        visible: gamesOpen
+        routeOpen: root.gamesOpen
+        foreground: root.active && !root.screenBlanked && !root.splashVisible
         z: 18
         onCloseRequested: root.activeScreen = "more"
     }
@@ -4962,25 +8127,44 @@ BrandWindow {
                 border.width: root.liquidGlassEnabled ? 1 : 0
                 border.color: "#48ffffff"
 
-                ColumnLayout {
+                RowLayout {
                     anchors.fill: parent
                     anchors.margins: 16
-                    spacing: 4
+                    spacing: 12
 
-                    Text {
-                        text: root.tr("pairing_code")
-                        color: BrandTheme.colors.muted
-                        font.pixelSize: 18
-                        font.bold: true
+                    ColumnLayout {
                         Layout.fillWidth: true
+                        spacing: 4
+
+                        Text {
+                            text: root.tr("pairing_code")
+                            color: BrandTheme.colors.muted
+                            font.pixelSize: 18
+                            font.bold: true
+                            Layout.fillWidth: true
+                        }
+
+                        Text {
+                            text: djconnect.pairingCode
+                            textFormat: Text.PlainText
+                            color: BrandTheme.colors.text
+                            font.pixelSize: 36
+                            font.bold: true
+                            Layout.fillWidth: true
+                        }
                     }
 
-                    Text {
-                        text: djconnect.pairingCode
-                        color: BrandTheme.colors.text
-                        font.pixelSize: 36
-                        font.bold: true
-                        Layout.fillWidth: true
+                    GlassButton {
+                        objectName: "copyPairingCode"
+                        readonly property string copyLabel: root.tr("copy_pairing_code")
+                        iconName: "copy"; tertiary: true
+                        Layout.preferredWidth: 56
+                        Layout.preferredHeight: 56
+                        Accessible.name: copyLabel
+                        ToolTip.text: copyLabel
+                        ToolTip.visible: hovered
+                        enabled: djconnect.pairingCode.length > 0
+                        onClicked: djconnect.copyPairingCode()
                     }
                 }
             }
@@ -5247,6 +8431,7 @@ BrandWindow {
 
     Rectangle {
         id: toast
+        objectName: "appToast"
         anchors.top: parent.top
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.topMargin: 32
@@ -5257,7 +8442,7 @@ BrandWindow {
         border.width: 2
         opacity: djconnect.toastVisible ? 1 : 0
         visible: opacity > 0
-        z: 70
+        z: djconnect.logsVisible && djconnect.toastIcon === "logs" ? logsPanel.z + 1 : 70
         y: djconnect.toastVisible ? 0 : -16
         scale: djconnect.toastVisible ? 1 : 0.94
         transformOrigin: Item.Top
@@ -5305,6 +8490,7 @@ BrandWindow {
 
             Text {
                 id: toastText
+                objectName: "appToastText"
                 width: Math.min(root.width - 188, implicitWidth)
                 anchors.verticalCenter: parent.verticalCenter
                 text: djconnect.toastText
@@ -5384,6 +8570,7 @@ BrandWindow {
     }
 
     Rectangle {
+        id: logsPanel
         anchors.fill: parent
         color: BrandTheme.colors.background
         visible: djconnect.logsVisible
@@ -5395,6 +8582,7 @@ BrandWindow {
             anchors.fill: parent
             backend: djconnect
             confirmationOpen: root.clearLogsConfirmOpen
+            findShortcutEnabled: root.active && !root.screenBlanked && !root.splashVisible
             onClearRequested: root.clearLogsConfirmOpen = true
         }
     }
@@ -5403,9 +8591,25 @@ BrandWindow {
         id: musicDnaOptIn
         objectName: "musicDnaOptInSheet"
         property bool discoveryConsent: false
-        property string profileId: ""
+        property int profileRevision: -1
+        readonly property bool currentProfile: profileRevision === djconnect.musicDnaContextRevision
+        readonly property bool requestBusy: discoveryConsent ? djconnect.musicDiscoveryBusy : djconnect.musicDnaBusy
+        property bool activationPending: false
+        property string activationError: ""
         z: 86
-        onClosed: profileId = ""
+        onRequestBusyChanged: finishActivation()
+        onClosed: {
+            profileRevision = -1
+            activationPending = false
+            activationError = ""
+        }
+
+        function finishActivation() {
+            if (!activationPending || requestBusy || !currentProfile) return
+            activationPending = false
+            if (djconnect.musicDnaEnabled && !djconnect.musicDnaError) close()
+            else activationError = djconnect.musicDnaError || root.tr("music_dna_profile_unavailable")
+        }
 
         contentItem: ScrollView {
             id: optInScroll
@@ -5431,6 +8635,18 @@ BrandWindow {
                     Layout.maximumWidth: musicDnaOptIn.compact ? optInScroll.width - 40 : 900
                     Layout.alignment: Qt.AlignHCenter
 
+                    Text {
+                        objectName: "musicDnaOptInDemoNotice"
+                        visible: djconnect.demoMode
+                        text: root.tr("music_dna_opt_in_demo")
+                        textFormat: Text.PlainText
+                        color: BrandTheme.colors.muted
+                        font.pixelSize: musicDnaOptIn.compact ? 17 : 20
+                        font.weight: Font.DemiBold
+                        wrapMode: Text.WordWrap
+                        Layout.fillWidth: true
+                    }
+
                     Repeater {
                         model: [
                             {icon: "trash", key: "music_dna_opt_in_erase"},
@@ -5455,21 +8671,35 @@ BrandWindow {
                             }
                         }
                     }
+                    Text {
+                        objectName: "musicDnaOptInError"
+                        visible: musicDnaOptIn.activationError.length > 0
+                        text: musicDnaOptIn.activationError
+                        textFormat: Text.PlainText
+                        color: BrandTheme.colors.danger
+                        font.pixelSize: musicDnaOptIn.compact ? 17 : 20
+                        wrapMode: Text.WordWrap
+                        Layout.fillWidth: true
+                    }
                     GlassButton {
                         objectName: "musicDnaConfirmEnable"
                         primary: true
                         text: root.tr("music_dna_opt_in_accept")
                         iconName: "discover"
+                        busy: musicDnaOptIn.activationPending
                         Layout.fillWidth: true
                         Layout.preferredHeight: musicDnaOptIn.compact ? 56 : 68
-                        enabled: djconnect.paired && !djconnect.musicDnaBusy && !djconnect.musicDiscoveryBusy
-                            && musicDnaOptIn.profileId === djconnect.activeProfileId
+                        enabled: (djconnect.paired || djconnect.demoMode) && !djconnect.musicDnaBusy
+                            && !djconnect.musicDiscoveryBusy && musicDnaOptIn.currentProfile && !busy
                         onClicked: {
                             if (!musicDnaOptIn.opened || !enabled) return
-                            var discoveryConsent = musicDnaOptIn.discoveryConsent
-                            musicDnaOptIn.close()
-                            if (discoveryConsent) djconnect.acceptMusicDiscoveryConsent()
-                            else djconnect.setMusicDnaEnabled(true)
+                            musicDnaOptIn.activationError = ""
+                            musicDnaOptIn.activationPending = true
+                            const discoveryConsent = musicDnaOptIn.discoveryConsent
+                            const revision = musicDnaOptIn.profileRevision
+                            if (discoveryConsent) djconnect.acceptMusicDiscoveryConsent(revision)
+                            else djconnect.setMusicDnaEnabled(true, revision)
+                            musicDnaOptIn.finishActivation()
                         }
                     }
                     GlassButton {
@@ -5477,10 +8707,12 @@ BrandWindow {
                         foregroundColor: BrandTheme.colors.muted
                         font.pixelSize: musicDnaOptIn.compact ? 18 : 21
                         text: root.tr("music_dna_opt_in_not_now")
+                        enabled: !musicDnaOptIn.activationPending
                         tertiary: true
                         Layout.fillWidth: true
                         onClicked: {
-                            if (musicDnaOptIn.discoveryConsent) djconnect.rejectMusicDiscoveryConsent()
+                            if (musicDnaOptIn.currentProfile && musicDnaOptIn.discoveryConsent)
+                                djconnect.rejectMusicDiscoveryConsent()
                             musicDnaOptIn.close()
                         }
                     }
@@ -5529,6 +8761,7 @@ BrandWindow {
                 }
 
                 DangerButton {
+                    objectName: "confirmClearLogs"
                     text: root.tr("clear_logs")
                     Layout.fillWidth: true
                     Layout.preferredHeight: 56
@@ -5596,11 +8829,13 @@ BrandWindow {
                 }
 
                 DangerButton {
+                    objectName: "askDjClearConfirmButton"
                     text: root.tr("clear")
-                    enabled: !djconnect.askDjBusy
+                    enabled: !djconnect.askDjBusy && (djconnect.demoMode || (djconnect.paired
+                        && djconnect.backendAvailable && !djconnect.versionMismatchVisible))
                     Layout.fillWidth: true
                     Layout.preferredHeight: 56
-                    onClicked: djconnect.clearAskDjHistory()
+                    onClicked: djconnect.clearAskDjHistory(root.askDjClearConfirmationRevision)
                 }
 
                 PurpleButton {
@@ -5655,11 +8890,12 @@ BrandWindow {
 
                 DangerButton {
                     text: root.tr("music_dna_clear")
+                    enabled: djconnect.musicDnaEnabled && !djconnect.musicDnaBusy
                     Layout.fillWidth: true
                     Layout.preferredHeight: 56
                     onClicked: {
                         root.musicDnaClearConfirmOpen = false
-                        djconnect.clearMusicDna()
+                        djconnect.clearMusicDna(root.musicDnaConfirmationRevision)
                     }
                 }
 
@@ -5714,11 +8950,12 @@ BrandWindow {
 
                 DangerButton {
                     text: root.tr("music_dna_disable")
+                    enabled: djconnect.musicDnaEnabled && !djconnect.musicDnaBusy
                     Layout.fillWidth: true
                     Layout.preferredHeight: 56
                     onClicked: {
                         root.musicDnaDisableConfirmOpen = false
-                        djconnect.setMusicDnaEnabled(false)
+                        djconnect.setMusicDnaEnabled(false, root.musicDnaConfirmationRevision)
                     }
                 }
 
@@ -5735,6 +8972,7 @@ BrandWindow {
 
     GlassSheet {
         id: resetPairingConfirmPanel
+        objectName: "resetPairingConfirmPanel"
         visible: root.resetPairingConfirmOpen
         z: 84
 
@@ -5765,6 +9003,7 @@ BrandWindow {
                 }
 
                 Text {
+                    objectName: "resetPairingConfirmMessage"
                     text: root.tr("reset_pairing_confirm_message")
                     color: BrandTheme.colors.text
                     font.pixelSize: 24
@@ -5773,17 +9012,19 @@ BrandWindow {
                 }
 
                 DangerButton {
+                    objectName: "resetPairingConfirmAction"
                     text: root.tr("reset_pairing")
                     Layout.fillWidth: true
                     Layout.preferredHeight: 56
                     onClicked: {
                         root.resetPairingConfirmOpen = false
+                        root.activeScreen = "session"
                         djconnect.resetPairing()
-                        root.activeScreen = "now"
                     }
                 }
 
                 PurpleButton {
+                    objectName: "resetPairingCancel"
                     text: root.tr("cancel")
                     font.pixelSize: 24
                     Layout.fillWidth: true
@@ -5939,6 +9180,7 @@ BrandWindow {
 
         ScrollView {
             id: aboutScroll
+            objectName: "aboutScroll"
             anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
             anchors.top: aboutToolbar.bottom
             anchors.margins: 24
@@ -5973,22 +9215,100 @@ BrandWindow {
                     Layout.fillWidth: true
 
                     Text { text: root.tr("version"); color: BrandTheme.colors.muted; font.pixelSize: 20; font.bold: true; horizontalAlignment: Text.AlignRight; Layout.preferredWidth: 190 }
-                    Text { text: djconnect.version; color: BrandTheme.colors.text; font.pixelSize: 20; Layout.fillWidth: true }
+                    AboutCopyValue {
+                        objectName: "aboutAppVersion"
+                        text: djconnect.version
+                        labelKey: "copy_app_version"
+                    }
                     Text { text: root.tr("device_name"); color: BrandTheme.colors.muted; font.pixelSize: 20; font.bold: true; horizontalAlignment: Text.AlignRight; Layout.preferredWidth: 190 }
-                    Text { text: "DJConnect"; color: BrandTheme.colors.text; font.pixelSize: 20; Layout.fillWidth: true }
+                    AboutCopyValue {
+                        objectName: "aboutDeviceName"
+                        text: djconnect.deviceName
+                        labelKey: "copy_device_name"
+                    }
                     Text { text: root.tr("client_type"); color: BrandTheme.colors.muted; font.pixelSize: 20; font.bold: true; horizontalAlignment: Text.AlignRight; Layout.preferredWidth: 190 }
                     Text { text: djconnect.clientType; color: BrandTheme.colors.text; font.pixelSize: 20; Layout.fillWidth: true }
                     Text { text: root.tr("website"); color: BrandTheme.colors.muted; font.pixelSize: 20; font.bold: true; horizontalAlignment: Text.AlignRight; Layout.preferredWidth: 190 }
-                    Text { text: "https://djconnect.dev"; color: BrandTheme.colors.text; font.pixelSize: 20; Layout.fillWidth: true; elide: Text.ElideRight }
+                    GlassButton {
+                        objectName: "aboutWebsiteLink"
+                        text: "https://djconnect.dev"
+                        iconName: "globe"
+                        Layout.alignment: Qt.AlignLeft
+                        onClicked: Qt.openUrlExternally(text)
+                    }
+                    Text {
+                        text: root.tr("updates")
+                        color: BrandTheme.colors.muted
+                        font.pixelSize: 20; font.bold: true
+                        horizontalAlignment: Text.AlignRight
+                        Layout.preferredWidth: 190
+                    }
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        Layout.maximumWidth: 390
+                        GlassButton {
+                            objectName: "aboutCheckUpdates"
+                            text: djconnect.updateCheckRunning ? root.tr("checking_updates") : root.tr("check_updates")
+                            iconName: "refresh"
+                            busy: djconnect.updateCheckRunning
+                            wrapText: true
+                            textAlignment: Text.AlignLeft
+                            Layout.fillWidth: true
+                            enabled: !djconnect.updateCheckRunning
+                            onClicked: djconnect.checkForUpdates()
+                        }
+                        Text {
+                            objectName: "aboutUpdateCheckStatus"
+                            visible: djconnect.updateCheckStatus.length > 0
+                            text: visible ? root.tr(djconnect.updateCheckStatus) : ""
+                            textFormat: Text.PlainText
+                            color: BrandTheme.colors.muted
+                            font.pixelSize: 17
+                            wrapMode: Text.WordWrap
+                            Layout.fillWidth: true
+                        }
+                    }
                     Text { text: root.tr("web_address"); color: BrandTheme.colors.muted; font.pixelSize: 20; font.bold: true; horizontalAlignment: Text.AlignRight; Layout.preferredWidth: 190 }
                     Text { text: djconnect.webPortalUrl; color: BrandTheme.colors.text; font.pixelSize: 18; Layout.fillWidth: true; elide: Text.ElideMiddle }
                     Text { text: root.tr("device_id"); color: BrandTheme.colors.muted; font.pixelSize: 20; font.bold: true; horizontalAlignment: Text.AlignRight; Layout.preferredWidth: 190 }
-                    Text { text: djconnect.deviceId; color: BrandTheme.colors.text; font.pixelSize: 18; Layout.fillWidth: true; elide: Text.ElideMiddle }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 8
+                        Text {
+                            text: djconnect.deviceId
+                            textFormat: Text.PlainText
+                            color: BrandTheme.colors.text
+                            font.pixelSize: 18
+                            Layout.fillWidth: true
+                            elide: Text.ElideMiddle
+                        }
+                        GlassButton {
+                            objectName: "aboutCopyDeviceId"
+                            iconName: "copy"; tertiary: true
+                            Accessible.name: root.tr("copy_device_id")
+                            ToolTip.text: root.tr("copy_device_id")
+                            ToolTip.visible: hovered
+                            enabled: djconnect.deviceId.length > 0
+                            onClicked: djconnect.copyDeviceId()
+                        }
+                    }
                 }
                 }
 
                 GlassCard {
+                    id: aboutConnectionCard
                     Layout.fillWidth: true
+                readonly property bool liveConnectionEligible: !djconnect.demoMode && djconnect.paired
+                    && djconnect.backendAvailable && !djconnect.versionMismatchVisible
+                readonly property bool hasActiveAddress: djconnect.aboutConnectionOrigin.length > 0
+                readonly property string connectionFallback: djconnect.demoMode ? "demo_mode"
+                    : !liveConnectionEligible ? "ha_address_inactive" : !hasActiveAddress ? "ha_connection_unconfirmed" : ""
+                readonly property string connectionStatus: djconnect.demoMode ? "demo_mode"
+                    : !djconnect.paired ? "not_connected_value"
+                    : !djconnect.haUrl.trim().length ? "session_connection_address_missing"
+                    : djconnect.versionMismatchVisible ? "version_mismatch_title"
+                    : !djconnect.backendAvailable ? "ha_connection_unavailable"
+                    : hasActiveAddress ? "connected" : "ha_connection_unconfirmed"
                 Text {
                     text: root.tr("connection_section")
                     color: BrandTheme.colors.muted
@@ -6005,20 +9325,69 @@ BrandWindow {
 
                     Text { text: root.tr("home_assistant"); color: BrandTheme.colors.muted; font.pixelSize: 20; font.bold: true; horizontalAlignment: Text.AlignRight; Layout.preferredWidth: 190 }
                     Text { text: djconnect.paired ? root.tr("paired") : root.tr("not_paired"); color: BrandTheme.colors.text; font.pixelSize: 20; Layout.fillWidth: true }
-                    Text { text: root.tr("transport"); color: BrandTheme.colors.muted; font.pixelSize: 20; font.bold: true; horizontalAlignment: Text.AlignRight; Layout.preferredWidth: 190 }
-                    Text { text: djconnect.transportMode; color: BrandTheme.colors.text; font.pixelSize: 20; Layout.fillWidth: true }
+                    Text { text: root.tr("ha_connection_status"); color: BrandTheme.colors.muted; font.pixelSize: 20; font.bold: true; horizontalAlignment: Text.AlignRight; Layout.preferredWidth: 190; wrapMode: Text.WordWrap }
+                    Text {
+                        objectName: "aboutHaConnectionStatus"
+                        readonly property string status: aboutConnectionCard.connectionStatus
+                        text: root.tr(status)
+                        textFormat: Text.PlainText
+                        color: status === "connected" ? BrandTheme.colors.success
+                            : status === "ha_connection_unavailable" ? BrandTheme.colors.danger : BrandTheme.colors.muted
+                        font.pixelSize: 20; Layout.fillWidth: true; wrapMode: Text.Wrap
+                    }
                     Text { text: root.tr("connection_type"); color: BrandTheme.colors.muted; font.pixelSize: 20; font.bold: true; horizontalAlignment: Text.AlignRight; Layout.preferredWidth: 190 }
-                    Text { text: djconnect.connectionType; color: BrandTheme.colors.text; font.pixelSize: 20; Layout.fillWidth: true; elide: Text.ElideRight }
+                    Text {
+                        objectName: "aboutHaConnectionType"
+                        text: root.tr(aboutConnectionCard.connectionFallback || "local_only")
+                        textFormat: Text.PlainText
+                        color: BrandTheme.colors.text; font.pixelSize: 20; Layout.fillWidth: true; wrapMode: Text.Wrap
+                    }
+                    Text { text: root.tr("transport"); color: BrandTheme.colors.muted; font.pixelSize: 20; font.bold: true; horizontalAlignment: Text.AlignRight; Layout.preferredWidth: 190 }
+                    Text {
+                        objectName: "aboutHaConnectionTransport"
+                        text: root.tr(aboutConnectionCard.connectionFallback || djconnect.aboutConnectionTransport)
+                        textFormat: Text.PlainText
+                        color: BrandTheme.colors.text; font.pixelSize: 20; Layout.fillWidth: true; wrapMode: Text.Wrap
+                    }
                     Text { text: root.tr("music_backend"); color: BrandTheme.colors.muted; font.pixelSize: 20; font.bold: true; horizontalAlignment: Text.AlignRight; Layout.preferredWidth: 190 }
-                    Text { text: djconnect.paired ? root.tr("connected_value") : root.tr("not_connected_value"); color: djconnect.paired ? BrandTheme.colors.success : BrandTheme.colors.danger; font.pixelSize: 20; font.bold: true; Layout.fillWidth: true }
+                    Text {
+                        objectName: "aboutMusicBackendStatus"
+                        readonly property string availability: djconnect.aboutMusicAvailability
+                        text: root.tr("music_backend_" + availability + "_state")
+                        color: availability === "available" ? BrandTheme.colors.success
+                            : availability === "unavailable" ? BrandTheme.colors.danger : BrandTheme.colors.muted
+                        font.pixelSize: 20; font.bold: true; Layout.fillWidth: true; wrapMode: Text.Wrap
+                    }
                     Text { text: root.tr("backend_name"); color: BrandTheme.colors.muted; font.pixelSize: 20; font.bold: true; horizontalAlignment: Text.AlignRight; Layout.preferredWidth: 190 }
                     Text { text: djconnect.musicBackendName.length ? djconnect.musicBackendName : "-"; color: BrandTheme.colors.text; font.pixelSize: 18; Layout.fillWidth: true; elide: Text.ElideMiddle }
                     Text { text: root.tr("backend_error"); color: BrandTheme.colors.muted; font.pixelSize: 20; font.bold: true; horizontalAlignment: Text.AlignRight; Layout.preferredWidth: 190; visible: djconnect.musicBackendError.length > 0 }
                     Text { text: djconnect.musicBackendError; color: BrandTheme.colors.danger; font.pixelSize: 18; Layout.fillWidth: true; wrapMode: Text.Wrap; visible: djconnect.musicBackendError.length > 0 }
                     Text { text: root.tr("client_api_url_label"); color: BrandTheme.colors.muted; font.pixelSize: 20; font.bold: true; horizontalAlignment: Text.AlignRight; Layout.preferredWidth: 190 }
                     Text { text: djconnect.localApiUrl; color: BrandTheme.colors.text; font.pixelSize: 18; Layout.fillWidth: true; elide: Text.ElideMiddle }
-                    Text { text: root.tr("ha_local_url"); color: BrandTheme.colors.muted; font.pixelSize: 20; font.bold: true; horizontalAlignment: Text.AlignRight; Layout.preferredWidth: 190 }
-                    Text { text: djconnect.haUrl; color: BrandTheme.colors.text; font.pixelSize: 18; Layout.fillWidth: true; elide: Text.ElideMiddle }
+                    Text { text: root.tr("active_ha_address"); color: BrandTheme.colors.muted; font.pixelSize: 20; font.bold: true; horizontalAlignment: Text.AlignRight; Layout.preferredWidth: 190; wrapMode: Text.WordWrap }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 8
+                        Text {
+                            objectName: "aboutActiveHaAddress"
+                            text: djconnect.aboutConnectionOrigin || root.tr(aboutConnectionCard.liveConnectionEligible
+                                ? "ha_address_unconfirmed" : "ha_address_inactive")
+                            textFormat: Text.PlainText
+                            color: BrandTheme.colors.text; font.pixelSize: 18; Layout.fillWidth: true; wrapMode: Text.Wrap
+                        }
+                        GlassButton {
+                            objectName: "aboutCopyActiveHaAddress"
+                            readonly property string copyLabel: root.tr("copy_active_ha_address")
+                            iconName: "copy"; tertiary: true
+                            Layout.preferredWidth: 48
+                            Layout.preferredHeight: 48
+                            Accessible.name: copyLabel
+                            ToolTip.text: copyLabel
+                            ToolTip.visible: hovered
+                            visible: aboutConnectionCard.hasActiveAddress
+                            onClicked: djconnect.copyActiveHaAddress()
+                        }
+                    }
                 }
                 }
 
@@ -6040,6 +9409,23 @@ BrandWindow {
 
                     Text { text: root.tr("copyright"); color: BrandTheme.colors.muted; font.pixelSize: 20; font.bold: true; horizontalAlignment: Text.AlignRight; Layout.preferredWidth: 190 }
                     Text { text: "2026 Peter van Tol"; color: BrandTheme.colors.text; font.pixelSize: 20; Layout.fillWidth: true }
+                    Text {
+                        text: root.tr("about_source_repository")
+                        color: BrandTheme.colors.muted
+                        font.pixelSize: 20; font.bold: true
+                        horizontalAlignment: Text.AlignRight
+                        Layout.preferredWidth: 190
+                    }
+                    GlassButton {
+                        objectName: "aboutSourceRepository"
+                        text: "djconnect-music-dj/djconnect"
+                        iconName: "globe"
+                        wrapText: true
+                        textAlignment: Text.AlignLeft
+                        Layout.fillWidth: true
+                        Layout.maximumWidth: 390
+                        onClicked: Qt.openUrlExternally("https://github.com/djconnect-music-dj/djconnect")
+                    }
                 }
                 }
             }
@@ -6057,10 +9443,52 @@ BrandWindow {
         z: 198
         active: root.trackArtworkOpen && root.trackArtworkViewOpen
         focus: active
-        onLoaded: item.forceActiveFocus()
+        onLoaded: item.focusOverlay()
         sourceComponent: FocusScope {
+            id: artworkOverlay
             objectName: "trackArtworkOverlay"
-            Keys.onEscapePressed: root.trackArtworkControlsOpen = false
+            readonly property bool playbackButtonsEnabled: !!sharedSessionScreen.state.playback_control.enabled
+            onPlaybackButtonsEnabledChanged: {
+                if (!playbackButtonsEnabled) Qt.callLater(restoreControlFocus)
+            }
+            function focusOverlay() {
+                if (root.trackArtworkOpeningControl) closeArtworkButton.forceActiveFocus(Qt.PopupFocusReason)
+                else forceActiveFocus()
+            }
+            function restoreControlFocus() {
+                if (!root.trackArtworkOpen || !visible || activeControls().includes(root.activeFocusItem)) return
+                const fallback = artworkControlsToggle.enabled ? artworkControlsToggle : closeArtworkButton
+                fallback.forceActiveFocus(Qt.PopupFocusReason)
+            }
+            Connections {
+                target: root
+                function onTrackArtworkCanControlChanged() {
+                    if (!root.trackArtworkCanControl) Qt.callLater(artworkOverlay.restoreControlFocus)
+                }
+            }
+            function activeControls() {
+                const playback = artworkTransportLoader.item
+                return [closeArtworkButton, artworkControlsToggle]
+                    .concat(playback ? playback.artworkFocusOrder : [], [expandedSource.spotifyFocusTarget])
+                    .filter(control => control.visible && control.enabled && control.activeFocusOnTab)
+            }
+            function moveControlFocus(backward) {
+                const targets = activeControls()
+                const index = targets.indexOf(root.activeFocusItem)
+                const next = index < 0 ? (backward ? targets.length - 1 : 0)
+                    : (index + (backward ? -1 : 1) + targets.length) % targets.length
+                if (targets[next]) targets[next].forceActiveFocus(backward ? Qt.BacktabFocusReason : Qt.TabFocusReason)
+            }
+            Shortcut { sequence: "Tab"; onActivated: moveControlFocus(false) }
+            Shortcut { sequence: "Shift+Tab"; onActivated: moveControlFocus(true) }
+            Keys.onEscapePressed: {
+                if (root.trackArtworkControlsOpen) {
+                    root.toggleTrackArtworkControls()
+                    artworkControlsToggle.forceActiveFocus(Qt.PopupFocusReason)
+                } else {
+                    root.trackArtworkOpen = false
+                }
+            }
 
             Rectangle {
                 anchors.fill: parent
@@ -6082,8 +9510,9 @@ BrandWindow {
                     Layout.fillWidth: true
                     Item { Layout.fillWidth: true }
                     GlassButton {
+                        id: closeArtworkButton
                         objectName: "closeTrackArtwork"
-                        iconName: "end"
+                        iconName: "close"
                         Accessible.name: root.tr("close")
                         onClicked: root.trackArtworkOpen = false
                     }
@@ -6173,17 +9602,31 @@ BrandWindow {
                                 visible: root.trackArtworkCanControl && root.trackArtworkControlsOpen
                                 color: "#80000000"
                             }
-                            MouseArea {
+                            Button {
+                                id: artworkControlsToggle
+                                objectName: "trackArtworkControlsToggle"
                                 anchors.fill: parent
                                 enabled: root.trackArtworkCanControl
+                                Accessible.name: root.tr("session_playback_controls")
+                                Accessible.checkable: true
+                                Accessible.checked: root.trackArtworkControlsOpen
+                                contentItem: Item {}
+                                background: Rectangle {
+                                    color: "transparent"
+                                    radius: expandedArtworkCard.radius
+                                    border.width: artworkControlsToggle.visualFocus ? 2 : 0
+                                    border.color: BrandTheme.colors.focus
+                                }
                                 onClicked: root.toggleTrackArtworkControls()
                             }
                             Loader {
+                                id: artworkTransportLoader
                                 anchors.centerIn: parent
                                 width: parent.width - 20
                                 height: parent.height - 20
                                 active: root.trackArtworkCanControl && root.trackArtworkControlsOpen
                                 sourceComponent: sharedSessionScreen.artworkTransportControls
+                                onLoaded: item.refreshFocusFallback = artworkControlsToggle
                             }
                         }
 
@@ -6191,34 +9634,48 @@ BrandWindow {
                             id: expandedTitle
                             objectName: "expandedTrackTitle"
                             width: parent.width
-                            text: root.sessionTrackArtwork ? sharedSessionScreen.state.playback.title || "" : djconnect.title
+                            text: root.sessionTrackArtwork
+                                ? (sharedSessionScreen.state.playback.title || "").trim() || root.tr("session_track_title_unknown")
+                                : djconnect.title
                             textFormat: Text.PlainText
+                            Accessible.role: Accessible.Heading
+                            Accessible.name: text
                             color: BrandTheme.colors.text
                             font.pixelSize: root.wallProfile ? 42 : 32
                             font.bold: true
                             horizontalAlignment: Text.AlignHCenter
+                            wrapMode: Text.Wrap
+                            maximumLineCount: 2
                             elide: Text.ElideRight
                         }
 
                         RowLayout {
                             id: expandedCredits
-                            width: parent.width
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            width: expandedArtist.visible ? parent.width : expandedSource.implicitWidth
                             visible: expandedArtist.text.length > 0 || expandedSource.visible
-                            Item { Layout.preferredWidth: expandedSource.visible ? expandedSource.implicitWidth : 0 }
+                            Item {
+                                visible: expandedArtist.visible && expandedSource.visible
+                                Layout.preferredWidth: expandedSource.implicitWidth
+                            }
                             Text {
                                 id: expandedArtist
                                 objectName: "expandedTrackArtist"
                                 Layout.fillWidth: true
+                                Layout.minimumWidth: 0
                                 visible: text.length > 0
                                 text: root.sessionTrackArtwork ? sharedSessionScreen.state.playback.artist || "" : djconnect.artist
                                 textFormat: Text.PlainText
                                 color: BrandTheme.colors.muted
                                 font.pixelSize: root.wallProfile ? 30 : 24
                                 horizontalAlignment: Text.AlignHCenter
+                                wrapMode: Text.Wrap
+                                maximumLineCount: 2
                                 elide: Text.ElideRight
                             }
                             SessionAttribution {
                                 id: expandedSource
+                                objectName: "expandedTrackSource"
                                 visible: requiresSpotify && ready
                                 requiresSpotify: root.sessionTrackArtwork && !!sharedSessionScreen.state.playback.requires_spotify_attribution
                                 spotifyURL: requiresSpotify ? sharedSessionScreen.state.playback.source_url || "" : ""

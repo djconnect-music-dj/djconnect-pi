@@ -1,9 +1,12 @@
 """Read-only search/navigation and attribution presentation over Core history2."""
+import re
 from copy import deepcopy
 from html import escape
 from importlib.resources import files
+from unicodedata import normalize
 from urllib.parse import urlsplit
 
+from .i18n import normalize_language, translate
 from .session_projection import history_page, live_moments, safe_link, text, timestamp
 from .session_transport import SessionError, identifier
 
@@ -89,6 +92,98 @@ def presented_history(response):
     return result
 
 
+def ask_dj_history_matches(rows, *, now):
+    """Playback observations from a Profile-owned Ask DJ response."""
+    if not isinstance(rows, list):
+        return []
+    matches = {}
+    for raw in rows[:20]:
+        if (not isinstance(raw, dict) or raw.get("kind") != "playback_observed"
+                or raw.get("historical_view_only") is not True or raw.get("current_display_allowed") is not False
+                or raw.get("state") == "source_withdrawn"
+                or type(raw.get("order")) is not int or raw["order"] <= 0):
+            continue
+        expiry = timestamp(raw.get("retained_until"))
+        if expiry is None or expiry <= now or timestamp(raw.get("occurred_at")) is None:
+            continue
+        try:
+            session_id = identifier(raw.get("session_id"))
+            entry_id = identifier(raw.get("entry_id"))
+            row, = presented_history({"entries": [raw]})["entries"]
+        except SessionError:
+            continue
+        playback = row["historical_playback"]
+        spotify = row["requires_spotify_attribution"] or text(raw["playback"].get("provider"), 128).casefold() == "spotify"
+        if not playback or (spotify and not row["spotify_source_url"]):
+            continue
+        action = row.get("open_action")
+        can_open = (isinstance(action, dict) and action.get("navigation_only") is True
+                    and action == {"kind": "open_session", "session_id": session_id,
+                                   "entry_id": entry_id, "navigation_only": True})
+        if action is not None and not can_open:
+            continue
+        matches.setdefault((session_id, entry_id), {
+            **playback, "session_id": session_id, "entry_id": entry_id, "can_open": can_open,
+            "occurred_at": row["occurred_at"], "expires_at": expiry,
+            "requires_spotify_attribution": row["requires_spotify_attribution"],
+            "spotify_source_url": row["spotify_source_url"],
+        })
+    return list(matches.values())
+
+
+
+def ask_dj_context_entry(message_id, rows, *, now):
+    """Match a retained DJ answer by its server message identity."""
+    matches = set()
+    withdrawn = set()
+    for row in rows:
+        if (row.get("kind") != "conversation_dj" or row.get("role") != "assistant"
+                or row.get("origin_message_id") != message_id):
+            continue
+        reference = (row["session_id"], row["entry_id"])
+        if row.get("state") == "source_withdrawn":
+            withdrawn.add(reference)
+        elif (timestamp(row.get("retained_until")) or 0) > now:
+            matches.add(reference)
+    matches.difference_update(withdrawn)
+    if len(matches) != 1:
+        return {}
+    session_id, entry_id = matches.pop()
+    return {"session_id": session_id, "entry_id": entry_id}
+
+
+def retained_contribution_preview(row):
+    body = text(row.get("text")).strip() if row else ""
+    if not body:
+        return {}
+    return {"text": body[:600], "sources": deepcopy(row.get("display_sources", [])),
+            "expires_at": timestamp(row.get("retained_until")),
+            "requires_spotify_attribution": row.get("requires_spotify_attribution") is True,
+            "spotify_source_url": row.get("spotify_source_url", "")}
+
+
+def contribution_question(caps, language):
+    key = "ask_dj_contextual_exploration"
+    version = caps.get("contract_versions", {}).get(key)
+    value = caps.get(key)
+    if (caps.get("capabilities", {}).get(key) is not True or type(version) is not int or version != 1
+            or not isinstance(value, dict)):
+        return ""
+    version = value.get("version")
+    maximum = value.get("maximum_agent_calls")
+    context = value.get("context")
+    if (type(version) is not int or version != 1 or value.get("operation") != "ask_dj/message"
+            or not isinstance(context, list) or sorted(map(str, context)) != ["selected_entry", "selected_moment"]
+            or value.get("attribute_required") is not False or value.get("effect") != "informational"
+            or value.get("subject_authority") != "qualified_selected_public_context"
+            or value.get("unqualified_context") != "existing_source_unavailable_response"
+            or value.get("client_gesture_owner") != "client" or type(maximum) is not int or maximum != 3):
+        return ""
+    questions = value.get("generic_questions")
+    question = questions.get(normalize_language(language)) if isinstance(questions, dict) else None
+    expected = translate(language, "ask_dj_tell_more")
+    return expected if isinstance(question, str) and question.strip() == expected else ""
+
 
 def retained_flow_presentation(entries, admitted_moments, session_id):
     """Order admitted history for Flow without changing the canonical timeline.
@@ -132,15 +227,19 @@ def flow_contributions(entries, admitted_moments, session_id):
 
 
 def _highlighted_text(body, marks):
-    # Called only after server UTF-16 ranges passed exact character-boundary validation.
+    # The caller supplies validated or locally computed UTF-16 ranges.
     indices = {0: 0}
     offset = 0
     for index, char in enumerate(body):
         offset += len(char.encode("utf-16-le")) // 2
         indices[offset] = index + 1
-    spans = sorted((indices[mark["start_utf16"]], indices[mark["start_utf16"] + mark["length_utf16"]]) for mark in marks)
+    spans = ((indices[mark["start_utf16"]], indices[mark["start_utf16"] + mark["length_utf16"]]) for mark in marks)
+    return _render_highlighted_spans(body, spans)
+
+
+def _render_highlighted_spans(body, spans):
     merged = []
-    for start, end in spans:
+    for start, end in sorted(spans):
         if merged and start <= merged[-1][1]:
             merged[-1] = (merged[-1][0], max(end, merged[-1][1]))
         else:
@@ -153,6 +252,41 @@ def _highlighted_text(body, marks):
     fragments.append(escape(body[previous:]))
     # The only generated tags are emphasis and line breaks. User markup stays literal.
     return "".join(fragments).replace("\n", "<br>")
+
+
+def local_highlighted_text(body, query):
+    def fold(value):
+        return re.sub("[\u0300-\u036f]", "", normalize("NFD", value)).lower()
+
+    needle = fold(query.strip())
+    folded = fold(body)
+    if not needle or needle not in folded:
+        return ""
+    offsets = []
+    for cluster in re.finditer(r".[\u0300-\u036f]*", body, re.DOTALL):
+        offsets.extend([cluster.span()] * len(fold(cluster[0])))
+    return _render_highlighted_spans(
+        body, [(offsets[match.start()][0], offsets[match.end() - 1][1])
+               for match in re.finditer(re.escape(needle), folded)]
+    )
+
+
+def demo_search_body(row):
+    if row["text"]:
+        return row["text"]
+    playback = row.get("historical_playback", {})
+    return " · ".join(value for value in (playback.get("title"), playback.get("artist"), playback.get("album")) if value)
+
+
+def demo_search_matches(entries, query):
+    pattern = re.compile(re.escape(query), re.IGNORECASE)
+    matches = []
+    for row in entries:
+        body = demo_search_body(row)
+        spans = [match.span() for match in pattern.finditer(body)]
+        if spans:
+            matches.append({**row, "highlighted_text": _render_highlighted_spans(body, spans)})
+    return matches
 
 
 def search_page(response, session_id, query, *, now=None):

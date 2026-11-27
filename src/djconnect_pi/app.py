@@ -4,17 +4,20 @@ import argparse
 import hashlib
 import json
 import logging
+import math
 import os
 import re
+import stat
 import subprocess
 import sys
 import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
-from datetime import datetime
+from datetime import UTC, datetime
 from importlib.resources import files
 from pathlib import Path
+from threading import Lock
 from urllib.parse import urlencode, urlparse, urlsplit
 from uuid import uuid4
 
@@ -27,6 +30,8 @@ from PySide6.QtCore import (
     QIODevice,
     QObject,
     QSaveFile,
+    QSettings,
+    QStandardPaths,
     Qt,
     QTimer,
     QUrl,
@@ -38,7 +43,14 @@ from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuick import QQuickWindow
 from PySide6.QtQuickControls2 import QQuickStyle
 
+from . import __version__
 from .artwork_palette import displayed_artwork_tint
+from .ask_dj_help import (
+    compatible_catalogue,
+    demo_help,
+    project_help,
+    select_suggestions,
+)
 from .brand_theme import apply_palette
 from .config import (
     CLIENT_TYPE,
@@ -54,6 +66,7 @@ from .config import (
     normalize_log_level,
     save_config,
 )
+from .expiry_clock import elapsed_time
 from .ha import (
     DJCONNECT_API_PREFIX,
     PROFILE_ERROR_CODES,
@@ -65,17 +78,42 @@ from .ha import (
     ProfileContextError,
     ProtocolVersionMismatch,
     StaleBackendAction,
+    StatusObservation,
     UnsupportedBackendCapability,
+    playlist_command_target,
 )
 from .i18n import LANGUAGES, normalize_language, translate
 from .logging_config import clear_log_files, setup_logging
 from .navigation_gesture import EdgeBackGesture
+from .queue_projection import compact_adjacent_tracks, queue_artist_and_album
 from .session_controller import SessionController
-from .session_playback_control import output_id
-from .session_projection import volume_observation
+from .session_history_view import (
+    ask_dj_history_matches,
+    contribution_question,
+    conversation_entries,
+    local_highlighted_text,
+    presented_history,
+    retained_contribution_preview,
+)
+from .session_playback_control import (
+    REPEAT_NEXT,
+    favorite_observation,
+    output_id,
+    sorted_output_choices,
+)
+from .session_playback_control import reference as session_playback_reference
+from .session_projection import (
+    active_session,
+    history_page,
+    timestamp,
+    track_insight_verified_credit,
+    volume_observation,
+)
+from .session_projection import text as bounded_text
 from .session_transport import SessionError, session_profile_id
 from .shared_settings import SettingsError
 from .system_info import log_raspberry_pi_system_info
+from .track_insight_clip import TrackInsightClip, clip_format
 
 _LOGGER = logging.getLogger(__name__)
 LOCAL_TERMINAL_UNIT = Path("/etc/systemd/system/djconnect-local-terminal.service")
@@ -87,16 +125,19 @@ LOG_DISPLAY_MAX_BYTES = 80_000
 GAME_SOUND_SAMPLE_RATE = 16_000
 DISPLAY_WAKE_DEBOUNCE_SECONDS = 0.8
 MEDIA_ARTWORK_CACHE_LIMIT = 6
+MUSIC_DNA_IMPORT_MAX_BYTES = 8 * 1024 * 1024
 QT_PIXMAP_CACHE_LIMIT_KB = 4096
 UI_WORKER_COUNT = 1
 TOAST_ICON_FALLBACK = "music"
 TOAST_CONTEXT_ICONS = {
     "playback": "music",
+    "media_start": "play",
     "now": "music",
     "queue": "queue",
     "playlists": "playlists",
     "settings": "settings",
     "connectivity": "info",
+    "refresh": "refresh",
     "home_assistant": "info",
     "updates": "logs",
     "diagnostics": "logs",
@@ -120,31 +161,58 @@ class _ProfileReadResult(dict):
         self.owner_context = context
 
 
+class _MusicDnaProfileResult(_ProfileReadResult):
+    """Profile read outcome and local refresh behavior, outside the wire payload."""
+
+    def __init__(self, data, context, *, manual: bool, retryable: bool):
+        super().__init__(data, context)
+        self.manual = manual
+        self.retryable = retryable
+
+
+class _DiscoveryReadResult(_ProfileReadResult):
+    """A Discover feed bound to the original Music DNA consent."""
+
+    def __init__(self, data, context, consent_epoch, *, manual=False, used_existing_feed=False):
+        super().__init__(data, context)
+        self.consent_epoch = consent_epoch
+        self.manual = manual
+        self.used_existing_feed = used_existing_feed
+
+
 class _TrackInsightResult(dict):
     """Track Insight delivery scope captured before dispatch, outside the wire payload."""
 
-    def __init__(self, data, scope):
+    def __init__(self, data, scope, proof=None, *, manual: bool = False):
         super().__init__(data)
         self.scope = scope
+        self.proof = proof
+        self.manual = manual
 
 
 class DJConnectBackend(QObject):
     statusTextChanged = Signal()
     backendAvailableChanged = Signal()
+    aboutMusicAvailabilityChanged = Signal()
+    aboutConnectionOriginChanged = Signal()
     titleChanged = Signal()
     artistChanged = Signal()
+    albumChanged = Signal()
     imageUrlChanged = Signal()
     playbackTrackChanged = Signal()
     playingChanged = Signal()
     favoriteChanged = Signal()
     favoriteBusyChanged = Signal()
+    _favoriteRemovalFinished = Signal(object, str)
     volumeChanged = Signal()
     controlVolumeChanged = Signal()
     _controlVolumeFinished = Signal()
     shuffleChanged = Signal()
     repeatChanged = Signal()
+    playbackModePendingChanged = Signal()
     outputDeviceChanged = Signal()
     progressChanged = Signal()
+    playbackSeekCancelled = Signal()
     pairedChanged = Signal()
     busyChanged = Signal()
     settingsChanged = Signal()
@@ -157,20 +225,31 @@ class DJConnectBackend(QObject):
     logsChanged = Signal()
     mediaListsChanged = Signal()
     mediaActivityChanged = Signal()
-    _mediaListFinished = Signal(str)
+    _mediaListFinished = Signal(str, object, bool)
     _mediaPlaybackFinished = Signal()
+    _mediaPlaybackObserved = Signal(object, object, bool)
     askDjChanged = Signal()
+    askDjUnsentDraft = Signal(str)
+    _askDjUnsentDraftReady = Signal(object, str)
+    _askDjDeliveryReady = Signal(object, str)
     musicDnaChanged = Signal()
+    profileExportProgress = Signal(int, bool, str)
     musicDiscoveryChanged = Signal()
     musicDiscoveryItemsChanged = Signal()
     musicDiscoveryPlayed = Signal(str, str)
     trackInsightChanged = Signal()
+    trackInsightClipChanged = Signal()
+    trackInsightClipFrameRequested = Signal(float)
+    trackInsightExportFinished = Signal(str, bool)
+    trackInsightPlaybackItemChanged = Signal()
+    trackInsightObservationChanged = Signal()
     demoModeChanged = Signal()
     glassChanged = Signal()
     screenTimeoutChanged = Signal()
     returnToNowChanged = Signal()
     screenBrightnessChanged = Signal()
     updateChannelChanged = Signal()
+    updateCheckChanged = Signal()
     logFileChanged = Signal()
     logLevelChanged = Signal()
     languageChanged = Signal()
@@ -181,23 +260,43 @@ class DJConnectBackend(QObject):
     profileChanged = Signal()
     djAnnouncementChanged = Signal()
     localAudioDevicesChanged = Signal()
+    gameHighScoresChanged = Signal()
     wakeScreenRequested = Signal()
     temporaryWakeRequested = Signal(int, bool)
     screenshotRequested = Signal()
     debugScreenRequested = Signal(str)
 
     _playbackReady = Signal(object)
+    _playbackModeFinished = Signal(object, object)
     _statusReady = Signal(str)
     _pairingReady = Signal(bool, str)
     _busyReady = Signal(bool)
     _versionMismatchReady = Signal(str, str)
-    _mediaListReady = Signal(str, object)
+    _mediaListReady = Signal(str, object, object)
+    _mediaArtworkReady = Signal(str, object, object)
     _outputDeviceRejected = Signal(str, str)
+    _outputChoiceFinished = Signal(object, bool)
+    _controlOutputsFinished = Signal(object, object, bool)
     _backendAvailableReady = Signal(bool)
+    _aboutMusicAvailabilityReady = Signal(object, object, float)
+    _aboutConnectionReady = Signal(object, str, float, bool)
     _toastReady = Signal(str, int, str)
+    _updateCheckFinished = Signal(str)
     _askDjReady = Signal(object)
+    _askDjContextReady = Signal(object, object, object)
+    _askDjContextWithdrawn = Signal(object, object)
+    _askDjRefreshReady = Signal(object)
+    _askDjClearReady = Signal(object)
+    askDjHelpChanged = Signal()
+    askDjHelpSelected = Signal(str, str, int)
+    askDjSuggestionSelected = Signal(str, int)
+    _askDjHelpReady = Signal(object, object, object)
     _musicDnaReady = Signal(object)
+    _musicDnaImportPrepared = Signal(object, object, object)
+    _musicDnaImportFinished = Signal(object, object, str)
     _musicDiscoveryReady = Signal(object)
+    _musicDiscoveryPlayConfirmed = Signal(object, str, str, object)
+    _musicDiscoveryFeedbackAccepted = Signal(object, str, str, object)
     _trackInsightReady = Signal(object)
 
     def __init__(self, config_path: Path) -> None:
@@ -231,30 +330,55 @@ class DJConnectBackend(QObject):
         self._toast_timer.setSingleShot(True)
         self._toast_timer.timeout.connect(self.hideToast)
         self._logs_text = ""
+        self._logs_read_error = ""
         self._logs_visible = False
         self._demo_mode = False
+        self._demo_favorite_uris: set[str] = set()
         self._demo_progress = QTimer(self)
         self._demo_progress.setInterval(1000)
         self._demo_progress.timeout.connect(self._tick_demo_playback)
         self._queue_items: list[dict[str, object]] = []
         self._playlist_items: list[dict[str, object]] = []
         self._ask_dj_messages: list[dict[str, object]] = []
+        self._ask_dj_withdrawn_ids: set[str] = set()
+        self._ask_dj_withdrawn_entries: set[tuple[str, str]] = set()
+        self._ask_dj_history_open = None
+        self._ask_dj_context_request = None
+        self._ask_dj_context_page = None
+        self._ask_dj_destination_loading = False
         self._ask_dj_history_revision = 0
+        self._ask_dj_delivery_key = ""
         self._ask_dj_clear_revision = 0
         self._ask_dj_busy = False
+        self._ask_dj_help_request = None
+        self._ask_dj_help_busy = False
+        self._ask_dj_help_sections = []
+        self._ask_dj_suggestions = []
         self._music_dna_enabled = False
+        self._music_dna_loaded = False
+        self._music_dna_context_revision = 0
+        self._music_dna_updated_at = ""
         self._music_dna_summary = ""
         self._music_dna_error = ""
+        self._music_dna_needs_recovery = False
+        self._music_dna_import = None
         self._music_dna_sections: list[dict[str, object]] = []
         self._music_dna_busy = False
         self._music_discovery_items: list[dict[str, object]] = []
         self._music_discovery_empty_text = ""
         self._music_discovery_error = ""
+        self._music_discovery_dna_disabled = False
+        self._music_discovery_loaded = False
+        self._music_discovery_feed_deadline = None
         self._music_discovery_busy = False
-        self._music_discovery_playing_id = ""
+        self._music_discovery_playing: tuple[str, str] | None = None
         self._music_discovery_feedback_supported = False
         self._music_discovery_consent_rejected = False
+        self._music_discovery_consent_epoch = 0
         self._track_insight_title = ""
+        self._track_insight_loading = False
+        self._track_insight_audio_notice = False
+        self._track_insight_verified_credit: dict[str, str] = {}
         self._track_insight_artist = ""
         self._track_insight_album = ""
         self._track_insight_image_url = ""
@@ -266,19 +390,43 @@ class DJConnectBackend(QObject):
         self._application_foreground = True
         self._track_insight_revision = 0
         self._track_insight_result_scope = None
+        self._track_insight_last_proof = None
+        self._track_insight_deadline = None
+        self._track_insight_clip = None
+        self._track_insight_retryable = False
         self._ask_dj_unavailable_until = 0.0
         self._ask_dj_poll_error_count = 0
         self._ask_dj_poll_in_flight = False
         self._suppress_next_playback_navigation = False
         self._media_loads_in_flight: set[str] = set()
+        self._media_list_load_failures: set[str] = set()
         self._media_playback_busy = False
+        self._queue_read_lock = Lock()
         self._media_artwork_cache_in_flight: set[str] = set()
         self._pending_output_device = ""
         self._pending_output_until = 0.0
+        self._pending_output_choice = None
+        self._unconfirmed_output_choice = ""
+        self._control_outputs_request = None
+        self._control_outputs_status = ""
         self._last_display_wake_at = 0.0
         self._game_sound_objects: list[tuple[object, QBuffer]] = []
+        self._game_settings = QSettings(str(config_path.with_suffix(".games.ini")), QSettings.Format.IniFormat, self)
+        self._game_high_scores = {}
+        for game in ("pong", "asteroids", "fly", "pacman"):
+            try:
+                score = self._game_settings.value(f"highScores/{game}", 0, type=int)
+            except (TypeError, ValueError):
+                score = 0
+            self._game_high_scores[game] = score if type(score) is int and 0 <= score <= 2_147_483_647 else 0
         self._status_text = self.tr_key("paired" if self.cfg.paired else "not_paired")
         self._backend_available = True
+        self._update_check_running = False
+        self._update_check_status = ""
+        self._about_music_availability = None
+        self._about_connection_origin = None
+        self._about_connection_request_time = 0.0
+        self._about_music_request_time = 0.0
         self._busy = False
         self._executor = ThreadPoolExecutor(max_workers=UI_WORKER_COUNT, thread_name_prefix="djconnect")
         # Bounded independent lanes: slow text generation cannot occupy Session control.
@@ -288,9 +436,13 @@ class DJConnectBackend(QObject):
         self._shared_settings.owner_context = self._session_controller.scope_context
         self._shared_owner_context = self._shared_settings.context()
         self._session_controller.ownerScopeChanged.connect(self._session_owner_changed)
+        self._session_controller.askDjEntryOpenFailed.connect(self._show_ask_dj_history_open_failed)
         self._control_volume_serial = 0
+        self._playback_seek_epoch = 0
+        self._playback_seek_gesture = None
         self._control_volume_intent = None
         self._control_volume_pending = False
+        self._pending_playback_mode: tuple[tuple, str, bool | str] | None = None
         self._controlVolumeFinished.connect(self._finish_control_volume)
         self.settingsChanged.connect(self.controlVolumeChanged.emit)
         self.profileChanged.connect(self.cancelControlVolume)
@@ -304,20 +456,63 @@ class DJConnectBackend(QObject):
         self._event_timer.timeout.connect(self._poll_local_events)
         self._event_timer.start()
         self._playbackReady.connect(self._apply_playback)
+        self._playbackModeFinished.connect(self._finish_playback_mode)
+        self._favoriteRemovalFinished.connect(self._finish_favorite_removal)
+        for signal in (self.outputDeviceChanged, self.profileChanged, self.pairedChanged,
+                       self.demoModeChanged, self.settingsChanged):
+            signal.connect(self._invalidate_playback_mode)
+            signal.connect(self._invalidate_playback_seek)
+        self.playbackTrackChanged.connect(self._invalidate_playback_seek)
         self._statusReady.connect(self._set_status_text)
         self._pairingReady.connect(self._apply_pairing)
         self._busyReady.connect(self._set_busy)
         self._versionMismatchReady.connect(self._apply_version_mismatch)
         self._mediaListReady.connect(self._apply_media_list)
+        self._mediaArtworkReady.connect(self._apply_cached_media_list)
         self._mediaListFinished.connect(self._finish_media_list_load)
         self._mediaPlaybackFinished.connect(self._finish_media_playback)
+        self._mediaPlaybackObserved.connect(self._apply_media_playback_observation)
         self._outputDeviceRejected.connect(self._apply_output_device_rejection)
+        self._outputChoiceFinished.connect(self._finish_output_choice)
+        self._controlOutputsFinished.connect(self._finish_control_outputs)
         self._backendAvailableReady.connect(self._set_backend_available)
+        self._aboutMusicAvailabilityReady.connect(self._apply_about_music_availability)
+        self._aboutConnectionReady.connect(self._apply_about_connection_origin)
+        for signal in (self.profileChanged, self.pairedChanged, self.demoModeChanged,
+                       self.versionMismatchChanged, self.backendAvailableChanged, self.settingsChanged):
+            signal.connect(self._reconcile_about_status)
         self._toastReady.connect(self._show_toast)
+        self._updateCheckFinished.connect(self._finish_update_check)
         self._askDjReady.connect(self._apply_ask_dj_data)
+        self._askDjContextReady.connect(self._apply_ask_dj_context_rows)
+        self._askDjContextWithdrawn.connect(self._apply_ask_dj_context_withdrawal)
+        self._askDjUnsentDraftReady.connect(self._restore_unsent_ask_dj_draft)
+        self._askDjDeliveryReady.connect(self._apply_ask_dj_delivery)
+        self._askDjRefreshReady.connect(self._apply_ask_dj_refresh_result)
+        self._askDjClearReady.connect(self._apply_ask_dj_clear_result)
+        self._askDjHelpReady.connect(self._apply_ask_dj_help)
+        self._ask_dj_help_timer = QTimer(self)
+        self._ask_dj_help_timer.setSingleShot(True)
+        self._ask_dj_help_timer.setTimerType(Qt.TimerType.PreciseTimer)
+        self._ask_dj_help_timer.timeout.connect(self.closeAskDjHelp)
+        for signal in (self.profileChanged, self.pairedChanged, self.languageChanged,
+                       self.backendAvailableChanged, self.demoModeChanged, self.versionMismatchChanged,
+                       self.settingsChanged):
+            signal.connect(self._invalidate_ask_dj_help_if_changed)
         self._musicDnaReady.connect(self._apply_music_dna_data)
+        self._musicDnaImportPrepared.connect(self._apply_music_dna_import)
+        self._musicDnaImportFinished.connect(self._finish_music_dna_import)
         self._musicDiscoveryReady.connect(self._apply_music_discovery_data)
+        self._musicDiscoveryPlayConfirmed.connect(self._apply_music_discovery_play)
+        self._musicDiscoveryFeedbackAccepted.connect(self._remove_music_discovery_item)
         self._trackInsightReady.connect(self._apply_track_insight_data)
+        self._track_insight_expiry_timer = QTimer(self)
+        self._track_insight_expiry_timer.setSingleShot(True)
+        self._track_insight_expiry_timer.timeout.connect(self._expire_track_insight)
+        self._track_insight_style = self._current_track_insight_style()
+        self._session_controller.changed.connect(self._observe_track_insight_style)
+        self._session_controller.changed.connect(self._invalidate_ask_dj_help_if_changed)
+        self.sharedSettingsChanged.connect(self._observe_track_insight_style)
         self._sharedSettingsReady.connect(self._apply_shared_settings)
         self._shared_settings_timer = QTimer(self)
         self._shared_settings_timer.setInterval(15000)
@@ -385,7 +580,17 @@ class DJConnectBackend(QObject):
             return
         self._start_shared_settings(deepcopy(patch))
 
-    def _start_shared_settings(self, patch: dict | None = None) -> None:
+    @Slot()
+    def useConfirmedSharedSettings(self) -> None:
+        if self._shutting_down:
+            return
+        self._invalidate_shared_settings_if_context_changed()
+        if (self._demo_mode or not self.paired or self._shared_settings_inflight
+                or not self._shared_settings_state.get("operation_unknown")):
+            return
+        self._start_shared_settings(accept_current=True)
+
+    def _start_shared_settings(self, patch: dict | None = None, *, accept_current: bool = False) -> None:
         self._shared_settings_inflight = True
         self.sharedSettingsChanged.emit()
         epoch = self._shared_settings_epoch
@@ -395,7 +600,9 @@ class DJConnectBackend(QObject):
             result = {"epoch": epoch, "context": context}
             try:
                 owner = self._shared_settings
-                if patch is None:
+                if accept_current:
+                    result["projection"] = owner.read(accept_current=True)
+                elif patch is None:
                     result["projection"] = owner.read()
                 else:
                     token = patch.pop("_edit_token", self._shared_settings_state.get("edit_token", ""))
@@ -443,6 +650,10 @@ class DJConnectBackend(QObject):
     def personalProfileActive(self) -> bool:
         return self.cfg.active_profile_type == "personal"
 
+    @Property(bool, notify=profileChanged)
+    def personalProfileExportAllowed(self) -> bool:
+        return bool(self.personalProfileActive and session_profile_id(self.cfg) and not self.cfg.private_session)
+
     @Property(str, notify=statusTextChanged)
     def statusText(self) -> str:
         return self._status_text
@@ -462,6 +673,10 @@ class DJConnectBackend(QObject):
     @Property(str, notify=artistChanged)
     def artist(self) -> str:
         return self.playback.artist
+
+    @Property(str, notify=albumChanged)
+    def album(self) -> str:
+        return self.playback.album
 
     @Property(str, notify=imageUrlChanged)
     def imageUrl(self) -> str:
@@ -484,6 +699,14 @@ class DJConnectBackend(QObject):
         return "playlists" in self._media_loads_in_flight
 
     @Property(bool, notify=mediaActivityChanged)
+    def queueLoadFailed(self) -> bool:
+        return "queue" in self._media_list_load_failures
+
+    @Property(bool, notify=mediaActivityChanged)
+    def playlistsLoadFailed(self) -> bool:
+        return "playlists" in self._media_list_load_failures
+
+    @Property(bool, notify=mediaActivityChanged)
     def mediaPlaybackBusy(self) -> bool:
         return self._media_playback_busy
 
@@ -491,13 +714,183 @@ class DJConnectBackend(QObject):
     def askDjMessages(self) -> list[dict[str, object]]:
         return self._ask_dj_messages
 
+    @Slot(result=float)
+    def askDjHistoryClock(self) -> float:
+        return self._session_controller._clock.now()
+
+    @Slot(str, result="QVariantMap")
+    def askDjContextEntry(self, message_id):
+        if (self._demo_mode or not self._application_foreground or not self.paired
+                or not self._backend_available or self._version_mismatch_visible
+                or not self.personalProfileExportAllowed or self.cfg.active_profile_privacy_mode != "private"
+                or not any(message.get("id") == message_id and message.get("contextEligible") is True
+                           for message in self._ask_dj_messages)):
+            return {}
+        page = self._ask_dj_context_page
+        rows = page[2] if page and page[0] == self._private_read_context() else []
+        reference = self._session_controller.ask_dj_context_entry(message_id, rows)
+        if reference and (reference["session_id"], reference["entry_id"]) in self._ask_dj_withdrawn_entries:
+            return {}
+        return reference
+
+    @Slot(str, str, str, result="QVariantMap")
+    def askDjSelectedContributionPreview(self, message_id, session_id, entry_id):
+        selected = {"session_id": session_id, "entry_id": entry_id}
+        if message_id:
+            if self.askDjContextEntry(message_id) != selected:
+                return {}
+        elif not self.canAskAboutSavedEntry(session_id, entry_id):
+            return {}
+        page = self._ask_dj_context_page
+        rows = page[2] if page and page[0] == self._private_read_context() else []
+        return self._session_controller.ask_dj_selection_preview(selected, rows, saved=not message_id)
+
+    @Slot()
+    def cancelAskDjHistoryOpen(self):
+        self._ask_dj_history_open = None
+        self._ask_dj_context_request = None
+        self._ask_dj_context_page = None
+        if self._ask_dj_destination_loading:
+            self._ask_dj_destination_loading = False
+            self.askDjChanged.emit()
+
+    @Property(bool, notify=askDjChanged)
+    def askDjDestinationLoading(self):
+        return self._ask_dj_destination_loading
+
+    @Property(bool, notify=askDjChanged)
+    def askDjDestinationUnavailable(self):
+        page = self._ask_dj_context_page
+        return bool(not self._ask_dj_destination_loading and page
+                    and page[0] == self._private_read_context() and page[1] is None)
+
+    @Property(str, notify=askDjChanged)
+    def askDjContributionQuestion(self):
+        page = self._ask_dj_context_page
+        return page[3] if page and page[0] == self._private_read_context() else ""
+
+    @Slot(str, str, str, result=bool)
+    def exploreAskDjAnswer(self, reply_id, session_id, entry_id):
+        question = self.askDjContributionQuestion
+        if not question or not reply_id or not session_id or not entry_id:
+            return False
+        return self._send_ask_dj_question(question, reply_id, session_id, entry_id, restore_draft=False)
+
+    @Slot(str, str, result=bool)
+    def exploreSavedAskDjEntry(self, session_id, entry_id):
+        selected = {"session_id": session_id, "entry_id": entry_id}
+        question = self._session_controller.saved_exploration_question(selected)
+        return self._send_ask_dj_question(question, "", session_id, entry_id,
+                                          restore_draft=False, from_archive=True)
+
+    @Slot(str, str, result=bool)
+    def canAskAboutSavedEntry(self, session_id, entry_id):
+        return ((session_id, entry_id) not in self._ask_dj_withdrawn_entries
+                and self._session_controller.saved_question_available({"session_id": session_id, "entry_id": entry_id}))
+
+    @Slot(str, str, str, result=bool)
+    def sendAskDjSavedQuestion(self, text, session_id, entry_id):
+        return self._send_ask_dj_question(text, "", session_id, entry_id, restore_draft=True, from_archive=True)
+
+    @Slot(str, str, str)
+    def openAskDjHistoryMatch(self, message_id, session_id, entry_id):
+        ticket = self._private_read_context()
+        request = self._ask_dj_history_open = object()
+
+        def current():
+            return (self._ask_dj_history_open is request and ticket == self._private_read_context()
+                    and self._application_foreground and self.paired and self._backend_available
+                    and not self._demo_mode and not self._version_mismatch_visible and self.personalProfileExportAllowed
+                    and any(match["session_id"] == session_id and match["entry_id"] == entry_id
+                            and match["can_open"] and match["expires_at"] > self.askDjHistoryClock()
+                            for message in self._ask_dj_messages if message.get("id") == message_id
+                            for match in message.get("historicalMatches", [])))
+
+        if current() and not self._session_controller.open_ask_dj_entry(session_id, entry_id, current):
+            self._show_ask_dj_history_open_failed("", "")
+
+    @Slot(str, str)
+    def _show_ask_dj_history_open_failed(self, session_id, entry_id):
+        if session_id and entry_id:
+            reference = (session_id, entry_id)
+            self._ask_dj_withdrawn_entries.add(reference)
+            self._ask_dj_messages = [
+                {**message, "historicalMatches": [
+                    match for match in message["historicalMatches"]
+                    if (match["session_id"], match["entry_id"]) != reference
+                ]} if message.get("historicalMatches") else message
+                for message in self._ask_dj_messages
+            ]
+            self.askDjChanged.emit()
+        self._show_toast(self.tr_key("ask_dj_saved_session_open_failed"), 3000, "askdj")
+
+    @Slot(str, str, result=str)
+    def highlightAskDjMessage(self, body: str, query: str) -> str:
+        return local_highlighted_text(body, query)
+
+    @Slot(str, float, result=str)
+    def formatAskDjTimestamp(self, created_at: str, now_ms: float) -> str:
+        stamp = timestamp(created_at)
+        if stamp is None:
+            return ""
+        elapsed = max(0, now_ms / 1000 - stamp)
+        if elapsed < 3600:
+            return self.tr_key("ask_dj_minutes_ago", count=max(1, int(elapsed // 60)))
+        created = datetime.fromtimestamp(stamp, UTC).astimezone()
+        days = (datetime.fromtimestamp(now_ms / 1000, UTC).astimezone().date() - created.date()).days
+        if days <= 0:
+            return created.strftime("%H:%M")
+        if days == 1:
+            return self.tr_key("ask_dj_yesterday")
+        if days < 7:
+            return self.tr_key("ask_dj_days_ago", count=days)
+        if days < 14:
+            return self.tr_key("ask_dj_last_week")
+        if days <= 30:
+            return self.tr_key("ask_dj_weeks_ago", count=days // 7)
+        if days <= 61:
+            return self.tr_key("ask_dj_last_month")
+        return self.tr_key("ask_dj_months_ago", count=days // 30)
+
     @Property(bool, notify=askDjChanged)
     def askDjBusy(self) -> bool:
         return self._ask_dj_busy
 
+    @Property(bool, notify=askDjChanged)
+    def trackInsightLoading(self) -> bool:
+        return self._track_insight_loading
+
+    @Property("QVariantList", notify=askDjHelpChanged)
+    def askDjHelpSections(self) -> list:
+        if self._ask_dj_help_is_current(self._ask_dj_help_request):
+            return self._ask_dj_help_sections
+        return []
+
+    @Property(bool, notify=askDjHelpChanged)
+    def askDjHelpBusy(self) -> bool:
+        return self._ask_dj_help_busy
+
+    @Property("QVariantList", notify=askDjHelpChanged)
+    def askDjSuggestions(self) -> list:
+        if self._ask_dj_help_is_current(self._ask_dj_help_request):
+            return self._ask_dj_suggestions
+        return []
+
     @Property(bool, notify=musicDnaChanged)
     def musicDnaEnabled(self) -> bool:
         return self._music_dna_enabled
+
+    @Property(bool, notify=musicDnaChanged)
+    def musicDnaLoaded(self) -> bool:
+        return self._music_dna_loaded
+
+    @Property(int, notify=musicDnaChanged)
+    def musicDnaContextRevision(self) -> int:
+        return self._music_dna_context_revision
+
+    @Property(str, notify=musicDnaChanged)
+    def musicDnaUpdatedAt(self) -> str:
+        return self._music_dna_updated_at
 
     @Property(bool, notify=musicDnaChanged)
     def musicDnaBusy(self) -> bool:
@@ -506,6 +899,30 @@ class DJConnectBackend(QObject):
     @Property(str, notify=musicDnaChanged)
     def musicDnaError(self) -> str:
         return self._music_dna_error
+
+    @Property(bool, notify=musicDnaChanged)
+    def musicDnaNeedsRecovery(self) -> bool:
+        return self._music_dna_needs_recovery
+
+    @Property("QVariantMap", notify=musicDnaChanged)
+    def musicDnaImportPreview(self) -> dict[str, object]:
+        request = self._music_dna_import
+        return dict(request["preview"]) if request and self._music_dna_import_current(request) else {}
+
+    @Property(bool, notify=musicDnaChanged)
+    def musicDnaImportUploading(self) -> bool:
+        request = self._music_dna_import
+        return bool(request and request.get("uploading") and self._music_dna_import_current(request))
+
+    @Property(bool, notify=musicDnaChanged)
+    def musicDnaImportSaved(self) -> bool:
+        request = self._music_dna_import
+        return bool(request and request.get("saved") and self._music_dna_import_current(request))
+
+    @Property(str, notify=musicDnaChanged)
+    def musicDnaImportFailureKey(self) -> str:
+        request = self._music_dna_import
+        return request.get("failure", "") if request and self._music_dna_import_current(request) else ""
 
     @Property(str, notify=musicDnaChanged)
     def musicDnaSummary(self) -> str:
@@ -531,9 +948,21 @@ class DJConnectBackend(QObject):
     def musicDiscoveryError(self) -> str:
         return self._music_discovery_error
 
+    @Property(bool, notify=musicDiscoveryChanged)
+    def musicDiscoveryDnaDisabled(self) -> bool:
+        return self._music_discovery_dna_disabled
+
+    @Property(bool, notify=musicDiscoveryChanged)
+    def musicDiscoveryLoaded(self) -> bool:
+        return self._music_discovery_loaded
+
     @Property(str, notify=musicDiscoveryChanged)
     def musicDiscoveryPlayingId(self) -> str:
-        return self._music_discovery_playing_id
+        return self._music_discovery_playing[1] if self._music_discovery_playing else ""
+
+    @Property(str, notify=musicDiscoveryChanged)
+    def musicDiscoveryPlayingSectionId(self) -> str:
+        return self._music_discovery_playing[0] if self._music_discovery_playing else ""
 
     @Property(bool, notify=musicDiscoveryChanged)
     def musicDiscoveryFeedbackSupported(self) -> bool:
@@ -546,6 +975,30 @@ class DJConnectBackend(QObject):
     @Property(str, notify=trackInsightChanged)
     def trackInsightTitle(self) -> str:
         return self._track_insight_title
+
+    @Property(bool, notify=trackInsightChanged)
+    def trackInsightMatchesPlayback(self) -> bool:
+        return self._demo_mode or self._track_insight_result_scope == self._track_insight_scope()
+
+    @Property(bool, notify=trackInsightChanged)
+    def trackInsightRenewalNeeded(self) -> bool:
+        previous = self._track_insight_last_proof
+        return bool(previous and self._track_insight_result_scope is None
+                    and previous[0] == self._track_insight_scope()
+                    and previous[2] <= self._session_controller._clock.now()
+                    and self._track_insight_retryable)
+
+    @Property(str, notify=trackInsightPlaybackItemChanged)
+    def trackInsightPlaybackItemId(self) -> str:
+        uri = self.playback.uri.strip()
+        return hashlib.sha256(uri.encode()).hexdigest()[:24] if uri else ""
+
+    @Slot(str, str, result=bool)
+    def canOpenSessionTrackInsight(self, session_id: str, item_id: str) -> bool:
+        current = session_playback_reference(self._session_controller)
+        return bool(self.paired and self.hasTrackTitle and not self.askDjBusy and item_id
+                    and current and current[:2] == (session_id, item_id)
+                    and item_id == self.trackInsightPlaybackItemId)
 
     @Property(str, notify=trackInsightChanged)
     def trackInsightArtist(self) -> str:
@@ -563,6 +1016,157 @@ class DJConnectBackend(QObject):
     def trackInsightText(self) -> str:
         return self._track_insight_text
 
+    @Property("QVariantMap", notify=trackInsightChanged)
+    def trackInsightShareDescriptors(self) -> dict[str, str]:
+        descriptors = {}
+        for section in self._track_insight_sections:
+            kind = section.get("kind")
+            if kind not in {"genre", "vibe"} or kind in descriptors:
+                continue
+            candidates = [section.get("body"), *section.get("details", [])]
+            value = next((text for item in candidates if (text := bounded_text(item, 128).strip())), "")
+            if value:
+                descriptors[kind] = value
+        return descriptors
+
+    @Property(str, notify=trackInsightChanged)
+    def trackInsightShareText(self) -> str:
+        if not self._track_insight_title or not self._track_insight_text:
+            return ""
+        if not self._demo_mode:
+            if (not self.paired or not self._backend_available or self._version_mismatch_visible
+                    or self._track_insight_result_scope != self._track_insight_scope()):
+                return ""
+            if (self._track_insight_deadline is not None
+                    and self._track_insight_deadline <= self._session_controller._clock.now()):
+                return ""
+        heading = " — ".join(value for value in (self._track_insight_title, self._track_insight_artist) if value)
+        descriptors = self.trackInsightShareDescriptors
+        descriptor_line = " · ".join(descriptors[key] for key in ("genre", "vibe") if key in descriptors)
+        parts = [value for value in (heading, descriptor_line, self._track_insight_text) if value]
+        if self._demo_mode:
+            parts.insert(0, self.tr_key("demo_mode"))
+        credit = self._track_insight_verified_credit
+        if credit.get("context") and credit["context"] != self._track_insight_text:
+            parts.append(credit["context"])
+        if credit.get("url"):
+            parts.append("\n".join(credit[key] for key in ("provider", "license", "url") if credit.get(key)))
+        if self._track_insight_audio_notice:
+            parts.append(self.tr_key("track_insight_unmeasured_audio"))
+        return "\n\n".join(parts)
+
+    @Slot(result=bool)
+    def copyTrackInsight(self) -> bool:
+        text = self.trackInsightShareText if self._application_foreground else ""
+        if not text:
+            return False
+        QGuiApplication.clipboard().setText(text)
+        return True
+
+    @Slot(QUrl, bool, bool, result=QUrl)
+    def trackInsightExportDestination(self, folder: QUrl, story: bool, clip: bool) -> QUrl:
+        words = re.findall(r"[^\W_]+", self.trackInsightTitle[:200])[:4]
+        title = "-".join(words)[:40].rstrip("-") or "Track-Insight"
+        shape = "story" if story else "square"
+        extension = "mp4" if clip else "png"
+        return self._local_export_destination(folder, f"DJConnect-{title}-{shape}.{extension}",
+                                              QStandardPaths.StandardLocation.PicturesLocation)
+
+    @Slot(QUrl, bool, result=QUrl)
+    def profileExportDestination(self, folder: QUrl, music_dna: bool) -> QUrl:
+        data_kind = "music-dna" if music_dna else "ask-dj-history"
+        date = datetime.now(UTC).astimezone().strftime("%Y%m%d-%H%M%S")
+        return self._local_export_destination(folder, f"djconnect-{data_kind}-{CLIENT_TYPE}-{date}.json",
+                                              QStandardPaths.StandardLocation.DocumentsLocation)
+
+    @staticmethod
+    def _local_export_destination(folder: QUrl, filename: str, fallback: QStandardPaths.StandardLocation) -> QUrl:
+        directory = folder.toLocalFile() or QStandardPaths.writableLocation(fallback)
+        if not directory or not Path(directory).is_absolute():
+            return QUrl()
+        return QUrl.fromLocalFile(str(Path(directory) / filename))
+
+    @Slot(QImage, QUrl, str)
+    def saveTrackInsightCard(self, image: QImage, destination: QUrl, expected_text: str) -> None:
+        if (not self._application_foreground or not expected_text or expected_text != self.trackInsightShareText):
+            return
+        path = destination.toLocalFile()
+        if (not path or Path(path).suffix.lower() != ".png" or image.width() != 1080
+                or image.height() not in {1080, 1920}):
+            self.trackInsightExportFinished.emit("track_insight_card_save_failed", False)
+            return
+        target = QSaveFile(path)
+        if target.open(QIODevice.OpenModeFlag.WriteOnly) and image.save(target, "PNG") and target.commit():
+            self.trackInsightExportFinished.emit("track_insight_card_saved", True)
+        else:
+            target.cancelWriting()
+            self.trackInsightExportFinished.emit("track_insight_card_save_failed", False)
+
+    @Property(bool, constant=True)
+    def trackInsightClipSupported(self) -> bool:
+        return clip_format() is not None
+
+    @Property(bool, notify=trackInsightClipChanged)
+    def trackInsightClipRunning(self) -> bool:
+        return self._track_insight_clip is not None
+
+    @Slot(QUrl, bool, str)
+    def startTrackInsightClip(self, destination: QUrl, story: bool, expected_text: str) -> None:
+        scope = self._track_insight_scope()
+        item = self.trackInsightPlaybackItemId
+
+        def current() -> bool:
+            return (self._application_foreground and not self._shutting_down and bool(expected_text)
+                    and expected_text == self.trackInsightShareText and self._track_insight_scope() == scope
+                    and self.trackInsightPlaybackItemId == item)
+
+        if self._track_insight_clip is not None or not current():
+            return
+        path = destination.toLocalFile()
+        fmt = clip_format()
+        if fmt is None:
+            self.trackInsightExportFinished.emit("track_insight_clip_unavailable", False)
+            return
+        if not path or Path(path).suffix.lower() != ".mp4":
+            self.trackInsightExportFinished.emit("track_insight_clip_save_failed", False)
+            return
+        clip = TrackInsightClip(path, 1920 if story else 1080, fmt, current, self)
+        self._track_insight_clip = clip
+        clip.frameRequested.connect(self.trackInsightClipFrameRequested.emit)
+        clip.finished.connect(lambda outcome: self._finish_track_insight_clip(clip, outcome))
+        self.trackInsightClipChanged.emit()
+        clip.start()
+
+    @Slot(QImage)
+    def supplyTrackInsightClipFrame(self, image: QImage) -> None:
+        if self._track_insight_clip is not None:
+            self._track_insight_clip.supply(image)
+
+    @Slot()
+    def cancelTrackInsightClip(self) -> None:
+        if self._track_insight_clip is not None:
+            self._track_insight_clip.stop()
+
+    def _finish_track_insight_clip(self, clip, outcome: str) -> None:
+        if self._track_insight_clip is not clip:
+            return
+        self._track_insight_clip = None
+        clip.deleteLater()
+        self.trackInsightClipChanged.emit()
+        if outcome != "cancelled":
+            saved = outcome == "saved"
+            key = {"saved": "track_insight_clip_saved", "encoding_failed": "track_insight_clip_encoding_failed"}.get(
+                outcome, "track_insight_clip_save_failed")
+            self.trackInsightExportFinished.emit(key, saved)
+
+    @Property(bool, notify=trackInsightChanged)
+    def trackInsightAudioNotice(self) -> bool:
+        return self._track_insight_audio_notice
+
+    @Property("QVariantMap", notify=trackInsightChanged)
+    def trackInsightVerifiedCredit(self) -> dict[str, str]:
+        return self._track_insight_verified_credit
+
     @Property(str, notify=trackInsightChanged)
     def trackInsightError(self) -> str:
         return self._track_insight_error
@@ -570,6 +1174,10 @@ class DJConnectBackend(QObject):
     @Property("QVariantList", notify=trackInsightChanged)
     def trackInsightItems(self) -> list[dict[str, object]]:
         return self._track_insight_items
+
+    @Property("QVariantList", notify=trackInsightChanged)
+    def trackInsightShareMeters(self) -> list[dict[str, object]]:
+        return [item for item in self._track_insight_items if "shareFraction" in item]
 
     @Property("QVariantList", notify=trackInsightChanged)
     def trackInsightSections(self) -> list[dict[str, object]]:
@@ -589,8 +1197,14 @@ class DJConnectBackend(QObject):
 
     @Property(bool, notify=favoriteChanged)
     def favoriteAvailable(self) -> bool:
+        if self._demo_mode:
+            return self.playback.uri.startswith("demo:track:")
         capabilities = self.cfg.music_backend_capabilities or {}
         return bool(self.paired and capabilities.get("supports_favorites") and self.playback.uri)
+
+    @Property(bool, notify=favoriteChanged)
+    def favoriteRemovalAvailable(self) -> bool:
+        return self.favoriteAvailable and (self._demo_mode or self.cfg.music_backend == "spotify_direct")
 
     @Property(bool, notify=favoriteBusyChanged)
     def favoriteBusy(self) -> bool:
@@ -602,11 +1216,19 @@ class DJConnectBackend(QObject):
 
     @Property(bool, notify=shuffleChanged)
     def shuffle(self) -> bool:
+        if self._pending_playback_mode and self._pending_playback_mode[1] == "shuffle":
+            return bool(self._pending_playback_mode[2])
         return self.playback.shuffle
 
     @Property(str, notify=repeatChanged)
     def repeat(self) -> str:
+        if self._pending_playback_mode and self._pending_playback_mode[1] == "repeat":
+            return str(self._pending_playback_mode[2])
         return self.playback.repeat
+
+    @Property(bool, notify=playbackModePendingChanged)
+    def playbackModePending(self) -> bool:
+        return self._pending_playback_mode is not None
 
     @Property(int, notify=progressChanged)
     def positionSeconds(self) -> int:
@@ -615,6 +1237,22 @@ class DJConnectBackend(QObject):
     @Property(int, notify=progressChanged)
     def durationSeconds(self) -> int:
         return self.playback.duration_seconds
+
+    @Property(bool, notify=settingsChanged)
+    def musicBackendSupportsSeek(self) -> bool:
+        return self.cfg.music_backend_capabilities.get("supports_seek") is True
+
+    @Property(bool, notify=settingsChanged)
+    def musicBackendSupportsShuffle(self) -> bool:
+        return self.cfg.music_backend_capabilities.get("supports_shuffle") is True
+
+    @Property(bool, notify=settingsChanged)
+    def musicBackendSupportsRepeat(self) -> bool:
+        return self.cfg.music_backend_capabilities.get("supports_repeat") is True
+
+    @Property(bool, notify=outputDeviceChanged)
+    def playbackSeekOutputKnown(self) -> bool:
+        return bool(output_id(self.playback.output_device_id))
 
     @Property(float, notify=progressChanged)
     def trackProgress(self) -> float:
@@ -630,6 +1268,26 @@ class DJConnectBackend(QObject):
     def outputDevice(self) -> str:
         return self.playback.output_device
 
+    @Property(str, notify=outputDeviceChanged)
+    def outputDeviceId(self) -> str:
+        return self.playback.output_device_id
+
+    @Property(str, notify=outputDeviceChanged)
+    def pendingOutputChoiceName(self) -> str:
+        return self._pending_output_choice[1] if self._pending_output_choice else ""
+
+    @Property(bool, notify=outputDeviceChanged)
+    def outputChoiceUnconfirmed(self) -> bool:
+        return bool(self._unconfirmed_output_choice)
+
+    @Property(bool, notify=outputDeviceChanged)
+    def controlOutputsRefreshing(self) -> bool:
+        return self._control_outputs_request is not None
+
+    @Property(str, notify=outputDeviceChanged)
+    def controlOutputsStatus(self) -> str:
+        return self._control_outputs_status
+
     @Property("QVariantList", notify=outputDeviceChanged)
     def outputDevices(self) -> list[str]:
         return list(self.playback.output_devices)
@@ -637,8 +1295,10 @@ class DJConnectBackend(QObject):
     @Property("QVariantList", notify=outputDeviceChanged)
     def outputDeviceChoices(self) -> list[dict[str, object]]:
         if self.playback.output_device_details:
-            return [dict(item) for item in self.playback.output_device_details]
-        return [{"name": name, "value": name} for name in self.playback.output_devices]
+            choices = [dict(item) for item in self.playback.output_device_details]
+        else:
+            choices = [{"name": name, "value": name} for name in self.playback.output_devices]
+        return sorted_output_choices(choices, self.cfg.language)
 
     @Property(bool, notify=pairedChanged)
     def paired(self) -> bool:
@@ -672,13 +1332,17 @@ class DJConnectBackend(QObject):
     def deviceId(self) -> str:
         return self.cfg.device_id
 
+    @Property(str, notify=settingsChanged)
+    def deviceName(self) -> str:
+        return self.cfg.device_name
+
     @Property(str, notify=pairingCodeChanged)
     def pairingCode(self) -> str:
         return self.cfg.pairing_code
 
     @Property(str, constant=True)
     def version(self) -> str:
-        return self.cfg.version
+        return __version__
 
     @Property(str, constant=True)
     def protocolVersion(self) -> str:
@@ -708,6 +1372,65 @@ class DJConnectBackend(QObject):
     @Property(str, notify=settingsChanged)
     def musicBackendId(self) -> str:
         return self.cfg.music_backend
+
+    @Property(bool, notify=settingsChanged)
+    def musicBackendAvailable(self) -> bool:
+        return self.cfg.music_backend_available
+
+    def _about_music_scope(self):
+        return (self._private_read_context(), self.cfg.music_backend, self.cfg.music_backend_revision)
+
+    @Property(str, notify=aboutMusicAvailabilityChanged)
+    def aboutMusicAvailability(self) -> str:
+        observation = self._about_music_availability
+        if (self._demo_mode or not self.paired or not self._backend_available or self._version_mismatch_visible
+                or observation is None or observation[0] != self._about_music_scope()):
+            return "unconfirmed"
+        return "available" if observation[1] else "unavailable"
+
+    def _reconcile_about_status(self):
+        if self._about_music_availability is not None and self.aboutMusicAvailability == "unconfirmed":
+            self._about_music_availability = None
+        if self._about_connection_origin is not None and not self.aboutConnectionOrigin:
+            self._about_connection_origin = None
+            self.aboutConnectionOriginChanged.emit()
+        self.aboutMusicAvailabilityChanged.emit()
+
+    @Slot(object, object, float)
+    def _apply_about_music_availability(self, scope, available, started):
+        if (self._shutting_down or scope != self._about_music_scope() or started < self._about_music_request_time
+                or self._demo_mode or not self.paired or not self._backend_available or self._version_mismatch_visible):
+            return
+        self._about_music_request_time = started
+        self._about_music_availability = (scope, available) if type(available) is bool else None
+        self.aboutMusicAvailabilityChanged.emit()
+
+    @Property(str, notify=aboutConnectionOriginChanged)
+    def aboutConnectionOrigin(self) -> str:
+        observation = self._about_connection_origin
+        if (self._demo_mode or not self.paired or not self._backend_available or self._version_mismatch_visible
+                or observation is None or observation[0] != self._private_read_context()):
+            return ""
+        return observation[1]
+
+    @Property(str, notify=aboutConnectionOriginChanged)
+    def aboutConnectionTransport(self) -> str:
+        origin = self.aboutConnectionOrigin
+        if not origin:
+            return ""
+        if self._about_connection_origin[2]:
+            return "local_websocket_fast_path"
+        return "ha_transport_https" if origin.startswith("https:") else "ha_transport_http"
+
+    @Slot(object, str, float, bool)
+    def _apply_about_connection_origin(self, binding, origin: str, started: float, via_websocket: bool = False) -> None:
+        if (self._shutting_down or started < self._about_connection_request_time
+                or binding != self._private_read_context() or self._demo_mode
+                or not self.paired or not self._backend_available or self._version_mismatch_visible):
+            return
+        self._about_connection_request_time = started
+        self._about_connection_origin = (binding, origin, via_websocket) if origin else None
+        self.aboutConnectionOriginChanged.emit()
 
     @Property(str, notify=settingsChanged)
     def musicTargetPlayerName(self) -> str:
@@ -892,16 +1615,55 @@ class DJConnectBackend(QObject):
     def logsText(self) -> str:
         return self._logs_text
 
+    @Property(str, notify=logsChanged)
+    def logsReadError(self) -> str:
+        return self._logs_read_error
+
     @Property(bool, notify=logsChanged)
     def logsVisible(self) -> bool:
         return self._logs_visible
 
     @Slot(result=bool)
-    def openFeedbackIssue(self) -> bool:
+    @Slot(str, result=bool)
+    def openFeedbackIssue(self, surface: str = "") -> bool:
         # User click opens a draft only; no private app state or automatic submit.
-        query = urlencode({"title": translate(self.cfg.language, "feedback_issue_title"),
+        title_key = "ask_dj_feedback_title" if surface == "ask_dj" else "feedback_issue_title"
+        query = urlencode({"title": translate(self.cfg.language, title_key),
                            "body": translate(self.cfg.language, "feedback_issue_template")})
         return QDesktopServices.openUrl(QUrl("https://github.com/djconnect-music-dj/djconnect-pi/issues/new?" + query))
+
+    @Slot(result=str)
+    def bundledFontLicense(self) -> str:
+        try:
+            return files("djconnect_pi").joinpath("fonts", "LICENSE.txt").read_text(encoding="utf-8")
+        except OSError:
+            return ""
+
+    @Slot(str)
+    @Slot(str, str)
+    @Slot(str, str, str)
+    def copyAskDjFeedbackAnswer(self, message_id: str, note: str = "", edited_answer: str | None = None) -> None:
+        if (not message_id or not self._application_foreground
+                or (not self._demo_mode and (not self.paired or not self.backendAvailable or self.versionMismatchVisible))):
+            return
+        for message in self._ask_dj_messages:
+            if (message.get("id") == message_id and message.get("role") == "assistant"
+                    and message.get("messageKind") not in {"system", "status"} and message.get("text")):
+                note = note.strip()[:1200]
+                answer = message["text"] if edited_answer is None else edited_answer.strip()
+                if not answer and not note:
+                    return
+                details = f"{self.tr_key('ask_dj_feedback_note')}:\n{note}" if note else ""
+                QGuiApplication.clipboard().setText("\n\n".join(part for part in (details, answer) if part))
+                self.showToastForContext(self.tr_key("copied"), "connectivity")
+                return
+
+    @Slot()
+    def openPrivacyStatement(self) -> None:
+        language = normalize_language(self.cfg.language)
+        path = "privacy" if language == "nl" else f"{language}/privacy"
+        if not QDesktopServices.openUrl(QUrl(f"https://djconnect.dev/{path}")):
+            self.showToastForContext(self.tr_key("privacy_open_failed"), "connectivity")
 
     @Slot(str, result=str)
     def t(self, key: str) -> str:
@@ -979,6 +1741,7 @@ class DJConnectBackend(QObject):
             return
         self.cfg.language = language
         save_config(self.config_path, self.cfg)
+        self._invalidate_track_insight_language()
         self._translation_version += 1
         self.languageChanged.emit()
         self.translationsChanged.emit()
@@ -1003,20 +1766,40 @@ class DJConnectBackend(QObject):
         self.showToastForContext(self.tr_key("update_channel", channel=channel), "updates")
         self._set_status_text(self.tr_key("update_channel", channel=channel))
 
-    @Slot(str)
-    def setLogLevel(self, value: str) -> None:
+    @Slot(str, result=bool)
+    def setLogLevel(self, value: str) -> bool:
         level = normalize_log_level(value)
-        if self.cfg.log_level == level:
-            return
-        self.cfg.log_level = level
-        save_config(self.config_path, self.cfg)
-        applied = self._apply_log_level()
+        previous_level = self.cfg.log_level
+        if previous_level == level:
+            return True
+
+        if level == DEFAULT_LOG_LEVEL:
+            try:
+                path = setup_logging(self.cfg.log_file, level)
+                clear_log_files(path)
+                self.cfg.log_level = level
+                save_config(self.config_path, self.cfg)
+            except OSError:
+                self.cfg.log_level = previous_level
+                try:
+                    setup_logging(self.cfg.log_file, previous_level)
+                except OSError as exc:
+                    self.showToastForContext(self.tr_key("logs_failed", error=exc), "diagnostics")
+                return False
+            self.hideLogs()
+            applied = True
+        else:
+            self.cfg.log_level = level
+            save_config(self.config_path, self.cfg)
+            applied = self._apply_log_level()
+
         self.logLevelChanged.emit()
         self.settingsChanged.emit()
         if applied:
             _LOGGER.info("User changed log level to %s", level)
             label = self.tr_key("off") if level == DEFAULT_LOG_LEVEL else level
             self.showToastForContext(self.tr_key("log_level_saved", level=label), "diagnostics")
+        return applied
 
     def _apply_log_level(self) -> bool:
         disabled = self.cfg.log_level == DEFAULT_LOG_LEVEL
@@ -1127,6 +1910,7 @@ class DJConnectBackend(QObject):
             latest.device_token == self.cfg.device_token
             and latest.paired == self.cfg.paired
             and latest.ha_url == self.cfg.ha_url
+            and latest.device_name == self.cfg.device_name
             and latest.language == self.cfg.language
             and latest.log_level == self.cfg.log_level
             and latest.screen_brightness_percent == self.cfg.screen_brightness_percent
@@ -1163,6 +1947,7 @@ class DJConnectBackend(QObject):
         if glass_changed:
             self.glassChanged.emit()
         if language_changed:
+            self._invalidate_track_insight_language()
             self._translation_version += 1
             self.languageChanged.emit()
             self.translationsChanged.emit()
@@ -1249,6 +2034,9 @@ class DJConnectBackend(QObject):
 
     @Slot()
     def saveCurrentTrack(self) -> None:
+        if self._demo_mode:
+            self._set_demo_favorite(True)
+            return
         self._sync_config_from_disk()
         if self._demo_mode or not self.favoriteAvailable or self._favorite_busy:
             return
@@ -1256,10 +2044,79 @@ class DJConnectBackend(QObject):
         self._set_favorite_busy(True)
         self._run("save_current_track", self._save_current_track_worker, done=lambda: self._set_favorite_busy(False))
 
+    def _favorite_removal_context(self) -> tuple | None:
+        if (not self._application_foreground or not self.favoriteRemovalAvailable
+                or self._demo_mode or self._shutting_down):
+            return None
+        return self._playback_mode_context(), self.playback.uri.strip()
+
+    @Slot()
+    def removeCurrentTrackFavorite(self) -> None:
+        if self._demo_mode:
+            self._set_demo_favorite(False)
+            return
+        self._sync_config_from_disk()
+        context = self._favorite_removal_context()
+        if context is None or not self.playback.is_favorite or self._favorite_busy:
+            return
+        self._set_favorite_busy(True)
+        result = ""
+
+        def worker() -> None:
+            nonlocal result
+            result = self._remove_current_favorite_worker(context)
+
+        self._run("set_current_track_favorite", worker, done=lambda: self._favoriteRemovalFinished.emit(context, result))
+
+    def _remove_current_favorite_worker(self, context: tuple) -> str:
+        if context != self._favorite_removal_context():
+            return ""
+        expected_uri = context[1]
+        try:
+            status = self.client.command("status")
+            current = status.get("playback")
+            if (status.get("success") is not True or not isinstance(current, dict)
+                    or current.get("uri") != expected_uri or status.get("music_backend") != "spotify_direct"):
+                return "unavailable"
+            liked = favorite_observation(status, "spotify_direct")
+            if context != self._favorite_removal_context():
+                return ""
+            if not liked:
+                return "already_removed"
+            response = self.client.command("set_current_track_favorite", value=False)
+        except SessionError:
+            return "unavailable"
+        except requests.RequestException:
+            return "uncertain"
+        if response.get("success") is not True:
+            return "unavailable"
+        observed = response.get("playback")
+        if (not isinstance(observed, dict) or observed.get("uri") != expected_uri
+                or observed.get("favorite_status") is not False or observed.get("is_liked", False) is not False):
+            return "uncertain"
+        return "removed"
+
+    @Slot(object, str)
+    def _finish_favorite_removal(self, context: tuple, result: str) -> None:
+        self._set_favorite_busy(False)
+        if not result or context != self._favorite_removal_context():
+            return
+        if result in {"removed", "already_removed"}:
+            if self.playback.is_favorite:
+                self.playback.is_favorite = False
+                self.favoriteChanged.emit()
+            if result == "removed":
+                self._show_toast(self.tr_key("favorite_removed"), 2200, "playback")
+        else:
+            key = "session_uncertain" if result == "uncertain" else "session_favorite_unavailable"
+            self._show_toast(self.tr_key(key), 3500, "connectivity")
+
     def setApplicationForeground(self, foreground: bool) -> None:
         if foreground != self._application_foreground:
             self._application_foreground = foreground
             if not foreground:
+                self.cancelPlaybackSeek()
+                self.closeAskDjHelp()
                 self._track_insight_revision += 1
                 self._clear_track_insight()
         self._session_controller.setForeground(foreground)
@@ -1269,16 +2126,17 @@ class DJConnectBackend(QObject):
             self.cancelControlVolume()
 
     @Slot()
-    def openTrackInsight(self) -> None:
-        if not self._demo_mode and not self.playback.is_playing:
+    @Slot(bool)
+    def openTrackInsight(self, explicit: bool = False) -> None:
+        if not self._demo_mode and not self.playback.is_playing and not (explicit and self.hasTrackTitle):
             return
-        self._request_track_insight(show_toast=False)
+        self._request_track_insight(manual=False)
 
     @Slot()
     def refreshTrackInsight(self) -> None:
-        self._request_track_insight(show_toast=True)
+        self._request_track_insight(manual=True)
 
-    def _request_track_insight(self, *, show_toast: bool) -> None:
+    def _request_track_insight(self, *, manual: bool) -> None:
         if self._demo_mode:
             self._show_demo_track_insight()
             return
@@ -1287,21 +2145,135 @@ class DJConnectBackend(QObject):
             return
         _LOGGER.info("User requested Track Insight for current track")
         scope = self._track_insight_scope()
-        if self._track_insight_result_scope == scope and not show_toast:
+        if self._track_insight_result_scope == scope and not manual:
             return
         if self._track_insight_result_scope is not None and self._track_insight_result_scope != scope:
             self._clear_track_insight()
         playback = deepcopy(self.playback)
-        if show_toast:
+        if manual:
             self.showToastForContext(self.tr_key("refreshing"), "trackinsight")
+        self._track_insight_loading = True
         self._set_ask_dj_busy(True)
-        self._run(self.tr_key("track_insight"), lambda: self._track_insight_worker(playback, scope),
-                  done=lambda: self._set_ask_dj_busy(False))
+        self._run(self.tr_key("track_insight"), lambda: self._track_insight_worker(playback, scope, force_refresh=manual),
+                  done=self._finish_track_insight_request)
+
+    def _finish_track_insight_request(self) -> None:
+        self._track_insight_loading = False
+        self._set_ask_dj_busy(False)
+
+    def _playback_seek_context(self, playback: Playback) -> tuple | None:
+        if (not self.paired or not session_profile_id(self.cfg) or not self.musicBackendAvailable
+                or self._pending_output_choice
+                or not self.musicBackendSupportsSeek or not playback.uri or playback.duration_seconds <= 0
+                or not output_id(playback.output_device_id)):
+            return None
+        return (self._private_read_context(), self.cfg.music_backend, self.cfg.music_backend_revision,
+                playback.uri, playback.output_device_id)
+
+    @Slot()
+    def cancelPlaybackSeek(self) -> None:
+        had_gesture = self._playback_seek_gesture is not None
+        self._playback_seek_epoch += 1
+        self._playback_seek_gesture = None
+        if had_gesture:
+            self.playbackSeekCancelled.emit()
+
+    @Slot()
+    def _invalidate_playback_seek(self) -> None:
+        if self._playback_seek_gesture and self._playback_seek_gesture[1] != self._seek_gesture_context():
+            self.cancelPlaybackSeek()
+
+    def _seek_gesture_context(self):
+        if self._demo_mode:
+            return ("demo", self.playback.uri, self.playback.output_device) if self.playback.duration_seconds > 0 else None
+        return self._playback_seek_context(self.playback)
+
+    @Slot(result=int)
+    def beginPlaybackSeek(self) -> int:
+        context = self._seek_gesture_context()
+        if self.busy or not self._session_controller._foreground or context is None:
+            return 0
+        self.cancelPlaybackSeek()
+        self._playback_seek_gesture = (self._playback_seek_epoch, context)
+        return self._playback_seek_epoch
+
+    @Slot(int, int)
+    def commitPlaybackSeek(self, lease: int, target_seconds: int) -> None:
+        if not lease or self._playback_seek_gesture != (lease, self._seek_gesture_context()):
+            return
+        self.cancelPlaybackSeek()
+        self._seek_playback(target_seconds=target_seconds)
+
+    @Slot(int)
+    def seekPlayback(self, offset_ms: int) -> None:
+        if offset_ms in (-15000, 15000):
+            self._seek_playback(offset_ms=offset_ms)
+
+    def _seek_playback(self, *, offset_ms: int = 0, target_seconds: int | None = None) -> None:
+        if self.playback.duration_seconds <= 0:
+            return
+        if self._demo_mode:
+            position = self.playback.position_seconds + offset_ms // 1000 if target_seconds is None else target_seconds
+            self.playback.position_seconds = max(0, min(self.playback.duration_seconds - 1, position))
+            self.progressChanged.emit()
+            self.djSession.demo_playback_changed()
+            return
+        context = self._playback_seek_context(self.playback)
+        if self.busy or not self._session_controller._foreground or context is None:
+            return
+        transport = self._session_controller.transport
+        try:
+            binding = transport.binding()
+        except SessionError:
+            return
+        self.cancelPlaybackSeek()
+        epoch = self._playback_seek_epoch
+
+        def current() -> bool:
+            return (self._session_controller._foreground and epoch == self._playback_seek_epoch
+                    and context == self._playback_seek_context(self.playback))
+
+        def worker() -> None:
+            if not current():
+                return
+            _, backend, revision, uri, output = context
+            try:
+                status = transport.playback_status(binding)
+                observed = status.get("playback")
+                device = observed.get("device") if isinstance(observed, dict) else None
+                capabilities = status.get("music_backend_capabilities")
+                if (not current() or status.get("music_backend") != backend
+                        or type(status.get("music_backend_revision")) is not int or status["music_backend_revision"] != revision
+                        or status.get("backend_available") is not True or status.get("music_backend_available") is not True
+                        or not isinstance(capabilities, dict) or capabilities.get("supports_seek") is not True
+                        or not isinstance(observed, dict) or observed.get("has_playback") is not True or observed.get("uri") != uri
+                        or not isinstance(device, dict) or device.get("active") is not True
+                        or device.get("is_restricted") is not False or device.get("id") != output):
+                    return
+                if target_seconds is None:
+                    transport.playback_adjustment(binding, "seek_relative", offset_ms)
+                else:
+                    progress = observed.get("progress_ms")
+                    duration = observed.get("duration_ms")
+                    if type(progress) is not int or type(duration) is not int or not 0 <= progress <= duration or duration <= 0:
+                        return
+                    delta = max(0, min(duration, target_seconds * 1000)) - progress
+                    if abs(delta) < 500:
+                        return
+                    transport.playback_seek_offset(binding, delta)
+            except SessionError:
+                return
+            if current():
+                self._refresh_worker()
+
+        label = "session_playback_position" if target_seconds is not None else "seek_back_15" if offset_ms < 0 else "seek_forward_15"
+        self._run(self.tr_key(label), worker)
 
     def _control_volume_context(self, playback: Playback) -> tuple | None:
         if self._demo_mode:
             return ("demo",)
         if (not self.paired or not session_profile_id(self.cfg)
+                or self._pending_output_choice
                 or (self._pending_output_device and time.monotonic() < self._pending_output_until)
                 or self.cfg.music_backend not in {"spotify_direct", "music_assistant"}
                 or self.cfg.music_backend_capabilities.get("supports_volume") is not True
@@ -1313,9 +2285,13 @@ class DJConnectBackend(QObject):
         )
 
     @Property(bool, notify=controlVolumeChanged)
+    def controlVolumeKnown(self) -> bool:
+        return self._control_volume_context(self.playback) is not None
+
+    @Property(bool, notify=controlVolumeChanged)
     def controlVolumeAvailable(self) -> bool:
         return (self._session_controller._foreground and not self._control_volume_pending
-                and self._control_volume_context(self.playback) is not None)
+                and self.controlVolumeKnown)
 
     @Slot(result=int)
     def beginControlVolume(self) -> int:
@@ -1409,39 +2385,213 @@ class DJConnectBackend(QObject):
 
     @Slot()
     def toggleShuffle(self) -> None:
-        self.playback.shuffle = not self.playback.shuffle
-        self.shuffleChanged.emit()
-        _LOGGER.info("User toggled shuffle to %s", self.playback.shuffle)
-        self.showToastForContext(self.tr_key("shuffle"), "playback")
-        if self._demo_mode:
-            return
-        self.command("set_shuffle", value=self.playback.shuffle)
+        self._request_playback_mode("shuffle", not self.playback.shuffle)
 
     @Slot()
     def cycleRepeat(self) -> None:
-        next_value = {"off": "context", "context": "track", "track": "off"}.get(self.playback.repeat, "off")
-        self.playback.repeat = next_value
-        self.repeatChanged.emit()
-        _LOGGER.info("User changed repeat mode to %s", next_value)
-        self.showToastForContext(self.tr_key("repeat"), "playback")
-        if self._demo_mode:
+        self.setPlaybackRepeatMode(REPEAT_NEXT.get(self.playback.repeat, "off"))
+
+    @Slot(str)
+    def setPlaybackRepeatMode(self, value: str) -> None:
+        if value not in REPEAT_NEXT:
             return
-        self.command("set_repeat", value=next_value)
+        self._request_playback_mode("repeat", value)
+
+    def _playback_mode_context(self) -> tuple:
+        return (self._private_read_context(), self.cfg.music_backend, self.cfg.music_backend_revision,
+                self.cfg.music_target_player.get("id", ""), self.playback.output_device_id,
+                self.playback.output_device, self._demo_mode)
+
+    def _request_playback_mode(self, mode: str, value: bool | str) -> None:
+        context = self._playback_mode_context()
+        if self._demo_mode:
+            self._apply_playback_mode(mode, value)
+            return
+        if self.busy or self.playbackModePending or not self.paired:
+            return
+
+        request = (context, mode, value)
+        self._set_pending_playback_mode(request)
+        outcome = None
+
+        def worker() -> None:
+            nonlocal outcome
+            outcome = self._playback_mode_worker(request)
+
+        self._run(self.tr_key(mode), worker, done=lambda: self._playbackModeFinished.emit(request, outcome))
+
+    def _set_pending_playback_mode(self, request: tuple[tuple, str, bool | str] | None) -> None:
+        self._pending_playback_mode = request
+        self.playbackModePendingChanged.emit()
+        self.shuffleChanged.emit()
+        self.repeatChanged.emit()
+
+    @Slot()
+    def _invalidate_playback_mode(self) -> None:
+        if self._pending_playback_mode and self._pending_playback_mode[0] != self._playback_mode_context():
+            self._set_pending_playback_mode(None)
+
+    def _playback_mode_worker(self, request: tuple[tuple, str, bool | str]) -> str | None:
+        context, mode, value = request
+        if self._pending_playback_mode is not request or context != self._playback_mode_context():
+            return None
+        data = self.client.command(f"set_{mode}", value=value)
+        self._persist_backend_summary()
+        if context != self._playback_mode_context():
+            return None
+        if data.get("success") is False or data.get("backend_available") is False:
+            return "rejected"
+        if not self._playback_mode_matches(data, mode, value):
+            # A provider can acknowledge the command before its playback state propagates.
+            time.sleep(0.35)
+            if self._pending_playback_mode is not request or context != self._playback_mode_context():
+                return None
+            data = self.client.command("status")
+            self._persist_backend_summary()
+        if (data.get("success") is not False and data.get("backend_available") is not False
+                and self._playback_mode_matches(data, mode, value)):
+            return "confirmed"
+        return None
+
+    @staticmethod
+    def _playback_mode_matches(data: dict, mode: str, value: bool | str) -> bool:
+        playback = data.get("playback")
+        snapshot = playback if isinstance(playback, dict) else data
+        observed = snapshot.get("repeat_state", snapshot.get(mode)) if mode == "repeat" else snapshot.get(mode)
+        return type(observed) is type(value) and observed == value
+
+    @Slot(object, object)
+    def _finish_playback_mode(self, request: tuple[tuple, str, bool | str], outcome: str | None) -> None:
+        if self._shutting_down or self._pending_playback_mode is not request:
+            return
+        context, mode, value = request
+        if context == self._playback_mode_context():
+            if outcome == "confirmed":
+                self._apply_playback_mode(mode, value)
+            elif outcome == "rejected":
+                self.showToastForContext(self.tr_key("command_failed"), "connectivity")
+        self._set_pending_playback_mode(None)
+
+    def _apply_playback_mode(self, mode: str, value: bool | str) -> None:
+        if mode == "shuffle" and isinstance(value, bool):
+            self.playback.shuffle = value
+            self.shuffleChanged.emit()
+        elif mode == "repeat" and isinstance(value, str):
+            self.playback.repeat = value
+            self.repeatChanged.emit()
+        self.showToastForContext(self.tr_key(mode), "playback")
 
     @Slot(str)
     def setOutputDevice(self, value: str) -> None:
         value = value.strip()
         if not value:
             self.playback.output_device = ""
+            self.cancelPlaybackSeek()
             self.outputDeviceChanged.emit()
             _LOGGER.info("User cleared output device selection from touch UI")
             self.showToastForContext(self.tr_key("none"), "playback")
             return
+        self._select_output(value)
+
+    @Slot()
+    @Slot(bool)
+    def refreshControlOutputs(self, manual: bool = True) -> None:
+        if self._demo_mode:
+            if manual:
+                self.showToastForContext(self.tr_key("session_output_updated"), "playback")
+            return
+        if (not self.paired or not self.backendAvailable or self._pending_output_choice
+                or self._control_outputs_request is not None):
+            return
+        context = self._private_read_context()
+        self._control_outputs_request = context
+        self.outputDeviceChanged.emit()
+        observed = None
+
+        def worker() -> None:
+            nonlocal observed
+            if self._control_outputs_request is not context or context != self._private_read_context():
+                return
+            result = self.client.command("devices")
+            if result.get("success") is False:
+                return
+            playback = result.get("playback")
+            containers = (result, playback) if isinstance(playback, dict) else (result,)
+            rows = next((container[key] for container in containers
+                         for key in ("output_devices", "devices", "available_devices", "outputs")
+                         if isinstance(container.get(key), (list, dict))), None)
+            if rows is not None:
+                observed = self.client.playback_from_status({"output_devices": rows})
+
+        self._run(self.tr_key("session_output_refresh"), worker,
+                  done=lambda: self._controlOutputsFinished.emit(context, observed, manual), interactive=False)
+
+    @Slot(object, object, bool)
+    def _finish_control_outputs(self, context, observed: Playback | None, manual: bool) -> None:
+        if self._control_outputs_request is not context:
+            return
+        self._control_outputs_request = None
+        if context == self._private_read_context():
+            self._control_outputs_status = "ready" if observed is not None else "unavailable"
+            if observed is not None:
+                self.playback.output_devices = observed.output_devices
+                self.playback.output_device_details = observed.output_device_details
+            if manual:
+                key = "session_output_updated" if observed is not None else "session_output_unavailable"
+                self.showToastForContext(self.tr_key(key), "playback")
+        self.outputDeviceChanged.emit()
+
+    @Slot(str)
+    def setOutputChoice(self, output_value: str) -> None:
+        matches = [choice for choice in self.outputDeviceChoices if choice.get("value") == output_value]
+        if not output_id(output_value) or len(matches) != 1 or not matches[0].get("name"):
+            return
+        name = matches[0]["name"]
+        if self._demo_mode:
+            self._select_output(name)
+            return
+        if (not self.paired or not self.backendAvailable or not self._session_controller._foreground
+                or self._pending_output_choice or self.controlOutputsRefreshing
+                or output_value == self.playback.output_device_id):
+            return
+        context = self._private_read_context()
+        request = (output_value, name, context)
+        self._pending_output_choice = request
+        self._unconfirmed_output_choice = ""
+        confirmed = False
+        self.cancelControlVolume()
+        self.cancelPlaybackSeek()
+        self.outputDeviceChanged.emit()
+
+        def worker() -> None:
+            nonlocal confirmed
+            if (not self._session_controller._foreground or self._pending_output_choice is not request
+                    or context != self._private_read_context()):
+                return
+            result = self.client.command("set_output", value=output_value)
+            if result.get("success") is False:
+                return
+            if self._pending_output_choice is request and context == self._private_read_context():
+                confirmed = self._refresh_worker(ticket=context, expected_output=output_value) is True
+
+        self._run(self.tr_key("output_device"), worker, done=lambda: self._outputChoiceFinished.emit(request, confirmed))
+
+    @Slot(object, bool)
+    def _finish_output_choice(self, request, confirmed: bool) -> None:
+        if self._pending_output_choice is request:
+            self._pending_output_choice = None
+            if not confirmed and request[2] == self._private_read_context():
+                self._unconfirmed_output_choice = request[0]
+            self.controlVolumeChanged.emit()
+            self.outputDeviceChanged.emit()
+
+    def _select_output(self, value: str) -> None:
         previous = self.playback.output_device
         self.playback.output_device = value
         self._pending_output_device = value
         self._pending_output_until = time.monotonic() + 20
         self.cancelControlVolume()
+        self.cancelPlaybackSeek()
         self.outputDeviceChanged.emit()
         _LOGGER.info("User selected output device: %s", value)
         self.showToastForContext(value, "playback")
@@ -1473,6 +2623,7 @@ class DJConnectBackend(QObject):
         if not self._demo_mode:
             return
         self._demo_mode = False
+        self._demo_favorite_uris.clear()
         self._demo_progress.stop()
         self._clear_profile_scoped_caches(preserve_session=True)
         self._queue_items = []
@@ -1480,8 +2631,10 @@ class DJConnectBackend(QObject):
         self.demoModeChanged.emit()
         self.mediaListsChanged.emit()
         self.playback = Playback()
+        self.favoriteChanged.emit()
         self.titleChanged.emit()
         self.artistChanged.emit()
+        self.albumChanged.emit()
         self.imageUrlChanged.emit()
         self.playingChanged.emit()
         self.volumeChanged.emit()
@@ -1524,17 +2677,247 @@ class DJConnectBackend(QObject):
     def refreshAskDjHistory(self) -> None:
         self._load_ask_dj_history(show_toast=True, action="refreshed")
 
+    def _ask_dj_help_context(self, surface):
+        cfg = self.cfg
+        if not self._application_foreground or self._shutting_down:
+            return None
+        if self._demo_mode:
+            session_id = ""
+            if surface == "active_session":
+                header = self._session_controller.runtimeHeader
+                if header["runtime_state"] != "active" or not header["session_id"]:
+                    return None
+                session_id = header["session_id"]
+            return (self._private_read_context(), "", frozenset(), session_id, True)
+        if (not self.paired or cfg.private_session or not self._backend_available
+                or self._version_mismatch_visible or cfg.music_backend_available is not True):
+            return None
+        subject = self._session_controller.ask_dj_help_subject() if surface == "active_session" else None
+        if surface == "active_session" and subject is None:
+            return None
+        return (self._private_read_context(), cfg.music_backend,
+                frozenset(key for key, value in (cfg.music_backend_capabilities or {}).items() if value is True),
+                subject, False)
+
+    def _ask_dj_help_is_current(self, request):
+        return (request is not None and self._ask_dj_help_request is request
+                and elapsed_time() < request[1] and request[0] == self._ask_dj_help_context(request[2]))
+
+    def _invalidate_ask_dj_help_if_changed(self):
+        if self._ask_dj_help_request is not None and not self._ask_dj_help_is_current(self._ask_dj_help_request):
+            self.closeAskDjHelp()
+
     @Slot()
-    def clearAskDjHistory(self) -> None:
+    def openAskDjHelp(self) -> None:
+        self._read_ask_dj_help("ask_dj")
+
+    @Slot()
+    def openSessionAskDjHelp(self) -> None:
+        self._read_ask_dj_help("active_session")
+
+    @Slot(str, int)
+    def selectAskDjHelp(self, entry_id, edit_revision):
+        if self._ask_dj_help_busy or self._ask_dj_busy:
+            return
+        for section in self.askDjHelpSections:
+            for entry in section["examples"]:
+                if entry["id"] == entry_id:
+                    context, _, surface = self._ask_dj_help_request
+                    self._read_ask_dj_help(surface, (edit_revision, entry, ()), context)
+                    return
+
+    @Slot(str, int)
+    def selectAskDjSuggestion(self, entry_id, edit_revision):
+        if self._ask_dj_help_busy or self._ask_dj_busy:
+            return
+        original = tuple(self.askDjSuggestions)
+        if len(original) != 3:
+            return
+        for entry in original:
+            if entry["id"] == entry_id:
+                context, _, surface = self._ask_dj_help_request
+                self._read_ask_dj_help(surface, (edit_revision, entry, original), context)
+                return
+
+    def _read_ask_dj_help(self, surface, selection=None, expected_context=None):
+        self.closeAskDjHelp()
+        if not self._demo_mode:
+            self._sync_config_from_disk()
+        context = self._ask_dj_help_context(surface)
+        if context is None or (expected_context is not None and context != expected_context):
+            return
+        _, music_backend, supported_features, subject, demo = context
+        if demo:
+            request = (context, float("inf"), surface)
+            self._ask_dj_help_request = request
+            try:
+                projection = demo_help(self.cfg.language, surface)
+            except (OSError, ValueError):
+                projection = ([], [])
+            self._apply_ask_dj_help(request, projection, selection)
+            return
+        transport = self._session_controller.transport
+        try:
+            binding = transport.binding()
+        except SessionError:
+            return
+        if not binding.resolved_profile_id:
+            return
+        request = (context, elapsed_time() + 15, surface)
+        self._ask_dj_help_request = request
+        self._ask_dj_help_busy = True
+        self._ask_dj_help_timer.start(15_000)
+        self.askDjHelpChanged.emit()
+        session_id, _, track, session_features = subject or (None, None, (), frozenset())
+
+        def read():
+            projection = ([], [])
+            try:
+                if self._ask_dj_help_is_current(request):
+                    capabilities = transport.capabilities(binding, isolated=True)
+                    if compatible_catalogue(capabilities) and self._ask_dj_help_is_current(request):
+                        observation = transport.ask_dj_help(binding, surface, session_id)
+                        if observation.available and (observation.track_id is None or (track and track[0] == observation.track_id)):
+                            features = session_features if observation.track_id is not None else (
+                                session_features - {"current_track", "current_album", "forecast_ready"})
+                            artist = track[3] if observation.track_id is not None else ""
+                            projection = project_help(binding.language, surface, observation.eligible_ids,
+                                                      music_backend, supported_features, features,
+                                                      capabilities["contract_versions"], artist)
+            except (SessionError, OSError, ValueError):
+                pass
+            self._askDjHelpReady.emit(request, projection, selection)
+
+        self._executor.submit(read)
+
+    @Slot(object, object, object)
+    def _apply_ask_dj_help(self, request, projection, selection):
+        if not self._ask_dj_help_is_current(request):
+            return
+        sections, candidates = projection
+        self._ask_dj_help_busy = False
+        self._ask_dj_help_sections = sections
+        if selection is None:
+            self._ask_dj_suggestions = candidates if request[0][-1] else select_suggestions(candidates, uuid4().hex)
+        self.askDjHelpChanged.emit()
+        if selection is not None and not self._ask_dj_busy and self._ask_dj_help_is_current(request):
+            edit_revision, entry, original = selection
+            if original and all(suggestion in candidates for suggestion in original):
+                self.askDjSuggestionSelected.emit(entry["text"], edit_revision)
+            elif not original and any(entry in section["examples"] for section in sections):
+                self.askDjHelpSelected.emit(entry["text"], entry["placeholder"], edit_revision)
+
+    @Slot()
+    def closeAskDjHelp(self) -> None:
+        if self._ask_dj_help_request is not None:
+            self._ask_dj_help_timer.stop()
+            self._ask_dj_help_request = None
+            self._ask_dj_help_busy = False
+            self._ask_dj_help_sections = []
+            self._ask_dj_suggestions = []
+            self.askDjHelpChanged.emit()
+
+    @Slot(QUrl, int)
+    def exportAskDjHistory(self, destination: QUrl, revision: int) -> None:
+        self._export_profile_file(destination, revision, music_dna=False)
+
+    @Slot(QUrl, int)
+    def exportMusicDna(self, destination: QUrl, revision: int) -> None:
+        self._export_profile_file(destination, revision, music_dna=True)
+
+    def _export_profile_file(self, destination: QUrl, revision: int, *, music_dna: bool) -> None:
+        ticket = self._private_read_context()
+        self._sync_config_from_disk()
+        if (revision != self._music_dna_context_revision or ticket != self._private_read_context()
+                or not destination.isLocalFile() or not destination.toLocalFile()
+                or not self.paired or self._demo_mode or not self.personalProfileExportAllowed
+                or not self._backend_available or self._version_mismatch_visible
+                or not self._application_foreground or self._shutting_down):
+            return
+        dna_key = self.cfg.music_dna_key
+        if music_dna:
+            if self._music_dna_busy or not self._music_dna_loaded or not self._music_dna_enabled or not dna_key:
+                return
+            read = self.client.music_dna_export
+            set_busy = self._set_music_dna_busy
+            prefix, context = "music_dna_export", "musicdna"
+        else:
+            if self._ask_dj_busy:
+                return
+            read = self.client.ask_dj_history_export
+            set_busy = self._set_ask_dj_busy
+            prefix, context = "ask_dj_export", "askdj"
+
+        def current() -> bool:
+            return (self._application_foreground and not self._shutting_down and not self._demo_mode
+                    and ticket == self._private_read_context()
+                    and (not music_dna or (self._music_dna_enabled and self.cfg.music_dna_key == dna_key)))
+
+        outcome = "failed"
+
+        def export() -> None:
+            nonlocal outcome
+            if not current():
+                return
+            try:
+                data = read()
+                if music_dna:
+                    profile = data.get("profile")
+                    if (data.get("success") is not True or data.get("format") != "djconnect.music_dna.export"
+                            or type(data.get("schema_version")) is not int or data["schema_version"] != 1
+                            or not isinstance(profile, dict) or profile.get("enabled") is not True
+                            or profile.get("music_dna_key") != dna_key or not isinstance(profile.get("profile"), dict)):
+                        raise DJConnectError("invalid_music_dna_export")
+            except (AuthenticationError, ProtocolVersionMismatch):
+                if current():
+                    raise
+                return
+            except (DJConnectError, requests.RequestException):
+                if current():
+                    outcome = "read_failed"
+                    self._toastReady.emit(self.tr_key("profile_export_read_failed"), 3500, context)
+                return
+            if not current():
+                return
+            contents = json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8") + b"\n"
+            target = QSaveFile(destination.toLocalFile())
+            if target.open(QIODevice.OpenModeFlag.WriteOnly):
+                if (target.setPermissions(QSaveFile.Permission.ReadOwner | QSaveFile.Permission.WriteOwner)
+                        and target.write(contents) == len(contents) and current()):
+                    if target.commit():
+                        outcome = "saved"
+                else:
+                    target.cancelWriting()
+            if current():
+                self._toastReady.emit(self.tr_key(prefix + "_" + outcome), 3500, context)
+
+        def finish() -> None:
+            set_busy(False)
+            self.profileExportProgress.emit(revision, music_dna, outcome if current() else "")
+
+        set_busy(True)
+        self.profileExportProgress.emit(revision, music_dna, "saving")
+        self._run(self.tr_key(prefix), export, done=finish, interactive=False)
+
+    @Slot()
+    @Slot(int)
+    def clearAskDjHistory(self, revision: int | None = None) -> None:
+        if revision is not None and revision != self._music_dna_context_revision:
+            return
         if self._demo_mode:
             self._clear_ask_dj_cache()
             return
+        ticket = self._private_read_context()
         self._sync_config_from_disk()
-        if self._demo_mode or not self.paired or self._ask_dj_busy:
+        if (self._demo_mode or not self.paired or self._ask_dj_busy
+                or not self._backend_available or self._version_mismatch_visible
+                or ticket != self._private_read_context()
+                or (revision is not None and revision != self._music_dna_context_revision)):
             return
         _LOGGER.info("User requested Ask DJ chat history clear")
         self._set_ask_dj_busy(True)
-        self._run(self.tr_key("ask_dj_clear_chat"), self._clear_ask_dj_history_worker, done=lambda: self._set_ask_dj_busy(False))
+        self._run(self.tr_key("ask_dj_clear_chat"), lambda: self._clear_ask_dj_history_worker(ticket=ticket),
+                  done=lambda: self._set_ask_dj_busy(False))
 
     def _load_ask_dj_history(self, *, show_toast: bool, action: str) -> None:
         self._sync_config_from_disk()
@@ -1543,23 +2926,54 @@ class DJConnectBackend(QObject):
         _LOGGER.info("User %s Ask DJ history", action)
         if show_toast:
             self.showToastForContext(self.tr_key("refreshing"), "askdj")
+        ticket = self._private_read_context()
+        request = self._ask_dj_context_request = object()
+        self._ask_dj_destination_loading = True
         self._set_ask_dj_busy(True)
-        self._run(self.tr_key("ask_dj"), self._load_ask_dj_history_worker, done=lambda: self._set_ask_dj_busy(False))
+
+        def load_history():
+            reading_destination = False
+            try:
+                reading_destination = self._load_ask_dj_history_worker(
+                    ticket=ticket, show_toast=show_toast, context_request=request)
+            finally:
+                if not reading_destination:
+                    self._askDjContextReady.emit(ticket, request, ("", [], ""))
+
+        self._run(self.tr_key("ask_dj"), load_history, done=lambda: self._set_ask_dj_busy(False))
 
     @Slot(str, result=bool)
-    def sendAskDjQuestion(self, text: str) -> bool:
+    @Slot(str, str, str, str, result=bool)
+    def sendAskDjQuestion(self, text: str, reply_id="", session_id="", entry_id="") -> bool:
+        return self._send_ask_dj_question(text, reply_id, session_id, entry_id, restore_draft=True)
+
+    def _send_ask_dj_question(self, text, reply_id, session_id, entry_id, *, restore_draft, from_archive=False):
         text = text.strip()
-        if not text or len(text) > 4000 or self._ask_dj_busy or not self._application_foreground or self._shutting_down:
+        if (not text or len(text) > 4000 or self._ask_dj_busy or self._ask_dj_destination_loading
+                or self.askDjDestinationUnavailable
+                or not self._application_foreground or self._shutting_down):
             return False
+        selected = {"session_id": session_id, "entry_id": entry_id} if reply_id or from_archive else None
         message_id = uuid4().hex
         if self._demo_mode:
+            if selected is not None:
+                return False
             self._merge_ask_dj_messages(parse_ask_dj_messages({"messages": [
                 {"id": message_id, "role": "user", "text": text},
                 {"id": message_id + "-demo", "role": "assistant", "text": self.tr_key("demo_dj_answer")},
             ]}))
             return True
         self._sync_config_from_disk()
-        if not self.paired or self.cfg.private_session:
+        if not self.paired or self.cfg.private_session or not self._backend_available or self._version_mismatch_visible:
+            return False
+        def reference_current():
+            if from_archive:
+                return (self.canAskAboutSavedEntry(session_id, entry_id)
+                        and (restore_draft or text == self._session_controller.saved_exploration_question(selected)))
+            return selected is None or self.askDjContextEntry(reply_id) == selected
+
+        if not reference_current():
+            self.showToastForContext(self.tr_key("session_question_reference_unavailable"), "askdj")
             return False
         transport = self._session_controller.transport
         try:
@@ -1567,12 +2981,26 @@ class DJConnectBackend(QObject):
         except SessionError:
             return False
         ticket = self._private_read_context()
+        page = self._ask_dj_context_page
+        destination = page[1] if page and page[0] == ticket else None
+        if destination is None:
+            destination = self._session_controller.ask_dj_session_destination()
+        question_context = {}
+        if destination and not from_archive:
+            question_context["active_session_id"] = destination
+        if selected is not None:
+            question_context["selected_entry"] = selected
 
         def current():
             return (not self._shutting_down and self._application_foreground and not self._demo_mode
                     and ticket == self._private_read_context() and binding == transport.binding())
 
+        def restore_unsent():
+            if restore_draft:
+                self._askDjUnsentDraftReady.emit(ticket, text)
+
         def send():
+            accepted = False
             try:
                 if not current():
                     return
@@ -1580,17 +3008,46 @@ class DJConnectBackend(QObject):
                 if not current():
                     return
                 if not owner:
+                    restore_unsent()
                     self._toastReady.emit(self.tr_key("session_profile_missing"), 5000, "askdj")
                     return
-                transport.standalone_question(binding, text, message_id, owner)
+                if from_archive:
+                    try:
+                        active = active_session(transport.active(binding, isolated=True))
+                    except SessionError:
+                        restore_unsent()
+                        self._askDjDeliveryReady.emit(ticket, "ask_dj_destination_unavailable")
+                        return
+                    if active:
+                        restore_unsent()
+                        self._askDjDeliveryReady.emit(ticket, "ask_dj_destination_changed")
+                        return
+                if not current():
+                    return
+                if not reference_current():
+                    restore_unsent()
+                    self._toastReady.emit(self.tr_key("session_question_reference_unavailable"), 5000, "askdj")
+                    return
+                transport.standalone_question(binding, text, message_id, owner, **question_context)
+                accepted = True
                 if not current():
                     return
                 history = transport.standalone_history(binding, owner)
                 if current():
                     self._askDjReady.emit(self._profile_read_result(history, ticket))
-            except SessionError:
+                    self._askDjDeliveryReady.emit(ticket, "")
+            except SessionError as exc:
                 if ticket == self._private_read_context() and self._application_foreground:
-                    self._toastReady.emit(self.tr_key("session_uncertain"), 5000, "askdj")
+                    if not accepted and selected is not None and exc.category == "reference_unavailable":
+                        restore_unsent()
+                        self._askDjContextWithdrawn.emit(ticket, (selected["session_id"], selected["entry_id"]))
+                        return
+                    if not accepted and destination and exc.category == "session_changed":
+                        restore_unsent()
+                        self._askDjDeliveryReady.emit(ticket, "ask_dj_destination_changed")
+                        return
+                    key = "session_question_accepted_unavailable" if accepted else "session_question_uncertain"
+                    self._askDjDeliveryReady.emit(ticket, key)
 
         def execute():
             try:
@@ -1601,6 +3058,34 @@ class DJConnectBackend(QObject):
         self._set_ask_dj_busy(True)
         self._question_executor.submit(execute)
         return True
+
+    @Slot(object, str)
+    def _restore_unsent_ask_dj_draft(self, ticket, text: str) -> None:
+        if (self._application_foreground and not self._shutting_down and not self._demo_mode
+                and ticket == self._private_read_context()):
+            self.askDjUnsentDraft.emit(text)
+
+    @Slot(object, object)
+    def _apply_ask_dj_context_withdrawal(self, ticket, reference):
+        if (not self._application_foreground or self._shutting_down or self._demo_mode
+                or ticket != self._private_read_context()):
+            return
+        self._ask_dj_withdrawn_entries.add(reference)
+        self._apply_ask_dj_delivery(ticket, "session_question_reference_unavailable")
+
+    @Property(str, notify=askDjChanged)
+    def askDjDeliveryKey(self) -> str:
+        return self._ask_dj_delivery_key
+
+    @Slot(object, str)
+    def _apply_ask_dj_delivery(self, ticket, key: str) -> None:
+        if (not self._application_foreground or self._shutting_down or self._demo_mode
+                or ticket != self._private_read_context()):
+            return
+        self._ask_dj_delivery_key = key
+        self.askDjChanged.emit()
+        if key:
+            self._show_toast(self.tr_key(key), 5000, "askdj")
 
     @Slot(str)
     def sendAskDjAction(self, action_payload: str) -> None:
@@ -1627,34 +3112,147 @@ class DJConnectBackend(QObject):
     def refreshMusicDna(self) -> None:
         self._music_dna_request("profile", show_toast=True)
 
-    @Slot(bool)
-    def setMusicDnaEnabled(self, enabled: bool) -> None:
-        self._music_dna_request("settings", enabled=bool(enabled))
+    def _music_dna_import_current(self, request: dict) -> bool:
+        return (self._music_dna_import is request and self._application_foreground and not self._shutting_down
+                and not self._demo_mode and self._music_dna_enabled
+                and request["ticket"] == self._private_read_context() and request["key"] == self.cfg.music_dna_key)
+
+    @Slot(QUrl, int)
+    def prepareMusicDnaImport(self, source: QUrl, revision: int) -> None:
+        ticket = self._private_read_context()
+        self._sync_config_from_disk()
+        if (revision != self._music_dna_context_revision or ticket != self._private_read_context()
+                or not source.isLocalFile() or not source.toLocalFile()
+                or not self.paired or self._demo_mode or not self.personalProfileExportAllowed
+                or not self.musicDnaLoaded or not self.musicDnaEnabled or not self.cfg.music_dna_key
+                or not self._backend_available or self._version_mismatch_visible or self._music_dna_busy
+                or not self._application_foreground or self._shutting_down):
+            return
+        request = {"ticket": ticket, "key": self.cfg.music_dna_key, "preview": {}}
+        self._music_dna_import = request
+        self._set_music_dna_busy(True)
+
+        def prepare() -> None:
+            if not self._music_dna_import_current(request):
+                return
+            try:
+                payload, preview = _read_music_dna_import(Path(source.toLocalFile()))
+            except (OSError, ValueError, RecursionError):
+                payload, preview = None, {}
+            self._musicDnaImportPrepared.emit(request, payload, preview)
+
+        self._run(self.tr_key("music_dna_import"), prepare,
+                  done=lambda: self._set_music_dna_busy(False), interactive=False)
+
+    @Slot(object, object, object)
+    def _apply_music_dna_import(self, request: dict, payload: dict | None, preview: dict) -> None:
+        if not self._music_dna_import_current(request):
+            return
+        if payload is None:
+            self.cancelMusicDnaImport()
+            self._show_toast(self.tr_key("music_dna_import_invalid"), 3500, "musicdna")
+            return
+        request["payload"] = payload
+        request["preview"] = preview
+        self.musicDnaChanged.emit()
 
     @Slot()
-    def clearMusicDna(self) -> None:
-        self._music_dna_request("clear")
+    def cancelMusicDnaImport(self) -> None:
+        if self._music_dna_import is not None:
+            self._music_dna_import = None
+            self.musicDnaChanged.emit()
 
-    def _music_dna_request(self, action: str, show_toast: bool = False, **payload: object) -> None:
+    @Slot()
+    def confirmMusicDnaImport(self) -> None:
+        self._sync_config_from_disk()
+        request = self._music_dna_import
+        if (not request or not self._music_dna_import_current(request) or self._music_dna_busy
+                or not self.personalProfileExportAllowed or not self._backend_available or self._version_mismatch_visible
+                or "payload" not in request):
+            return
+        payload = request.pop("payload")
+        request["uploading"] = True
+        config = deepcopy(self.cfg)
+        config.explicit_profile_id = session_profile_id(config)
+        client = HAClient(config)
+        self._set_music_dna_busy(True)
+
+        def upload() -> None:
+            data = None
+            notice = "music_dna_import_uncertain"
+            try:
+                if not self._music_dna_import_current(request):
+                    return
+                response = client.music_dna_import(payload)
+                if (response.get("success") is True and response.get("enabled") is True
+                        and response.get("music_dna_key") == request["key"] and isinstance(response.get("profile"), dict)):
+                    data = response
+                elif response.get("success") is False:
+                    notice = "music_dna_import_failed"
+            except (AuthenticationError, ProfileContextError):
+                notice = "music_dna_import_failed"
+            except (requests.RequestException, DJConnectError):
+                pass
+            finally:
+                self._musicDnaImportFinished.emit(request, data, notice)
+
+        self._run(self.tr_key("music_dna_import"), upload,
+                  done=lambda: self._set_music_dna_busy(False), interactive=False)
+
+    @Slot(object, object, str)
+    def _finish_music_dna_import(self, request: dict, data: dict | None, notice: str) -> None:
+        if not self._music_dna_import_current(request):
+            return
+        request["uploading"] = False
+        if data is not None:
+            request["saved"] = True
+            self._apply_music_dna_data(self._profile_read_result(data, request["ticket"]))
+            return
+        request["failure"] = notice
+        self.musicDnaChanged.emit()
+
+    @Slot(bool)
+    @Slot(bool, int)
+    def setMusicDnaEnabled(self, enabled: bool, revision: int | None = None) -> None:
+        self._music_dna_request("settings", revision=revision, enabled=bool(enabled))
+
+    @Slot()
+    @Slot(int)
+    def clearMusicDna(self, revision: int | None = None) -> None:
+        self._music_dna_request("clear", revision=revision)
+
+    def _music_dna_request(
+        self, action: str, show_toast: bool = False, revision: int | None = None, **payload: object,
+    ) -> None:
+        if revision is not None and revision != self._music_dna_context_revision:
+            return
         if self._demo_mode:
             if action == "settings":
                 self._set_demo_music_dna(bool(payload["enabled"]))
             elif action == "clear":
                 self._set_demo_music_dna(False)
             return
+        confirmation_context = self._private_read_context() if revision is not None else None
         self._sync_config_from_disk()
         if self._demo_mode or not self.paired or self._music_dna_busy:
+            return
+        ticket = self._private_read_context()
+        if revision is not None and (
+            revision != self._music_dna_context_revision or confirmation_context != ticket
+        ):
             return
         self._set_music_dna_busy(True)
         if show_toast:
             self.showToastForContext(self.tr_key("refreshing"), "musicdna")
         if action == "settings":
             def worker() -> None:
-                self._music_dna_settings_worker(**payload)
+                self._music_dna_settings_worker(ticket=ticket, **payload)
         elif action == "clear":
-            worker = self._music_dna_clear_worker
+            def worker() -> None:
+                self._music_dna_clear_worker(ticket=ticket)
         else:
-            worker = self._music_dna_profile_worker
+            def worker() -> None:
+                self._music_dna_profile_worker(ticket=ticket, manual=show_toast)
         _LOGGER.info("User requested Music DNA %s", action)
         self._run(self.tr_key("music_dna"), worker, done=lambda: self._set_music_dna_busy(False))
 
@@ -1663,13 +3261,20 @@ class DJConnectBackend(QObject):
         self._music_discovery_request("feed")
 
     @Slot()
+    def openMusicDiscovery(self) -> None:
+        self._music_discovery_request("open")
+
+    @Slot()
     def refreshMusicDiscovery(self) -> None:
+        if not self._demo_mode and self._music_dna_blocks_discover():
+            self.loadMusicDna()
+            return
         self._music_discovery_request("refresh")
 
     @Slot()
-    def acceptMusicDiscoveryConsent(self) -> None:
-        self._music_discovery_consent_rejected = False
-        self._music_discovery_request("accept")
+    @Slot(int)
+    def acceptMusicDiscoveryConsent(self, revision: int | None = None) -> None:
+        self._music_discovery_request("accept", revision=revision)
 
     @Slot()
     def rejectMusicDiscoveryConsent(self) -> None:
@@ -1680,9 +3285,13 @@ class DJConnectBackend(QObject):
 
     @Slot(str)
     def playMusicDiscoveryItem(self, payload: str) -> None:
+        ticket = self._private_read_context()
         if not self._demo_mode:
             self._sync_config_from_disk()
-        if (not self._demo_mode and not self.paired) or self._music_discovery_busy or self._music_discovery_playing_id:
+            if ticket != self._private_read_context():
+                return
+        if ((not self._demo_mode and (not self.paired or self._music_dna_blocks_discover()))
+                or self._music_discovery_busy or self._music_discovery_playing):
             return
         try:
             item = json.loads(payload)
@@ -1695,18 +3304,28 @@ class DJConnectBackend(QObject):
             _LOGGER.info("Ignoring Music Discovery item without backend id")
             return
         item_id = str(item.get("discovery_item_id") or item.get("id") or "").strip()
+        section_id = str(item.get("section_id") or "").strip()
         if self._demo_mode:
             self._play_demo_uri(item_id)
-            self.musicDiscoveryPlayed.emit(str(item.get("section_id") or ""), item_id)
+            self.musicDiscoveryPlayed.emit(section_id, item_id)
             return
-        self._music_discovery_playing_id = item_id
+        self._music_discovery_error = ""
+        playing = (section_id, item_id)
+        consent_epoch = self._music_discovery_consent_epoch
+        self._music_discovery_playing = playing
         self.musicDiscoveryChanged.emit()
-        self._run(self.tr_key("music_discovery"), lambda: self._music_discovery_play_worker(item), done=lambda: self._clear_music_discovery_playing())
+        self._run(
+            self.tr_key("music_discovery"),
+            lambda: self._music_discovery_play_worker(item, ticket=ticket, consent_epoch=consent_epoch),
+            done=lambda: self._clear_music_discovery_playing(playing),
+        )
 
     @Slot(str, str)
     def sendMusicDiscoveryFeedback(self, payload: str, feedback: str) -> None:
+        ticket = self._private_read_context()
         self._sync_config_from_disk()
-        if self._demo_mode or not self.paired or self._music_discovery_busy or not self._music_discovery_feedback_supported:
+        if (self._demo_mode or not self.paired or self._music_discovery_busy or self._music_dna_blocks_discover()
+                or not self._music_discovery_feedback_supported or ticket != self._private_read_context()):
             return
         feedback_value = str(feedback or "").strip()
         if feedback_value not in {"not_for_me", "less_like_this", "hide_artist"}:
@@ -1718,30 +3337,55 @@ class DJConnectBackend(QObject):
             return
         if not isinstance(item, dict):
             return
+        if not str(item.get("discovery_item_id") or item.get("id") or "").strip():
+            return
+        self._music_discovery_error = ""
+        consent_epoch = self._music_discovery_consent_epoch
         self._set_music_discovery_busy(True)
         self._run(
             self.tr_key("music_discovery"),
-            lambda: self._music_discovery_feedback_worker(item, feedback_value),
+            lambda: self._music_discovery_feedback_worker(item, feedback_value, ticket=ticket, consent_epoch=consent_epoch),
             done=lambda: self._set_music_discovery_busy(False),
         )
 
-    def _music_discovery_request(self, action: str) -> None:
+    def _music_discovery_request(self, action: str, *, revision: int | None = None) -> None:
+        if revision is not None and revision != self._music_dna_context_revision:
+            return
         if self._demo_mode:
             if action == "accept":
                 self._set_demo_music_dna(True)
             return
+        confirmation_context = self._private_read_context() if revision is not None else None
         self._sync_config_from_disk()
-        if self._demo_mode or not self.paired or self._music_discovery_busy:
+        if (self._demo_mode or not self.paired or self._music_discovery_busy
+                or (action != "accept" and self._music_dna_blocks_discover())):
             return
+        if action == "open" and self._music_discovery_feed_deadline is not None:
+            now = self._session_controller._clock.now()
+            if (self._backend_available and not self._music_discovery_error and self._music_discovery_items
+                    and now < self._music_discovery_feed_deadline
+                    and all(not item.get("imageExpiresAt") or item["imageExpiresAt"] > now * 1000
+                            for item in self._music_discovery_items)):
+                return
+        ticket = self._private_read_context()
+        consent_epoch = self._music_discovery_consent_epoch
+        if revision is not None and (
+            revision != self._music_dna_context_revision or confirmation_context != ticket
+        ):
+            return
+        if action == "accept":
+            self._music_discovery_consent_rejected = False
         self._set_music_discovery_busy(True)
         if action == "refresh":
             self.showToastForContext(self.tr_key("refreshing"), "discover")
         if action == "accept":
-            worker = self._music_discovery_accept_worker
-        elif action == "refresh":
-            worker = self._music_discovery_refresh_worker
+            def worker() -> None:
+                self._music_discovery_accept_worker(ticket=ticket, consent_epoch=consent_epoch)
         else:
-            worker = self._music_discovery_feed_worker
+            manual = action == "refresh"
+
+            def worker() -> None:
+                self._music_discovery_feed_worker(ticket=ticket, manual=manual, consent_epoch=consent_epoch)
         _LOGGER.info("User requested Music Discovery %s", action)
         self._run(self.tr_key("music_discovery"), worker, done=lambda: self._set_music_discovery_busy(False))
 
@@ -1807,20 +3451,37 @@ class DJConnectBackend(QObject):
 
     @Slot()
     def checkForUpdates(self) -> None:
+        if self._update_check_running or self._shutting_down:
+            return
+        self._update_check_running = True
+        self._update_check_status = ""
+        self.updateCheckChanged.emit()
         _LOGGER.info("User requested update check from touch UI")
         self._set_status_text(self.tr_key("checking_updates"))
         self.showToastForContext(self.tr_key("checking_updates"), "updates")
+        self._executor.submit(self._check_for_updates_worker)
+
+    @Property(bool, notify=updateCheckChanged)
+    def updateCheckRunning(self) -> bool:
+        return self._update_check_running
+
+    @Property(str, notify=updateCheckChanged)
+    def updateCheckStatus(self) -> str:
+        return self._update_check_status
+
+    def _check_for_updates_worker(self) -> None:
         commands = (
             ["sudo", "-n", "/usr/bin/systemctl", "start", "djconnect-updater.service"],
             ["sudo", "-n", "/bin/systemctl", "start", "djconnect-updater.service"],
         )
         last_error = "unknown error"
         for command in commands:
+            if self._shutting_down:
+                return
             try:
                 _LOGGER.info("Starting update check command: %s", " ".join(command))
                 subprocess.run(command, check=True, timeout=8, capture_output=True, text=True)
-                self._set_status_text(self.tr_key("update_check_started"))
-                self.showToastForContext(self.tr_key("update_check_started"), "updates")
+                self._updateCheckFinished.emit("")
                 return
             except subprocess.CalledProcessError as exc:
                 detail = (exc.stderr or exc.stdout or str(exc)).strip()
@@ -1829,9 +3490,21 @@ class DJConnectBackend(QObject):
             except Exception as exc:  # noqa: BLE001 - native command boundary must surface every local failure to the UI
                 last_error = str(exc)
                 _LOGGER.warning("Update check command failed: %s: %s", " ".join(command), exc)
-        message = self.tr_key("update_check_failed", error=last_error)
+        self._updateCheckFinished.emit(last_error or "unknown error")
+
+    @Slot(str)
+    def _finish_update_check(self, error) -> None:
+        if self._shutting_down:
+            return
+        self._update_check_running = False
+        self._update_check_status = "update_check_start_failed" if error else "update_check_started"
+        self.updateCheckChanged.emit()
+        message = self.tr_key("update_check_failed", error=error) if error else self.tr_key("update_check_started")
         self._set_status_text(message)
-        self._show_toast(message, 5000, "updates")
+        if error:
+            self._show_toast(message, 5000, "updates")
+        else:
+            self.showToastForContext(message, "updates")
 
     def _run_power_command(self, *, action: str, status_key: str, failure_key: str, commands: tuple[list[str], ...]) -> None:
         self._set_status_text(self.tr_key(status_key))
@@ -1864,15 +3537,33 @@ class DJConnectBackend(QObject):
         if command not in {"play_context_at", "start_playlist"}:
             _LOGGER.warning("Ignoring unsupported media item command from touch UI: %s", command)
             return
+        starting_key = "media_playlist_starting" if command == "start_playlist" else "media_track_starting"
+        self.showToastForContext(self.tr_key(starting_key), "media_start")
         if self._demo_mode:
             uri = payload["uri"] if command == "start_playlist" else payload["value"]["uri"]
             self._play_demo_uri(uri)
             return
         _LOGGER.info("User requested %s from touch UI", command)
-        self.showToastForContext(self.tr_key("play"), "playback")
+        scope = self._media_playback_scope()
         self._media_playback_busy = True
         self.mediaActivityChanged.emit()
-        self._run(command, lambda: self._play_media_item_worker(command, payload), done=self._mediaPlaybackFinished.emit)
+        self._run(command, lambda: self._play_media_item_worker(command, payload, scope=scope),
+                  done=self._mediaPlaybackFinished.emit)
+
+    def _media_playback_scope(self):
+        return (self._private_read_context(), self.cfg.music_backend, self.cfg.music_backend_revision,
+                self.cfg.music_target_player.get("id", ""))
+
+    def _media_playback_current(self, scope):
+        return (not self._demo_mode and not self._shutting_down and self._application_foreground
+                and not self._version_mismatch_visible and (scope is None or scope == self._media_playback_scope()))
+
+    @Slot(object, object, bool)
+    def _apply_media_playback_observation(self, scope, playback, suppress_navigation):
+        if self._media_playback_current(scope):
+            self._suppress_next_playback_navigation = suppress_navigation
+            if playback is not None:
+                self._apply_playback(playback)
 
     @Slot()
     def _finish_media_playback(self) -> None:
@@ -1884,18 +3575,33 @@ class DJConnectBackend(QObject):
         if self.cfg.log_level == DEFAULT_LOG_LEVEL:
             return
         _LOGGER.info("User opened logs view")
-        self.showToastForContext(self.tr_key("logs"), "diagnostics")
-        path = Path(self.cfg.log_file)
-        try:
-            if path.exists():
-                data = _read_tail_text(path, LOG_DISPLAY_MAX_BYTES)
-                self._logs_text = _format_logs_for_display(data)
-            else:
-                self._logs_text = self.tr_key("logs_missing")
-        except Exception as exc:  # noqa: BLE001 - log rendering must remain available when local diagnostics are unreadable
-            self._logs_text = self.tr_key("logs_failed", error=exc)
         self._logs_visible = True
+        self._read_logs()
+
+    @Slot()
+    def refreshLogs(self) -> None:
+        if not self._logs_visible:
+            return
+        if self._read_logs():
+            self.showToastForContext(self.tr_key("logs_refreshed"), "diagnostics")
+        elif self._toast_icon == _toast_icon_for_context("diagnostics"):
+            self.hideToast()
+
+    def _read_logs(self) -> bool:
+        path = Path(self.cfg.log_file)
+        self._logs_read_error = ""
+        read = False
+        try:
+            data = _read_tail_text(path, LOG_DISPLAY_MAX_BYTES)
+            self._logs_text = _format_logs_for_display(data)
+            read = True
+        except FileNotFoundError:
+            self._logs_text = ""
+        except Exception as exc:  # noqa: BLE001 - log rendering must remain available when local diagnostics are unreadable
+            self._logs_text = ""
+            self._logs_read_error = str(exc)
         self.logsChanged.emit()
+        return read
 
     @Slot()
     def copyLogs(self) -> None:
@@ -1904,22 +3610,45 @@ class DJConnectBackend(QObject):
         self.showToastForContext(self.tr_key("logs_copied"), "diagnostics")
 
     @Slot()
+    def copyDeviceId(self) -> None:
+        QGuiApplication.clipboard().setText(self.deviceId)
+        self.showToastForContext(self.tr_key("device_id_copied"), "connectivity")
+
+    @Slot()
+    def copyPairingCode(self) -> None:
+        if self.paired or self._demo_mode or not self.pairingCode:
+            return
+        QGuiApplication.clipboard().setText(self.pairingCode)
+        self.showToastForContext(self.tr_key("copied"), "connectivity")
+
+    @Slot()
+    def copyActiveHaAddress(self) -> None:
+        origin = self.aboutConnectionOrigin
+        if not origin:
+            return
+        QGuiApplication.clipboard().setText(origin)
+        self.showToastForContext(self.tr_key("copied"), "connectivity")
+
+    @Slot()
     def clearLogs(self) -> None:
         _LOGGER.info("User cleared logs from touch UI")
         path = Path(self.cfg.log_file)
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text("", encoding="utf-8")
-            self._logs_text = self.tr_key("logs_cleared")
+            self._logs_text = ""
+            self._logs_read_error = ""
             self.showToastForContext(self.tr_key("logs_cleared"), "diagnostics")
         except Exception as exc:  # noqa: BLE001 - log clearing must report all local filesystem failures to the UI
-            self._logs_text = self.tr_key("logs_failed", error=exc)
+            _LOGGER.warning("Could not clear the local log file: %s", exc)
+            self.showToastForContext(self.tr_key("logs_clear_failed"), "diagnostics")
         self.logsChanged.emit()
 
     @Slot()
     def hideLogs(self) -> None:
         self._logs_visible = False
         self._logs_text = ""
+        self._logs_read_error = ""
         self.logsChanged.emit()
 
     @Slot(str)
@@ -1929,6 +3658,19 @@ class DJConnectBackend(QObject):
     @Slot(str, str)
     def showToastForContext(self, text: str, context: str) -> None:
         self._show_toast(text, 2000, context)
+
+    @Property("QVariantMap", notify=gameHighScoresChanged)
+    def gameHighScores(self) -> dict[str, int]:
+        return self._game_high_scores.copy()
+
+    @Slot(str, int)
+    def recordGameHighScore(self, game: str, score: int) -> None:
+        previous = self._game_high_scores.get(game)
+        if previous is None or score <= previous:
+            return
+        self._game_high_scores[game] = score
+        self._game_settings.setValue(f"highScores/{game}", score)
+        self.gameHighScoresChanged.emit()
 
     @Slot(str)
     def playGameSound(self, kind: str) -> None:
@@ -1978,7 +3720,14 @@ class DJConnectBackend(QObject):
         except Exception as exc:  # noqa: BLE001 - optional game audio must not affect the renderer lifecycle
             _LOGGER.debug("Game sound skipped: %s", exc)
 
+    @Slot()
+    def stopGameSounds(self) -> None:
+        for sink, buffer in tuple(self._game_sound_objects):
+            self._cleanup_game_sound(sink, buffer)
+
     def _cleanup_game_sound(self, sink: object, buffer: QBuffer) -> None:
+        if (sink, buffer) not in self._game_sound_objects:
+            return
         try:
             if hasattr(sink, "stop"):
                 sink.stop()
@@ -2024,30 +3773,61 @@ class DJConnectBackend(QObject):
         self.command("play_uri", uri=uri)
 
     @Slot()
-    def loadQueue(self) -> None:
+    @Slot(bool)
+    def loadQueue(self, manual: bool = False) -> None:
         if not self._demo_mode:
-            self._start_media_list_load("queue", self._load_queue_worker)
+            self._start_media_list_load("queue", self._load_queue_worker, manual=manual)
 
     @Slot()
-    def loadPlaylists(self) -> None:
+    @Slot(bool)
+    def loadPlaylists(self, manual: bool = False) -> None:
         if self._demo_mode:
             self._playlist_items = demo_playlist_items()
             self.mediaListsChanged.emit()
             return
-        self._start_media_list_load("playlists", self._load_playlists_worker)
+        self._start_media_list_load("playlists", self._load_playlists_worker, manual=manual)
 
-    def _start_media_list_load(self, kind: str, worker: Callable[[], None]) -> None:
+    def _start_media_list_load(self, kind: str, worker: Callable[..., None], *, manual: bool = False) -> None:
         self._sync_config_from_disk()
-        if not self.paired or kind in self._media_loads_in_flight:
+        if not self.paired or self._version_mismatch_visible or kind in self._media_loads_in_flight:
             return
         self._media_loads_in_flight.add(kind)
+        self._media_list_load_failures.discard(kind)
         self.mediaActivityChanged.emit()
         _LOGGER.info("User requested %s from touch UI", kind)
-        self._run(self.tr_key(kind), worker, done=lambda: self._mediaListFinished.emit(kind), interactive=False)
+        context = self._private_read_context()
+        failed = True
 
-    @Slot(str)
-    def _finish_media_list_load(self, kind: str) -> None:
+        def read() -> None:
+            nonlocal failed
+            if context != self._private_read_context():
+                return
+            key = f"{kind}_updated"
+            try:
+                worker(ticket=context)
+                failed = False
+            except (AuthenticationError, ProtocolVersionMismatch):
+                if context == self._private_read_context():
+                    raise
+                return
+            except (DJConnectError, requests.RequestException) as exc:
+                if context != self._private_read_context():
+                    return
+                if not manual:
+                    raise
+                _LOGGER.debug("%s refresh failed: %s", kind, type(exc).__name__)
+                key = f"{kind}_update_failed"
+            if manual and context == self._private_read_context():
+                self._toastReady.emit(self.tr_key(key), 2200, kind)
+
+        self._run(self.tr_key(kind), read,
+                  done=lambda: self._mediaListFinished.emit(kind, context, failed), interactive=False)
+
+    @Slot(str, object, bool)
+    def _finish_media_list_load(self, kind: str, ticket, failed: bool) -> None:
         self._media_loads_in_flight.discard(kind)
+        if failed and not self._demo_mode and ticket == self._private_read_context():
+            self._media_list_load_failures.add(kind)
         self.mediaActivityChanged.emit()
 
     @Slot(str, result=str)
@@ -2060,10 +3840,20 @@ class DJConnectBackend(QObject):
         save_config(self.config_path, self.cfg)
         self._pairingReady.emit(True, self.tr_key("paired"))
 
-    def _refresh_worker(self) -> None:
+    def _refresh_worker(self, *, ticket=None, expected_output: str = "") -> bool | None:
+        if ticket is not None and ticket != self._private_read_context():
+            return
         started = time.monotonic()
+        about_started = elapsed_time()
+        about_binding = self._private_read_context() if self.paired else None
         _LOGGER.debug("Refreshing playback status")
         data = self.client.command("status") if self.paired else self.client.status()
+        if ticket is not None and ticket != self._private_read_context():
+            return
+        about_scope = self._about_music_scope()
+        active_origin = ""
+        status_via_websocket = isinstance(data, StatusObservation) and data.via_websocket
+        music_available = data.get("music_backend_available") if data.get("success") is not False else None
         self._persist_backend_summary()
         playback = self.client.playback_from_status(data)
         if self._pending_output_device and time.monotonic() < self._pending_output_until:
@@ -2089,12 +3879,25 @@ class DJConnectBackend(QObject):
             except DJConnectError as exc:
                 _LOGGER.warning("Output devices refresh failed: %s", exc)
         if self.paired:
-            self.client.status(playback, queue_items=self._queue_items)
+            if ticket is not None and ticket != self._private_read_context():
+                return
+            status = self.client.status(playback, queue_items=self._queue_items)
+            if isinstance(status, StatusObservation):
+                active_origin = status.authenticated_origin
             self._persist_backend_summary()
         if playback.image_url:
             playback.image_url = cached_image_url(playback.image_url, timeout_seconds=3)
+        if ticket is not None and ticket != self._private_read_context():
+            return
         self._playbackReady.emit(playback)
+        if about_binding is not None and about_binding == about_scope[0]:
+            self._aboutConnectionReady.emit(about_binding, active_origin, about_started, status_via_websocket)
+            self._aboutMusicAvailabilityReady.emit(about_scope, music_available, about_started)
         _LOGGER.info("Refresh completed in %.0fms", _elapsed_ms(started))
+        if expected_output:
+            return (data.get("success") is not False and data.get("backend_available") is not False
+                    and playback.output_device_active and playback.output_device_id == expected_output)
+        return None
 
     def _command_worker(self, command: str, **payload: object) -> None:
         started = time.monotonic()
@@ -2121,17 +3924,56 @@ class DJConnectBackend(QObject):
             self._playbackReady.emit(self.client.playback_from_status(data))
         _LOGGER.info("Save current track completed in %.0fms", _elapsed_ms(started))
 
-    def _play_media_item_worker(self, command: str, payload: dict[str, object]) -> None:
+    def _play_media_item_worker(self, command: str, payload: dict[str, object], *, scope=None) -> None:
+        if not self._media_playback_current(scope):
+            return
         started = time.monotonic()
         _LOGGER.info("Sending media item command: %s", command)
-        data = self.client.command(command, **payload)
+        try:
+            data = self.client.command(command, **payload)
+        except DJConnectError:
+            if self._media_playback_current(scope):
+                raise
+            return
+        except requests.RequestException as exc:
+            if not self._media_playback_current(scope):
+                return
+            _LOGGER.warning("Media item command %s was not confirmed: %s", command, type(exc).__name__)
+            self._backendAvailableReady.emit(False)
+            self._statusReady.emit(self.tr_key("backend_unavailable"))
+            self._toastReady.emit(self.tr_key("session_uncertain"), 5000, "connectivity")
+            return
+        if not self._media_playback_current(scope):
+            return
+        success = data.get("success")
+        if success is False:
+            self._persist_backend_summary()
+            failure_key = "media_playlist_start_failed" if command == "start_playlist" else "media_track_start_failed"
+            self._toastReady.emit(self.tr_key(failure_key), 3500, "connectivity")
+            _LOGGER.warning("Media item command %s was rejected", command)
+            return
+        has_playback = _contains_playback_payload(data)
+        if success is not True and ("success" in data or not has_playback):
+            self._toastReady.emit(self.tr_key("session_uncertain"), 5000, "connectivity")
+            _LOGGER.warning("Media item command %s returned no confirmation", command)
+            return
         self._persist_backend_summary()
-        self._suppress_next_playback_navigation = command == "play_context_at"
-        self._playbackReady.emit(self.client.playback_from_status(data))
-        if command == "start_playlist":
-            self._load_queue_worker()
-        else:
-            self._refresh_worker()
+        self._mediaPlaybackObserved.emit(scope, self.client.playback_from_status(data) if has_playback else None,
+                                         command == "play_context_at")
+        for read in (self._load_queue_worker, self._refresh_worker):
+            if not self._media_playback_current(scope):
+                return
+            try:
+                if scope is None:
+                    read()
+                else:
+                    read(ticket=scope[0])
+            except (AuthenticationError, ProtocolVersionMismatch):
+                if self._media_playback_current(scope):
+                    raise
+                return
+            except (DJConnectError, requests.RequestException) as exc:
+                _LOGGER.debug("Media item readback failed: %s", type(exc).__name__)
         _LOGGER.info("Media item command %s completed in %.0fms", command, _elapsed_ms(started))
 
     def _set_output_worker(self, value: str, previous: str) -> None:
@@ -2161,40 +4003,141 @@ class DJConnectBackend(QObject):
                 self._toastReady.emit(self.tr_key("spotify_cached_output_unavailable"), 7000, "playback")
             raise
 
-    def _load_queue_worker(self) -> None:
+    def _load_queue_worker(self, *, ticket=None) -> None:
+        if ticket is None:
+            ticket = self._private_read_context()
         started = time.monotonic()
         _LOGGER.info("Loading queue from Home Assistant")
-        data = self.client.command("queue", limit=100)
-        self._persist_backend_summary()
-        items = parse_queue_items(data)
-        _LOGGER.info("Loaded %s queue items from Home Assistant", len(items))
-        self._mediaListReady.emit("queue", items)
+        # An earlier manual read must publish before the post-selection queue.
+        with self._queue_read_lock:
+            if ticket != self._private_read_context():
+                return
+            data = self.client.command("queue", limit=100)
+            if ticket != self._private_read_context():
+                return
+            items = _parse_queue_snapshot(data) if data.get("success") is not False else None
+            if items is None:
+                raise DJConnectError(self.tr_key("queue_update_failed"))
+            self._persist_backend_summary()
+            _LOGGER.info("Loaded %s queue items from Home Assistant", len(items))
+            self._mediaListReady.emit("queue", items, ticket)
         _LOGGER.info("Queue list displayed in %.0fms", _elapsed_ms(started))
         self._cache_media_artwork_async("queue", items)
 
-    def _load_playlists_worker(self) -> None:
+    def _load_playlists_worker(self, *, ticket=None) -> None:
+        if ticket is None:
+            ticket = self._private_read_context()
+        if ticket != self._private_read_context():
+            return
         started = time.monotonic()
         _LOGGER.info("Loading playlists from Home Assistant")
         data = self.client.command("playlists", limit=100)
+        if ticket != self._private_read_context():
+            return
+        items = _parse_playlist_snapshot(data) if data.get("success") is not False else None
+        if items is None:
+            raise DJConnectError(self.tr_key("playlists_update_failed"))
         self._persist_backend_summary()
-        items = parse_playlist_items(data)
         _LOGGER.info("Loaded %s playlists from Home Assistant", len(items))
-        self._mediaListReady.emit("playlists", items)
+        self._mediaListReady.emit("playlists", items, ticket)
         _LOGGER.info("Playlist list displayed in %.0fms", _elapsed_ms(started))
         self._cache_media_artwork_async("playlists", items)
 
-    def _load_ask_dj_history_worker(self) -> None:
-        ticket = self._private_read_context()
+    def _load_ask_dj_history_worker(self, *, ticket, show_toast: bool, context_request) -> bool:
+        if ticket != self._private_read_context():
+            return False
         try:
             data = self.client.ask_dj_history(self._ask_dj_history_revision)
             if ticket != self._private_read_context():
-                return
+                return False
             self._apply_profile_context(data)
             ticket = self._private_read_context()
             self._persist_backend_summary()
+        except (AuthenticationError, ProtocolVersionMismatch):
+            if ticket == self._private_read_context():
+                raise
+            return False
         except (DJConnectError, requests.RequestException) as exc:
-            raise BackendUnavailable("Ask DJ unavailable") from exc
-        self._askDjReady.emit(self._profile_read_result(data, ticket))
+            if ticket != self._private_read_context():
+                return False
+            if not show_toast:
+                raise BackendUnavailable("Ask DJ unavailable") from exc
+            data = {"success": False, "_transport_unavailable": True}
+        ready = self._askDjRefreshReady if show_toast else self._askDjReady
+        ready.emit(self._profile_read_result(data, ticket))
+        owner = data.get("owner_profile_id")
+        if data.get("history_scope") == "profile" and owner == self.cfg.active_profile_id and owner:
+            self._session_executor.submit(self._read_ask_dj_context_rows, ticket, context_request, owner)
+            return True
+        return False
+
+    def _read_ask_dj_context_rows(self, ticket, request, owner):
+        def current():
+            return (request is self._ask_dj_context_request and ticket == self._private_read_context()
+                    and not self._shutting_down and self._application_foreground and self.personalProfileExportAllowed
+                    and self.cfg.active_profile_privacy_mode == "private")
+
+        session = self._session_controller
+        transport = session.transport
+        rows = []
+        destination = None
+        question = ""
+        try:
+            if not current():
+                return
+            binding = transport.binding()
+            if binding.profile_id != owner:
+                return
+            caps = transport.capabilities(binding, isolated=True)
+            if not current():
+                return
+            if session._supports_history(caps) and session._supports_contextual_dialogue(caps):
+                active = active_session(transport.active(binding, isolated=True))
+                if not active:
+                    destination = ""
+                    question = contribution_question(caps, binding.language)
+                if (current() and active.get("owner_profile_id") == owner
+                        and active.get("runtime_state") == "active"):
+                    destination = active["session_id"]
+                    question = contribution_question(caps, binding.language)
+                    self._askDjContextReady.emit(ticket, request, (destination, [], question))
+                    page = history_page(transport.timeline(binding, destination, isolated=True), session_id=destination,
+                                        now=session._clock.now())
+                    keys = ("session_id", "entry_id", "kind", "role", "origin_message_id", "retained_until", "state")
+                    dialogue = conversation_entries(page)
+                    rows = [{**{key: row[key] for key in keys if key in row},
+                             "preview": retained_contribution_preview(row)}
+                            for row in presented_history({"entries": dialogue + [
+                                entry for entry in page["entries"] if entry.get("state") == "source_withdrawn"
+                            ]})["entries"]
+                            if row["kind"] == "conversation_dj"]
+            else:
+                destination = ""
+        except SessionError:
+            pass
+        finally:
+            self._askDjContextReady.emit(ticket, request, (destination, rows, question) if current() else (None, [], ""))
+
+    @Slot(object, object, object)
+    def _apply_ask_dj_context_rows(self, ticket, request, result):
+        if request is not self._ask_dj_context_request:
+            return
+        self._ask_dj_destination_loading = False
+        if ticket == self._private_read_context():
+            self._ask_dj_context_page = (ticket, *result)
+        self.askDjChanged.emit()
+
+    @Slot(object)
+    def _apply_ask_dj_refresh_result(self, data: object) -> None:
+        if self._demo_mode or not self._profile_result_current(data):
+            return
+        if isinstance(data, dict) and data.get("success") is False and data.get("_transport_unavailable") is True:
+            self._set_backend_available(False)
+        refreshed = self._apply_ask_dj_data(data)
+        if refreshed and self._ask_dj_delivery_key:
+            self._apply_ask_dj_delivery(self._private_read_context(), "")
+        key = "ask_dj_history_updated" if refreshed else "ask_dj_history_refresh_failed"
+        self._show_toast(self.tr_key(key), 2500, "askdj")
 
     def _send_ask_dj_action_worker(self, action: dict[str, object]) -> None:
         ticket = self._private_read_context()
@@ -2219,36 +4162,83 @@ class DJConnectBackend(QObject):
         self._persist_backend_summary()
         self._askDjReady.emit(self._profile_read_result(data, ticket))
 
-    def _clear_ask_dj_history_worker(self) -> None:
-        ticket = self._private_read_context()
+    def _clear_ask_dj_history_worker(self, *, ticket=None) -> None:
+        current = self._private_read_context()
+        if ticket is not None and ticket != current:
+            return
+        ticket = current
         try:
             data = self.client.ask_dj_history_clear()
         except (AuthenticationError, ProtocolVersionMismatch):
             raise
         except (DJConnectError, requests.RequestException) as exc:
             raise BackendUnavailable("Ask DJ clear unavailable") from exc
+        if ticket != self._private_read_context():
+            return
         self._persist_backend_summary()
-        self._askDjReady.emit(self._profile_read_result(data, ticket))
-        self._toastReady.emit(self.tr_key("ask_dj_cleared"), 2500, "askdj")
+        self._askDjClearReady.emit(self._profile_read_result(data, ticket))
 
-    def _track_insight_worker(self, playback: Playback, scope: tuple) -> None:
+    @Slot(object)
+    def _apply_ask_dj_clear_result(self, data: object) -> None:
+        if self._demo_mode or not isinstance(data, dict) or not self._profile_result_current(data):
+            return
+        cleared = data.get("cleared")
+        revision = data.get("clear_revision")
+        legacy_receipt = (
+            cleared is None and type(revision) is int and revision > self._ask_dj_clear_revision
+            and data.get("messages") == []
+        )
+        if data.get("success") is not True or not (cleared is True or legacy_receipt):
+            self._show_toast(self.tr_key("ask_dj_clear_unconfirmed"), 5000, "askdj")
+            return
+        if self._apply_ask_dj_data(data) and self._profile_result_current(data):
+            self._show_toast(self.tr_key("ask_dj_cleared"), 2500, "askdj")
+
+    def _track_insight_worker(self, playback: Playback, scope: tuple, *, force_refresh: bool) -> None:
         if not self._application_foreground or scope != self._track_insight_scope():
             return
+        proof = None
         try:
-            data = self.client.track_insight(playback)
+            current_mode = self._uses_current_track_insight()
+            if self._needs_track_insight_capabilities():
+                owner = self._session_controller
+                transport = owner.transport
+                snapshot = transport.track_insight_capabilities(transport.binding())
+                if not self._application_foreground or scope != self._track_insight_scope():
+                    return
+                current_mode = owner.supports_current_track_insight(snapshot)
+            if current_mode:
+                if not re.fullmatch(r"spotify:track:[A-Za-z0-9]{22}", playback.uri):
+                    data = {"success": False, "error": "current_track_unavailable"}
+                else:
+                    clock = self._session_controller._clock
+                    requested_at = clock.now()
+                    data = self.client.current_track_insight(force_refresh=force_refresh)
+                    if data.get("success") is False:
+                        data = {"success": False, "error": data.get("error") or "current_track_unavailable"}
+                    else:
+                        proof = _current_track_insight_proof(data.get("subject"), playback.uri, requested_at, clock.now())
+                        if proof is None:
+                            data = {"success": False, "error": "track_insight_context_changed"}
+            else:
+                data = self.client.track_insight(playback, force_refresh=force_refresh)
             if scope != self._track_insight_scope():
                 return
             self._apply_profile_context(data)
             self._persist_backend_summary()
         except (AuthenticationError, ProtocolVersionMismatch):
             raise
-        except (DJConnectError, requests.RequestException) as exc:
+        except (DJConnectError, SessionError, requests.RequestException) as exc:
             _LOGGER.warning("Track Insight unavailable; showing retry state: %s", exc.__class__.__name__)
             data = {"success": False, "error": "transient"}
-        self._trackInsightReady.emit(_TrackInsightResult(data, scope))
+        self._trackInsightReady.emit(_TrackInsightResult(data, scope, proof, manual=force_refresh))
 
-    def _music_dna_profile_worker(self) -> None:
-        ticket = self._private_read_context()
+    def _music_dna_profile_worker(self, *, ticket=None, manual: bool = False) -> None:
+        current = self._private_read_context()
+        if ticket is not None and ticket != current:
+            return
+        ticket = current
+        retryable = False
         try:
             data = self.client.music_dna_profile()
             if ticket != self._private_read_context():
@@ -2259,15 +4249,19 @@ class DJConnectBackend(QObject):
         except (AuthenticationError, ProtocolVersionMismatch):
             raise
         except ProfileContextError as exc:
-            self._musicDnaReady.emit(self._profile_read_result({"success": False, "error": exc.code}, ticket))
-            return
-        except (DJConnectError, requests.RequestException):
-            self._musicDnaReady.emit(self._profile_read_result({"success": False, "error": "music_dna_unavailable"}, ticket))
-            return
-        self._musicDnaReady.emit(self._profile_read_result(data, ticket))
+            data = {"success": False, "error": exc.code}
+        except (BackendUnavailable, requests.RequestException):
+            data = {"success": False, "error": "music_dna_unavailable"}
+            retryable = True
+        except DJConnectError:
+            data = {"success": False, "error": "music_dna_unavailable"}
+        self._musicDnaReady.emit(_MusicDnaProfileResult(data, ticket, manual=manual, retryable=retryable))
 
-    def _music_dna_settings_worker(self, **settings: object) -> None:
-        ticket = self._private_read_context()
+    def _music_dna_settings_worker(self, *, ticket=None, **settings: object) -> None:
+        current = self._private_read_context()
+        if ticket is not None and ticket != current:
+            return
+        ticket = current
         try:
             data = self.client.music_dna_settings(**settings)
             if ticket != self._private_read_context():
@@ -2285,8 +4279,11 @@ class DJConnectBackend(QObject):
             return
         self._musicDnaReady.emit(self._profile_read_result(data, ticket))
 
-    def _music_dna_clear_worker(self) -> None:
-        ticket = self._private_read_context()
+    def _music_dna_clear_worker(self, *, ticket=None) -> None:
+        current = self._private_read_context()
+        if ticket is not None and ticket != current:
+            return
+        ticket = current
         try:
             data = self.client.music_dna_clear()
             if ticket != self._private_read_context():
@@ -2304,32 +4301,62 @@ class DJConnectBackend(QObject):
             return
         self._musicDnaReady.emit(self._profile_read_result(data, ticket))
 
-    def _music_discovery_feed_worker(self) -> None:
-        ticket = self._private_read_context()
+    def _music_discovery_feed_worker(self, *, ticket=None, manual: bool = False, consent_epoch=None) -> None:
+        current = self._private_read_context()
+        if consent_epoch is None:
+            consent_epoch = self._music_discovery_consent_epoch
+        if ((ticket is not None and ticket != current) or consent_epoch != self._music_discovery_consent_epoch
+                or self._music_dna_blocks_discover()):
+            return
+        ticket = current
+        used_existing_feed = False
         try:
-            data = self.client.music_discovery_feed()
-            if ticket != self._private_read_context():
+            if manual:
+                try:
+                    data = self.client.music_discovery_refresh()
+                except BackendUnavailable:
+                    data = {"success": False, "error": "music_discovery_unavailable"}
+                if data.get("success") is False and data.get("error") in ("rate_limited", "music_discovery_unavailable"):
+                    if not self._discovery_action_current(ticket, consent_epoch):
+                        return
+                    data = self.client.music_discovery_feed()
+                    used_existing_feed = True
+            else:
+                data = self.client.music_discovery_feed()
+            if not self._discovery_action_current(ticket, consent_epoch):
                 return
             self._apply_profile_context(data)
             ticket = self._private_read_context()
             data["_feedback_supported"] = self._supports_music_discovery_feedback()
             self._persist_backend_summary()
-        except (DJConnectError, requests.RequestException) as exc:
-            raise BackendUnavailable("Music Discovery unavailable") from exc
-        self._musicDiscoveryReady.emit(self._profile_read_result(data, ticket))
+        except (AuthenticationError, ProtocolVersionMismatch):
+            if ticket == self._private_read_context():
+                raise
+            return
+        except ProfileContextError as exc:
+            data = {"success": False, "error": exc.code}
+        except (DJConnectError, requests.RequestException):
+            data = {"success": False, "error": "music_discovery_unavailable"}
+        result = _DiscoveryReadResult(data, ticket, consent_epoch, manual=manual, used_existing_feed=used_existing_feed)
+        self._musicDiscoveryReady.emit(result)
 
-    def _music_discovery_accept_worker(self) -> None:
-        ticket = self._private_read_context()
+    def _music_discovery_accept_worker(self, *, ticket=None, consent_epoch=None) -> None:
+        current = self._private_read_context()
+        if consent_epoch is None:
+            consent_epoch = self._music_discovery_consent_epoch
+        if (ticket is not None and ticket != current) or consent_epoch != self._music_discovery_consent_epoch:
+            return
+        ticket = current
         try:
             profile = self.client.music_dna_settings(enabled=True)
-            if ticket != self._private_read_context():
+            if ticket != self._private_read_context() or consent_epoch != self._music_discovery_consent_epoch:
                 return
             self._apply_profile_context(profile)
             ticket = self._private_read_context()
             self._persist_backend_summary()
             self._musicDnaReady.emit(self._profile_read_result(profile, ticket))
             data = self.client.music_discovery_feed()
-            if ticket != self._private_read_context():
+            if ticket != self._private_read_context() or consent_epoch != self._music_discovery_consent_epoch:
                 return
             self._apply_profile_context(data)
             ticket = self._private_read_context()
@@ -2337,65 +4364,108 @@ class DJConnectBackend(QObject):
             self._persist_backend_summary()
         except (DJConnectError, requests.RequestException) as exc:
             raise BackendUnavailable("Music Discovery unavailable") from exc
-        self._musicDiscoveryReady.emit(self._profile_read_result(data, ticket))
+        self._musicDiscoveryReady.emit(_DiscoveryReadResult(data, ticket, consent_epoch))
 
-    def _music_discovery_refresh_worker(self) -> None:
-        ticket = self._private_read_context()
-        try:
-            data = self.client.music_discovery_refresh()
-            if ticket != self._private_read_context():
-                return
-            self._apply_profile_context(data)
-            ticket = self._private_read_context()
-            data["_feedback_supported"] = self._supports_music_discovery_feedback()
-            self._persist_backend_summary()
-        except (DJConnectError, requests.RequestException) as exc:
-            raise BackendUnavailable("Music Discovery unavailable") from exc
-        self._musicDiscoveryReady.emit(self._profile_read_result(data, ticket))
+    def _discovery_action_current(self, ticket, consent_epoch):
+        return (ticket == self._private_read_context() and consent_epoch == self._music_discovery_consent_epoch
+                and not self._shutting_down and not self._demo_mode and not self._music_dna_blocks_discover())
 
-    def _music_discovery_play_worker(self, item: dict[str, object]) -> None:
-        ticket = self._private_read_context()
+    def _music_discovery_play_worker(self, item: dict[str, object], *, ticket, consent_epoch) -> None:
+        if not self._discovery_action_current(ticket, consent_epoch):
+            return
         try:
             data = self.client.music_discovery_play(item)
-            if data.get("success") is False:
-                raise DJConnectError("Music Discovery playback rejected")
-            if ticket != self._private_read_context():
+        except (AuthenticationError, ProtocolVersionMismatch):
+            if ticket == self._private_read_context():
+                raise
+            return
+        except (DJConnectError, requests.RequestException):
+            data = {}
+        if not self._discovery_action_current(ticket, consent_epoch):
+            return
+        item_id = str(item.get("discovery_item_id") or item.get("id") or "").strip()
+        receipt_item = data.get("item")
+        legacy_receipt = "played" not in data and "item" not in data
+        acknowledged = (legacy_receipt or (data.get("played") is True and isinstance(receipt_item, dict)
+                                           and receipt_item.get("id") == item_id))
+        if data.get("success") is not True or not acknowledged:
+            outcome = data.get("action_outcome")
+            if data.get("success") is True or (isinstance(outcome, dict) and outcome.get("state") in ("unknown", "dispatched")):
+                error_key = "music_discovery_play_unconfirmed"
+            else:
+                error_key = "music_discovery_play_failed"
+            error = {"success": False, "error": error_key}
+            self._musicDiscoveryReady.emit(_DiscoveryReadResult(error, ticket, consent_epoch))
+            return
+        self._apply_profile_context(data)
+        if not self._discovery_action_current(ticket, consent_epoch):
+            return
+        self._persist_backend_summary()
+        has_playback = _contains_playback_payload(data)
+        self._musicDiscoveryPlayConfirmed.emit(
+            (ticket, consent_epoch), str(item.get("section_id") or ""), item_id,
+            self.client.playback_from_status(data) if has_playback else None,
+        )
+        readbacks = (self._load_queue_worker,) if has_playback else (self._load_queue_worker, self._refresh_worker)
+        for read in readbacks:
+            try:
+                read(ticket=ticket)
+            except (AuthenticationError, ProtocolVersionMismatch):
+                if ticket == self._private_read_context():
+                    raise
                 return
-            self._apply_profile_context(data)
-            ticket = self._private_read_context()
-            self._persist_backend_summary()
-            self.musicDiscoveryPlayed.emit(
-                str(item.get("section_id") or ""), str(item.get("discovery_item_id") or item.get("id") or "").strip(),
-            )
-            feed = self.client.music_discovery_feed()
-            if ticket != self._private_read_context():
-                return
-            self._apply_profile_context(feed)
-            ticket = self._private_read_context()
-            feed["_feedback_supported"] = self._supports_music_discovery_feedback()
-            self._persist_backend_summary()
-        except (DJConnectError, requests.RequestException) as exc:
-            raise BackendUnavailable("Music Discovery unavailable") from exc
-        if _contains_playback_payload(data):
-            self._playbackReady.emit(self.client.playback_from_status(data))
-        self._musicDiscoveryReady.emit(self._profile_read_result(feed, ticket))
-        self._toastReady.emit(self.tr_key("play"), 1800, "playback")
+            except (DJConnectError, requests.RequestException) as exc:
+                _LOGGER.debug("Discovery playback readback failed: %s", type(exc).__name__)
+        self._music_discovery_feed_worker(ticket=ticket, consent_epoch=consent_epoch)
 
-    def _music_discovery_feedback_worker(self, item: dict[str, object], feedback: str) -> None:
-        ticket = self._private_read_context()
+    @Slot(object, str, str, object)
+    def _apply_music_discovery_play(self, action_context, section_id: str, item_id: str, playback: Playback | None) -> None:
+        if not self._discovery_action_current(*action_context):
+            return
+        if playback is not None:
+            self._apply_playback(playback)
+        self.musicDiscoveryPlayed.emit(section_id, item_id)
+        self._show_toast(self.tr_key("play"), 1800, "playback")
+
+    def _music_discovery_feedback_worker(self, item: dict[str, object], feedback: str, *, ticket, consent_epoch) -> None:
+        if not self._discovery_action_current(ticket, consent_epoch):
+            return
         try:
-            self.client.music_discovery_feedback(item, feedback)
-            self._persist_backend_summary()
-            feed = self.client.music_discovery_feed()
-            if ticket != self._private_read_context():
-                return
-            self._apply_profile_context(feed)
-            ticket = self._private_read_context()
-            feed["_feedback_supported"] = self._supports_music_discovery_feedback()
-            self._persist_backend_summary()
-        except (DJConnectError, requests.RequestException) as exc:
-            raise BackendUnavailable("Music Discovery unavailable") from exc
-        self._musicDiscoveryReady.emit(self._profile_read_result(feed, ticket))
+            result = self.client.music_discovery_feedback(item, feedback)
+        except (AuthenticationError, ProtocolVersionMismatch):
+            if ticket == self._private_read_context():
+                raise
+            return
+        except (DJConnectError, requests.RequestException):
+            result = {}
+        if not self._discovery_action_current(ticket, consent_epoch):
+            return
+        item_id = str(item.get("discovery_item_id") or item.get("id") or "").strip()
+        receipt_item = result.get("item")
+        legacy_receipt = "feedback" not in result and "item" not in result
+        acknowledged = (legacy_receipt or (result.get("feedback") == feedback and isinstance(receipt_item, dict)
+                                           and receipt_item.get("id") == item_id))
+        if result.get("success") is not True or not acknowledged:
+            error = {"success": False, "error": "music_discovery_feedback_failed"}
+            self._musicDiscoveryReady.emit(_DiscoveryReadResult(error, ticket, consent_epoch))
+            return
+        self._persist_backend_summary()
+        media_key = None if legacy_receipt else _discovery_media_key(receipt_item.get("uri"))
+        self._musicDiscoveryFeedbackAccepted.emit(
+            (ticket, consent_epoch), str(item.get("section_id") or ""), item_id, media_key,
+        )
+        self._music_discovery_feed_worker(ticket=ticket, consent_epoch=consent_epoch)
+
+    @Slot(object, str, str, object)
+    def _remove_music_discovery_item(self, action_context, section_id: str, item_id: str, media_key: str | None) -> None:
+        if not self._discovery_action_current(*action_context):
+            return
+        self._set_music_discovery_items([
+            item for item in self._music_discovery_items
+            if (item.get("sectionId"), item.get("discoveryItemId")) != (section_id, item_id)
+            and not (media_key is not None and (item.get("discoveryItemId") == item_id
+                     or (media_key and item.get("_media_key") == media_key)))
+        ])
 
     def _supports_music_discovery_feedback(self) -> bool:
         try:
@@ -2456,7 +4526,7 @@ class DJConnectBackend(QObject):
                 for index, cached_item in enumerate(cached):
                     if index < len(merged):
                         merged[index] = cached_item
-                self._mediaListReady.emit(kind, merged)
+                self._mediaArtworkReady.emit(kind, items, merged)
             finally:
                 self._media_artwork_cache_in_flight.discard(kind)
 
@@ -2538,7 +4608,9 @@ class DJConnectBackend(QObject):
         previous_uri = self.playback.uri
         self.playback.title = str(track["title"])
         self.playback.artist = str(track["subtitle"])
+        self.playback.album = str(track.get("album") or "")
         self.playback.uri = str(track["uri"])
+        self.playback.is_favorite = self.playback.uri in self._demo_favorite_uris
         self.playback.position_seconds = 0
         self.playback.duration_seconds = int(track["duration"])
         self.playback.image_url = ""
@@ -2548,12 +4620,27 @@ class DJConnectBackend(QObject):
             self._show_demo_track_insight()
         self.titleChanged.emit()
         self.artistChanged.emit()
+        self.albumChanged.emit()
         self.imageUrlChanged.emit()
         self.playingChanged.emit()
         self.progressChanged.emit()
-        self.djSession.demo_playback_changed()
-        if previous_uri != self.playback.uri:
+        track_changed = previous_uri != self.playback.uri
+        self.djSession.demo_playback_changed(track_changed=track_changed)
+        if track_changed:
+            self.favoriteChanged.emit()
+            self.trackInsightPlaybackItemChanged.emit()
             self.playbackTrackChanged.emit()
+
+    def _set_demo_favorite(self, liked: bool) -> None:
+        if not self.favoriteAvailable or liked == self.playback.is_favorite:
+            return
+        if liked:
+            self._demo_favorite_uris.add(self.playback.uri)
+        else:
+            self._demo_favorite_uris.discard(self.playback.uri)
+        self.playback.is_favorite = liked
+        self.favoriteChanged.emit()
+        self.showToastForContext(self.tr_key("favorite_saved" if liked else "favorite_removed"), "playback")
 
     def _show_demo_track_insight(self) -> None:
         track = next((item for item in demo_queue_items() if item["uri"] == self.playback.uri), None)
@@ -2575,6 +4662,8 @@ class DJConnectBackend(QObject):
 
     def _set_demo_music_dna(self, enabled: bool) -> None:
         self._music_dna_enabled = enabled
+        self._music_dna_loaded = True
+        self._music_dna_updated_at = ""
         self._music_discovery_consent_rejected = False
         self._music_dna_summary = self.tr_key("demo_dna_summary") if enabled else ""
         tracks = demo_queue_items()
@@ -2670,21 +4759,34 @@ class DJConnectBackend(QObject):
             self.versionMismatchChanged.emit()
         old = self.playback
         old_volume_context = self._control_volume_context(old)
+        if self._playback_seek_context(old) != self._playback_seek_context(playback):
+            self.cancelPlaybackSeek()
         self.playback = playback
         if old_volume_context != self._control_volume_context(playback):
             self.cancelControlVolume()
         track_changed = old.title != playback.title or old.artist != playback.artist or old.image_url != playback.image_url or old.uri != playback.uri
+        observation_changed = ((self._uses_current_track_insight() or self._needs_track_insight_capabilities())
+                               and (old.is_playing != playback.is_playing
+                                    or old.position_seconds - playback.position_seconds > 5))
         if (self._track_insight_subject(old) != self._track_insight_subject(playback)
-                or self._track_insight_output(old) != self._track_insight_output(playback)):
+                or self._track_insight_output(old) != self._track_insight_output(playback)
+                or observation_changed):
             self._track_insight_revision += 1
             self._clear_track_insight()
+            if observation_changed:
+                self.trackInsightObservationChanged.emit()
         elif self._track_insight_result_scope is not None and self._track_insight_result_scope != self._track_insight_scope():
             self._clear_track_insight()
+            self.trackInsightObservationChanged.emit()
         resumed_playback = not old.is_playing and playback.is_playing
         if old.title != playback.title:
             self.titleChanged.emit()
         if old.artist != playback.artist:
             self.artistChanged.emit()
+        if old.album != playback.album:
+            self.albumChanged.emit()
+        if old.uri != playback.uri:
+            self.trackInsightPlaybackItemChanged.emit()
         if old.image_url != playback.image_url:
             self.imageUrlChanged.emit()
         if old.is_playing != playback.is_playing:
@@ -2697,10 +4799,19 @@ class DJConnectBackend(QObject):
             self.shuffleChanged.emit()
         if old.repeat != playback.repeat:
             self.repeatChanged.emit()
+        if (playback.uri and playback.output_device_active
+                and (old.shuffle, old.repeat, old.is_favorite) != (playback.shuffle, playback.repeat, playback.is_favorite)):
+            self.djSession.playback_overlay_observation_changed(playback.uri, playback.output_device_id)
+        output_confirmed = bool(self._unconfirmed_output_choice and playback.output_device_active
+                                and playback.output_device_id == self._unconfirmed_output_choice)
+        if output_confirmed:
+            self._unconfirmed_output_choice = ""
         if (
             old.output_device != playback.output_device
+            or old.output_device_id != playback.output_device_id
             or old.output_devices != playback.output_devices
             or old.output_device_details != playback.output_device_details
+            or output_confirmed
         ):
             self.outputDeviceChanged.emit()
         if old.position_seconds != playback.position_seconds or old.duration_seconds != playback.duration_seconds:
@@ -2714,9 +4825,9 @@ class DJConnectBackend(QObject):
             self.playbackTrackChanged.emit()
         self._set_status_text(self.tr_key("connected" if self.paired else "ready_to_pair"))
 
-    @Slot(str, object)
-    def _apply_media_list(self, kind: str, items: object) -> None:
-        if self._demo_mode:
+    @Slot(str, object, object)
+    def _apply_media_list(self, kind: str, items: object, ticket=None) -> None:
+        if self._demo_mode or (ticket is not None and ticket != self._private_read_context()):
             return
         if not isinstance(items, list):
             return
@@ -2728,33 +4839,38 @@ class DJConnectBackend(QObject):
             return
         self.mediaListsChanged.emit()
 
-    @Slot(object)
-    def _apply_ask_dj_data(self, data: object) -> None:
+    @Slot(str, object, object)
+    def _apply_cached_media_list(self, kind: str, original: object, cached: object) -> None:
+        current = self._queue_items if kind == "queue" else self._playlist_items
+        if current is original:
+            self._apply_media_list(kind, cached)
+
+    @Slot(object, result=bool)
+    def _apply_ask_dj_data(self, data: object) -> bool:
         if self._demo_mode:
-            return
+            return False
         if not self._profile_result_current(data):
-            return
-        if not isinstance(data, dict):
-            return
+            return False
+        if not isinstance(data, dict) or data.get("success") is False:
+            return False
         self._apply_profile_context(data)
         clear_revision = _int_value(data.get("clear_revision"), self._ask_dj_clear_revision)
-        messages_value = data.get("messages")
-        clear_ack = (
-            data.get("cleared") is True
-            or (
-                data.get("success") is True
-                and "clear_revision" in data
-                and isinstance(messages_value, list)
-                and not messages_value
-            )
-        )
+        history_revision = _int_value(data.get("history_revision"), self._ask_dj_history_revision)
+        if clear_revision < self._ask_dj_clear_revision or history_revision < self._ask_dj_history_revision:
+            return False
+        if history_revision > self._ask_dj_history_revision:
+            self._ask_dj_withdrawn_ids.clear()
+        clear_ack = data.get("cleared") is True
         if clear_revision > self._ask_dj_clear_revision or clear_ack:
+            if clear_ack:
+                self._ask_dj_context_request = None
+                self._ask_dj_destination_loading = False
             self._clear_ask_dj_cache(reset_revisions=False)
             self._ask_dj_clear_revision = max(self._ask_dj_clear_revision, clear_revision)
-            self._ask_dj_history_revision = max(self._ask_dj_history_revision, _int_value(data.get("history_revision"), self._ask_dj_history_revision))
+            self._ask_dj_history_revision = max(self._ask_dj_history_revision, history_revision)
             self._set_backend_available(True)
             if clear_ack:
-                return
+                return True
         trimmed_before = str(data.get("history_trimmed_before") or "").strip()
         if trimmed_before:
             self._ask_dj_messages = [m for m in self._ask_dj_messages if str(m.get("created_at") or m.get("server_time") or "") >= trimmed_before]
@@ -2762,12 +4878,36 @@ class DJConnectBackend(QObject):
         if trimmed_count > 0:
             self._ask_dj_messages = _sort_ask_dj_messages_newest_first(_sort_ask_dj_messages(self._ask_dj_messages)[trimmed_count:])
         messages = parse_ask_dj_messages(data)
+        if (data.get("history_scope") == "profile" and self.cfg.active_profile_id
+                and data.get("owner_profile_id") == self.cfg.active_profile_id
+                and self.personalProfileExportAllowed and self.cfg.active_profile_privacy_mode == "private"
+                and isinstance(data.get("messages"), list)):
+            by_id = {
+                row["id"]: row
+                for row in data["messages"] if isinstance(row, dict) and isinstance(row.get("id"), str)
+            }
+            withdrawn = {message_id for message_id, row in by_id.items() if row.get("status") == "source_withdrawn"}
+            if withdrawn:
+                self._ask_dj_withdrawn_ids.update(withdrawn)
+                self._ask_dj_messages = [message for message in self._ask_dj_messages if message.get("id") not in withdrawn]
+            now = self._session_controller._clock.now()
+            for message in messages:
+                if message.get("role") == "assistant":
+                    row = by_id.get(message.get("id"), {})
+                    message["contextEligible"] = (row.get("role") == "assistant"
+                        and row.get("message_kind", "assistant") == "assistant")
+                    message["historicalMatches"] = [
+                        match for match in ask_dj_history_matches(row.get("historical_matches"), now=now)
+                        if (match["session_id"], match["entry_id"]) not in self._ask_dj_withdrawn_entries
+                    ]
+        messages = [message for message in messages if message.get("id") not in self._ask_dj_withdrawn_ids]
         if messages:
             self._merge_ask_dj_messages(messages, limit=_int_value(data.get("history_limit"), 100))
         else:
             self.askDjChanged.emit()
-        self._ask_dj_history_revision = max(self._ask_dj_history_revision, _int_value(data.get("history_revision"), self._ask_dj_history_revision))
+        self._ask_dj_history_revision = max(self._ask_dj_history_revision, history_revision)
         self._set_backend_available(True)
+        return True
 
     def _merge_ask_dj_messages(self, messages: list[dict[str, object]], limit: int = 100) -> None:
         merged = list(self._ask_dj_messages)
@@ -2798,6 +4938,13 @@ class DJConnectBackend(QObject):
 
     def _clear_ask_dj_cache(self, *, reset_revisions: bool = True) -> None:
         self._ask_dj_messages = []
+        self._ask_dj_context_page = None
+        if reset_revisions:
+            self._ask_dj_context_request = None
+            self._ask_dj_destination_loading = False
+        self._ask_dj_withdrawn_ids.clear()
+        self._ask_dj_withdrawn_entries.clear()
+        self._ask_dj_delivery_key = ""
         self._ask_dj_poll_error_count = 0
         self._ask_dj_poll_in_flight = False
         self._ask_dj_unavailable_until = 0.0
@@ -2840,6 +4987,7 @@ class DJConnectBackend(QObject):
     def _session_owner_changed(self):
         if self._shutting_down:
             return
+        self.closeAskDjHelp()
         self._clear_profile_scoped_caches(preserve_session=True)
         self._invalidate_shared_settings_if_context_changed()
         timer = getattr(self, "_settings_reconcile_timer", None)
@@ -2850,20 +4998,43 @@ class DJConnectBackend(QObject):
         return (self.cfg.active_profile_id, self.cfg.active_profile_type, self.cfg.active_profile_privacy_mode)
 
     def _clear_profile_scoped_caches(self, *, preserve_session=False) -> None:
+        if self._media_list_load_failures:
+            self._media_list_load_failures.clear()
+            self.mediaActivityChanged.emit()
         if not preserve_session and hasattr(self, "_session_controller"):
             self._session_controller.invalidate()
+        if self._queue_items or self._playlist_items:
+            self._queue_items = []
+            self._playlist_items = []
+            self.mediaListsChanged.emit()
+        if (self._pending_output_choice or self._unconfirmed_output_choice
+                or self._control_outputs_request is not None or self._control_outputs_status):
+            self._pending_output_choice = None
+            self._unconfirmed_output_choice = ""
+            self._control_outputs_request = None
+            self._control_outputs_status = ""
+            self.controlVolumeChanged.emit()
+            self.outputDeviceChanged.emit()
         self._shared_settings_epoch += 1
         self._shared_settings_state = {}
         self.sharedSettingsChanged.emit()
         self._clear_ask_dj_cache()
         self._music_dna_enabled = False
+        self._music_dna_loaded = False
+        self._music_dna_context_revision += 1
+        self._music_dna_updated_at = ""
         self._music_dna_summary = ""
         self._music_dna_error = ""
+        self._music_dna_needs_recovery = False
+        self._music_dna_import = None
         self._music_dna_sections = []
         self._set_music_discovery_items([])
         self._music_discovery_empty_text = ""
         self._music_discovery_error = ""
-        self._music_discovery_playing_id = ""
+        self._music_discovery_dna_disabled = False
+        self._music_discovery_loaded = False
+        self._music_discovery_feed_deadline = None
+        self._music_discovery_playing = None
         self._music_discovery_feedback_supported = False
         self._music_discovery_consent_rejected = False
         self._track_insight_revision += 1
@@ -2900,8 +5071,10 @@ class DJConnectBackend(QObject):
             self._music_discovery_items = items
             self.musicDiscoveryItemsChanged.emit()
 
-    def _clear_music_discovery_playing(self) -> None:
-        self._music_discovery_playing_id = ""
+    def _clear_music_discovery_playing(self, expected: tuple[str, str]) -> None:
+        if self._music_discovery_playing is not expected:
+            return
+        self._music_discovery_playing = None
         self.musicDiscoveryChanged.emit()
 
     @Slot(object)
@@ -2912,22 +5085,49 @@ class DJConnectBackend(QObject):
             return
         if not isinstance(data, dict):
             return
+        profile_read = isinstance(data, _MusicDnaProfileResult)
+        self._music_dna_needs_recovery = profile_read and data.retryable
         if data.get("success") is False:
             code = data.get("error")
             key = "session_profile_missing" if isinstance(code, str) and code in PROFILE_ERROR_CODES | {"music_dna_context_changed"} else "backend_unavailable"
-            self._music_dna_error = self.tr_key(key)
-            self._music_dna_summary = ""
-            self._music_dna_sections = []
+            self._music_dna_error = self.tr_key("music_dna_recovering" if self._music_dna_needs_recovery else key)
+            if not self._music_dna_needs_recovery:
+                self._music_dna_summary = ""
+                self._music_dna_sections = []
+                self._music_dna_updated_at = ""
             self.musicDnaChanged.emit()
+            if profile_read and data.manual:
+                notice_key = key if key == "session_profile_missing" else "music_dna_profile_unavailable"
+                self._show_toast(self.tr_key(notice_key), 2200, "musicdna")
             return
         self._music_dna_error = ""
         self._apply_profile_context(data)
+        was_disabled = self._music_dna_blocks_discover()
         parsed = parse_music_dna_profile(data, ha_url=self.cfg.ha_url)
         self._music_dna_enabled = bool(parsed["enabled"])
+        self._music_dna_loaded = isinstance(data.get("enabled"), bool)
+        profile = data.get("profile")
+        updated_at = profile.get("updated_at") if isinstance(profile, dict) else None
+        if timestamp(updated_at) is None:
+            updated_at = data.get("updated_at")
+        self._music_dna_updated_at = updated_at if (self._music_dna_loaded and self._music_dna_enabled
+            and isinstance(updated_at, str) and timestamp(updated_at) is not None) else ""
         self._music_dna_summary = str(parsed["summary"])
         self._music_dna_sections = list(parsed["sections"])
+        if not was_disabled and self._music_dna_blocks_discover():
+            self._music_discovery_consent_epoch += 1
+            self._set_music_discovery_items([])
+            self._music_discovery_loaded = False
+            self._music_discovery_feed_deadline = None
+            self._music_discovery_feedback_supported = False
+            self._music_discovery_error = ""
+            self._music_discovery_empty_text = ""
+            self.musicDiscoveryChanged.emit()
         self._set_backend_available(True)
         self.musicDnaChanged.emit()
+        if profile_read and data.manual:
+            notice_key = "music_dna_updated" if self._music_dna_loaded else "music_dna_profile_unavailable"
+            self._show_toast(self.tr_key(notice_key), 2200, "musicdna")
 
     @Slot(object)
     def _apply_music_discovery_data(self, data: object) -> None:
@@ -2937,33 +5137,74 @@ class DJConnectBackend(QObject):
             return
         if not isinstance(data, dict):
             return
+        if self._music_dna_blocks_discover() or (
+                isinstance(data, _DiscoveryReadResult) and data.consent_epoch != self._music_discovery_consent_epoch):
+            return
+        manual = isinstance(data, _DiscoveryReadResult) and data.manual
         error = str(data.get("error") or "")
+        if data.get("success") is False and error in {
+            "music_discovery_play_failed", "music_discovery_play_unconfirmed", "music_discovery_feedback_failed",
+        }:
+            self._music_discovery_error = self.tr_key(error)
+            self.musicDiscoveryChanged.emit()
+            return
+        if data.get("success") is False and error == "music_discovery_unavailable":
+            self._music_discovery_error = self.tr_key("music_discovery_load_failed")
+            self._set_backend_available(False)
+            self.musicDiscoveryChanged.emit()
+            if manual:
+                self._show_toast(self._music_discovery_error, 2200, "discover")
+            return
         if data.get("success") is False and error != "music_dna_disabled":
             # Rejected feeds are not content or Profile authority. Never render
             # their machine error/message as user-facing recommendation text.
             self._set_music_discovery_items([])
             self._music_discovery_feedback_supported = False
             self._music_discovery_empty_text = ""
+            self._music_discovery_dna_disabled = False
+            self._music_discovery_loaded = False
+            self._music_discovery_feed_deadline = None
             key = "session_profile_missing" if error in PROFILE_ERROR_CODES | {"music_dna_context_changed"} else "backend_unavailable"
             self._music_discovery_error = self.tr_key(key)
             self.musicDiscoveryChanged.emit()
+            if manual:
+                self._show_toast(self._music_discovery_error, 2200, "discover")
             return
         self._apply_profile_context(data)
         self._music_discovery_consent_rejected = False
-        if data.get("enabled") is False or str(data.get("error") or "") == "music_dna_disabled":
+        self._music_discovery_loaded = True
+        self._music_discovery_dna_disabled = data.get("enabled") is False or error == "music_dna_disabled"
+        if self._music_discovery_dna_disabled:
+            self._music_discovery_feed_deadline = None
             self._set_music_discovery_items([])
             self._music_discovery_feedback_supported = False
             self._music_discovery_error = ""
             self._music_discovery_empty_text = str(data.get("reason") or data.get("empty_text") or data.get("message") or self.tr_key("music_discovery_requires_music_dna"))
             self.musicDiscoveryChanged.emit()
+            if manual:
+                self._show_toast(self.tr_key("music_discovery_requires_music_dna"), 2200, "discover")
             return
         parsed = parse_music_discovery_feed(data, ha_url=self.cfg.ha_url)
+        generated = timestamp(data.get("generated_at"))
+        ttl = data.get("ttl_seconds")
+        self._music_discovery_feed_deadline = (generated + ttl
+            if data.get("enabled") is True and generated is not None
+            and type(ttl) is int and 0 < ttl <= 2_147_483_647 else None)
         self._set_music_discovery_items(parsed["items"])
         self._music_discovery_empty_text = parsed["empty_text"]
         self._music_discovery_feedback_supported = bool(data.get("_feedback_supported") or data.get("feedback_supported") or data.get("supports_feedback"))
         self._music_discovery_error = ""
         self._set_backend_available(True)
         self.musicDiscoveryChanged.emit()
+        if manual:
+            if data.used_existing_feed:
+                notice_key = "music_discovery_existing_feed"
+            else:
+                notice_key = "music_discovery_rate_limited" if data.get("rate_limited") is True else "music_discovery_updated"
+            self._show_toast(self.tr_key(notice_key), 2200, "discover")
+
+    def _music_dna_blocks_discover(self):
+        return self._music_dna_loaded and not self._music_dna_enabled
 
     @Slot(object)
     def _apply_track_insight_data(self, data: object) -> None:
@@ -2976,20 +5217,34 @@ class DJConnectBackend(QObject):
             return
         if not isinstance(data, dict):
             return
+        manual = isinstance(data, _TrackInsightResult) and data.manual
         error = str(data.get("error") or "").strip()
-        if error == "no_track_playing":
-            self._clear_track_insight(error=self.tr_key("track_insight_no_track"))
+        if error in ("no_track_playing", "current_track_unavailable"):
+            self._clear_track_insight(error=self.tr_key("track_insight_no_track"),
+                                      retryable=error == "current_track_unavailable", notify=manual)
             return
         if error == "rate_limited":
-            self._clear_track_insight(error=self.tr_key("track_insight_rate_limited"))
+            self._clear_track_insight(error=self.tr_key("track_insight_rate_limited"), retryable=True, notify=manual)
             return
         if error:
-            self._clear_track_insight(error=self.tr_key("track_insight_retry"))
+            self._clear_track_insight(error=self.tr_key("track_insight_retry"),
+                                      retryable=error in {"transient", "track_insight_context_changed"}, notify=manual)
             return
+        proof = data.proof if isinstance(data, _TrackInsightResult) else None
+        deadline = None
+        if proof is not None:
+            observation, deadline = proof
+            previous = self._track_insight_last_proof
+            if previous and previous[:2] == (scope, observation):
+                deadline = min(deadline, previous[2])
+            if deadline <= self._session_controller._clock.now():
+                self._expire_track_insight()
+                return
+            self._track_insight_last_proof = (scope, observation, deadline)
         messages = parse_ask_dj_messages(data)
         message = next((item for item in messages if item.get("trackInsight")), None)
         if not isinstance(message, dict):
-            self._clear_track_insight(error=self.tr_key("track_insight_empty"))
+            self._clear_track_insight(error=self.tr_key("track_insight_empty"), notify=manual)
             return
         track = message.get("trackInsightData")
         track_data = track.get("track") if isinstance(track, dict) and isinstance(track.get("track"), dict) else {}
@@ -3003,10 +5258,19 @@ class DJConnectBackend(QObject):
         self._track_insight_error = ""
         self._track_insight_items = list(message.get("items")) if isinstance(message.get("items"), list) else []
         self._track_insight_sections = list(analysis.get("sections")) if isinstance(analysis.get("sections"), list) else []
+        raw_analysis = track.get("analysis", {}) if isinstance(track, dict) else {}
+        self._track_insight_audio_notice = (_track_insight_unmeasured(raw_analysis)
+                                            and raw_analysis.get("basis") != "unmeasured_metadata_only_v1")
+        self._track_insight_verified_credit = track.get("verifiedCredit", {}) if isinstance(track, dict) else {}
         self._track_insight_visualizer = _track_insight_visualizer(track, self._track_insight_items, self._track_insight_sections) if isinstance(track, dict) else {}
         self._track_insight_result_scope = scope
+        self._track_insight_deadline = deadline
+        self._track_insight_retryable = False
+        self._schedule_track_insight_expiry()
         self._set_backend_available(True)
         self.trackInsightChanged.emit()
+        if manual:
+            self._show_toast(self.tr_key("track_insight_updated"), 2200, "trackinsight")
 
     @staticmethod
     def _playback_track_changed(previous: Playback, current: Playback) -> bool:
@@ -3040,9 +5304,60 @@ class DJConnectBackend(QObject):
             self.cfg.music_backend_revision,
             self.cfg.music_target_player.get("id", ""),
             self._track_insight_output(self.playback),
+            self._current_track_insight_style(),
         )
 
-    def _clear_track_insight(self, *, error: str = "") -> None:
+    def _current_track_insight_style(self) -> tuple:
+        if not (self._uses_current_track_insight() or self._needs_track_insight_capabilities()):
+            return ()
+        return (self._session_controller.track_insight_session_style(),
+                self._shared_settings_state.get("track_insight_style", ""))
+
+    @Slot()
+    def _observe_track_insight_style(self) -> None:
+        style = self._current_track_insight_style()
+        if style == self._track_insight_style:
+            return
+        self._track_insight_style = style
+        if self._demo_mode:
+            return
+        self._track_insight_revision += 1
+        self._clear_track_insight()
+        self.trackInsightObservationChanged.emit()
+
+    def _uses_current_track_insight(self) -> bool:
+        return (self.cfg.music_backend not in {"music_assistant", "later_manual"}
+                and self._session_controller.supports_current_track_insight())
+
+    def _needs_track_insight_capabilities(self) -> bool:
+        return bool(self.cfg.ha_url and self.paired
+                    and self.cfg.music_backend not in {"music_assistant", "later_manual"}
+                    and not self._session_controller.has_capability_snapshot())
+
+    def _schedule_track_insight_expiry(self) -> None:
+        self._track_insight_expiry_timer.stop()
+        if self._track_insight_deadline is not None:
+            remaining_ms = 1000 * (self._track_insight_deadline - self._session_controller._clock.now())
+            self._track_insight_expiry_timer.start(max(1, math.ceil(remaining_ms)))
+
+    def _expire_track_insight(self) -> None:
+        if self._track_insight_deadline is None:
+            return
+        if self._track_insight_deadline <= self._session_controller._clock.now():
+            self._clear_track_insight(retryable=True)
+            self.trackInsightObservationChanged.emit()
+        else:
+            self._schedule_track_insight_expiry()
+
+    def _invalidate_track_insight_language(self) -> None:
+        self._track_insight_revision += 1
+        if self._demo_mode:
+            if self._track_insight_title:
+                self._show_demo_track_insight()
+        else:
+            self._clear_track_insight()
+
+    def _clear_track_insight(self, *, error: str = "", retryable: bool = False, notify: bool = False) -> None:
         changed = any(
             (
                 self._track_insight_title,
@@ -3051,6 +5366,8 @@ class DJConnectBackend(QObject):
                 self._track_insight_image_url,
                 self._track_insight_text,
                 self._track_insight_error,
+                self._track_insight_audio_notice,
+                self._track_insight_verified_credit,
                 self._track_insight_items,
                 self._track_insight_sections,
                 self._track_insight_visualizer,
@@ -3063,12 +5380,19 @@ class DJConnectBackend(QObject):
         self._track_insight_image_url = ""
         self._track_insight_text = ""
         self._track_insight_error = error
+        self._track_insight_audio_notice = False
+        self._track_insight_verified_credit = {}
         self._track_insight_items = []
         self._track_insight_sections = []
         self._track_insight_visualizer = {}
         self._track_insight_result_scope = None
+        self._track_insight_deadline = None
+        self._track_insight_retryable = retryable
+        self._track_insight_expiry_timer.stop()
         if changed or error:
             self.trackInsightChanged.emit()
+        if notify:
+            self._show_toast(error, 2200, "trackinsight")
 
     @Slot(str, str)
     def _apply_output_device_rejection(self, previous: str, attempted: str) -> None:
@@ -3114,6 +5438,9 @@ class DJConnectBackend(QObject):
     def _set_backend_available(self, value: bool) -> None:
         if self._backend_available == value:
             return
+        if not value:
+            self._about_music_request_time = elapsed_time()
+            self._about_connection_request_time = self._about_music_request_time
         self._backend_available = value
         self.backendAvailableChanged.emit()
 
@@ -3159,6 +5486,9 @@ class DJConnectBackend(QObject):
     @Slot()
     def shutdown(self) -> None:
         self._shutting_down = True
+        self.cancelTrackInsightClip()
+        self._game_settings.sync()
+        self.closeAskDjHelp()
         self._edge_back_gesture.cancel()
         _LOGGER.info("Stopping DJConnect Pi client backend")
         self._poll_timer.stop()
@@ -3167,6 +5497,7 @@ class DJConnectBackend(QObject):
         self._startup_settings_timer.stop()
         self._startup_refresh_timer.stop()
         self._settings_reconcile_timer.stop()
+        self._track_insight_expiry_timer.stop()
         self._session_controller.setForeground(False)
         self._session_controller.shutdownImages()
         self._session_executor.shutdown(wait=False, cancel_futures=True)
@@ -3464,6 +5795,10 @@ def demo_playlist_items() -> list[dict[str, object]]:
 
 
 def parse_queue_items(data: dict[str, object]) -> list[dict[str, object]]:
+    return _parse_queue_snapshot(data) or []
+
+
+def _parse_queue_snapshot(data: dict[str, object]) -> list[dict[str, object]] | None:
     raw_queue = _first_present(data, ("queue",))
     context_uri = str(_first_present(data, ("context_uri", "contextUri")) or "")
     if isinstance(raw_queue, dict):
@@ -3474,64 +5809,45 @@ def parse_queue_items(data: dict[str, object]) -> list[dict[str, object]]:
     else:
         raw_items = None
     if not isinstance(raw_items, list):
-        return []
-    return _dedupe_queue_items([parsed for item in raw_items[:100] if isinstance(item, dict) and (parsed := _queue_item(item, context_uri))])
+        return None
+    return compact_adjacent_tracks([
+        {**parsed, "sourceIndex": source_index}
+        for source_index, item in enumerate(raw_items[:100])
+        if isinstance(item, dict) and (parsed := _queue_item(item, context_uri))
+    ])
 
 
 def parse_playlist_items(data: dict[str, object]) -> list[dict[str, object]]:
+    return _parse_playlist_snapshot(data) or []
+
+
+def _parse_playlist_snapshot(data: dict[str, object]) -> list[dict[str, object]] | None:
     raw_items = _first_present(data, ("playlists", "items"))
     if not isinstance(raw_items, list):
-        return []
-    return [parsed for item in raw_items[:100] if isinstance(item, dict) and (parsed := _media_item(item, playlist=True))]
+        return None
+    return [parsed for item in raw_items[:100] if isinstance(item, dict) and (parsed := _playlist_item(item))]
 
 
-def _dedupe_queue_items(items: list[dict[str, object]]) -> list[dict[str, object]]:
-    seen: set[tuple[str, str, str, str]] = set()
-    deduped: list[dict[str, object]] = []
-    for item in items:
-        key = (
-            str(item.get("uri") or "").strip().casefold(),
-            str(item.get("title") or "").strip().casefold(),
-            str(item.get("subtitle") or "").strip().casefold(),
-            str(item.get("imageUrl") or "").strip(),
-        )
-        if key in seen:
-            continue
-        seen.add(key)
-        deduped.append(item)
-    if len(items) > 1 and len(deduped) == 1:
-        return []
-    return deduped
-
-
-def _media_item(item: dict[str, object], playlist: bool = False) -> dict[str, object] | None:
+def _playlist_item(item: dict[str, object]) -> dict[str, object] | None:
     title = str(item.get("name") or item.get("title") or item.get("display_title") or item.get("track_name") or "")
-    subtitle = str(item.get("artist") or item.get("artist_name") or item.get("artists") or item.get("subtitle") or item.get("album") or "")
-    uri = str(item.get("uri") or item.get("id") or item.get("value") or item.get("playlist_uri") or item.get("track_uri") or "")
-    context_uri = str(item.get("context_uri") or item.get("contextUri") or item.get("queue_context") or item.get("queueContext") or "")
-    index = item.get("index")
-    image_url = _image_url_from(item)
-    if playlist:
-        subtitle = str(item.get("owner") or item.get("owner_name") or item.get("description") or subtitle)
-        if not title or not uri:
-            return None
-    result: dict[str, object] = {
+    uri = playlist_command_target(item)
+    if not title or not uri:
+        return None
+    subtitle = str(item.get("owner") or item.get("owner_name") or item.get("description")
+                   or item.get("artist") or item.get("artist_name") or item.get("artists")
+                   or item.get("subtitle") or item.get("album") or "")
+    return {
         "title": title,
         "subtitle": subtitle,
         "uri": uri,
-        "imageUrl": image_url,
-        "tint": "#8b5cf6" if playlist else "#38bdf8",
+        "imageUrl": _image_url_from(item),
+        "tint": "#8b5cf6",
     }
-    if not playlist:
-        result["contextUri"] = context_uri
-        result["index"] = index if isinstance(index, int) else None
-    return result
 
 
 def _queue_item(item: dict[str, object], queue_context_uri: str = "") -> dict[str, object] | None:
     title = str(item.get("title") or item.get("name") or item.get("display_title") or item.get("track_name") or "")
-    artist = str(item.get("artist") or item.get("artist_name") or item.get("subtitle") or "")
-    album = str(item.get("album") or item.get("album_name") or "")
+    artist, album = queue_artist_and_album(item)
     uri = str(item.get("uri") or item.get("id") or item.get("track_uri") or "")
     context_uri = str(item.get("context_uri") or item.get("contextUri") or item.get("queue_context") or item.get("queueContext") or queue_context_uri)
     index = item.get("index")
@@ -3545,7 +5861,7 @@ def _queue_item(item: dict[str, object], queue_context_uri: str = "") -> dict[st
         "imageUrl": image_url,
         "tint": "#38bdf8",
         "contextUri": context_uri,
-        "index": index if isinstance(index, int) else None,
+        "index": index if type(index) is int and index >= 0 else None,
     }
 
 
@@ -3585,11 +5901,13 @@ def media_item_payload(command: str, item: object) -> dict[str, object]:
         or ""
     ).strip()
     index = item_data.get("index")
+    if type(index) is not int or index < 0:
+        index = item_data.get("sourceIndex")
     if title:
         value["title"] = title
     if artist:
         value["artist"] = artist
-    if isinstance(index, int):
+    if type(index) is int and index >= 0:
         value["index"] = index
     if context_uri:
         value["context_uri"] = context_uri
@@ -3639,6 +5957,8 @@ def _contains_playback_payload(data: dict[str, object]) -> bool:
 
 
 def _ask_dj_message(item: dict[str, object]) -> dict[str, object] | None:
+    if item.get("status") == "source_withdrawn":
+        return None
     assistant_payload, text, user_text = _ask_dj_message_content(item)
     role = str(item.get("role") or item.get("sender") or "").strip().lower()
     kind = str(item.get("message_kind") or item.get("kind") or "").strip().lower()
@@ -3684,6 +6004,7 @@ def _ask_dj_message(item: dict[str, object]) -> dict[str, object] | None:
 def _ask_dj_message_metadata(item: dict[str, object]) -> dict[str, object]:
     return {
         "id": str(item.get("id") or item.get("message_id") or item.get("server_id") or ""),
+        "contextEligible": False,
         "client_message_id": str(item.get("client_message_id") or ""),
         "exchange_id": str(item.get("exchange_id") or ""),
         "exchange_order": _optional_int(item.get("exchange_order")),
@@ -3785,6 +6106,27 @@ def _is_track_insight(item: dict[str, object]) -> bool:
     )
 
 
+def _current_track_insight_proof(subject: object, recording: str, requested_at: float, now: float) -> tuple[str, float] | None:
+    if (not isinstance(subject, dict) or type(subject.get("schema_version")) is not int
+            or subject["schema_version"] != 1 or subject.get("mode") != "current"
+            or not re.fullmatch(r"spotify:track:[A-Za-z0-9]{22}", recording)
+            or subject.get("media_identity") != recording or now < requested_at):
+        return None
+    observation = subject.get("observation_id")
+    expires_in, expires_at = subject.get("expires_in"), subject.get("expires_at")
+    if (not isinstance(observation, str) or not observation or len(observation) > 512
+            or type(expires_in) not in (int, float) or not 0 < expires_in <= 30
+            or type(expires_at) not in (int, float)):
+        return None
+    try:
+        if len(observation.encode("utf-8")) > 512 or not math.isfinite(expires_at):
+            return None
+    except (UnicodeEncodeError, OverflowError):
+        return None
+    deadline = min(requested_at + expires_in, expires_at)
+    return (observation, deadline) if deadline > now else None
+
+
 def _track_insight_payload(item: dict[str, object]) -> dict[str, object]:
     payload = item.get("track_insight")
     return payload if isinstance(payload, dict) else item
@@ -3797,6 +6139,11 @@ def _track_insight_text(item: dict[str, object]) -> str:
         return "Er speelt nu geen track."
     if error == "rate_limited":
         return "Track Insight is even beperkt. Probeer het zo opnieuw."
+    analysis = payload.get("analysis")
+    if isinstance(analysis, dict) and _track_insight_unmeasured(analysis):
+        explanation = analysis.get("full_text") or analysis.get("summary")
+        if isinstance(explanation, str) and explanation.strip():
+            return explanation.strip()
     track = payload.get("track")
     if isinstance(track, dict):
         title = str(track.get("title") or track.get("name") or "").strip()
@@ -3822,6 +6169,7 @@ def _track_insight_data(item: dict[str, object]) -> dict[str, object]:
     return {
         "track": payload.get("track") if isinstance(payload.get("track"), dict) else {},
         "analysis": _track_insight_allowed_analysis(analysis),
+        "verifiedCredit": track_insight_verified_credit(analysis),
         "music_dna": payload.get("music_dna") if isinstance(payload.get("music_dna"), dict) else {},
         "visual_profile": payload.get("visual_profile") if isinstance(payload.get("visual_profile"), dict) else {},
         "visualizer": visualizer,
@@ -3848,6 +6196,8 @@ def _track_insight_allowed_analysis(analysis: dict[str, object]) -> dict[str, ob
         "danceability",
         "intensity",
         "confidence",
+        "basis",
+        "measured_audio",
         "production_notes",
         "instrumentation",
         "arrangement_notes",
@@ -3859,6 +6209,12 @@ def _track_insight_allowed_analysis(analysis: dict[str, object]) -> dict[str, ob
         "sections",
     }
     return {key: value for key, value in analysis.items() if key in allowed}
+
+
+def _track_insight_unmeasured(analysis: dict[str, object]) -> bool:
+    return (analysis.get("measured_audio") is False or analysis.get("basis") in (
+        "unmeasured_metadata_only_v1", "qualified_credit_and_interpretation_v1",
+    ))
 
 
 def _track_insight_music_dna_match(data: dict[str, object]) -> str:
@@ -3873,6 +6229,8 @@ def _track_insight_music_dna_match(data: dict[str, object]) -> str:
 
 def _track_insight_visualizer(data: dict[str, object], items: list[dict[str, object]], sections: list[dict[str, object]]) -> dict[str, object]:
     analysis = data.get("analysis") if isinstance(data.get("analysis"), dict) else {}
+    if _track_insight_unmeasured(analysis):
+        return {}
     track = data.get("track") if isinstance(data.get("track"), dict) else {}
     visualizer = data.get("visualizer") if isinstance(data.get("visualizer"), dict) else {}
     colors = _track_visualizer_colors(visualizer, data)
@@ -4012,7 +6370,7 @@ def _track_insight_analysis(data: dict[str, object]) -> dict[str, object]:
     analysis = data.get("analysis")
     music_dna = data.get("music_dna")
     sections: list[dict[str, object]] = []
-    if isinstance(analysis, dict):
+    if isinstance(analysis, dict) and analysis.get("basis") != "unmeasured_metadata_only_v1":
         sections.extend(_track_insight_analysis_sections(analysis, data.get("track")))
     sections.extend(_track_insight_context_sections(data.get("mood_context"), music_dna))
     return {
@@ -4249,7 +6607,7 @@ def _track_insight_items(data: dict[str, object]) -> list[dict[str, object]]:
                 "musicDna": True,
             }
         )
-    if isinstance(analysis, dict):
+    if isinstance(analysis, dict) and not _track_insight_unmeasured(analysis):
         for key, title in (("energy", "Energy"), ("danceability", "Danceability"), ("intensity", "Intensity"), ("confidence", "Confidence")):
             raw = analysis.get(key)
             if raw not in (None, ""):
@@ -4268,6 +6626,9 @@ def _track_insight_items(data: dict[str, object]) -> list[dict[str, object]]:
                         "musicDna": False,
                     }
                 )
+                if (key != "confidence" and not bounded_text(analysis.get("basis"), 128).strip()
+                        and not data.get("verifiedCredit") and type(raw) in (int, float) and 0 <= raw <= 1):
+                    items[-1]["shareFraction"] = float(raw)
     if isinstance(music_dna, dict):
         traits = _string_list(music_dna.get("traits") or music_dna.get("signals"))
         for trait in traits[:4]:
@@ -4602,6 +6963,60 @@ def _first_dict(*values: object) -> dict[str, object]:
     return {}
 
 
+def _read_music_dna_import(path: Path) -> tuple[dict[str, object], dict[str, object]]:
+    with os.fdopen(os.open(path, os.O_RDONLY | os.O_NONBLOCK), "rb") as source:
+        if not stat.S_ISREG(os.fstat(source.fileno()).st_mode):
+            raise ValueError("invalid_music_dna_import")
+        contents = source.read(MUSIC_DNA_IMPORT_MAX_BYTES + 1)
+    if len(contents) > MUSIC_DNA_IMPORT_MAX_BYTES:
+        raise ValueError("invalid_music_dna_import")
+    document = json.loads(contents)
+    export_format = "djconnect.music_dna.export"
+    if not isinstance(document, dict) or ("format" in document and document["format"] != export_format):
+        raise ValueError("invalid_music_dna_import")
+    envelope = "format" in document
+    if envelope and (document.get("success") is not True or type(document.get("schema_version")) is not int
+                     or document["schema_version"] != 1):
+        raise ValueError("invalid_music_dna_import")
+    response = document.get("profile") if envelope else document
+    if (not isinstance(response, dict) or response.get("success") is not True
+            or type(response.get("enabled")) is not bool or not isinstance(response.get("profile"), dict)):
+        raise ValueError("invalid_music_dna_import")
+    profile = response["profile"]
+    json.dumps(profile, allow_nan=False)
+    preview = {"filename": path.name}
+    counts = []
+    for field, label in (("track_count", "music_dna_card_tracks"), ("artist_count", "music_dna_card_artists"),
+                         ("genre_count", "music_dna_card_genres")):
+        value = profile.get(field)
+        if type(value) is int and 0 <= value <= 2**53 - 1:
+            counts.append({"label": label, "value": value})
+    if counts:
+        preview["counts"] = counts
+    exported = document.get("exported_at") if envelope else None
+    if isinstance(exported, str) and timestamp(exported) is not None:
+        preview["exportedAt"] = exported
+    client_type = document.get("exported_by_client_type") if envelope else None
+    if isinstance(client_type, str):
+        client_label = {
+            "ios": "music_dna_origin_ios",
+            "macos": "music_dna_origin_macos",
+            "watchos": "music_dna_origin_watchos",
+            "raspberry_pi": "music_dna_origin_raspberry_pi",
+            "esp32": "music_dna_origin_esp32",
+        }.get(client_type)
+        if client_label:
+            preview["exportClientLabel"] = client_label
+    for updated in (response.get("updated_at"), profile.get("updated_at"), preview.get("exportedAt")):
+        if isinstance(updated, str) and timestamp(updated) is not None:
+            preview["updatedAt"] = updated
+            break
+    generation = response.get("generation")
+    if type(generation) is int and 0 <= generation <= 2**53 - 1:
+        preview["generation"] = generation
+    return {"success": True, "enabled": response["enabled"], "profile": profile}, preview
+
+
 def parse_music_dna_profile(data: dict[str, object], *, ha_url: str = "") -> dict[str, object]:
     profile = data.get("profile")
     if not isinstance(profile, dict):
@@ -4619,7 +7034,7 @@ def _music_dna_cards(profile: dict[str, object], ha_url: str) -> list[dict[str, 
         value = profile.get(key)
         return value if isinstance(value, dict) and value.get("eligible") is not False else {}
 
-    def rows(items, *, artwork=False, limit=5):
+    def rows(items, *, artwork=False, limit=5, title_fields=("title", "name", "track_name"), subtitle_field=None):
         result = []
         for item in items[:limit] if isinstance(items, list) else []:
             if isinstance(item, str) and item.strip():
@@ -4627,13 +7042,17 @@ def _music_dna_cards(profile: dict[str, object], ha_url: str) -> list[dict[str, 
                 continue
             if not isinstance(item, dict):
                 continue
-            title = next((item[key].strip() for key in ("title", "name", "track_name")
+            title = next((item[key].strip() for key in title_fields
                           if isinstance(item.get(key), str) and item[key].strip()), "")
             if not title:
                 continue
             subtitle = " · ".join(value for value in (item.get("artist") or item.get("artist_name"),
                                                        item.get("album") or item.get("album_name"))
                                   if isinstance(value, str) and value.strip())
+            if subtitle_field:
+                secondary = bounded_text(item.get(subtitle_field), 256).strip()
+                if secondary and secondary != title:
+                    subtitle = secondary
             count = item.get("play_count", item.get("count"))
             row = {"title": title, "subtitle": subtitle, "value": item.get("formatted") or "",
                    "count": count if type(count) is int and count >= 0 else None}
@@ -4642,20 +7061,54 @@ def _music_dna_cards(profile: dict[str, object], ha_url: str) -> list[dict[str, 
             result.append(row)
         return result
 
-    def card(key, icon, *, entries=None, groups=None, value="", metric=None, average=None, count=None):
+    def card(key, icon, *, entries=None, groups=None, value="", value_key="", metric=None, average=None, count=None):
         if entries or groups or value or metric is not None or average is not None:
             cards.append({"key": "music_dna_card_" + key, "icon": icon, "rows": entries or [],
-                          "groups": groups or [], "value": value, "metric": metric,
+                          "groups": groups or [], "value": value, "valueKey": value_key, "metric": metric,
                           "average": average, "count": count})
 
     def grouped(title, entries, *, shelf=False):
         return [{"key": "music_dna_card_" + title, "rows": entries, "shelf": shelf}] if entries else []
 
+    def playtime_ranking(items):
+        entries = rows(items, limit=3)
+        for rank, entry in enumerate(entries, 1):
+            entry["rank"] = rank
+            entry["value"] = bounded_text(entry.get("value"), 64).strip() or "–"
+        return entries
+
+    def accepted_rows(items, *, artwork=False, limit=5):
+        return rows(items, artwork=artwork, limit=limit, title_fields=("title", "name", "track_name", "subtitle"),
+                    subtitle_field="subtitle")
+
+    def signal_rows(items):
+        if not isinstance(items, list):
+            return []
+        result = []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            titles = (bounded_text(item.get(key), 256).strip() for key in ("title", "name", "value"))
+            primary = next(filter(None, titles), "")
+            artist = bounded_text(item.get("artist"), 256).strip() or bounded_text(item.get("artist_name"), 256).strip()
+            album = bounded_text(item.get("album"), 256).strip()
+            genres = item.get("genres")
+            styles = ""
+            if isinstance(genres, list):
+                styles = ", ".join(filter(None, (bounded_text(genre, 128).strip() for genre in genres[:2])))
+            labels = [label for label in (primary, artist, album, styles) if label]
+            if labels:
+                result.append({"title": labels[0], "subtitle": " · ".join(labels[1:])})
+                if len(result) == 4:
+                    break
+        return result
+
     def percentages(items, field, labels):
-        return [{"labelKey": labels.get(str(item[field]).lower(), ""), "title": str(item[field]),
+        return [{"labelKey": labels.get(item[field].strip().casefold(), ""), "title": item[field].strip(),
                  "percent": item["percent"]}
                 for item in items[:7] if isinstance(item, dict) and isinstance(item.get(field), str)
-                and type(item.get("percent")) in (int, float) and 0 <= item["percent"] <= 100] if isinstance(items, list) else []
+                and item[field].strip() and type(item.get("percent")) in (int, float)
+                and 0 <= item["percent"] <= 100] if isinstance(items, list) else []
 
     zones = {zone: "mood_" + zone for zone in ("chill", "groove", "energy", "party")}
     dayparts = {value: "music_dna_card_" + key for key, value in
@@ -4668,59 +7121,122 @@ def _music_dna_cards(profile: dict[str, object], ha_url: str) -> list[dict[str, 
         tuple(weekdays), strict=True)})
 
     playtime = block("playtime")
-    duration = playtime.get("formatted_total")
-    if not isinstance(duration, str) or not duration:
+    formatted_duration = playtime.get("formatted_total")
+    duration = formatted_duration.strip() if isinstance(formatted_duration, str) else ""
+    if not duration:
         seconds = playtime.get("total_seconds")
-        duration = f"{seconds // 3600}h {seconds // 60 % 60}m" if type(seconds) is int and seconds > 0 else ""
+        duration = f"{seconds}s" if type(seconds) is int and seconds > 0 else ""
     genres = ", ".join(entry["title"] for entry in rows(profile.get("favorite_genres"), limit=10))
     tracks = profile.get("recent_tracks")
     artists = profile.get("favorite_artists")
+    track_count = profile.get("track_count")
+    artist_count = profile.get("artist_count")
+    tracks_total = type(track_count) is int and track_count >= 0
+    if type(artist_count) is not int or artist_count < 0:
+        artist_count = len(artists) if isinstance(artists, list) else None
     mood = block("mood")
+    mood_average = mood.get("average")
+    has_mood_average = type(mood_average) in (int, float) and 0 <= mood_average <= 100
+    mood_percent = mood_average if has_mood_average else mood.get("value")
+    zone = (mood.get("average_zone") if has_mood_average else None) or mood.get("zone") or mood.get("average_zone")
+    mood_zone_key = zones.get(zone.lower(), "") if isinstance(zone, str) else ""
     summary = [{"labelKey": "music_dna_card_" + key, "title": str(value)}
                for key, value in (("playtime", duration),
-                                  ("recent_tracks", len(tracks) if isinstance(tracks, list) else None),
-                                  ("artists", len(artists) if isinstance(artists, list) else None),
+                                  ("tracks", track_count if tracks_total else None),
+                                  ("recent_tracks", len(tracks) if not tracks_total and isinstance(tracks, list) else None),
+                                  ("artists", artist_count),
                                   ("favorite_genres", genres)) if value is not None and value != ""]
-    zone = mood.get("zone") or mood.get("average_zone")
-    if isinstance(zone, str) and zone.lower() in zones:
-        summary.append({"labelKey": "music_dna_card_energy", "valueKey": zones[zone.lower()]})
+    if mood_zone_key:
+        summary.append({"labelKey": "music_dna_card_profile_mood", "valueKey": mood_zone_key})
     card("summary", "waveform", entries=summary)
     card("favorite_genres", "music", value=genres)
     card("favorite_artists", "session_persona", groups=grouped("", rows(artists, artwork=True, limit=12), shelf=True))
+    if type(mood_percent) in (int, float) and 0 <= mood_percent <= 100:
+        sample_count = mood.get("sample_count")
+        card("profile_mood", mood_zone_key or "waveform", metric=mood_percent,
+             count=sample_count if type(sample_count) is int and sample_count >= 0 else None,
+             entries=[{"valueKey": mood_zone_key}] if mood_zone_key else [])
     energy = block("energy_profile")
     percent = energy.get("energy_percent")
+    sample_count = energy.get("sample_count")
     energy_zone = energy.get("zone")
-    if type(percent) in (int, float) and 0 <= percent <= 100:
-        card("energy", "waveform", metric=percent, count=energy.get("sample_count"),
-             entries=[{"valueKey": zones[energy_zone.lower()]}]
-             if isinstance(energy_zone, str) and energy_zone.lower() in zones else [])
+    if type(sample_count) is int and sample_count > 0 and type(percent) in (int, float) and 0 <= percent <= 100:
+        energy_rows = [{"valueKey": zones[energy_zone.lower()]}] if (
+            isinstance(energy_zone, str) and energy_zone.lower() in zones) else []
+        for name in ("danceability", "intensity"):
+            secondary = energy.get(name + "_percent")
+            if type(secondary) in (int, float) and 0 <= secondary <= 100:
+                energy_rows.append({"labelKey": "music_dna_card_" + name, "percent": secondary})
+        card("energy", "mood_energy", metric=percent, entries=energy_rows, count=sample_count)
     rhythm = block("listening_rhythm")
-    card("rhythm", "history", entries=percentages(rhythm.get("dayparts"), "daypart", dayparts),
+    top_daypart = bounded_text(rhythm.get("top_daypart"), 64).strip()
+    top_weekday = bounded_text(rhythm.get("top_weekday"), 64).strip()
+    rhythm_entries = percentages(rhythm.get("dayparts"), "daypart", dayparts)
+    if top_daypart or top_weekday:
+        title, title_labels = (top_daypart, dayparts) if top_daypart else (top_weekday, weekdays)
+        value_key = title_labels.get(title.casefold(), "")
+        rhythm_entries.insert(0, {
+            "title": "" if value_key else title,
+            "valueKey": value_key,
+            "subtitle": top_weekday if top_daypart else "",
+            "subtitleKey": weekdays.get(top_weekday.casefold(), "") if top_daypart else "",
+        })
+    card("rhythm", "history", entries=rhythm_entries,
          groups=grouped("weekdays", percentages(rhythm.get("weekdays"), "weekday", weekdays)))
     mix = block("mood_mix")
     average = mix.get("average")
-    card("mood_mix", "mood_chill", entries=percentages(mix.get("zones"), "zone", zones),
+    top_zone = bounded_text(mix.get("top_zone"), 64).strip()
+    top_zone_key = zones.get(top_zone.casefold(), "")
+    card("mood_mix", top_zone_key or "sparkles", value=top_zone, value_key=top_zone_key,
+         entries=percentages(mix.get("zones"), "zone", zones),
          average=average if type(average) in (int, float) and 0 <= average <= 100 else None)
     card("playtime", "history", value=duration,
-         groups=grouped("artists_by_time", rows(playtime.get("top_artists"), limit=3))
-         + grouped("albums_by_time", rows(playtime.get("top_albums"), limit=3)))
+         groups=grouped("artists_by_time", playtime_ranking(playtime.get("top_artists")))
+         + grouped("albums_by_time", playtime_ranking(playtime.get("top_albums"))))
     card("repeat", "repeat", entries=rows(block("repeat_magnets").get("items")))
     positives = block("explicit_positives")
     card("positives", "heart", groups=grouped("recent_favorites", rows(positives.get("favorite_tracks")))
-         + grouped("accepted", rows(positives.get("accepted_recommendations"))),
+         + grouped("accepted", accepted_rows(positives.get("accepted_recommendations"), artwork=True)),
          entries=rows(positives.get("items")))
-    card("anchors", "sparkles", entries=rows(block("taste_anchors").get("items")))
+    anchor_items = block("taste_anchors").get("items")
+    anchors = {"artist": [], "genre": [], "other": []}
+    for item in anchor_items[:5] if isinstance(anchor_items, list) else []:
+        kind = item.get("kind") if isinstance(item, dict) else None
+        anchors[kind if kind in ("artist", "genre") else "other"].append(item)
+    card("anchors", "sparkles", entries=rows(anchors["other"]),
+         groups=grouped("artists", rows(anchors["artist"])) + grouped("genres", rows(anchors["genre"])))
     card("recent_tracks", "history", entries=rows(tracks, artwork=True, limit=3))
     card("recent_favorites", "heart", entries=rows(profile.get("recent_favorite_tracks"), artwork=True, limit=3))
-    for key, icon, shelf in (("top_tracks", "music", False), ("top_artists", "session_persona", True)):
-        ranges = block(key + "_by_range")
-        terms = ("long_term", "medium_term", "short_term") if shelf else ("short_term", "medium_term", "long_term")
-        groups = [group for term in terms
-                  for group in grouped(term, rows(ranges.get(term), artwork=True, limit=12 if shelf else 3), shelf=shelf)]
-        card(key, icon, groups=groups)
+    top_tracks = block("top_tracks_by_range")
+    track_groups = [group for term in ("short_term", "medium_term", "long_term")
+                    for group in grouped(term, rows(top_tracks.get(term), artwork=True, limit=3))]
+    card("top_tracks", "music", groups=track_groups)
+    top_artists = block("top_artists_by_range")
+    artist_groups = [
+        {"key": "music_dna_card_" + term, "rows": rows(top_artists.get(term), artwork=True, limit=12), "shelf": True}
+        for term in ("long_term", "medium_term", "short_term")
+    ]
+    if any(group["rows"] for group in artist_groups):
+        card("top_artists", "session_persona", groups=artist_groups)
     feedback = block("discovery_feedback")
-    card("feedback", "sparkles", groups=grouped("accepted", rows(feedback.get("accepted_items") or feedback.get("accepted")))
-         + grouped("feedback_hidden", rows(feedback.get("blocked_artists")) + rows(feedback.get("blocked_items"))))
+    accepted = feedback.get("accepted_recommendations") or feedback.get("accepted_items") or feedback.get("accepted")
+    groups = grouped("accepted", accepted_rows(accepted, limit=3))
+    less_like_this = signal_rows(feedback.get("negative_signals"))
+    if less_like_this:
+        groups.append({"key": "music_discovery_less_like_this", "rows": less_like_this, "shelf": False})
+    hidden = rows(feedback.get("hidden_artists") or feedback.get("blocked_artists")) + rows(feedback.get("blocked_items"))
+    groups += grouped("feedback_hidden", hidden)
+    counts = feedback.get("counts")
+    counts = counts if isinstance(counts, dict) else {}
+    totals = [
+        ("music_dna_card_feedback_accepted_count", feedback.get("accepted_count")),
+        ("music_dna_card_feedback_negative_count", feedback.get("negative_count")),
+        *((f"music_discovery_{action}", counts.get(action)) for action in ("not_for_me", "less_like_this", "hide_artist")),
+    ]
+    card("feedback", "sparkles", groups=groups, entries=[
+        {"labelKey": label, "title": str(value)} for label, value in totals if type(value) is int and value >= 0])
+    card("basis", "waveform", entries=signal_rows(profile.get("based_on"))
+         or signal_rows(energy.get("recent_signals")) or signal_rows(profile.get("recommendation_signals")))
     return cards
 
 
@@ -4728,10 +7244,10 @@ def parse_music_discovery_feed(data: dict[str, object], *, ha_url: str = "") -> 
     items: list[dict[str, object]] = []
     sections_source = data.get("sections")
     if isinstance(sections_source, list):
-        for section_index, section in enumerate(sections_source):
+        for section in sections_source:
             if not isinstance(section, dict):
                 continue
-            section_id = str(section.get("id") or section.get("section_id") or f"section-{section_index + 1}").strip()
+            section_id = str(section.get("id") or section.get("section_id") or "").strip()
             section_title = str(section.get("title") or section.get("name") or "").strip()
             raw_items = section.get("items")
             if not isinstance(raw_items, list):
@@ -4796,6 +7312,12 @@ def _discovery_artwork(raw: dict[str, object], ha_url: str) -> dict[str, object]
     return {"imageUrl": source, "imageExpiresAt": expires * 1000, "imageSourceUrl": spotify_url}
 
 
+def _discovery_media_key(uri: object) -> str:
+    if not isinstance(uri, str) or not re.fullmatch(r"spotify:(?:track|album|artist|playlist):[A-Za-z0-9]{22}", uri):
+        return ""
+    return hashlib.sha256(uri.encode()).hexdigest()
+
+
 def _music_discovery_item(raw: dict[str, object], *, section_id: str, section_title: str, ha_url: str) -> dict[str, object] | None:
     kind = str(raw.get("kind") or "").strip().lower()
     title = str(raw.get("title") or "").strip()
@@ -4832,6 +7354,7 @@ def _music_discovery_item(raw: dict[str, object], *, section_id: str, section_ti
         "reasonSources": reason_sources,
         "hasReason": bool(reason),
         "playable": playable,
+        "_media_key": _discovery_media_key(uri),
         "payload": json.dumps(payload, ensure_ascii=True),
     }
 

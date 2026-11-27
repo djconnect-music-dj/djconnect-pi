@@ -12,6 +12,15 @@ Control {
     property bool showLeading: true
     property string connectionLabel: ""
     property string connectionText: ""
+    property string connectionDetail: ""
+    property string connectionIcon: "globe"
+    property color connectionIconColor: BrandTheme.colors.text
+    property string aboutLabel: ""
+    property string stopDemoLabel: ""
+    property string pairAgainLabel: ""
+    signal aboutRequested()
+    signal stopDemoRequested()
+    signal pairAgainRequested()
     onVisibleChanged: if (!visible) connectionInfo.close()
     property bool compact: width < 900
     default property alias actions: trailingRow.data
@@ -26,7 +35,59 @@ Control {
         background: GlassSurface { elevated: true }
         contentItem: ColumnLayout {
             Text { text: bar.connectionLabel; textFormat: Text.PlainText; font.bold: true; font.pixelSize: 24; color: BrandTheme.colors.text; Layout.fillWidth: true; wrapMode: Text.WordWrap }
-            Text { text: bar.connectionText; textFormat: Text.PlainText; font.pixelSize: 22; color: BrandTheme.colors.muted; Layout.fillWidth: true; wrapMode: Text.WordWrap }
+            Text {
+                objectName: "pageToolbarConnectionStatus"
+                text: bar.connectionText
+                textFormat: Text.PlainText
+                font.pixelSize: 22
+                color: BrandTheme.colors.muted
+                Layout.fillWidth: true
+                wrapMode: Text.Wrap
+            }
+            Text {
+                objectName: "pageToolbarConnectionDetail"
+                visible: text.length > 0
+                text: bar.connectionDetail
+                textFormat: Text.PlainText
+                font.pixelSize: 18
+                color: BrandTheme.colors.muted
+                Layout.fillWidth: true
+                wrapMode: Text.Wrap
+            }
+            GlassButton {
+                objectName: "pageToolbarConnectionAbout"
+                visible: bar.aboutLabel.length > 0
+                text: bar.aboutLabel
+                iconName: "info"
+                Layout.fillWidth: true
+                onClicked: {
+                    connectionInfo.close()
+                    bar.aboutRequested()
+                }
+            }
+            GlassButton {
+                objectName: "pageToolbarPairAgain"
+                visible: bar.pairAgainLabel.length > 0
+                text: bar.pairAgainLabel
+                iconName: "globe"
+                Layout.fillWidth: true
+                onClicked: {
+                    connectionInfo.close()
+                    bar.pairAgainRequested()
+                }
+            }
+            GlassButton {
+                objectName: "pageToolbarStopDemo"
+                visible: bar.stopDemoLabel.length > 0
+                text: bar.stopDemoLabel
+                iconName: "end"
+                tint: BrandTheme.colors.danger
+                Layout.fillWidth: true
+                onClicked: {
+                    connectionInfo.close()
+                    bar.stopDemoRequested()
+                }
+            }
         }
     }
     padding: 0
@@ -59,7 +120,9 @@ Control {
                     GlassButton {
                         objectName: "pageToolbarConnection"
                         visible: bar.showConnection
-                        iconName: "globe"; tertiary: true; implicitWidth: 52
+                        iconName: bar.connectionIcon
+                        foregroundColor: bar.connectionIconColor
+                        tertiary: true; implicitWidth: 52
                         Accessible.name: bar.connectionLabel
                         onClicked: connectionInfo.open()
                     }

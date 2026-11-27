@@ -25,9 +25,11 @@ from .ha import (
     DJConnectError,
     HAClient,
     Playback,
+    playlist_command_target,
 )
 from .i18n import translate
 from .logging_config import setup_logging
+from .queue_projection import compact_adjacent_tracks, queue_artist_and_album
 from .system_info import log_raspberry_pi_system_info
 
 _LOGGER = logging.getLogger(__name__)
@@ -354,7 +356,7 @@ def _parse_queue_items(data: dict[str, object]) -> list[dict[str, object]]:
         raw_items = None
     if not isinstance(raw_items, list):
         return []
-    return _dedupe_queue_items([parsed for item in raw_items[:100] if isinstance(item, dict) and (parsed := _queue_item(item, context_uri))])
+    return compact_adjacent_tracks([parsed for item in raw_items[:100] if isinstance(item, dict) and (parsed := _queue_item(item, context_uri))])
 
 
 def _parse_playlist_items(data: dict[str, object]) -> list[dict[str, object]]:
@@ -364,29 +366,10 @@ def _parse_playlist_items(data: dict[str, object]) -> list[dict[str, object]]:
     return [parsed for item in raw_items[:100] if isinstance(item, dict) and (parsed := _media_item(item, playlist=True))]
 
 
-def _dedupe_queue_items(items: list[dict[str, object]]) -> list[dict[str, object]]:
-    seen: set[tuple[str, str, str, str]] = set()
-    deduped: list[dict[str, object]] = []
-    for item in items:
-        key = (
-            str(item.get("uri") or "").strip().casefold(),
-            str(item.get("title") or "").strip().casefold(),
-            str(item.get("subtitle") or "").strip().casefold(),
-            str(item.get("imageUrl") or "").strip(),
-        )
-        if key in seen:
-            continue
-        seen.add(key)
-        deduped.append(item)
-    if len(items) > 1 and len(deduped) == 1:
-        return []
-    return deduped
-
-
 def _media_item(item: dict[str, object], playlist: bool = False) -> dict[str, object] | None:
     title = _media_item_value(item, "name", "title", "display_title", "track_name")
     subtitle = _media_item_value(item, "artist", "artist_name", "artists", "subtitle", "album")
-    uri = _media_item_value(item, "uri", "id", "value", "playlist_uri", "track_uri")
+    uri = playlist_command_target(item)
     context_uri = _media_item_value(item, "context_uri", "contextUri", "queue_context", "queueContext")
     index = item.get("index")
     image_url = _media_item_value(
@@ -427,8 +410,7 @@ def _media_item_value(item: dict[str, object], *keys: str) -> str:
 
 def _queue_item(item: dict[str, object], queue_context_uri: str = "") -> dict[str, object] | None:
     title = str(item.get("title") or item.get("name") or item.get("display_title") or item.get("track_name") or "")
-    artist = str(item.get("artist") or item.get("artist_name") or item.get("subtitle") or "")
-    album = str(item.get("album") or item.get("album_name") or "")
+    artist, album = queue_artist_and_album(item)
     uri = str(item.get("uri") or item.get("id") or item.get("track_uri") or "")
     context_uri = str(item.get("context_uri") or item.get("contextUri") or item.get("queue_context") or item.get("queueContext") or queue_context_uri)
     index = item.get("index")

@@ -43,24 +43,28 @@ def test_explicit_command_once_then_independent_owner_read_without_optimism(cont
     original = deepcopy(owner._session)
     assert owner.playbackCommand("synthetic-session", ITEM_ID, command)
     assert owner.busy and owner.state["playback_control"]["status"] == "sending"
+    assert owner.state["playback_control"]["pending_command"] == command
     assert not owner.playbackCommand("synthetic-session", ITEM_ID, command)
     backend.jobs.pop()()
     owner.transport.playback_command.assert_called_once_with(owner.transport.binding(), command)
     assert owner._session == original  # No response/optimistic Runtime overwrite.
     assert owner.state["playback_control"]["status"] == "accepted"
+    assert not owner.state["playback_control"]["pending_command"]
     assert len(backend.jobs) == 1 and owner._running_action == "refresh"
 
 
-@pytest.mark.parametrize(("command", "wire", "value"), [
-    ("seek_back_15", "seek_relative", -15000),
-    ("seek_forward_15", "seek_relative", 15000),
-    ("shuffle", "set_shuffle", False),
-    ("repeat", "set_repeat", "track"),
-    ("toggle_favorite", "set_current_track_favorite", True),
+@pytest.mark.parametrize(("command", "wire", "value", "previous_repeat"), [
+    ("seek_back_15", "seek_relative", -15000, "off"),
+    ("seek_forward_15", "seek_relative", 15000, "off"),
+    ("shuffle", "set_shuffle", False, "off"),
+    ("repeat", "set_repeat", "track", "off"),
+    ("repeat", "set_repeat", "context", "track"),
+    ("repeat", "set_repeat", "off", "context"),
+    ("toggle_favorite", "set_current_track_favorite", True, "off"),
 ])
 @pytest.mark.parametrize("changed_output", [False, True])
 def test_overlay_intent_rechecks_output_and_sends_only_one_explicit_adjustment(
-    controller, command, wire, value, changed_output,
+    controller, command, wire, value, previous_repeat, changed_output,
 ):
     owner, backend = setup(controller)
     caps = {"supports_favorites": True, "supports_seek": True, "supports_shuffle": True, "supports_repeat": True}
@@ -68,7 +72,7 @@ def test_overlay_intent_rechecks_output_and_sends_only_one_explicit_adjustment(
     owner._session["broadcast"]["playback"]["target_name"] = "Speaker"
     status = owner.transport.playback_status.return_value
     status["music_backend_capabilities"] = caps
-    status["playback"].update(shuffle=True, repeat_state="context", favorite_status=False, device={
+    status["playback"].update(shuffle=True, repeat_state=previous_repeat, favorite_status=False, device={
         "id": "speaker-id", "name": "Another speaker" if changed_output else "Speaker",
         "active": True, "is_restricted": False,
     })
@@ -76,7 +80,9 @@ def test_overlay_intent_rechecks_output_and_sends_only_one_explicit_adjustment(
     owner.transport.playback_favorite = Mock()
     epoch = owner.state["playback_control"]["transport_epoch"]
     assert owner.playbackCommand("synthetic-session", ITEM_ID, command, epoch)
+    assert owner.state["playback_control"]["toggling_favorite"] == (command == "toggle_favorite")
     backend.jobs.pop()()
+    assert not owner.state["playback_control"]["toggling_favorite"]
     owner.transport.playback_command.assert_not_called()
     if changed_output:
         owner.transport.playback_adjustment.assert_not_called()
@@ -86,6 +92,87 @@ def test_overlay_intent_rechecks_output_and_sends_only_one_explicit_adjustment(
         owner.transport.playback_favorite.assert_called_once_with(owner.transport.binding(), value)
     else:
         owner.transport.playback_adjustment.assert_called_once_with(owner.transport.binding(), wire, value)
+
+
+@pytest.mark.parametrize(("liked", "alias", "observed_output", "expected"), [
+    (True, True, "speaker-id", {"toggle_favorite": True}),
+    (False, False, "speaker-id", {"toggle_favorite": False}),
+    (True, False, "speaker-id", {}),
+    (True, True, "different-id", {}),
+])
+def test_favorite_overlay_read_checks_exact_output_and_consistent_favorite_fields(
+    controller, liked, alias, observed_output, expected,
+):
+    owner, backend = setup(controller)
+    owner._session["broadcast"]["playback"]["target_name"] = "Speaker"
+    backend.outputDeviceId = "speaker-id"
+    owner.transport.playback_status.return_value["playback"].update(
+        favorite_status=liked, is_liked=alias,
+        device={"id": observed_output, "name": "Speaker", "active": True, "is_restricted": False},
+    )
+    owner.transport.playback_favorite = Mock()
+    epoch = owner.state["playback_control"]["transport_epoch"]
+    assert owner.readPlaybackOverlay("synthetic-session", ITEM_ID, epoch, backend.outputDeviceId)
+    backend.jobs.pop()()
+    assert owner.state["playback_control"]["overlay_state"] == expected
+    owner.transport.playback_favorite.assert_not_called()
+    owner.transport.playback_command.assert_not_called()
+    assert not backend.jobs
+
+
+def test_same_playback_change_fences_an_older_overlay_observation(controller):
+    owner, backend = setup(controller)
+    owner._session["broadcast"]["playback"]["target_name"] = "Speaker"
+    backend.outputDeviceId = "speaker-id"
+    owner.transport.playback_status.return_value["playback"].update(
+        favorite_status=True,
+        device={"id": "speaker-id", "name": "Speaker", "active": True, "is_restricted": False},
+    )
+    epoch = owner.state["playback_control"]["transport_epoch"]
+    revision = owner.state["playback_control"]["overlay_revision"]
+    assert owner.readPlaybackOverlay("synthetic-session", ITEM_ID, epoch, "speaker-id")
+    owner.playback_overlay_observation_changed("spotify:track:other", "speaker-id")
+    owner.playback_overlay_observation_changed(URI, "other-output")
+    assert owner.state["playback_control"]["overlay_revision"] == revision
+    owner.playback_overlay_observation_changed(URI, "speaker-id")
+    backend.jobs.pop()()
+    assert owner.state["playback_control"]["overlay_revision"] == revision + 1
+    assert owner.state["playback_control"]["overlay_state"] == {}
+    assert owner.readPlaybackOverlay("synthetic-session", ITEM_ID, epoch, "speaker-id")
+    backend.jobs.pop()()
+    assert owner.state["playback_control"]["overlay_state"] == {"toggle_favorite": True}
+    assert not backend.jobs
+
+
+@pytest.mark.parametrize(("output_id", "progress_ms", "offset"), [
+    ("speaker-id", 18_000, 42_000),
+    ("other-id", 18_000, None),
+    ("speaker-id", 59_800, None),
+    ("speaker-id", True, None),
+])
+def test_session_seek_uses_fresh_progress_and_rechecks_the_exact_output(controller, output_id, progress_ms, offset):
+    owner, backend = setup(controller)
+    caps = {"supports_seek": True}
+    backend.cfg.music_backend_capabilities = caps
+    owner._session["broadcast"]["playback"].update(
+        target_name="Speaker", duration_ms=180_000, position_ms=12_000)
+    status = owner.transport.playback_status.return_value
+    status["music_backend_capabilities"] = caps
+    status["playback"].update(
+        progress_ms=progress_ms, duration_ms=180_000,
+        device={"id": output_id, "name": "Speaker", "active": True, "is_restricted": False})
+    owner.transport.playback_seek_offset = Mock()
+    epoch = owner.state["playback_control"]["transport_epoch"]
+    assert not owner.setPlaybackPosition("synthetic-session", ITEM_ID, epoch - 1, 60_000, "speaker-id")
+    assert not owner.setPlaybackPosition("synthetic-session", ITEM_ID, epoch, 180_001, "speaker-id")
+    assert owner.setPlaybackPosition("synthetic-session", ITEM_ID, epoch, 60_000, "speaker-id")
+    backend.jobs.pop()()
+    if offset is None:
+        owner.transport.playback_seek_offset.assert_not_called()
+        if progress_ms == 59_800:
+            assert owner.state["playback_control"]["status"] == ""
+    else:
+        owner.transport.playback_seek_offset.assert_called_once_with(owner.transport.binding(), offset)
 
 
 @pytest.mark.parametrize("changed", ["item", "state", "profile", "backend_revision", "credential", "hidden"])
@@ -183,6 +270,7 @@ def test_uncertain_command_never_replays_and_blocks_until_explicit_refresh(contr
     assert not owner.playbackCommand("synthetic-session", ITEM_ID, "next")
     owner.refreshPlayback()
     assert owner._running_action == "refresh" and len(backend.jobs) == 1
+    assert owner.state["playback_control"]["status"] == "uncertain"
     owner.transport.playback_command.assert_called_once()
 
 

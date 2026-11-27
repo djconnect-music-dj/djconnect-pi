@@ -43,6 +43,148 @@ def test_read_is_pure_and_bound_to_device_and_explicit_profile(transport):
     assert "json" not in kwargs
 
 
+def test_track_insight_capability_probe_distinguishes_missing_route_from_failure(transport):
+    client, _, request, response = transport
+    binding = client.binding()
+    response.status_code = 404
+    assert client.track_insight_capabilities(binding) == {}
+    assert request.call_args.args[1].endswith("/capabilities")
+    assert request.call_args.kwargs["allow_redirects"] is False
+    response.iter_content.assert_not_called()
+
+    for status, category in ((403, "denied"), (503, "unavailable")):
+        response.status_code = status
+        with pytest.raises(SessionError, match=category):
+            client.track_insight_capabilities(binding)
+
+
+@pytest.mark.parametrize(("overrides", "status", "error"), [
+    ({}, 200, ""),
+    ({"mode": "current"}, 200, "invalid"),
+    ({"media_identity": "lookalike"}, 200, "invalid"),
+    ({"media_identity": "spotify:track:" + "b" * 22}, 200, "invalid"),
+    ({"expires_in": True}, 200, "invalid"),
+    ({"expires_in": 601}, 200, "invalid"),
+    ({"reference": {"schema_version": 1, "session_id": "foreign", "moment_id": "m1",
+                    "action_id": "insight-m1"}}, 200, "invalid"),
+    ({}, 403, "denied"),
+    ({}, 410, "expired"),
+    ({}, 429, "rate_limited"),
+])
+def test_moment_track_insight_is_bound_to_the_explicit_reference(transport, overrides, status, error):
+    client, cfg, request, response = transport
+    cfg.explicit_profile_id = cfg.active_profile_id
+    binding = client.binding()
+    reference = {"schema_version": 1, "session_id": "s1", "moment_id": "m1", "action_id": "insight-m1"}
+    response.status_code = status
+    media = "spotify:track:" + "a" * 22
+    response.json.return_value = {
+        "subject": {"mode": "explicit", "reference": reference, "media_identity": media,
+                    "expires_in": 424, **overrides},
+        "track": {"title": "Same title", "media_identity": media, "uri": media},
+    }
+
+    if error:
+        with pytest.raises(SessionError, match=error):
+            client.moment_track_insight(binding, reference)
+    else:
+        assert client.moment_track_insight(binding, reference) == response.json.return_value
+
+    assert request.call_count == 1
+    assert request.call_args.args == ("POST", "http://fixture.invalid/api/djconnect/v1/track_insight")
+    assert request.call_args.kwargs["json"] == {
+        **binding.identity(), "track_insight_target": reference, "locale": "nl-NL", "include_visual_profile": True,
+    }
+    assert request.call_args.kwargs["allow_redirects"] is False
+
+
+def test_moment_track_insight_cannot_use_a_rejected_document(transport):
+    client, cfg, request, response = transport
+    cfg.explicit_profile_id = cfg.active_profile_id
+    response.json.return_value = {"success": False}
+    reference = {"schema_version": 1, "session_id": "s1", "moment_id": "m1", "action_id": "insight-m1"}
+    with pytest.raises(SessionError, match="uncertain"):
+        client.moment_track_insight(client.binding(), reference)
+    request.assert_called_once()
+
+
+def test_ask_dj_help_uses_closed_paired_get_without_profile_or_identity_query(transport):
+    client, cfg, request, response = transport
+    def wire(method, url, **options):
+        assert method == "GET" and url.endswith("/ask_dj/help-context")
+        assert options["allow_redirects"] is False and "json" not in options
+        headers = options["headers"]
+        assert headers["Cache-Control"] == "no-store" and headers["X-DJConnect-Device-ID"] == cfg.device_id
+        assert "X-DJConnect-Profile-ID" not in headers
+        query = options["params"]
+        assert set(query) == {"schema_version", "request_id", "surface", "language", "catalogue_id",
+                              "catalogue_revision", "catalogue_sha256", "session_id"}
+        assert query["session_id"] == "existing+session" and query["language"] == "nl"
+        receipt = {
+            "schema_version": 1, "request_id": query["request_id"], "surface": query["surface"],
+            "session_id": query["session_id"], "language": query["language"], "available": True,
+            "observation_id": "8d137231-cbb1-4e66-9d96-4936666e14c0", "track_id": "media+id",
+            "eligible_entry_ids": ["discover.recent", "listen.current"],
+            "catalogue": {"schema_version": 1, "catalogue_id": query["catalogue_id"],
+                          "revision": query["catalogue_revision"], "sha256": query["catalogue_sha256"],
+                          "qualified": True},
+        }
+        response.json.return_value = receipt
+        return response
+
+    request.side_effect = wire
+    result = client.ask_dj_help(client.binding(), "active_session", "existing+session")
+    assert result.available and result.track_id == "media+id"
+    assert result.eligible_ids == ("discover.recent", "listen.current")
+    response.close.assert_called_once()
+
+
+@pytest.mark.parametrize("update", [
+    {"schema_version": True}, {"schema_version": 1.0}, {"language": "en"},
+    {"session_id": "another-session"}, {"eligible_entry_ids": ["unknown"]},
+    {"eligible_entry_ids": ["discover.recent", "discover.recent"]},
+    {"eligible_entry_ids": ["listen.outputs", "discover.recent"]},
+    {"eligible_entry_ids": ["listen.current"]}, {"track_id": "foreign-track"},
+    {"observation_id": None}, {"extra": None}, {"available": False},
+])
+def test_ask_dj_help_rejects_unbound_or_malformed_observations(transport, update):
+    client, _, request, response = transport
+    def wire(*args, **options):
+        query = options["params"]
+        assert "session_id" not in query
+        response.json.return_value = {
+            "schema_version": 1, "request_id": query["request_id"], "surface": "ask_dj",
+            "session_id": None, "language": "nl", "available": True, "track_id": None,
+            "observation_id": "8d137231-cbb1-4e66-9d96-4936666e14c0",
+            "eligible_entry_ids": ["discover.recent"],
+            "catalogue": {"schema_version": 1, "catalogue_id": query["catalogue_id"],
+                          "revision": query["catalogue_revision"], "sha256": query["catalogue_sha256"],
+                          "qualified": True},
+            **update,
+        }
+        return response
+
+    request.side_effect = wire
+    with pytest.raises(SessionError, match="^invalid$"):
+        client.ask_dj_help(client.binding(), "ask_dj")
+
+
+def test_ask_dj_help_rejects_duplicate_keys_or_oversized_response(transport):
+    client, _, request, response = transport
+    response.iter_content.side_effect = lambda **_: iter([b'{"schema_version":1,"schema_version":1}'])
+    with pytest.raises(SessionError, match="^invalid$"):
+        client.ask_dj_help(client.binding(), "ask_dj")
+    response.iter_content.reset_mock()
+    response.headers["Content-Length"] = "16385"
+    with pytest.raises(SessionError, match="^invalid$"):
+        client.ask_dj_help(client.binding(), "ask_dj")
+    response.iter_content.assert_not_called()
+    request.reset_mock()
+    with pytest.raises(SessionError, match="^invalid$"):
+        client.ask_dj_help(client.binding(), "active_session")
+    request.assert_not_called()
+
+
 def test_successor_profile_discards_delayed_response(transport):
     client, cfg, request, response = transport
     def delayed(*args, **kwargs):
@@ -119,6 +261,87 @@ def test_standalone_question_checks_receipt_and_sends_text_once(transport):
     request.reset_mock()
     with pytest.raises(SessionError, match="uncertain"):
         client.standalone_question(client.binding(), "Question", "another-turn", "owner")
+    request.assert_called_once()
+
+
+@pytest.mark.parametrize(("receipt_context", "accepted"), [
+    ({"session_id": None, "selected_entry": {"session_id": "earlier", "entry_id": "entry-1"}}, True),
+    ({"session_id": None}, True),
+    ({"session_id": None, "selected_entry": {"session_id": "earlier", "entry_id": "another-entry"}}, False),
+    ({"session_id": "some-active-session"}, False),
+    ({}, False),
+])
+def test_standalone_follow_up_accepts_only_the_selected_entry_or_detached_topic(transport, receipt_context, accepted):
+    client, _, request, response = transport
+    selected = {"session_id": "earlier", "entry_id": "entry-1"}
+    context = {"session_id": None, "selected_entry": selected}
+    response.json.return_value = {
+        "success": True, "owner_profile_id": "owner", "client_message_id": "turn",
+        "conversation": {"schema_version": 1, "input_type": "text", "history_scope": "profile",
+                         "context": receipt_context, "turn_id": "confirmed-turn", "entry_ids": []},
+    }
+
+    if accepted:
+        client.standalone_question(client.binding(), "Tell me more", "turn", "owner", selected_entry=selected)
+    else:
+        with pytest.raises(SessionError, match="^uncertain$"):
+            client.standalone_question(client.binding(), "Tell me more", "turn", "owner", selected_entry=selected)
+
+    request.assert_called_once()
+    body = request.call_args.kwargs["json"]
+    assert body["conversation_context"] == context
+    assert body["conversation_scope"] == "profile" and body["profile_id"] == "owner"
+
+
+@pytest.mark.parametrize("entry_id", ["", " entry", "a" * 129, True])
+def test_standalone_follow_up_rejects_malformed_references_before_sending(transport, entry_id):
+    client, _, request, _ = transport
+    with pytest.raises(SessionError, match="^invalid$"):
+        client.standalone_question(client.binding(), "Tell me more", "turn", "owner",
+                                   selected_entry={"session_id": "earlier", "entry_id": entry_id})
+    request.assert_not_called()
+
+
+@pytest.mark.parametrize(("session_id", "entries", "accepted"), [
+    ("session-at-send", ["question", "answer"], True),
+    ("successor-session", ["question", "answer"], False),
+    (None, [], False),
+    ("session-at-send", [], False),
+    ("session-at-send", ["answer", "answer"], False),
+])
+def test_profile_question_requires_its_confirmed_active_session_and_saved_entries(transport, session_id, entries, accepted):
+    client, _, request, response = transport
+    response.json.return_value = {
+        "success": True, "owner_profile_id": "owner", "client_message_id": "turn",
+        "conversation": {"schema_version": 1, "input_type": "text", "history_scope": "profile",
+                         "context": {"session_id": session_id}, "turn_id": "confirmed-turn", "entry_ids": entries},
+    }
+    if accepted:
+        client.standalone_question(client.binding(), "Question", "turn", "owner", active_session_id="session-at-send")
+    else:
+        with pytest.raises(SessionError, match="^uncertain$"):
+            client.standalone_question(client.binding(), "Question", "turn", "owner", active_session_id="session-at-send")
+    request.assert_called_once()
+    assert request.call_args.kwargs["json"]["conversation_context"] == {"session_id": "session-at-send"}
+
+
+@pytest.mark.parametrize(("status", "code", "active_session_id", "category"), [
+    (404, "history_unavailable", None, "reference_unavailable"),
+    (409, "source_withdrawn", None, "reference_unavailable"),
+    (409, "conversation_source_withdrawn", None, "reference_unavailable"),
+    (409, "session_context_changed", None, "conflict"),
+    (409, "session_context_changed", "current-session", "session_changed"),
+    (404, "route_missing", None, "unavailable"),
+])
+def test_profile_follow_up_distinguishes_context_changes_from_other_errors(
+        transport, status, code, active_session_id, category):
+    client, _, request, response = transport
+    response.status_code = status
+    response.json.return_value = {"success": False, "error": code}
+    with pytest.raises(SessionError, match=f"^{category}$"):
+        client.standalone_question(client.binding(), "Tell me more", "turn", "owner",
+                                   selected_entry={"session_id": "earlier", "entry_id": "saved"},
+                                   active_session_id=active_session_id)
     request.assert_called_once()
 
 

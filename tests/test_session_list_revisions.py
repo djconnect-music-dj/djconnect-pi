@@ -94,3 +94,21 @@ def test_malformed_numeric_page_withdraws_previous_archive_projection(controller
     pages[0]["sessions"][0]["revision"] = True
     run(owner, backend, "refreshArchive")
     assert not owner.state["sessions"] and owner.state["error"] == "invalid"
+
+
+def test_manual_archive_refresh_reports_only_validated_outcomes(controller):
+    owner, backend = controller
+    _, pages = archive_pages(owner)
+    completed = []
+    owner.archiveRefreshFinished.connect(completed.append)
+    run(owner, backend, "loadHistory")
+    run(owner, backend, "refreshArchive")
+    assert completed == []
+    owner.refreshArchive(True)
+    assert completed == []
+    backend.jobs.pop()()
+    assert completed == [True]
+    pages[0]["sessions"][0]["revision"] = True
+    owner.refreshArchive(True)
+    backend.jobs.pop()()
+    assert completed == [True, False]

@@ -8,6 +8,10 @@ Rectangle {
     id: root
     objectName: "gamesPanel"
     readonly property bool compact: width < 900
+    property bool routeOpen: false
+    property bool foreground: false
+    readonly property bool gameplayActive: routeOpen && visible && foreground
+    visible: routeOpen
     color: BrandTheme.colors.background
     SessionMoodCanvas { anchors.fill: parent; mood: root.gameMood; activeSession: true }
 
@@ -53,7 +57,25 @@ Rectangle {
     }
     onVisibleChanged: {
         if (visible) forceActiveFocus()
-        else playing = false
+    }
+    onRouteOpenChanged: {
+        if (routeOpen || !gameCanvas) return
+        resetRound()
+    }
+    onGameplayActiveChanged: {
+        if (gameplayActive || !playing) return
+        pauseRound()
+        gameCanvas.requestPaint()
+    }
+    function pauseRound() {
+        playing = false
+        flashTimer.stop()
+        flash = false
+        djconnect.stopGameSounds()
+    }
+    function resetRound() {
+        pauseRound()
+        resetGame()
     }
     Keys.onUpPressed: root.useDirection("up")
     Keys.onDownPressed: root.useDirection("down")
@@ -63,7 +85,6 @@ Rectangle {
     Keys.onEscapePressed: root.closeRequested()
     property bool playing: false
     property int score: 0
-    property var highScores: ({ pong: 0, asteroids: 0, fly: 0, pacman: 0 })
     property bool flash: false
     property int pauseTicks: 0
     property int hitPulseTicks: 0
@@ -112,25 +133,26 @@ Rectangle {
     property var pellets: []
 
     function highScore() {
-        return highScores[gameId] || 0
+        return djconnect.gameHighScores[gameId] || 0
     }
 
     function setScore(value) {
         score = value
-        if (value > highScore()) {
-            highScores[gameId] = value
-            highScoresChanged()
-        }
+        if (value > highScore()) djconnect.recordGameHighScore(gameId, value)
     }
 
     function startGame() {
+        if (!gameplayActive) return false
         if (!playing) {
             playing = true
             playSfx("start")
         }
+        return true
     }
 
     function resetGame() {
+        flashTimer.stop()
+        flash = false
         score = 0
         paddleY = 86
         ballX = 160
@@ -233,20 +255,24 @@ Rectangle {
     }
 
     function selectGame(index) {
+        if (index === gameIndex) return
         gameIndex = index
-        playing = false
-        resetGame()
+        resetRound()
+    }
+
+    function clampedVerticalPosition(y, margin) {
+        return Math.max(margin, Math.min(170 - margin, y))
     }
 
     function move(direction) {
-        startGame()
+        if (!startGame()) return
         playSfx("move")
         if (gameId === "pong") {
-            paddleY = Math.max(42, Math.min(126, paddleY + direction * 12))
+            paddleY = clampedVerticalPosition(paddleY + direction * 12, 19)
         } else if (gameId === "asteroids") {
             shipX = Math.max(24, Math.min(296, shipX + direction * 14))
         } else if (gameId === "fly") {
-            planeY = Math.max(52, Math.min(138, planeY + direction * 12))
+            planeY = clampedVerticalPosition(planeY + direction * 12, 14)
         } else {
             pacmanDY = direction
             pacmanDX = 0
@@ -255,7 +281,7 @@ Rectangle {
     }
 
     function moveHorizontal(direction) {
-        startGame()
+        if (!startGame()) return
         playSfx("move")
         if (gameId === "pacman") {
             pacmanDX = direction
@@ -267,8 +293,7 @@ Rectangle {
     }
 
     function fire() {
-        if (!fireControl) return
-        startGame()
+        if (!fireControl || !startGame()) return
         if (gameId === "asteroids" && !asteroidBulletActive) {
             asteroidBulletActive = true
             asteroidBulletY = 120
@@ -281,15 +306,15 @@ Rectangle {
     }
 
     function handleTouch(x, y) {
-        startGame()
+        if (!startGame()) return
         var gx = x / gameCanvas.width * 320
         var gy = y / gameCanvas.height * 170
         if (gameId === "pong") {
-            paddleY = Math.max(42, Math.min(126, gy))
+            paddleY = clampedVerticalPosition(gy, 19)
         } else if (gameId === "asteroids") {
             shipX = Math.max(24, Math.min(296, gx))
         } else if (gameId === "fly") {
-            planeY = Math.max(52, Math.min(138, gy))
+            planeY = clampedVerticalPosition(gy, 14)
         } else {
             var dx = gx - pacmanX
             var dy = gy - pacmanY
@@ -358,9 +383,10 @@ Rectangle {
         } else if (gameId === "asteroids") {
             asteroidY += asteroidSpeed
             if (asteroidBulletActive) {
+                const hitRadius = Math.max(14, asteroidSize)
                 asteroidBulletY -= 8
                 if (asteroidBulletY < 36) asteroidBulletActive = false
-                else if (Math.abs(asteroidX - shipX) < asteroidSize + 8 && Math.abs(asteroidY - asteroidBulletY) < asteroidSize + 8) {
+                else if (Math.abs(asteroidX - shipX) < hitRadius && Math.abs(asteroidY - asteroidBulletY) < hitRadius) {
                     asteroidBulletActive = false
                     addExplosion(asteroidX, asteroidY, "#ff6fb3")
                     playSfx("explode")
@@ -379,7 +405,7 @@ Rectangle {
             if (flyShotActive) {
                 flyShotX += 9
                 if (flyShotX > 310) flyShotActive = false
-                else if (Math.abs(flyShotX - obstacleX) < 16 && Math.abs(planeY - obstacleY) < 24) {
+                else if (Math.abs(flyShotX - obstacleX) < 22 && Math.abs(planeY - obstacleY) < 26) {
                     flyShotActive = false
                     addExplosion(obstacleX, obstacleY, "#facc15")
                     playSfx("explode")
@@ -391,7 +417,7 @@ Rectangle {
                 setScore(score + 1)
                 resetObstacle()
             }
-            if (obstacleX < 66 && obstacleX > 28 && Math.abs(planeY - obstacleY) < 28) {
+            if (obstacleX < 70 && obstacleX > 28 && Math.abs(planeY - obstacleY) < 30) {
                 showFlash()
                 addExplosion(48, planeY, "#ff5b5b")
                 playSfx("crash")
@@ -452,7 +478,7 @@ Rectangle {
 
     Timer {
         interval: 33
-        running: root.visible && playing
+        running: root.gameplayActive && playing
         repeat: true
         onTriggered: tickGame()
     }
@@ -516,7 +542,7 @@ Rectangle {
                         implicitWidth: root.compact ? 48 : 64
                         implicitHeight: root.compact ? 46 : 58
                         padding: 9; background: Item {}
-                        onClicked: { root.playing = false; root.resetGame() }
+                        onClicked: root.resetGame()
                     }
                 }
             }
@@ -548,6 +574,7 @@ Rectangle {
                     color: BrandTheme.colors.text; font.pixelSize: root.compact ? 16 : 20
                 }
                 Text {
+                    objectName: "gameHighScore"
                     text: root.tr("high") + " " + root.highScore()
                     color: BrandTheme.colors.muted; font.pixelSize: root.compact ? 16 : 20
                 }
@@ -774,9 +801,13 @@ Rectangle {
                 }
 
                 GlassButton {
+                    objectName: "gameStart"
                     anchors.centerIn: parent
                     visible: !root.playing
+                    enabled: root.gameplayActive
                     text: root.tr("tap_to_play")
+                    iconName: "play"
+                    primary: true
                     font.pixelSize: 22
                     onClicked: root.startGame()
                 }

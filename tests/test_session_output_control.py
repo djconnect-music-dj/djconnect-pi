@@ -43,12 +43,24 @@ def test_explicit_read_admits_only_server_non_cached_unrestricted_choices(contro
     assert not owner.state["playback_control"]["outputs"]
     state = read_ready(owner, backend)
     assert state["origin"] == "original-output"
-    assert [row["id"] for row in state["choices"]] == ["original-output", "selected-output"]
+    assert [row["id"] for row in state["choices"]] == ["selected-output", "original-output"]
     assert owner._session == original
     owner.transport.playback_output.assert_not_called()
     owner.transport.active.assert_called_once()
     owner.transport.playback_status.assert_called_once()
     owner.transport.playback_outputs.assert_called_once()
+
+
+def test_output_choices_sort_names_naturally_with_stable_id_ties(controller):
+    owner, backend, _, inventory = setup_outputs(controller)
+    inventory["devices"][0]["name"] = "Speaker 10"
+    inventory["devices"][1]["name"] = "Speaker 2"
+    inventory["devices"].append(dict(inventory["devices"][1], id="another-output"))
+
+    state = read_ready(owner, backend)
+
+    assert [row["id"] for row in state["choices"]] == ["another-output", "selected-output", "original-output"]
+    assert state["origin"] == "original-output"
 
 
 @pytest.mark.parametrize(("supports_volume", "volume", "expected"), [
@@ -58,10 +70,9 @@ def test_explicit_read_admits_only_server_non_cached_unrestricted_choices(contro
 def test_output_volume_is_optional_display_metadata(controller, supports_volume, volume, expected):
     owner, backend, _, inventory = setup_outputs(controller)
     inventory["devices"][1].update(supports_volume=supports_volume, volume_percent=volume)
-    first, second = read_ready(owner, backend)["choices"]
-    assert "volume_percent" not in first
-    assert second.get("volume_percent") == expected
-    assert second["id"] == "selected-output"
+    choices = {row["id"]: row for row in read_ready(owner, backend)["choices"]}
+    assert "volume_percent" not in choices["original-output"]
+    assert choices["selected-output"].get("volume_percent") == expected
     owner.transport.playback_output.assert_not_called()
 
 

@@ -8,6 +8,7 @@ Item {
     objectName: "logsView"
     required property var backend
     property bool confirmationOpen: false
+    property bool findShortcutEnabled: true
     signal clearRequested()
 
     readonly property bool compact: width < 900
@@ -16,19 +17,51 @@ Item {
     property bool searching: false
     property bool keyboardOpen: false
     property int matchIndex: -1
-    readonly property var matches: findMatches(lines, searchInput.text)
+    property string matchQuery: ""
+    readonly property string query: searchInput.text.trim()
+    readonly property var searchMatches: findMatches(lines, query)
+    readonly property var matches: searchMatches.ordered
     readonly property var currentMatch: matches[matchIndex] || null
 
     function tr(key) { backend.translationVersion; return backend.t(key) }
+    function foldAccents(text) {
+        const decomposed = text.normalize("NFD")
+        const plain = decomposed.replace(/[\u0300-\u036f]/g, "")
+        return plain === decomposed ? text : plain.normalize("NFC")
+    }
+    function searchableLine(line) {
+        if (foldAccents(line) === line) return {text: line, offsets: null}
+        // Keep offsets into the original text, including combining accents.
+        const clusters = /[\s\S][\u0300-\u036f]*/gu
+        const offsets = []
+        var text = ""
+        var cluster
+        while ((cluster = clusters.exec(line)) !== null) {
+            const folded = foldAccents(cluster[0])
+            for (var offset = 0; offset < folded.length; offset++)
+                offsets.push({start: cluster.index, end: clusters.lastIndex})
+            text += folded
+        }
+        return {text: text, offsets: offsets}
+    }
     function findMatches(rows, query) {
-        if (!query.trim()) return []
-        var result = []
-        var pattern = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "giu")
+        const result = {ordered: [], byRow: {}}
+        const needle = searchableLine(query).text
+        if (!needle) return result
+        const pattern = new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "giu")
         for (var row = 0; row < rows.length; row++) {
+            const line = searchableLine(rows[row])
             pattern.lastIndex = 0
             var hit
-            while ((hit = pattern.exec(rows[row])) !== null)
-                result.push({row: row, start: hit.index, end: hit.index + hit[0].length})
+            while ((hit = pattern.exec(line.text)) !== null) {
+                const end = pattern.lastIndex
+                const match = {row: row,
+                    start: line.offsets ? line.offsets[hit.index].start : hit.index,
+                    end: line.offsets ? line.offsets[end - 1].end : end}
+                result.ordered.push(match)
+                if (!result.byRow[row]) result.byRow[row] = []
+                result.byRow[row].push(match)
+            }
         }
         return result
     }
@@ -36,36 +69,59 @@ Item {
         return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
     }
     function lineText(row, text) {
-        var hit = currentMatch
-        if (!hit || hit.row !== row) return escapeText(text)
-        return escapeText(text.slice(0, hit.start))
-            + '<b><font color="' + BrandTheme.colors.actionAccent + '">' + escapeText(text.slice(hit.start, hit.end))
-            + '</font></b>' + escapeText(text.slice(hit.end))
+        const rowMatches = searchMatches.byRow[row]
+        if (!rowMatches) return escapeText(text)
+        const selected = currentMatch
+        var styled = ""
+        var cursor = 0
+        for (const hit of rowMatches) {
+            const active = selected && selected.row === row && selected.start === hit.start
+            const color = active ? BrandTheme.colors.actionAccent : BrandTheme.colors.warning
+            const highlight = '<font color="' + color + '">' + escapeText(text.slice(hit.start, hit.end)) + '</font>'
+            styled += escapeText(text.slice(cursor, hit.start)) + (active ? '<b>' + highlight + '</b>' : highlight)
+            cursor = hit.end
+        }
+        return styled + escapeText(text.slice(cursor))
     }
     function moveMatch(step) {
-        if (!matches.length) return
+        if (!matches.length) return false
         matchIndex = (matchIndex + step + matches.length) % matches.length
-        logRows.positionViewAtIndex(currentMatch.row, ListView.Contain)
+        positionCurrentMatch()
+        return true
     }
-    function showSearch() {
+    function positionCurrentMatch() {
+        if (visible && currentMatch) logRows.positionViewAtIndex(currentMatch.row, ListView.Contain)
+    }
+    function showSearch(showKeyboard) {
         searching = true
-        keyboardOpen = true
+        keyboardOpen = showKeyboard
         searchInput.forceActiveFocus()
     }
     function closeSearch() {
+        const restoreFocus = searching && visible && !confirmationOpen
         keyboardOpen = false
         searching = false
         searchInput.clear()
+        if (restoreFocus && searchToggle.enabled) searchToggle.forceActiveFocus()
     }
     function submitSearch() {
         keyboardOpen = false
-        if (currentMatch) logRows.positionViewAtIndex(currentMatch.row, ListView.Contain)
+        positionCurrentMatch()
     }
     onMatchesChanged: {
-        matchIndex = matches.length ? 0 : -1
-        if (currentMatch) logRows.positionViewAtIndex(currentMatch.row, ListView.Contain)
+        const previousIndex = matchQuery === query ? Math.max(0, matchIndex) : 0
+        matchQuery = query
+        matchIndex = Math.min(previousIndex, matches.length - 1)
+        Qt.callLater(positionCurrentMatch)
     }
     onVisibleChanged: if (!visible) closeSearch()
+    onLinesChanged: if (!lines.length && searching) closeSearch()
+
+    Shortcut {
+        sequences: [StandardKey.Find]
+        enabled: view.visible && view.findShortcutEnabled && !view.confirmationOpen && searchToggle.enabled
+        onActivated: view.showSearch(false)
+    }
 
     component LogAction: GlassButton {
         implicitWidth: 48; implicitHeight: 48; padding: 9
@@ -97,17 +153,20 @@ Item {
                     anchors.centerIn: parent
                     spacing: 0
                     LogAction {
+                        id: searchToggle
                         objectName: "logsSearchOpen"
-                        iconName: "search"; Accessible.name: view.tr("logs_search")
+                        iconName: "search"; Accessible.name: view.tr(view.searching ? "close_search" : "logs_search")
                         checked: view.searching
+                        enabled: view.lines.length > 0
                         background: Item {}
                         foregroundColor: checked ? BrandTheme.colors.actionAccent : BrandTheme.colors.text
-                        onClicked: view.showSearch()
+                        onClicked: view.searching ? view.closeSearch() : view.showSearch(true)
                     }
                     LogAction {
-                        iconName: "refresh"; Accessible.name: view.tr("refresh")
+                        objectName: "logsRefresh"
+                        iconName: "refresh"; Accessible.name: view.tr("refresh_logs")
                         background: Item {}
-                        onClicked: { view.backend.showLogs(); if (!view.currentMatch) logRows.positionViewAtBeginning() }
+                        onClicked: { view.backend.refreshLogs(); if (!view.currentMatch) logRows.positionViewAtBeginning() }
                     }
                     LogAction {
                         objectName: "logsCopy"
@@ -151,17 +210,23 @@ Item {
                         font.pixelSize: view.compact ? 18 : 21
                         maximumLength: 120
                         selectByMouse: true
-                        onActiveFocusChanged: if (activeFocus && view.searching) view.keyboardOpen = true
                         TapHandler { onTapped: view.keyboardOpen = true }
                         Keys.onEscapePressed: if (view.keyboardOpen) view.submitSearch(); else view.closeSearch()
+                        Keys.onUpPressed: function(event) { event.accepted = view.moveMatch(-1) }
+                        Keys.onDownPressed: function(event) { event.accepted = view.moveMatch(1) }
                         onAccepted: {
                             if (view.keyboardOpen) view.submitSearch()
                             else view.moveMatch(1)
                         }
                     }
                     Text {
-                        visible: searchInput.text.length > 0
-                        text: view.matches.length ? (view.matchIndex + 1) + " / " + view.matches.length : view.tr("logs_no_matches")
+                        objectName: "logsSearchMatchCount"
+                        visible: view.query.length > 0
+                        text: view.matches.length ? (view.matchIndex + 1) + "/" + view.matches.length : "0"
+                        Layout.minimumWidth: 44
+                        horizontalAlignment: Text.AlignRight
+                        Accessible.role: Accessible.StaticText
+                        Accessible.name: view.matches.length ? text : view.tr("logs_no_matches")
                         color: BrandTheme.colors.muted; font.pixelSize: 15
                     }
                     LogAction {
@@ -179,7 +244,8 @@ Item {
                         onClicked: view.moveMatch(1)
                     }
                     LogAction {
-                        iconName: "end"; Accessible.name: view.tr("close")
+                        objectName: "logsSearchClose"
+                        iconName: "close"; Accessible.name: view.tr("close_search")
                         background: Item {}
                         onClicked: view.closeSearch()
                     }
@@ -188,6 +254,7 @@ Item {
             ListView {
                 id: logRows
                 objectName: "logRows"
+                visible: view.lines.length > 0
                 Layout.fillWidth: true; Layout.fillHeight: true; Layout.minimumHeight: 0
                 model: view.lines
                 clip: true
@@ -211,6 +278,43 @@ Item {
                         textFormat: Text.StyledText
                         font.family: "monospace"; font.pixelSize: view.compact ? 16 : 20
                         color: BrandTheme.colors.text
+                        wrapMode: Text.Wrap
+                        Layout.fillWidth: true
+                    }
+                }
+            }
+            Item {
+                visible: view.lines.length === 0
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                ColumnLayout {
+                    anchors.centerIn: parent
+                    width: Math.min(parent.width, 420)
+                    spacing: 12
+                    FeatureIcon {
+                        iconName: view.backend.logsReadError ? "info" : "logs"
+                        iconColor: view.backend.logsReadError ? BrandTheme.colors.warning : BrandTheme.colors.text
+                        Layout.alignment: Qt.AlignHCenter
+                        Layout.preferredWidth: 44
+                        Layout.preferredHeight: 44
+                    }
+                    Text {
+                        objectName: "logsEmptyMessage"
+                        text: view.tr(view.backend.logsReadError ? "logs_read_unavailable" : "logs_empty")
+                        color: BrandTheme.colors.muted
+                        font.pixelSize: view.compact ? 19 : 23
+                        horizontalAlignment: Text.AlignHCenter
+                        wrapMode: Text.WordWrap
+                        Layout.fillWidth: true
+                    }
+                    Text {
+                        objectName: "logsReadErrorDetail"
+                        visible: text.length > 0
+                        text: view.backend.logsReadError
+                        textFormat: Text.PlainText
+                        color: BrandTheme.colors.muted
+                        font.pixelSize: view.compact ? 16 : 18
+                        horizontalAlignment: Text.AlignHCenter
                         wrapMode: Text.Wrap
                         Layout.fillWidth: true
                     }

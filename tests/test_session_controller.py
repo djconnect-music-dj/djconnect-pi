@@ -61,6 +61,91 @@ def test_runtime_header_matches_full_state_and_withdraws_old_owner(controller):
     assert header == {key: owner.state[key] for key in header}
 
 
+def test_moment_insight_offer_requires_capability_and_live_private_session(controller):
+    owner, backend = controller
+    owner._session = {"session_id": "session-a", "runtime_state": "active"}
+    owner._clock = Mock()
+    owner._clock.now.return_value = 100
+    offer = {
+        "reference": {"schema_version": 1, "session_id": "session-a", "moment_id": "m1", "action_id": "insight-m1"},
+        "expires_at": 200,
+    }
+    owner._moments = [{"current": True, "display_expires_at": "1970-01-01T00:02:30Z", "insight_navigation": offer}]
+    assert not owner.screenState["moment_insight_offer"]
+    owner._caps = {
+        "capabilities": {"moment_track_insight_navigation_v1": True},
+        "contract_versions": {"moment_track_insight_navigation": 1},
+    }
+    assert owner.screenState["moment_insight_offer"] == offer
+    backend.cfg.active_profile_privacy_mode = "shared"
+    assert not owner.screenState["moment_insight_offer"]
+    backend.cfg.active_profile_privacy_mode = "private"
+    owner._clock.now.return_value = 150
+    assert not owner.screenState["moment_insight_offer"]
+
+
+@pytest.mark.parametrize("source_withdrawn", [False, True])
+@pytest.mark.parametrize("retry_first", [False, True])
+def test_moment_insight_keeps_the_original_recording_across_playback_changes(controller, source_withdrawn, retry_first):
+    owner, backend = controller
+    owner._clock = Mock()
+    owner._clock.now.return_value = 100
+    reference = {"schema_version": 1, "session_id": "session-a", "moment_id": "m1", "action_id": "insight-m1"}
+    grant = {"moment_id": "m1", "qualification": "qualified", "source_expires_at": "1970-01-01T00:05:00Z"}
+    authority = {"schema_version": 1, "session_id": "session-a", "revocation_scope": "session",
+                 "current_moment_id": "m1", "admissions": [grant]}
+    owner._session = {"session_id": "session-a", "runtime_state": "active",
+                      "broadcast": {"native_delivery": authority, "playback": {"item_id": "track-a"}}}
+    owner._caps = {"capabilities": {"moment_track_insight_navigation_v1": True},
+                   "contract_versions": {"moment_track_insight_navigation": 1}}
+    owner._moments = [{"current": True, "display_expires_at": "1970-01-01T00:02:30Z",
+                      "insight_navigation": {"reference": reference, "expires_at": 200}}]
+
+    def read(_binding, requested):
+        assert requested == reference
+        authority["current_moment_id"] = "m2"
+        owner._session["broadcast"]["playback"] = {"item_id": "track-b"}
+        if source_withdrawn:
+            authority["admissions"] = []
+        return {"track": {"title": "Original song", "artist": "Original artist"},
+                "analysis": {"summary": "Original insight"}, "subject": {"expires_in": 50}}
+
+    calls = []
+    def read_attempt(binding, requested):
+        calls.append(requested)
+        if retry_first and len(calls) == 1:
+            raise SessionError("uncertain")
+        return read(binding, requested)
+
+    owner.transport.moment_track_insight = Mock(side_effect=read_attempt)
+    owner.openMomentTrackInsight("insight-m1")
+    assert owner.momentTrackInsight == {"status": "loading"}
+    owner.openMomentTrackInsight("insight-m1")
+    worker, = backend.jobs
+    backend.jobs.clear()
+    worker()
+    if retry_first:
+        assert owner.momentTrackInsight == {"status": "unavailable", "retryable": True}
+        assert backend.jobs == []
+        owner.retryMomentTrackInsight()
+        assert owner.momentTrackInsight == {"status": "loading"}
+        owner.retryMomentTrackInsight()
+        worker, = backend.jobs
+        worker()
+    assert calls == [reference] * (2 if retry_first else 1)
+    if source_withdrawn:
+        assert owner.momentTrackInsight == {"status": "expired"}
+        authority["admissions"] = [grant]
+        assert owner.momentTrackInsight == {"status": "expired"}
+    else:
+        assert owner.momentTrackInsight["title"] == "Original song"
+        owner._clock.now.return_value = 150
+        owner._reconcile_moment_insight()
+        assert owner.momentTrackInsight == {"status": "expired"}
+    owner.retryMomentTrackInsight()
+    assert len(backend.jobs) == (1 if retry_first else 0)
+
+
 def test_screen_state_omits_flow_projection_but_keeps_fresh_rows_available(controller, monkeypatch):
     owner, backend = controller
     backend.demoMode = True
@@ -214,6 +299,27 @@ def test_same_context_refresh_marks_empty_only_after_success(controller):
     assert owner.state["history_available"] and not owner.state["session_id"]
 
 
+def test_manual_runtime_refresh_reports_confirmed_outcomes_only(controller):
+    owner, backend = controller
+    completed = []
+    owner.runtimeRefreshFinished.connect(completed.append)
+    owner.poll()
+    backend.jobs.pop()()
+    assert completed == []
+    owner.refresh(True)
+    assert completed == []
+    backend.jobs.pop()()
+    assert completed == [True]
+    owner.refresh(True)
+    owner.clearSearch()
+    backend.jobs.pop()()
+    assert completed == [True]
+    owner.transport.active.side_effect = SessionError("offline")
+    owner.refresh(True)
+    backend.jobs.pop()()
+    assert completed == [True, False]
+
+
 def test_automatic_refresh_keeps_controls_available_and_drops_superseded_read(controller):
     owner, backend = controller
     owner.refresh()
@@ -246,11 +352,18 @@ def test_temporary_poll_failure_keeps_confirmed_session_until_recovery(controlle
         {"success": True, "session": session}, failed_read,
         {"success": True, "session": session}, {"success": True, "session": None},
     ]
-    for expected_session in ("s1", "s1", "s1", ""):
+    failed_offline = isinstance(failed_read, SessionError) and failed_read.category == "offline"
+    for expected_session, was_offline, remains_offline in (
+        ("s1", False, False), ("s1", False, failed_offline), ("s1", failed_offline, False), ("", False, False),
+    ):
         owner.poll()
+        assert owner.connectionReadInFlight
+        assert owner.state["connection_offline"] == was_offline
         backend.jobs.pop()()
+        assert not owner.connectionReadInFlight
         assert owner.state["session_id"] == expected_session
         assert owner.state["error"] == ""
+        assert owner.state["connection_offline"] == remains_offline
     assert owner.state["loaded"]
 
 
@@ -323,10 +436,57 @@ def test_demo_session_never_uses_server_or_survives_demo_exit(controller):
     assert [row["contribution"]["kind"] for row in owner.state["flow_rows"]] == [
         "conversation_dj", "conversation_user", "dj_moment",
     ]
+    owner.search("demo-session", "LISTEN")
+    live_match, = owner.state["search"]["matches"]
+    assert "<b><u>listen</u></b>" in live_match["highlighted_text"]
+    positions = []
+    owner.timelineUpdated.connect(positions.append)
+    owner.readCurrentHistory()
+    current_timeline = owner.state["timeline"]
+    assert current_timeline["session"]["session_id"] == "demo-session"
+    assert [entry["kind"] for entry in current_timeline["entries"]] == [
+        "dj_moment", "conversation_user", "conversation_dj",
+    ]
+    owner.refreshSaved(live_match["entry_id"])
+    owner.firstEntries()
+    assert positions == ["", live_match["entry_id"], ""]
+    backend.playback = SimpleNamespace(title="Harbor Lights", artist="Nora Vale", album="Tidal Lines",
+                                       uri="demo:track:harbor", position_seconds=0,
+                                       duration_seconds=180, is_playing=True)
+    owner.demo_playback_changed(track_changed=True)
+    owner.demo_playback_changed()
+    owner.readCurrentHistory()
+    plays = [row for row in owner.state["timeline"]["entries"] if row["kind"] == "playback_observed"]
+    assert len(plays) == 1
+    assert plays[0]["historical_playback"] == {"title": "Harbor Lights", "artist": "Nora Vale", "album": "Tidal Lines"}
+    assert "uri" not in plays[0]["playback"]
     owner.end("demo-session")
     assert not owner.state["flow_rows"] and not owner.sendQuestion("No session")
+    assert not owner.state["timeline"]
     assert not owner.state["started_at"]
     assert owner.state["loaded"] and not owner.state["session_id"]
+    owner.loadHistory()
+    assert len(owner.archiveRows) == 1
+    owner.searchArchive("something absent from the session")
+    assert owner.archiveSearchState["sessions"] == []
+    owner.searchArchive("TIDAL LINES")
+    assert owner.archiveSearchState["sessions"] == owner.archiveRows
+    owner.searchArchive("LISTEN TO NEXT")
+    found = owner.archiveSearchState["sessions"]
+    assert found == owner.archiveRows and found[0]["read_only"]
+    owner.openArchiveSearchResult(found[0]["session_id"])
+    assert owner.state["timeline"]["session"] == found[0]
+    assert any(row["text"] == "What should I listen to next?" for row in owner.state["timeline"]["entries"])
+    owner.search(found[0]["session_id"], "LISTEN")
+    saved_match, = owner.state["search"]["matches"]
+    assert saved_match["entry_id"] == live_match["entry_id"]
+    owner.openEntry(found[0]["session_id"], saved_match["entry_id"])
+    assert owner.state["timeline"]["selected_entry_id"] == saved_match["entry_id"]
+    owner.search(found[0]["session_id"], "NORA")
+    track_match, = owner.state["search"]["matches"]
+    assert track_match["entry_id"] == plays[0]["entry_id"]
+    assert "<b><u>Nora</u></b>" in track_match["highlighted_text"]
+    owner.closeSaved()
     owner.start("party")
     assert owner.state["mood"] == "party"
     assert not backend.jobs
@@ -334,6 +494,7 @@ def test_demo_session_never_uses_server_or_survives_demo_exit(controller):
     backend.demoMode = False
     backend.demoModeChanged.emit()
     assert not owner.state["session_id"] and not owner.state["loaded"]
+    assert not owner.archiveRows and not owner.archiveSearchState
 
 
 def enable_search(owner):
@@ -364,7 +525,8 @@ def test_leaving_history_discards_delayed_search_without_erasing_active_session(
     assert not owner.busy
 
 
-def test_open_result_uses_navigation_then_anchor_without_mutating_runtime(controller):
+@pytest.mark.parametrize("from_ask_dj", [False, True])
+def test_open_result_uses_navigation_then_anchor_without_mutating_runtime(controller, from_ask_dj):
     from test_session_history_view import timeline_fixture
     owner, backend = controller
     enable_search(owner)
@@ -379,13 +541,19 @@ def test_open_result_uses_navigation_then_anchor_without_mutating_runtime(contro
     owner.transport.end = Mock()
     signal = Mock()
     owner.entryOpened.connect(signal)
-    owner.openEntry(row['session_id'], row['entry_id'])
+    if from_ask_dj:
+        owner._caps = {}
+        owner.open_ask_dj_entry(row['session_id'], row['entry_id'], lambda: True)
+    else:
+        owner.openEntry(row['session_id'], row['entry_id'])
     backend.jobs.pop()()
     assert owner.state['session_id'] == 'current-session'
     assert owner.state['timeline']['selected_entry_id'] == row['entry_id']
+    assert owner.state['timeline'].get('_opened_from_ask_dj', False) is from_ask_dj
     assert owner.transport.timeline.call_args.kwargs == {'window':'anchor','anchor_entry_id':row['entry_id']}
     owner.transport.start.assert_not_called()
     owner.transport.end.assert_not_called()
+    assert owner.transport.capabilities.call_count == int(from_ask_dj)
     signal.assert_called_once()
 
 
@@ -453,9 +621,13 @@ def test_retry_saved_refresh_repeats_the_same_read(controller, window):
         owner._timeline["_prefix_pages"] = 1
     timeline_updated = Mock()
     owner.timelineUpdated.connect(timeline_updated)
+    refreshed = []
+    owner.savedRefreshFinished.connect(refreshed.append)
     owner.transport.timeline = Mock(side_effect=[SessionError("offline"), tail])
-    owner.refreshSaved(anchor)
+    owner.refreshSaved(anchor, True)
+    assert refreshed == []
     backend.jobs.pop()()
+    assert refreshed == [False]
     assert not owner.state["timeline"]
     assert owner.state["saved_open_retry"]
 
@@ -469,6 +641,11 @@ def test_retry_saved_refresh_repeats_the_same_read(controller, window):
     assert owner.state["timeline"]["session"]["session_id"] == session_id
     assert not owner.state["saved_open_retry"]
     timeline_updated.assert_called_once_with(anchor)
+    assert refreshed == [False]
+    owner.transport.timeline = Mock(return_value=tail)
+    owner.refreshSaved(anchor, True)
+    backend.jobs.pop()()
+    assert refreshed == [False, True]
 
 
 def test_timeline_pages_replace_window_and_reject_changed_revision(controller):
@@ -817,6 +994,22 @@ def test_saved_duration_uses_confirmed_timestamps(controller, session, expected)
     assert owner.formatSavedDuration({"started_at": "2026-10-18T12:34:00Z", **session}) == expected
 
 
+def test_archive_timing_labels_unconfirmed_times_and_adds_the_end_date_after_midnight(controller):
+    owner, _ = controller
+    interrupted = {
+        "lifecycle_status": "INTERRUPTED",
+        "created_at": "2026-10-18T12:00:00Z",
+        "started_at": "2026-10-18T12:34:00Z",
+        "interrupted_at": "2026-10-19T14:35:00Z",
+    }
+    complete = owner.formatArchiveTiming(interrupted)
+    assert "26 u 1 min" in complete and complete.count("2026") == 2
+    missing_start = owner.formatArchiveTiming({**interrupted, "started_at": ""})
+    assert "begintijd onbekend" in missing_start and missing_start.count("2026") == 2
+    reversed_order = owner.formatArchiveTiming({**interrupted, "interrupted_at": "2026-10-18T12:33:00Z"})
+    assert "eindtijd onbekend" in reversed_order and reversed_order.count("2026") == 1
+
+
 def paged_timeline(owner):
     from copy import deepcopy
 
@@ -1019,6 +1212,83 @@ def search_pages(count=2):
             total_count=None)
         pages.append(page)
     return pages
+
+
+def test_archive_search_keeps_the_session_lookup_bounded_and_skips_live_headers(controller):
+    owner, _ = controller
+    clock_fixture(owner)
+    saved = {"session_id": "saved", "lifecycle_status": "ENDED", "read_only": True,
+             "created_at": "2026-10-19T00:00:00Z", "_history_deadline": owner._clock.now() + 60}
+    owner._read_history_window = Mock(return_value={
+        "sessions": [saved, {**saved, "session_id": "live", "lifecycle_status": "ACTIVE"}],
+        "next_cursor": None,
+    })
+    def page(binding, sid, query, *, cursor):
+        number = int(cursor) if cursor else 0
+        return {"success": True, "schema_version": 2, "history_contract_version": 2, "session_id": sid,
+                "query": query, "revision": "fixture-search", "complete": False, "next_cursor": str(number + 1),
+                "matches": [], "returned_count": 0}
+    owner.transport.search = Mock(side_effect=page)
+    binding = owner.transport.binding()
+    result = owner._read_archive_search(binding, "contribution", owner._view_epoch)
+    assert result == {"query": "contribution", "sessions": [], "complete": False}
+    assert owner.transport.search.call_count == 5
+    assert all(call.args[1] == "saved" for call in owner.transport.search.call_args_list)
+    with pytest.raises(SessionError, match="context_changed"):
+        owner._read_archive_search(binding, "contribution", owner._view_epoch - 1)
+
+
+def test_archive_search_publishes_read_only_headers_and_clears_on_navigation(controller):
+    owner, backend = controller
+    clock_fixture(owner)
+    enable_search(owner)
+    owner.transport.history = Mock(return_value={
+        "success": True, "schema_version": 2, "history_contract_version": 2, "revision": "archive",
+        "retention_days": 90, "retention_revision": 1, "next_cursor": None, "sessions": [{
+            "session_id": "saved", "revision": 1, "created_at": "2026-10-19T00:00:00Z",
+            "interrupted_at": "2026-10-19T01:00:00Z", "lifecycle_status": "INTERRUPTED", "read_only": True,
+        }],
+    })
+    owner.transport.search = Mock()
+    owner.searchArchive("onderbroken")
+    assert owner.searchBusy and owner.archiveSearchState == {"query": "onderbroken"}
+    backend.jobs.pop()()
+    result = owner.archiveSearchState
+    assert not owner.searchBusy and result["complete"]
+    assert [row["session_id"] for row in result["sessions"]] == ["saved"]
+    owner.transport.search.assert_not_called()
+    owner.searchArchive("nieuwe opdracht")
+    owner.clearArchiveSearch()
+    backend.jobs.pop()()
+    assert owner.archiveSearchState == {} and not owner.searchBusy
+    owner.transport.history.assert_called_once()
+
+
+def test_archive_search_admits_a_content_hit_only_until_its_retention_deadline(controller):
+    from test_session_history_view import search_fixture
+
+    owner, backend = controller
+    host = clock_fixture(owner)
+    enable_search(owner)
+    page = search_fixture()
+    page["matches"][0]["retained_until"] = "2026-10-20T00:00:10Z"
+    owner.transport.search = Mock(return_value=page)
+    owner.transport.history = Mock(return_value={
+        "success": True, "schema_version": 2, "history_contract_version": 2, "revision": "archive",
+        "retention_days": 90, "retention_revision": 1, "next_cursor": None, "sessions": [{
+            "session_id": page["session_id"], "revision": 1, "created_at": "2026-10-19T00:00:00Z",
+            "ended_at": "2026-10-19T01:00:00Z", "lifecycle_status": "ENDED", "read_only": True,
+        }],
+    })
+    owner.searchArchive(page["query"])
+    backend.jobs.pop()()
+    assert owner.archiveSearchState["sessions"][0]["session_id"] == page["session_id"]
+    assert "matches" not in owner.archiveSearchState
+    host.wall += 11
+    host.tick += 11
+    assert owner.archiveSearchState == {"query": page["query"], "error": "unavailable"}
+    owner.openArchiveSearchResult(page["session_id"])
+    assert not backend.jobs
 
 
 def test_search_more_revalidates_previous_pages_and_refresh_withdraws_old_body(controller):
