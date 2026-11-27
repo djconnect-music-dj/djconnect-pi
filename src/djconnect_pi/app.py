@@ -205,7 +205,7 @@ class DJConnectBackend(QObject):
     logsChanged = Signal()
     mediaListsChanged = Signal()
     mediaActivityChanged = Signal()
-    _mediaListFinished = Signal(str)
+    _mediaListFinished = Signal(str, object, bool)
     _mediaPlaybackFinished = Signal()
     _mediaPlaybackObserved = Signal(object, object, bool)
     askDjChanged = Signal()
@@ -379,6 +379,7 @@ class DJConnectBackend(QObject):
         self._ask_dj_poll_in_flight = False
         self._suppress_next_playback_navigation = False
         self._media_loads_in_flight: set[str] = set()
+        self._media_list_load_failures: set[str] = set()
         self._media_playback_busy = False
         self._queue_read_lock = Lock()
         self._media_artwork_cache_in_flight: set[str] = set()
@@ -676,6 +677,14 @@ class DJConnectBackend(QObject):
     @Property(bool, notify=mediaActivityChanged)
     def playlistsLoading(self) -> bool:
         return "playlists" in self._media_loads_in_flight
+
+    @Property(bool, notify=mediaActivityChanged)
+    def queueLoadFailed(self) -> bool:
+        return "queue" in self._media_list_load_failures
+
+    @Property(bool, notify=mediaActivityChanged)
+    def playlistsLoadFailed(self) -> bool:
+        return "playlists" in self._media_list_load_failures
 
     @Property(bool, notify=mediaActivityChanged)
     def mediaPlaybackBusy(self) -> bool:
@@ -3738,16 +3747,20 @@ class DJConnectBackend(QObject):
         if not self.paired or kind in self._media_loads_in_flight:
             return
         self._media_loads_in_flight.add(kind)
+        self._media_list_load_failures.discard(kind)
         self.mediaActivityChanged.emit()
         _LOGGER.info("User requested %s from touch UI", kind)
         context = self._private_read_context()
+        failed = True
 
         def read() -> None:
+            nonlocal failed
             if context != self._private_read_context():
                 return
             key = f"{kind}_updated"
             try:
                 worker(ticket=context)
+                failed = False
             except (AuthenticationError, ProtocolVersionMismatch):
                 if context == self._private_read_context():
                     raise
@@ -3763,11 +3776,13 @@ class DJConnectBackend(QObject):
                 self._toastReady.emit(self.tr_key(key), 2200, kind)
 
         self._run(self.tr_key(kind), read,
-                  done=lambda: self._mediaListFinished.emit(kind), interactive=False)
+                  done=lambda: self._mediaListFinished.emit(kind, context, failed), interactive=False)
 
-    @Slot(str)
-    def _finish_media_list_load(self, kind: str) -> None:
+    @Slot(str, object, bool)
+    def _finish_media_list_load(self, kind: str, ticket, failed: bool) -> None:
         self._media_loads_in_flight.discard(kind)
+        if failed and not self._demo_mode and ticket == self._private_read_context():
+            self._media_list_load_failures.add(kind)
         self.mediaActivityChanged.emit()
 
     @Slot(str, result=str)
@@ -4935,6 +4950,9 @@ class DJConnectBackend(QObject):
         return (self.cfg.active_profile_id, self.cfg.active_profile_type, self.cfg.active_profile_privacy_mode)
 
     def _clear_profile_scoped_caches(self, *, preserve_session=False) -> None:
+        if self._media_list_load_failures:
+            self._media_list_load_failures.clear()
+            self.mediaActivityChanged.emit()
         if not preserve_session and hasattr(self, "_session_controller"):
             self._session_controller.invalidate()
         if self._queue_items or self._playlist_items:

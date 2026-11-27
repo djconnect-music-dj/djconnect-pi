@@ -1019,6 +1019,7 @@ BrandWindow {
         id: panel
         property string heading: ""
         property string emptyText: ""
+        property string loadErrorText: ""
         property string searchLabel: ""
         property string refreshLabel: root.tr("refresh")
         property string iconName: "queue"
@@ -1449,9 +1450,10 @@ BrandWindow {
                     Text {
                         objectName: "mediaEmptyStateMessage"
                         text: panel.items.length > 0 ? root.tr("media_no_matches")
-                            : panel.loading ? root.tr("loading") : panel.emptyText
+                            : panel.loading ? root.tr("loading") : (panel.loadErrorText || panel.emptyText)
                         textFormat: Text.PlainText
-                        color: BrandTheme.colors.muted
+                        color: !panel.items.length && !panel.loading && panel.loadErrorText
+                            ? BrandTheme.colors.warning : BrandTheme.colors.muted
                         font.pixelSize: panel.compact ? 20 : 24
                         horizontalAlignment: Text.AlignHCenter
                         wrapMode: Text.Wrap
@@ -3213,6 +3215,7 @@ BrandWindow {
             objectName: "queuePanel"
             heading: root.playbackScreenTitle("queue")
             emptyText: root.tr("empty_queue")
+            loadErrorText: djconnect.queueLoadFailed ? root.tr("queue_update_failed") : ""
             searchLabel: root.tr("media_search_queue")
             refreshLabel: root.tr("refresh_queue")
             playCommand: "play_context_at"
@@ -3232,6 +3235,7 @@ BrandWindow {
             objectName: "playlistsPanel"
             heading: root.playbackScreenTitle("playlists")
             emptyText: root.tr("empty_playlists")
+            loadErrorText: djconnect.playlistsLoadFailed ? root.tr("playlists_update_failed") : ""
             searchLabel: root.tr("media_search_playlists")
             refreshLabel: root.tr("refresh_playlists")
             iconName: "playlists"

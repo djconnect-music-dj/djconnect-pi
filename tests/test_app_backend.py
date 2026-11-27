@@ -4238,12 +4238,15 @@ def test_manual_media_list_refresh_reports_outcome(tmp_path, kind, failure):
     setattr(backend, f"_{'queue' if kind == 'queue' else 'playlist'}_items", [{"title": "Previous list"}])
     backend.client.command = Mock(return_value={"success": not failure, kind: []})
     refresh = backend.loadQueue if kind == "queue" else backend.loadPlaylists
+    failed_property = "queueLoadFailed" if kind == "queue" else "playlistsLoadFailed"
 
     refresh(True)
+    assert not getattr(backend, failed_property)
     backend._executor.submit.call_args.args[0]()
 
     items = backend.queueItems if kind == "queue" else backend.playlistItems
     assert items == ([{"title": "Previous list"}] if failure else [])
+    assert getattr(backend, failed_property) is failure
     assert backend.toastText == backend.t(f"{kind}_{'update_failed' if failure else 'updated'}")
     assert backend.toastIcon == kind
 
