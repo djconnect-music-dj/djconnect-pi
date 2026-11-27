@@ -34,6 +34,7 @@ from .session_history_view import (
     accepted_question,
     ask_dj_context_entry,
     confirmed_question_entry,
+    contribution_question,
     conversation_entries,
     demo_search_body,
     demo_search_matches,
@@ -351,6 +352,8 @@ class SessionController(QObject):
             "presence": session.get("selected_presence", ""),
             "persona": session.get("dj_persona", ""),
             "composer_available": self._composer_supported(), "pending_question": {} if revoked else deepcopy(self._pending_question), "current_reply": {} if revoked else deepcopy(self._current_reply), "retained_flow": [] if revoked else deepcopy(flow),
+            "contribution_exploration": not revoked and self._composer_supported() and not self.backend.demoMode
+                and bool(contribution_question(self._caps, self.backend.cfg.language)),
             "flow_more": active_history and self._incomplete_flow_limit == 20,
             "flow_history_hint": active_history and self._incomplete_flow_limit == 50,
             **({
@@ -1067,7 +1070,7 @@ class SessionController(QObject):
             return (bool(self._question_running) and self._foreground and self._composer_supported()
                 and self._pending_question_binding == self.transport.binding()
                 and self._pending_question.get("session_id") == self._session.get("session_id")
-                and self._selection_valid()
+                and (self._pending_question.get("preserve_selection") or self._selection_valid())
                 and (not self._question_reference or self._question_reference == moment_reference(
                     self._session, self._question_reference["selected"], now=self._clock.now())))
         except SessionError:
@@ -1183,6 +1186,21 @@ class SessionController(QObject):
             "session_id": self._session["session_id"], "selected": deepcopy(self._selection)}
         request["live_reference"] = moment_reference(self._session, request["selected"], now=self._clock.now())
         self._launch("question", request)
+        return bool(self._question_running)
+
+    @Slot(str, str, result=bool)
+    def exploreMoment(self, session_id, moment_id):
+        if (self.busy or self._question_running or not self._foreground or not self._view_active
+                or self.backend.demoMode or not self._composer_supported()):
+            return False
+        question = contribution_question(self._caps, self.backend.cfg.language)
+        selected = {"kind": "selected_moment", "session_id": session_id, "moment_id": moment_id}
+        live_reference = moment_reference(self._session, selected, now=self._clock.now())
+        if not question or not live_reference:
+            return False
+        self._launch("question", {"text": question, "client_message_id": "pi-turn-" + uuid4().hex,
+            "session_id": session_id, "selected": selected, "live_reference": live_reference,
+            "preserve_selection": True})
         return bool(self._question_running)
 
     def _search_supported(self):
@@ -2039,6 +2057,8 @@ class SessionController(QObject):
             self._error = ""
         if action == "question":
             self._pending_question = {"text": value["text"], "session_id": value["session_id"], "client_message_id": value["client_message_id"]}
+            if value.get("preserve_selection"):
+                self._pending_question["preserve_selection"] = True
             self._pending_question_binding = binding
             self._question_reference = deepcopy(value.get("live_reference", {}))
             self._current_reply = {}
@@ -2058,6 +2078,8 @@ class SessionController(QObject):
 
         def worker():
             result = {"serial": serial, "binding": binding, "action": action, "view_epoch": view_epoch, "question_epoch": question_epoch, "raw_binding": raw_binding}
+            if action == "question" and value.get("preserve_selection"):
+                result["preserve_selection"] = True
             if entry_guard is not None:
                 result["entry_guard"] = entry_guard
             if action == "refresh" and manual_refresh:
@@ -2128,6 +2150,8 @@ class SessionController(QObject):
                     # Queued work must validate the original intent without a GUI getter/tick.
                     check_conversation_read()
                     expected_pending = {key: value[key] for key in ("text", "session_id", "client_message_id")}
+                    if value.get("preserve_selection"):
+                        expected_pending["preserve_selection"] = True
                     if (not self._pending_question_valid() or self._pending_question != expected_pending
                             or self._question_reference != value.get("live_reference", {})):
                         raise SessionError("context_changed")
@@ -2353,6 +2377,8 @@ class SessionController(QObject):
             self._question_receipt = result["receipt_update"]
         if question:
             self._question_receipt = result.get("question_receipt", {})
+            if not result.get("preserve_selection"):
+                self._selection = {}
             # A concurrent current read owns Runtime/capability authority. Reconcile with a new
             # read after it, never overwrite it with the question worker's older snapshot.
             if result.get("error") in {"denied", "unpaired"}:
@@ -2363,7 +2389,6 @@ class SessionController(QObject):
             if result.get("private_response") and "error" not in result:
                 self._question_receipt = {}
                 self._question_reference = {}
-                self._selection = {}
                 self._current_reply = result.get("current_reply", {})
                 self._current_reply_binding = result["binding"]
                 if not self._current_reply_valid():
@@ -2376,7 +2401,6 @@ class SessionController(QObject):
                 return
             if self._last_current_read > result["serial"]:
                 self._question_status = "accepted_unavailable" if result.get("question_accepted") else "uncertain" if result.get("error") == "uncertain" else "failed"
-                self._selection = {}
                 self._reconcile_question = True
                 self.changed.emit()
                 self._reconcile_if_idle()
@@ -2387,14 +2411,12 @@ class SessionController(QObject):
                 self._retained_flow = []
                 self._flow_window = None
                 self._incomplete_flow_limit = 0
-                self._selection = {}
                 if result["error"] not in {"denied", "context_changed", "unpaired"}:
                     self._error = result["error"]
                     self.changed.emit()
                     return
             else:
                 self._question_status = "accepted_unavailable"
-                self._selection = {}
                 # The question's GET is a receipt check, not a replacement Runtime snapshot.
                 self._conversation = self._without_withdrawn_entries(result.get("conversation", []))
                 self._apply_retained_flow(result)

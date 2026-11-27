@@ -198,6 +198,12 @@ Item {
             if (canAsk && screen.owner.selectMoment(screen.state.session_id, modelData.moment_id))
                 composerPanel.open()
         }
+        function tellMore() {
+            if (!canAsk) return
+            screen.followQuestionReply = true
+            if (!screen.owner.exploreMoment(screen.state.session_id, modelData.moment_id))
+                screen.followQuestionReply = false
+        }
         SessionFlowDelete {
             id: deleteAction
             objectName: "sessionDeleteLiveMoment"
@@ -300,7 +306,18 @@ Item {
                     text: modelData.body; textFormat: Text.PlainText
                     color: BrandTheme.colors.text; font.pixelSize: 23
                     wrapMode: Text.WordWrap; Layout.fillWidth: true
-                    TapHandler { enabled: liveCard.canAsk; onTapped: liveCard.askAbout() }
+                    TapHandler {
+                        enabled: liveCard.canAsk
+                        onTapped: screen.state.contribution_exploration ? liveCard.tellMore() : liveCard.askAbout()
+                    }
+                }
+                GlassButton {
+                    objectName: "sessionMomentTellMore"
+                    visible: liveSources.ready && screen.state.contribution_exploration
+                    enabled: liveCard.canAsk
+                    text: screen.tr("ask_dj_tell_more")
+                    tertiary: true
+                    onClicked: liveCard.tellMore()
                 }
             }
         }
