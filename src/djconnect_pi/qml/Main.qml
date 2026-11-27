@@ -2615,8 +2615,10 @@ BrandWindow {
                     }
                 }
                 Text {
-                    text: root.tr("music_dna_import_confirm")
-                    color: BrandTheme.colors.muted
+                    objectName: "musicDnaImportMessage"
+                    text: root.tr(djconnect.musicDnaImportSaved ? "music_dna_import_saved" : "music_dna_import_confirm")
+                    color: djconnect.musicDnaImportSaved ? BrandTheme.colors.success : BrandTheme.colors.muted
+                    textFormat: Text.PlainText
                     font.pixelSize: 20
                     wrapMode: Text.WordWrap
                     Layout.fillWidth: true
@@ -2629,7 +2631,8 @@ BrandWindow {
                     wrapText: true
                     leftPadding: uploading ? 50 : padding
                     primary: true
-                    enabled: settingsPanel.canTransferMusicDna
+                    visible: !djconnect.musicDnaImportSaved
+                    enabled: visible && settingsPanel.canTransferMusicDna
                     opacity: enabled || uploading ? 1 : 0.5
                     Layout.fillWidth: true
                     onClicked: djconnect.confirmMusicDnaImport()
@@ -2645,7 +2648,9 @@ BrandWindow {
                     }
                 }
                 GlassButton {
-                    text: root.tr("cancel")
+                    objectName: "musicDnaImportClose"
+                    text: root.tr(djconnect.musicDnaImportSaved ? "close" : "cancel")
+                    primary: djconnect.musicDnaImportSaved
                     enabled: !djconnect.musicDnaBusy
                     Layout.fillWidth: true
                     onClicked: djconnect.cancelMusicDnaImport()

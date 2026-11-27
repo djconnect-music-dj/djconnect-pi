@@ -756,6 +756,11 @@ class DJConnectBackend(QObject):
         request = self._music_dna_import
         return bool(request and request.get("uploading") and self._music_dna_import_current(request))
 
+    @Property(bool, notify=musicDnaChanged)
+    def musicDnaImportSaved(self) -> bool:
+        request = self._music_dna_import
+        return bool(request and request.get("saved") and self._music_dna_import_current(request))
+
     @Property(str, notify=musicDnaChanged)
     def musicDnaSummary(self) -> str:
         return self._music_dna_summary
@@ -2887,7 +2892,6 @@ class DJConnectBackend(QObject):
                 if (response.get("success") is True and response.get("enabled") is True
                         and response.get("music_dna_key") == request["key"] and isinstance(response.get("profile"), dict)):
                     data = response
-                    notice = "music_dna_import_saved"
             except requests.RequestException:
                 notice = "session_uncertain"
             except DJConnectError:
@@ -2902,9 +2906,12 @@ class DJConnectBackend(QObject):
     def _finish_music_dna_import(self, request: dict, data: dict | None, notice: str) -> None:
         if not self._music_dna_import_current(request):
             return
-        self.cancelMusicDnaImport()
         if data is not None:
+            request["uploading"] = False
+            request["saved"] = True
             self._apply_music_dna_data(self._profile_read_result(data, request["ticket"]))
+            return
+        self.cancelMusicDnaImport()
         self._show_toast(self.tr_key(notice), 3500, "musicdna")
 
     @Slot(bool)
