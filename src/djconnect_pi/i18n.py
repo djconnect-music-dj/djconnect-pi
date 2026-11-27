@@ -1763,6 +1763,7 @@ for _key, _values in _SESSION_LIFECYCLE_TRANSLATIONS.items():
 
 
 _SESSION_COMPOSER_TRANSLATIONS = {
+    "ask_dj_tell_more": ("Tell me more", "Vertel meer", "Erzähl mir mehr", "Dis-m’en plus", "Cuéntame más"),
     "ask_dj_destination_unavailable": (
         "Couldn’t check the active session. Refresh to send your draft.",
         "De actieve sessie kon niet worden gecontroleerd. Vernieuw om je concept te versturen.",

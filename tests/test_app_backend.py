@@ -528,12 +528,12 @@ def test_ask_dj_does_not_send_without_a_confirmed_session_destination(tmp_path):
     backend._question_executor.submit = Mock()
     request = backend._ask_dj_context_request = object()
     ticket = backend._private_read_context()
-    backend._apply_ask_dj_context_rows(ticket, request, (None, []))
+    backend._apply_ask_dj_context_rows(ticket, request, (None, [], ""))
     assert backend.askDjDestinationUnavailable
     assert not backend.sendAskDjQuestion("Keep this draft")
     backend._question_executor.submit.assert_not_called()
 
-    backend._apply_ask_dj_context_rows(ticket, request, ("", []))
+    backend._apply_ask_dj_context_rows(ticket, request, ("", [], ""))
     assert not backend.askDjDestinationUnavailable
     assert backend.sendAskDjQuestion("Keep this draft")
     backend._question_executor.submit.assert_called_once()

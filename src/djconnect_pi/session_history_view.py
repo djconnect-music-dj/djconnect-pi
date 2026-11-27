@@ -6,6 +6,7 @@ from importlib.resources import files
 from unicodedata import normalize
 from urllib.parse import urlsplit
 
+from .i18n import normalize_language, translate
 from .session_projection import history_page, live_moments, safe_link, text, timestamp
 from .session_transport import SessionError, identifier
 
@@ -149,6 +150,29 @@ def ask_dj_context_entry(message_id, rows, *, now):
         return {}
     session_id, entry_id = matches.pop()
     return {"session_id": session_id, "entry_id": entry_id}
+
+
+def contribution_question(caps, language):
+    key = "ask_dj_contextual_exploration"
+    version = caps.get("contract_versions", {}).get(key)
+    value = caps.get(key)
+    if (caps.get("capabilities", {}).get(key) is not True or type(version) is not int or version != 1
+            or not isinstance(value, dict)):
+        return ""
+    version = value.get("version")
+    maximum = value.get("maximum_agent_calls")
+    context = value.get("context")
+    if (type(version) is not int or version != 1 or value.get("operation") != "ask_dj/message"
+            or not isinstance(context, list) or sorted(map(str, context)) != ["selected_entry", "selected_moment"]
+            or value.get("attribute_required") is not False or value.get("effect") != "informational"
+            or value.get("subject_authority") != "qualified_selected_public_context"
+            or value.get("unqualified_context") != "existing_source_unavailable_response"
+            or value.get("client_gesture_owner") != "client" or type(maximum) is not int or maximum != 3):
+        return ""
+    questions = value.get("generic_questions")
+    question = questions.get(normalize_language(language)) if isinstance(questions, dict) else None
+    expected = translate(language, "ask_dj_tell_more")
+    return expected if isinstance(question, str) and question.strip() == expected else ""
 
 
 def retained_flow_presentation(entries, admitted_moments, session_id):

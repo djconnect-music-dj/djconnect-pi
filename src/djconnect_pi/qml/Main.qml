@@ -6415,6 +6415,7 @@ BrandWindow {
                                         }
                                     }
                                     GlassButton {
+                                        id: askDjAnswerContextButton
                                         objectName: "askDjSelectAnswerContext"
                                         readonly property var reference: {
                                             void askDjPanel.answerContextRevision
@@ -6454,6 +6455,26 @@ BrandWindow {
                                             askDjPanel.feedbackMessageId = modelData.id
                                             if (askDjPanel.feedbackAnswer) askDjFeedbackPopup.open()
                                         }
+                                    }
+                                }
+
+                                GlassButton {
+                                    objectName: "askDjTellMore"
+                                    visible: !askDjPanel.historyOffline && !bubble.systemBubble
+                                        && !!askDjAnswerContextButton.reference.entry_id
+                                        && djconnect.askDjContributionQuestion.length > 0
+                                    enabled: askDjChatInput.enabled && !djconnect.askDjDestinationLoading
+                                        && !djconnect.askDjDestinationUnavailable
+                                    text: root.tr("ask_dj_tell_more")
+                                    tertiary: true
+                                    Layout.alignment: Qt.AlignLeft
+                                    onClicked: {
+                                        const ref = askDjAnswerContextButton.reference
+                                        if (!djconnect.exploreAskDjAnswer(bubble.messageId, ref.session_id, ref.entry_id)) return
+                                        askDjPanel.pendingQuestionText = djconnect.askDjContributionQuestion
+                                        askDjPanel.closeSearch(false)
+                                        askDjPanel.chatKeyboardOpen = false
+                                        Qt.callLater(askDjPanel.scrollToTop)
                                     }
                                 }
 
