@@ -1555,6 +1555,12 @@ BrandWindow {
                 root.askDjClearConfirmOpen = false
             }
         }
+        function onAskDjUnsentDraft(text) {
+            if (!root.active || root.screenBlanked || root.askDjPendingQuestion !== text || root.askDjDraft) return
+            const panel = askDjLoader.item
+            if (panel) panel.restoreUnsentDraft(text)
+            else root.askDjDraft = text
+        }
         function onScreenshotRequested() {
             root.temporaryWake(10, false)
             root.restartIdleTimer()
@@ -6013,6 +6019,12 @@ BrandWindow {
             askDjChatInput.focus = false
         }
 
+        function restoreUnsentDraft(text) {
+            if (askDjChatInput.text) return
+            askDjChatInput.text = text
+            askDjChatInput.cursorPosition = text.length
+        }
+
         function sendQuestion() {
             const question = askDjChatInput.text.trim()
             if (!askDjSend.enabled) return
@@ -6074,11 +6086,6 @@ BrandWindow {
             function onAskDjChanged() {
                 askDjPanel.updateMessages()
                 askDjPanel.answerContextRevision += 1
-            }
-            function onAskDjUnsentDraft(text) {
-                if (!askDjPanel.visible || root.askDjPendingQuestion !== text || askDjChatInput.text) return
-                askDjChatInput.text = text
-                askDjChatInput.cursorPosition = text.length
             }
             function onAskDjHelpSelected(text, placeholder, revision) {
                 if (!askDjPanel.helpOpen || revision !== askDjPanel.draftEditRevision
