@@ -1163,8 +1163,7 @@ Item {
             var flick = historyScroll.contentItem
             if (!flick.dragging) return
             flowDragContext = flowLoadOlder.visible && screen.visible ? screen.composerContext : ""
-            archiveDragScope = archiveMore.visible && archiveMore.enabled && screen.backend.paired
-                && !screen.backend.demoMode && !searchPanel.visible ? screen.historyPullScope : ""
+            archiveDragScope = historyScroll.archiveAutoPageAllowed ? screen.historyPullScope : ""
             timelineDragScope = screen.timelineExtendScope
             dragStart = flick.contentY
             archivePosition.stop()
@@ -1182,8 +1181,8 @@ Item {
             timelineDragScope = ""
             var flick = historyScroll.contentItem
             if (flick.contentY <= dragStart) return
-            if (archiveScope && archiveScope === screen.historyPullScope
-                    && flick.contentY + flick.height >= flick.originY + flick.contentHeight - 24) {
+            if (archiveScope && archiveScope === screen.historyPullScope && historyScroll.archiveAutoPageAllowed
+                    && flick.contentY + flick.height >= flick.originY + flick.contentHeight - 100) {
                 screen.loadMoreArchive()
                 return
             }
@@ -1643,7 +1642,7 @@ Item {
         readonly property int dockClearance: composerDock.visible ? composerDock.height + 144 : 132
         readonly property bool archiveAutoPageAllowed: visible && screen.historyViewOpen && screen.backend.paired
             && !screen.backend.demoMode && !screen.state.error && archiveMore.visible && archiveMore.enabled
-            && !searchPanel.visible && !screen.archiveMoreLoading
+            && !screen.historyNavigationBlocked && !screen.archiveMoreLoading
         anchors.top: screen.idleWelcome && !screen.compact ? parent.top : modeSwitch.visible ? modeSwitch.bottom : toolbar.bottom; anchors.bottom: parent.bottom
         anchors.left: parent.left; anchors.right: parent.right
         anchors.margins: 20
@@ -1652,15 +1651,6 @@ Item {
         clip: true; contentWidth: availableWidth
         contentHeight: historyContent.implicitHeight + (screen.historical ? 0 : dockClearance)
         ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
-        Connections {
-            target: historyScroll.contentItem
-            function onMovementEnded() {
-                const flick = historyScroll.contentItem
-                if (!historyScroll.archiveAutoPageAllowed || flick.atYBeginning) return
-                const remaining = flick.originY + flick.contentHeight - flick.contentY - flick.height
-                if (remaining <= 100) screen.loadMoreArchive()
-            }
-        }
         Timer {
             interval: 120
             running: historyScroll.archiveAutoPageAllowed && historyScroll.contentItem.contentHeight
