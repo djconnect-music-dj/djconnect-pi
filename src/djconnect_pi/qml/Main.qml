@@ -3411,11 +3411,13 @@ BrandWindow {
             property int exportGeneration: 0
             property string exportNoticeKey: ""
             property color exportNoticeColor: BrandTheme.colors.muted
+            property bool copiedShareText: false
             onAboutToShow: {
                 storyCard = true
                 animatedPreview = false
                 clipSelected = false
                 exportNoticeKey = ""
+                copiedShareText = false
             }
             onClosed: {
                 exportGeneration += 1
@@ -3425,6 +3427,9 @@ BrandWindow {
             }
             Connections {
                 target: djconnect
+                function onTrackInsightChanged() {
+                    insightSharePopup.copiedShareText = false
+                }
                 function onTrackInsightExportFinished(key, saved) {
                     if (!insightSharePopup.opened || !trackInsightPanel.canShareInsight) return
                     insightSharePopup.exportNoticeKey = key
@@ -3655,7 +3660,7 @@ BrandWindow {
                         objectName: "trackInsightCopyShareText"
                         text: root.tr("track_insight_copy_share_text"); iconName: "copy"
                         Layout.fillWidth: true; enabled: trackInsightPanel.canShareInsight
-                        onClicked: djconnect.copyTrackInsight()
+                        onClicked: insightSharePopup.copiedShareText = djconnect.copyTrackInsight()
                     }
                     GlassButton {
                         objectName: "trackInsightSaveCard"
@@ -3665,6 +3670,15 @@ BrandWindow {
                         enabled: trackInsightPanel.canShareInsight && !insightSharePopup.exportBusy
                         onClicked: insightSaveDialog.open()
                     }
+                }
+                Text {
+                    objectName: "trackInsightShareCopied"
+                    visible: insightSharePopup.copiedShareText
+                    text: root.tr("copied")
+                    textFormat: Text.PlainText
+                    color: BrandTheme.colors.success
+                    font.pixelSize: 18
+                    Layout.fillWidth: true
                 }
                 GlassButton {
                     text: root.tr("close"); tertiary: true; Layout.fillWidth: true

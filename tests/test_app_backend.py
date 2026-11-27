@@ -3647,13 +3647,13 @@ def test_qualified_track_insight_clears_at_expiry_and_rejects_replayed_observati
     owner.transport.track_insight_capabilities.assert_called_once_with(owner.transport.binding())
 
     with patch("djconnect_pi.app.QGuiApplication.clipboard") as clipboard:
-        backend.copyTrackInsight()
+        assert backend.copyTrackInsight()
         shared = clipboard.return_value.setText.call_args.args[0]
         assert all(part in shared for part in (
             "Track", "Qualified analysis", "Verified recording credit", "CC0-1.0", "https://fixture.invalid/credit",
         ))
         owner._clock.now.return_value = 110
-        backend.copyTrackInsight()
+        assert not backend.copyTrackInsight()
         clipboard.return_value.setText.assert_called_once()
     backend._expire_track_insight()
     assert backend.trackInsightText == ""

@@ -898,12 +898,13 @@ class DJConnectBackend(QObject):
             parts.append(self.tr_key("track_insight_unmeasured_audio"))
         return "\n\n".join(parts)
 
-    @Slot()
-    def copyTrackInsight(self) -> None:
+    @Slot(result=bool)
+    def copyTrackInsight(self) -> bool:
         text = self.trackInsightShareText if self._application_foreground else ""
-        if text:
-            QGuiApplication.clipboard().setText(text)
-            self.showToastForContext(self.tr_key("copied"), "trackinsight")
+        if not text:
+            return False
+        QGuiApplication.clipboard().setText(text)
+        return True
 
     @Slot(QImage, QUrl, str)
     def saveTrackInsightCard(self, image: QImage, destination: QUrl, expected_text: str) -> None:
