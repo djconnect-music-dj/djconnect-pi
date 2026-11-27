@@ -5122,13 +5122,24 @@ BrandWindow {
                                 anchors.margins: 14
                                 spacing: 10
 
-                                Text {
-                                    text: root.tr("music_dna_disabled")
-                                    color: BrandTheme.colors.text
-                                    font.pixelSize: 21
-                                    font.bold: true
-                                    wrapMode: Text.WordWrap
+                                RowLayout {
                                     Layout.fillWidth: true
+                                    spacing: 10
+                                    FeatureIcon {
+                                        objectName: "discoveryMusicDnaLock"
+                                        iconName: "lock"
+                                        iconColor: BrandTheme.colors.actionAccent
+                                        Layout.preferredWidth: 28
+                                        Layout.preferredHeight: 28
+                                    }
+                                    Text {
+                                        text: root.tr("music_dna_disabled")
+                                        color: BrandTheme.colors.text
+                                        font.pixelSize: 21
+                                        font.bold: true
+                                        wrapMode: Text.WordWrap
+                                        Layout.fillWidth: true
+                                    }
                                 }
 
                                 Text {
@@ -5139,8 +5150,11 @@ BrandWindow {
                                     Layout.fillWidth: true
                                 }
 
-                                PurpleButton {
+                                GlassButton {
+                                    objectName: "discoveryEnableMusicDna"
                                     text: root.tr("music_discovery_enable")
+                                    iconName: "sparkles"
+                                    wrapText: true
                                     primary: true
                                     enabled: !djconnect.musicDnaBusy && !djconnect.musicDiscoveryBusy
                                     font.pixelSize: 19

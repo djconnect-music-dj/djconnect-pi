@@ -302,6 +302,14 @@ Canvas {
                 roundRect(9, 15, 5, 6, 1)
                 line(18, 15, 23, 15)
                 line(18, 21, 23, 21)
+            } else if (iconName === "lock") {
+                ctx.beginPath()
+                ctx.arc(px(16), py(12), 6 * s / 32, Math.PI, Math.PI * 2)
+                ctx.stroke()
+                line(10, 12, 10, 15)
+                line(22, 12, 22, 15)
+                roundRect(7, 15, 18, 13, 3)
+                circle(16, 21, 1.4, true)
             } else if (iconName === "sparkles") {
                 star(19, 19, 11); star(8, 8, 5); star(23, 5, 3)
             } else if (iconName === "playlists") {
