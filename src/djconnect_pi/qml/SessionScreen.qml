@@ -3924,6 +3924,7 @@ Item {
         readonly property var detail: screen.owner.momentTrackInsight
         readonly property var credit: detail.credit || ({})
         readonly property bool separateSummary: !credit.context || credit.context !== detail.summary
+        readonly property var listeningCues: detail.listening_cues || []
         anchors.centerIn: parent
         width: Math.min(screen.width - 32, 680)
         padding: 20
@@ -4041,6 +4042,28 @@ Item {
                         font.pixelSize: 17
                         wrapMode: Text.WordWrap
                         Layout.fillWidth: true
+                    }
+                    Text {
+                        objectName: "sessionMomentInsightCueHeading"
+                        visible: momentInsight.listeningCues.length > 0
+                        text: screen.tr("track_insight_listening_cues")
+                        textFormat: Text.PlainText
+                        color: BrandTheme.colors.muted
+                        font.pixelSize: 17; font.bold: true
+                        Layout.fillWidth: true
+                    }
+                    Repeater {
+                        model: momentInsight.listeningCues
+                        Text {
+                            objectName: "sessionMomentInsightListeningCue"
+                            required property string modelData
+                            text: modelData
+                            textFormat: Text.PlainText
+                            color: BrandTheme.colors.text
+                            font.pixelSize: 20
+                            wrapMode: Text.Wrap
+                            Layout.fillWidth: true
+                        }
                     }
                 }
             }

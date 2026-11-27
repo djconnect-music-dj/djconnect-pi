@@ -1311,8 +1311,13 @@ class SessionController(QObject):
             summary = text(analysis.get("summary")).strip() if isinstance(analysis, dict) else ""
             if self._moment_insight_current(request) and title and summary:
                 credit = track_insight_verified_credit(analysis)
+                cues = analysis.get("listening_cues")
+                listening_cues = list(dict.fromkeys(
+                    cue for value in cues[:5] if (cue := text(value, 240).strip())
+                )) if credit and isinstance(cues, list) else []
                 request["view"] = {"status": "ready", "title": title, "summary": summary,
                                    "artist": text(track.get("artist"), 2048).strip(), "credit": credit,
+                                   "listening_cues": listening_cues,
                                    "unmeasured_audio": analysis.get("measured_audio") is False}
             else:
                 request["view"] = {"status": "unavailable"}
