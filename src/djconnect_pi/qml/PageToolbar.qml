@@ -16,8 +16,10 @@ Control {
     property color connectionIconColor: BrandTheme.colors.text
     property string aboutLabel: ""
     property string stopDemoLabel: ""
+    property string pairAgainLabel: ""
     signal aboutRequested()
     signal stopDemoRequested()
+    signal pairAgainRequested()
     onVisibleChanged: if (!visible) connectionInfo.close()
     property bool compact: width < 900
     default property alias actions: trailingRow.data
@@ -50,6 +52,17 @@ Control {
                 onClicked: {
                     connectionInfo.close()
                     bar.aboutRequested()
+                }
+            }
+            GlassButton {
+                objectName: "pageToolbarPairAgain"
+                visible: bar.pairAgainLabel.length > 0
+                text: bar.pairAgainLabel
+                iconName: "globe"
+                Layout.fillWidth: true
+                onClicked: {
+                    connectionInfo.close()
+                    bar.pairAgainRequested()
                 }
             }
             GlassButton {

@@ -354,8 +354,10 @@ BrandWindow {
             : connectionProblem ? BrandTheme.colors.warning : BrandTheme.colors.text
         aboutLabel: root.tr("about")
         stopDemoLabel: djconnect.demoMode ? root.tr("exit_demo") : ""
+        pairAgainLabel: connectionProblem === "session_connection_address_missing" ? root.tr("reset_pairing") : ""
         onAboutRequested: root.aboutOpen = true
         onStopDemoRequested: root.leaveDemoMode()
+        onPairAgainRequested: if (pairAgainLabel.length) root.resetPairingConfirmOpen = true
     }
 
     function trackInsightLabel(value) {
