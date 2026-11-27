@@ -85,7 +85,8 @@ def test_moment_insight_offer_requires_capability_and_live_private_session(contr
 
 
 @pytest.mark.parametrize("source_withdrawn", [False, True])
-def test_moment_insight_keeps_the_original_recording_across_playback_changes(controller, source_withdrawn):
+@pytest.mark.parametrize("retry_first", [False, True])
+def test_moment_insight_keeps_the_original_recording_across_playback_changes(controller, source_withdrawn, retry_first):
     owner, backend = controller
     owner._clock = Mock()
     owner._clock.now.return_value = 100
@@ -109,13 +110,29 @@ def test_moment_insight_keeps_the_original_recording_across_playback_changes(con
         return {"track": {"title": "Original song", "artist": "Original artist"},
                 "analysis": {"summary": "Original insight"}, "subject": {"expires_in": 50}}
 
-    owner.transport.moment_track_insight = Mock(side_effect=read)
+    calls = []
+    def read_attempt(binding, requested):
+        calls.append(requested)
+        if retry_first and len(calls) == 1:
+            raise SessionError("uncertain")
+        return read(binding, requested)
+
+    owner.transport.moment_track_insight = Mock(side_effect=read_attempt)
     owner.openMomentTrackInsight("insight-m1")
     assert owner.momentTrackInsight == {"status": "loading"}
     owner.openMomentTrackInsight("insight-m1")
     worker, = backend.jobs
+    backend.jobs.clear()
     worker()
-    owner.transport.moment_track_insight.assert_called_once()
+    if retry_first:
+        assert owner.momentTrackInsight == {"status": "unavailable", "retryable": True}
+        assert backend.jobs == []
+        owner.retryMomentTrackInsight()
+        assert owner.momentTrackInsight == {"status": "loading"}
+        owner.retryMomentTrackInsight()
+        worker, = backend.jobs
+        worker()
+    assert calls == [reference] * (2 if retry_first else 1)
     if source_withdrawn:
         assert not owner.momentTrackInsight
     else:

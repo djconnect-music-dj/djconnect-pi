@@ -1225,12 +1225,22 @@ class SessionController(QObject):
             return
         request = {
             "reference": offer["reference"], "deadline": offer["expires_at"], "binding": binding,
-            "style": self.track_insight_session_style(), "view": {"status": "loading"},
+            "style": self.track_insight_session_style(),
         }
         self._moment_insight = request
         if not self._moment_insight_current(request):
             self._moment_insight = None
             return
+        self._fetch_moment_insight(request)
+
+    @Slot()
+    def retryMomentTrackInsight(self):
+        request = self._moment_insight
+        if request and self._moment_insight_current(request) and request["view"].get("retryable"):
+            self._fetch_moment_insight(request)
+
+    def _fetch_moment_insight(self, request):
+        request["view"] = {"status": "loading"}
         self.momentInsightChanged.emit()
 
         def fetch():
@@ -1238,7 +1248,7 @@ class SessionController(QObject):
                 return
             started = self._clock.now()
             try:
-                data = self.transport.moment_track_insight(binding, request["reference"])
+                data = self.transport.moment_track_insight(request["binding"], request["reference"])
                 result = (data, started, "")
             except SessionError as error:
                 result = (None, started, error.category)
@@ -1289,7 +1299,10 @@ class SessionController(QObject):
             return
         data, started, error = result
         if data is None:
-            request["view"] = {"status": "expired" if error in {"denied", "expired"} else "unavailable"}
+            request["view"] = {
+                "status": "expired" if error in {"denied", "expired"} else "unavailable",
+                "retryable": error in {"rate_limited", "uncertain"},
+            }
         else:
             request["deadline"] = min(request["deadline"], started + data["subject"]["expires_in"])
             track = data.get("track")

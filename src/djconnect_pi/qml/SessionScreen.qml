@@ -4045,6 +4045,14 @@ Item {
                 }
             }
             GlassButton {
+                objectName: "sessionMomentInsightRetry"
+                visible: momentInsight.detail.retryable === true
+                text: screen.tr("track_insight_retry_action")
+                primary: true
+                Layout.fillWidth: true
+                onClicked: screen.owner.retryMomentTrackInsight()
+            }
+            GlassButton {
                 objectName: "sessionMomentInsightClose"
                 text: screen.tr("close")
                 Layout.fillWidth: true

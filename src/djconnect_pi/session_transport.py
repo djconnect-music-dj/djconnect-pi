@@ -288,8 +288,11 @@ class SessionTransport:
                     if private_probe and response.status_code == 403:
                         raise SessionError("private_scope_denied")
                     raise SessionError("denied")
-                if method == "POST" and route == "track_insight" and response.status_code == 410:
-                    raise SessionError("expired")
+                if method == "POST" and route == "track_insight":
+                    if response.status_code == 410:
+                        raise SessionError("expired")
+                    if response.status_code == 429:
+                        raise SessionError("rate_limited")
                 if help_request is not None and response.status_code != 200:
                     raise SessionError("unavailable")
                 if optional_capabilities and method == "GET" and route == "capabilities" and response.status_code == 404:

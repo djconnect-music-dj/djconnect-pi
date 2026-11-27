@@ -68,6 +68,7 @@ def test_track_insight_capability_probe_distinguishes_missing_route_from_failure
                     "action_id": "insight-m1"}}, 200, "invalid"),
     ({}, 403, "denied"),
     ({}, 410, "expired"),
+    ({}, 429, "rate_limited"),
 ])
 def test_moment_track_insight_is_bound_to_the_explicit_reference(transport, overrides, status, error):
     client, cfg, request, response = transport
