@@ -353,6 +353,11 @@ Item {
     readonly property string playbackMenuScope: JSON.stringify([
         state.playback.item_id || "", state.playback.source_url || "", state.playback.target_name || ""
     ])
+    readonly property string pendingBasicPlaybackCommand: {
+        const control = state.playback_control
+        return control.status === "sending" && ["play", "pause", "next", "previous"].includes(control.pending_command)
+            ? control.pending_command : ""
+    }
     onPlaybackMenuScopeChanged: closePlaybackPanels()
     function closePlaybackPanels() {
         if (transportPanel) transportPanel.close()
@@ -1758,21 +1763,22 @@ Item {
                             }
                         }
                         Rectangle {
-                            id: artworkResumeFeedback
-                            objectName: "sessionArtworkResumeFeedback"
+                            id: artworkCommandFeedback
+                            objectName: "sessionArtworkCommandFeedback"
+                            readonly property string command: screen.pendingBasicPlaybackCommand
                             anchors.centerIn: parent
                             width: screen.compact ? 64 : 96
                             height: width
                             radius: width / 2
                             color: "#73000000"
-                            visible: screen.liveViewOpen && screen.state.playback_control.status === "sending"
-                                && screen.state.playback_control.pending_command === "play"
+                            visible: screen.liveViewOpen && !!command
 
                             FeatureIcon {
                                 anchors.centerIn: parent
                                 width: parent.width * 0.56
                                 height: width
-                                iconName: "play"
+                                objectName: "sessionArtworkCommandSymbol"
+                                iconName: artworkCommandFeedback.command
                                 iconColor: "white"
                             }
                         }
@@ -1784,7 +1790,7 @@ Item {
                             iconName: "play"
                             padding: 0
                             visible: screen.liveViewOpen && !!screen.state.playback_control.available
-                                && screen.state.playback.state === "paused" && !artworkResumeFeedback.visible
+                                && screen.state.playback.state === "paused" && !artworkCommandFeedback.visible
                             enabled: !!screen.state.playback_control.enabled
                             Accessible.name: screen.tr("play")
                             onCurrentTrackClicked: screen.owner.playbackCommand(screen.state.session_id,
@@ -2809,15 +2815,13 @@ Item {
         RowLayout {
             id: commandFeedback
             readonly property string status: screen.state.playback_control.status || ""
-            readonly property string pendingCommand: screen.state.playback_control.pending_command || ""
             visible: status.length > 0
             Layout.fillWidth: true
             Item { Layout.fillWidth: true }
             FeatureIcon {
                 objectName: "sessionTransportPendingIcon"
-                visible: commandFeedback.status === "sending"
-                    && ["previous", "play", "pause", "next"].includes(commandFeedback.pendingCommand)
-                iconName: commandFeedback.pendingCommand
+                visible: !!screen.pendingBasicPlaybackCommand
+                iconName: screen.pendingBasicPlaybackCommand
                 Layout.preferredWidth: 26
                 Layout.preferredHeight: 26
                 Accessible.ignored: true
