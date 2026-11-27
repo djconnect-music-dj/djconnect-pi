@@ -1569,6 +1569,13 @@ _LOG_SEARCH_TRANSLATIONS = {
         "Se eliminarán todos los registros de diagnóstico visibles y guardados en este dispositivo.",
     ),
     "disable_logging_confirm": ("Disable and clear", "Uitschakelen en wissen", "Deaktivieren und löschen", "Désactiver et effacer", "Desactivar y borrar"),
+    "disable_logging_failed": (
+        "Could not disable logging and clear the logs. Try again.",
+        "Logging kon niet worden uitgeschakeld en de logs konden niet worden gewist. Probeer opnieuw.",
+        "Die Protokollierung konnte nicht deaktiviert und die Protokolle konnten nicht gelöscht werden. Versuche es erneut.",
+        "Impossible de désactiver la journalisation et d’effacer les journaux. Réessayez.",
+        "No se pudo desactivar el registro y borrar los registros. Inténtalo de nuevo.",
+    ),
     "logs_clear_failed": ("Could not clear logs", "Logregels konden niet worden gewist", "Protokolle konnten nicht gelöscht werden", "Impossible d’effacer les journaux", "No se pudieron borrar los registros"),
     "logs_search": ("Search logs", "Zoek in logs", "Protokolle durchsuchen", "Rechercher dans les journaux", "Buscar en registros"),
     "logs_previous_match": ("Previous match", "Vorig resultaat", "Vorheriger Treffer", "Résultat précédent", "Coincidencia anterior"),

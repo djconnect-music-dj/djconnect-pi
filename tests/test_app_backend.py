@@ -3971,7 +3971,8 @@ def test_music_dna_import_does_not_upload_after_profile_changes(tmp_path: Path, 
     assert not backend.musicDnaImportPreview
 
 
-def test_switching_logging_off_clears_app_logs_and_hides_the_open_view(tmp_path, monkeypatch):
+@pytest.mark.parametrize("clear_fails", [False, True])
+def test_switching_logging_off_clears_app_logs_and_hides_the_open_view(tmp_path, monkeypatch, clear_fails):
     ensure_app()
     config = tmp_path / "client.json"
     log_file = tmp_path / "client.log"
@@ -3987,7 +3988,22 @@ def test_switching_logging_off_clears_app_logs_and_hides_the_open_view(tmp_path,
 
     backend.showLogs()
     assert backend.logsVisible
-    backend.setLogLevel("OFF")
+    if clear_fails:
+        clear = Mock(side_effect=PermissionError("fixture"))
+        monkeypatch.setattr("djconnect_pi.app.clear_log_files", clear)
+
+        assert not backend.setLogLevel("OFF")
+
+        clear.assert_called_once_with(log_file)
+        assert [call.args for call in logging_setup.call_args_list] == [
+            (str(log_file), "OFF"), (str(log_file), "INFO"),
+        ]
+        assert backend.logLevel == load_config(config).log_level == "INFO"
+        assert all(path.exists() for path in log_paths)
+        assert backend.logsVisible
+        return
+
+    assert backend.setLogLevel("OFF")
 
     logging_setup.assert_called_once_with(str(log_file), "OFF")
     assert load_config(config).log_level == "OFF"

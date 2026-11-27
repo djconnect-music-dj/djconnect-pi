@@ -1746,20 +1746,40 @@ class DJConnectBackend(QObject):
         self.showToastForContext(self.tr_key("update_channel", channel=channel), "updates")
         self._set_status_text(self.tr_key("update_channel", channel=channel))
 
-    @Slot(str)
-    def setLogLevel(self, value: str) -> None:
+    @Slot(str, result=bool)
+    def setLogLevel(self, value: str) -> bool:
         level = normalize_log_level(value)
-        if self.cfg.log_level == level:
-            return
-        self.cfg.log_level = level
-        save_config(self.config_path, self.cfg)
-        applied = self._apply_log_level()
+        previous_level = self.cfg.log_level
+        if previous_level == level:
+            return True
+
+        if level == DEFAULT_LOG_LEVEL:
+            try:
+                path = setup_logging(self.cfg.log_file, level)
+                clear_log_files(path)
+                self.cfg.log_level = level
+                save_config(self.config_path, self.cfg)
+            except OSError:
+                self.cfg.log_level = previous_level
+                try:
+                    setup_logging(self.cfg.log_file, previous_level)
+                except OSError as exc:
+                    self.showToastForContext(self.tr_key("logs_failed", error=exc), "diagnostics")
+                return False
+            self.hideLogs()
+            applied = True
+        else:
+            self.cfg.log_level = level
+            save_config(self.config_path, self.cfg)
+            applied = self._apply_log_level()
+
         self.logLevelChanged.emit()
         self.settingsChanged.emit()
         if applied:
             _LOGGER.info("User changed log level to %s", level)
             label = self.tr_key("off") if level == DEFAULT_LOG_LEVEL else level
             self.showToastForContext(self.tr_key("log_level_saved", level=label), "diagnostics")
+        return applied
 
     def _apply_log_level(self) -> bool:
         disabled = self.cfg.log_level == DEFAULT_LOG_LEVEL

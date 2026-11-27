@@ -2594,6 +2594,7 @@ BrandWindow {
     component SettingsPage: Rectangle {
         id: settingsPanel
         objectName: "settingsPanel"
+        property bool logDisableFailed: false
         color: "transparent"
         readonly property bool canChangeMusicDna: djconnect.musicDnaLoaded && !djconnect.musicDnaBusy
             && (djconnect.paired || djconnect.demoMode)
@@ -2634,7 +2635,7 @@ BrandWindow {
                     Layout.fillWidth: true
                     onClicked: {
                         disableLoggingPopup.close()
-                        djconnect.setLogLevel("OFF")
+                        settingsPanel.logDisableFailed = !djconnect.setLogLevel("OFF")
                     }
                 }
                 GlassButton {
@@ -3241,6 +3242,7 @@ BrandWindow {
                     }
                     Layout.fillWidth: true
                     onActivated: function(index) {
+                        settingsPanel.logDisableFailed = false
                         const level = model[index]
                         if (level === "OFF" && disableLoggingPopup.canDisable) {
                             currentIndex = Qt.binding(() => model.indexOf(djconnect.logLevel))
@@ -3250,6 +3252,16 @@ BrandWindow {
                         }
                     }
                 }
+            }
+
+            Text {
+                objectName: "settingsLogDisableFailed"
+                visible: settingsPanel.logDisableFailed && djconnect.logLevel !== "OFF"
+                text: root.tr("disable_logging_failed")
+                color: BrandTheme.colors.danger
+                wrapMode: Text.WordWrap
+                font.pixelSize: 18
+                Layout.fillWidth: true
             }
 
             Text {
