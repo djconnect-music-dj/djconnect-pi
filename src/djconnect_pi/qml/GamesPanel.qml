@@ -151,6 +151,8 @@ Rectangle {
     }
 
     function resetGame() {
+        flashTimer.stop()
+        flash = false
         score = 0
         paddleY = 86
         ballX = 160
@@ -539,7 +541,7 @@ Rectangle {
                         implicitWidth: root.compact ? 48 : 64
                         implicitHeight: root.compact ? 46 : 58
                         padding: 9; background: Item {}
-                        onClicked: root.resetRound()
+                        onClicked: root.resetGame()
                     }
                 }
             }
