@@ -3607,6 +3607,16 @@ BrandWindow {
                     Layout.fillWidth: true
                     onClicked: insightSharePopup.animatedPreview = !insightSharePopup.animatedPreview
                 }
+                Text {
+                    objectName: "trackInsightClipUnavailable"
+                    visible: !djconnect.trackInsightClipSupported
+                    text: root.tr("track_insight_clip_unavailable")
+                    textFormat: Text.PlainText
+                    wrapMode: Text.WordWrap
+                    color: BrandTheme.colors.muted
+                    font.pixelSize: 17
+                    Layout.fillWidth: true
+                }
                 ScrollView {
                     id: insightShareScroll
                     Layout.fillWidth: true

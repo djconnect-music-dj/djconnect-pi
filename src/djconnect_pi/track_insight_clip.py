@@ -9,9 +9,13 @@ FRAME_COUNT = 6 * FRAME_RATE
 
 def clip_format():
     try:
-        from PySide6.QtMultimedia import QMediaFormat
+        from PySide6 import QtMultimedia
     except ImportError:
         return None
+    if not all(hasattr(QtMultimedia, name) for name in (
+            "QMediaFormat", "QMediaCaptureSession", "QMediaRecorder", "QVideoFrame", "QVideoFrameInput")):
+        return None
+    QMediaFormat = QtMultimedia.QMediaFormat
     fmt = QMediaFormat(QMediaFormat.FileFormat.MPEG4)
     fmt.setVideoCodec(QMediaFormat.VideoCodec.H264)
     return fmt if fmt.isSupported(QMediaFormat.ConversionMode.Encode) else None
@@ -50,7 +54,7 @@ class TrackInsightClip(QObject):
         self._recorder.setVideoResolution(self._size)
         self._recorder.setMediaFormat(fmt)
         self._recorder.setAutoStop(True)
-        self._recorder.errorOccurred.connect(lambda *_: self.stop("failed"))
+        self._recorder.errorOccurred.connect(lambda *_: self.stop("encoding_failed"))
         self._recorder.recorderStateChanged.connect(self._state_changed)
         self._input.readyToSendVideoFrame.connect(self._request_or_send, Qt.ConnectionType.QueuedConnection)
 
@@ -113,7 +117,7 @@ class TrackInsightClip(QObject):
     def _state_changed(self, state):
         if state != self._stopped_state:
             return
-        outcome = self._outcome or ("saved" if self._end_sent else "failed")
+        outcome = self._outcome or ("saved" if self._end_sent else "encoding_failed")
         self._finish(outcome)
 
     def _finish(self, outcome):

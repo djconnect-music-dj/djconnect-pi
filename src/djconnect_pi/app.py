@@ -1070,7 +1070,10 @@ class DJConnectBackend(QObject):
             return
         path = destination.toLocalFile()
         fmt = clip_format()
-        if not path or Path(path).suffix.lower() != ".mp4" or fmt is None:
+        if fmt is None:
+            self.trackInsightExportFinished.emit("track_insight_clip_unavailable", False)
+            return
+        if not path or Path(path).suffix.lower() != ".mp4":
             self.trackInsightExportFinished.emit("track_insight_clip_save_failed", False)
             return
         clip = TrackInsightClip(path, 1920 if story else 1080, fmt, current, self)
@@ -1098,7 +1101,8 @@ class DJConnectBackend(QObject):
         self.trackInsightClipChanged.emit()
         if outcome != "cancelled":
             saved = outcome == "saved"
-            key = "track_insight_clip_saved" if saved else "track_insight_clip_save_failed"
+            key = {"saved": "track_insight_clip_saved", "encoding_failed": "track_insight_clip_encoding_failed"}.get(
+                outcome, "track_insight_clip_save_failed")
             self.trackInsightExportFinished.emit(key, saved)
 
     @Property(bool, notify=trackInsightChanged)

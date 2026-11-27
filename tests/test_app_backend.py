@@ -3394,6 +3394,23 @@ def test_backend_music_dna_refresh_shows_toast(tmp_path: Path) -> None:
     assert calls[0][0] == backend.t("music_dna")
 
 
+@pytest.mark.parametrize(("outcome", "notice_key"), [
+    ("encoding_failed", "track_insight_clip_encoding_failed"),
+    ("failed", "track_insight_clip_save_failed"),
+])
+def test_track_insight_distinguishes_clip_encoder_failure_from_save_failure(tmp_path, outcome, notice_key):
+    ensure_app()
+    backend = DJConnectBackend(tmp_path / "config.json")
+    clip = backend._track_insight_clip = Mock()
+    notice = Mock()
+    backend.trackInsightExportFinished.connect(notice)
+
+    backend._finish_track_insight_clip(clip, outcome)
+
+    notice.assert_called_once_with(notice_key, False)
+    assert not backend.trackInsightClipRunning
+
+
 def test_backend_track_insight_refresh_requests_fresh_analysis_and_shows_toast(tmp_path: Path) -> None:
     ensure_app()
     backend = DJConnectBackend(tmp_path / "config.json")
