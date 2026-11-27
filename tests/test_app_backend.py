@@ -3566,8 +3566,9 @@ def test_read_music_dna_import_keeps_profile_data_separate_from_source_identity(
     profile = {"success": True, "enabled": True, "music_dna_key": "source-only",
                "generation": 7, "profile": {"summary": "Test Music DNA", "track_count": 1200,
                                             "artist_count": 0, "genre_count": True}}
+    exported_at = "2026-10-19T14:10:00Z"
     document = {"success": True, "format": "djconnect.music_dna.export", "schema_version": 1,
-                "exported_at": "2026-10-19T14:10:00Z", "profile": profile} if envelope else profile
+                "exported_at": exported_at, "profile": profile} if envelope else {**profile, "exported_at": exported_at}
     path.write_text(json.dumps(document))
 
     payload, preview = _read_music_dna_import(path)
@@ -3578,7 +3579,8 @@ def test_read_music_dna_import_keeps_profile_data_separate_from_source_identity(
         {"label": "music_dna_card_tracks", "value": 1200},
         {"label": "music_dna_card_artists", "value": 0},
     ]
-    assert ("updatedAt" in preview) is envelope
+    assert preview.get("updatedAt") == (exported_at if envelope else None)
+    assert preview.get("exportedAt") == (exported_at if envelope else None)
 
 
 def test_read_music_dna_import_rejects_unknown_format_and_nonfinite_json(tmp_path: Path) -> None:

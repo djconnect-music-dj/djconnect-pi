@@ -6481,9 +6481,13 @@ def _read_music_dna_import(path: Path) -> tuple[dict[str, object], dict[str, obj
             counts.append({"label": label, "value": value})
     if counts:
         preview["counts"] = counts
-    updated = response.get("updated_at") or profile.get("updated_at") or (document.get("exported_at") if envelope else "")
-    if isinstance(updated, str) and timestamp(updated) is not None:
-        preview["updatedAt"] = updated
+    exported = document.get("exported_at") if envelope else None
+    if isinstance(exported, str) and timestamp(exported) is not None:
+        preview["exportedAt"] = exported
+    for updated in (response.get("updated_at"), profile.get("updated_at"), preview.get("exportedAt")):
+        if isinstance(updated, str) and timestamp(updated) is not None:
+            preview["updatedAt"] = updated
+            break
     generation = response.get("generation")
     if type(generation) is int and 0 <= generation <= 2**53 - 1:
         preview["generation"] = generation

@@ -2556,6 +2556,19 @@ BrandWindow {
                     font.pixelSize: 18
                     Layout.fillWidth: true
                 }
+                Text {
+                    objectName: "musicDnaImportExportedAt"
+                    readonly property string exportedTime: {
+                        root.trVersion
+                        return djconnect.djSession.formatTimestamp(djconnect.musicDnaImportPreview.exportedAt || "", true)
+                    }
+                    visible: exportedTime.length > 0
+                    text: root.tr("music_dna_exported_at").replace("%1", exportedTime)
+                    textFormat: Text.PlainText
+                    color: BrandTheme.colors.muted
+                    font.pixelSize: 18
+                    Layout.fillWidth: true
+                }
                 RowLayout {
                     id: importCounts
                     objectName: "musicDnaImportCounts"

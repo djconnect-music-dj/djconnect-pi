@@ -1312,6 +1312,9 @@ _MUSIC_DNA_CARD_TRANSLATIONS = {
     "music_dna_updated_at": (
         "Updated %1", "Bijgewerkt %1", "Aktualisiert %1", "Mis à jour %1", "Actualizado %1",
     ),
+    "music_dna_exported_at": (
+        "Exported %1", "Geëxporteerd %1", "Exportiert %1", "Exporté %1", "Exportado %1",
+    ),
     "music_dna_loading_profile": (
         "Loading Music DNA from Home Assistant…", "Music DNA ophalen uit Home Assistant…",
         "Music DNA wird aus Home Assistant geladen…", "Chargement de Music DNA depuis Home Assistant…",
