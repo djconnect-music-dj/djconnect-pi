@@ -5826,6 +5826,7 @@ BrandWindow {
                                     id: dnaGroup
                                     required property var modelData
                                     readonly property bool weekdays: modelData.key === "music_dna_card_weekdays"
+                                    readonly property bool tiles: weekdays || modelData.key === "music_dna_card_genres"
                                     Layout.fillWidth: true
                                     spacing: 8
                                     Text {
@@ -5878,25 +5879,26 @@ BrandWindow {
                                         wrapMode: Text.WordWrap
                                     }
                                     GridLayout {
-                                        objectName: "musicDnaWeekdayGrid"
-                                        visible: dnaGroup.weekdays
+                                        objectName: dnaGroup.weekdays ? "musicDnaWeekdayGrid"
+                                            : dnaGroup.tiles ? "musicDnaGenreGrid" : ""
+                                        visible: dnaGroup.tiles
                                         Layout.fillWidth: true
                                         columns: Math.max(1, Math.floor((width + columnSpacing) / (118 + columnSpacing)))
                                         columnSpacing: 8
                                         rowSpacing: 8
                                         Repeater {
-                                            model: dnaGroup.weekdays ? dnaGroup.modelData.rows : []
+                                            model: dnaGroup.tiles ? dnaGroup.modelData.rows : []
                                             Rectangle {
-                                                objectName: "musicDnaWeekdayTile"
+                                                objectName: dnaGroup.weekdays ? "musicDnaWeekdayTile" : "musicDnaGenreTile"
                                                 required property var modelData
                                                 radius: 7
                                                 color: BrandTheme.alpha(BrandTheme.colors.text, "14")
-                                                implicitHeight: weekdayLabels.implicitHeight + 16
+                                                implicitHeight: tileLabels.implicitHeight + 16
                                                 Layout.alignment: Qt.AlignTop
                                                 Layout.fillWidth: true
                                                 Layout.preferredWidth: 1
                                                 ColumnLayout {
-                                                    id: weekdayLabels
+                                                    id: tileLabels
                                                     anchors.fill: parent
                                                     anchors.leftMargin: 10
                                                     anchors.rightMargin: 10
@@ -5913,7 +5915,11 @@ BrandWindow {
                                                         wrapMode: Text.Wrap
                                                     }
                                                     Text {
-                                                        text: root.musicDnaPercent(modelData.percent)
+                                                        visible: text.length > 0
+                                                        text: typeof modelData.percent === "number" ? root.musicDnaPercent(modelData.percent)
+                                                            : modelData.value || (typeof modelData.count === "number"
+                                                                ? root.tr("music_dna_card_plays").replace("%1", modelData.count) : "")
+                                                        textFormat: Text.PlainText
                                                         color: BrandTheme.colors.muted
                                                         font.pixelSize: 15
                                                         Layout.fillWidth: true
@@ -5923,7 +5929,7 @@ BrandWindow {
                                         }
                                     }
                                     Repeater {
-                                        model: dnaGroup.modelData.shelf || dnaGroup.weekdays ? [] : dnaGroup.modelData.rows
+                                        model: dnaGroup.modelData.shelf || dnaGroup.tiles ? [] : dnaGroup.modelData.rows
                                         MusicDnaRow {
                                             required property var modelData
                                             entry: modelData

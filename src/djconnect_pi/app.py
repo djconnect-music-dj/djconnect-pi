@@ -7156,7 +7156,13 @@ def _music_dna_cards(profile: dict[str, object], ha_url: str) -> list[dict[str, 
     card("positives", "heart", groups=grouped("recent_favorites", rows(positives.get("favorite_tracks")))
          + grouped("accepted", accepted_rows(positives.get("accepted_recommendations"), artwork=True)),
          entries=rows(positives.get("items")))
-    card("anchors", "sparkles", entries=rows(block("taste_anchors").get("items")))
+    anchor_items = block("taste_anchors").get("items")
+    anchors = {"artist": [], "genre": [], "other": []}
+    for item in anchor_items[:5] if isinstance(anchor_items, list) else []:
+        kind = item.get("kind") if isinstance(item, dict) else None
+        anchors[kind if kind in ("artist", "genre") else "other"].append(item)
+    card("anchors", "sparkles", entries=rows(anchors["other"]),
+         groups=grouped("artists", rows(anchors["artist"])) + grouped("genres", rows(anchors["genre"])))
     card("recent_tracks", "history", entries=rows(tracks, artwork=True, limit=3))
     card("recent_favorites", "heart", entries=rows(profile.get("recent_favorite_tracks"), artwork=True, limit=3))
     top_tracks = block("top_tracks_by_range")

@@ -735,6 +735,16 @@ def test_music_dna_parser_renders_optional_blocks_and_hides_empty_cards() -> Non
     assert "secret" not in repr(cards)
 
 
+def test_music_dna_taste_anchors_group_typed_artists_and_genres_without_losing_legacy_labels():
+    anchors = {"items": [{"kind": "genre", "name": "Indie"}, {"kind": "artist", "name": "Robyn", "play_count": 8},
+                         "Legacy anchor", {"kind": "genre", "name": "House"}]}
+    (card,) = parse_music_dna_profile({"enabled": True, "profile": {"taste_anchors": anchors}})["sections"]
+    artists, genres = card["groups"]
+    assert artists["key"] == "music_dna_card_artists" and artists["rows"][0]["count"] == 8
+    assert [row["title"] for row in genres["rows"]] == ["Indie", "House"]
+    assert card["rows"] == [{"title": "Legacy anchor"}]
+
+
 def test_music_dna_summary_prefers_profile_totals_over_preview_list_lengths() -> None:
     profile = {"track_count": 42, "artist_count": 0, "recent_tracks": [{"title": "New"}],
                "favorite_artists": [{"name": "Artist"}]}
