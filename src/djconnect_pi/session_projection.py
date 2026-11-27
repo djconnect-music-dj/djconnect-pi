@@ -215,14 +215,47 @@ def live_moments(session, now=None, *, spotify_attribution_available=False):
             continue
         if grant.get("requires_spotify_attribution") and (not spotify_attribution_available or not current or not links or not any(urlsplit(value).hostname == "open.spotify.com" for value in links)):
             continue
-        result.append({"moment_id": moment_id, "title": text(moment.get("title"), 512),
+        card = {"moment_id": moment_id, "title": text(moment.get("title"), 512),
             "body": moment["content"], "current": current, "source_links": links,
             "source_provider": text(attribution.get("provider"), 128),
             "source_license": text(attribution.get("license"), 256),
             "requires_spotify_attribution": grant.get("requires_spotify_attribution") is True,
             "display_expires_at": grant.get("display_expires_at"),
-            "source_expires_at": grant.get("source_expires_at")})
+            "source_expires_at": grant.get("source_expires_at")}
+        if current and source_expiry is not None and moment.get("type") == "track":
+            navigation = _moment_insight_navigation(moment, grant, now, source_expiry)
+            if navigation:
+                card["insight_navigation"] = navigation
+        result.append(card)
     return result
+
+
+def _moment_insight_navigation(moment, grant, now, source_expiry):
+    actions = grant.get("navigation_actions")
+    published = timestamp(moment.get("created_at"))
+    if not isinstance(actions, list) or len(actions) != 1 or published is None:
+        return {}
+    deadline = min(published + 600, source_expiry)
+    if deadline <= now:
+        return {}
+    offer = actions[0]
+    if not isinstance(offer, dict):
+        return {}
+    session_id, moment_id = moment["session_id"], moment["moment_id"]
+    action_id = "insight-" + moment_id
+    if any(not isinstance(value, str) or not 1 <= len(value) <= 128 or any(ord(char) < 32 or ord(char) == 127 for char in value)
+           for value in (session_id, moment_id, action_id)):
+        return {}
+    reference = {"schema_version": 1, "session_id": session_id, "moment_id": moment_id, "action_id": action_id}
+    incoming = offer.get("reference")
+    if (type(offer.get("schema_version")) is not int or offer["schema_version"] != 1
+            or offer.get("kind") != "navigation" or offer.get("target") != "track_insight"
+            or offer.get("required_capability") != "moment_track_insight_navigation_v1"
+            or offer.get("action_id") != action_id or not text(offer.get("label"), 256).strip()
+            or not isinstance(incoming, dict) or type(incoming.get("schema_version")) is not int
+            or incoming != reference):
+        return {}
+    return {"reference": reference, "expires_at": deadline}
 
 
 def history_page(response, *, session_id=None, now=None):
