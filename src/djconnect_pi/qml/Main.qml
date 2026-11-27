@@ -3183,6 +3183,31 @@ BrandWindow {
             }
 
             Text {
+                objectName: "settingsProfileHeading"
+                text: root.tr("settings_profile")
+                color: BrandTheme.colors.text
+                font.pixelSize: 26
+                font.bold: true
+                Layout.fillWidth: true
+                Layout.topMargin: 8
+            }
+
+            PurpleButton {
+                objectName: "askDjExportButton"
+                text: root.tr("ask_dj_export")
+                font.pixelSize: 24
+                Layout.fillWidth: true
+                Layout.preferredHeight: 58
+                enabled: settingsPanel.canExportAskDj
+                onClicked: profileExportPreview.review(false)
+            }
+            ProfileExportStatusLabel {
+                objectName: "askDjExportStatus"
+                status: root.askDjExportStatus
+                keyPrefix: "ask_dj_export"
+            }
+
+            Text {
                 text: root.tr("music_dna")
                 color: BrandTheme.colors.text
                 font.pixelSize: 26
@@ -3281,21 +3306,6 @@ BrandWindow {
                         root.musicDnaClearConfirmOpen = true
                     }
                 }
-            }
-
-            PurpleButton {
-                objectName: "askDjExportButton"
-                text: root.tr("ask_dj_export")
-                font.pixelSize: 24
-                Layout.fillWidth: true
-                Layout.preferredHeight: 58
-                enabled: settingsPanel.canExportAskDj
-                onClicked: profileExportPreview.review(false)
-            }
-            ProfileExportStatusLabel {
-                objectName: "askDjExportStatus"
-                status: root.askDjExportStatus
-                keyPrefix: "ask_dj_export"
             }
 
             PurpleButton {
