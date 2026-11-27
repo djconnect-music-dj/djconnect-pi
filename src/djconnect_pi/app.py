@@ -276,7 +276,7 @@ class DJConnectBackend(QObject):
     _musicDnaImportFinished = Signal(object, object, str)
     _musicDiscoveryReady = Signal(object)
     _musicDiscoveryPlayConfirmed = Signal(object, str, str, object)
-    _musicDiscoveryFeedbackAccepted = Signal(object, str, str)
+    _musicDiscoveryFeedbackAccepted = Signal(object, str, str, object)
     _trackInsightReady = Signal(object)
 
     def __init__(self, config_path: Path) -> None:
@@ -4364,18 +4364,21 @@ class DJConnectBackend(QObject):
             self._musicDiscoveryReady.emit(_DiscoveryReadResult(error, ticket, consent_epoch))
             return
         self._persist_backend_summary()
+        media_key = None if legacy_receipt else _discovery_media_key(receipt_item.get("uri"))
         self._musicDiscoveryFeedbackAccepted.emit(
-            (ticket, consent_epoch), str(item.get("section_id") or ""), item_id,
+            (ticket, consent_epoch), str(item.get("section_id") or ""), item_id, media_key,
         )
         self._music_discovery_feed_worker(ticket=ticket, consent_epoch=consent_epoch)
 
-    @Slot(object, str, str)
-    def _remove_music_discovery_item(self, action_context, section_id: str, item_id: str) -> None:
+    @Slot(object, str, str, object)
+    def _remove_music_discovery_item(self, action_context, section_id: str, item_id: str, media_key: str | None) -> None:
         if not self._discovery_action_current(*action_context):
             return
         self._set_music_discovery_items([
             item for item in self._music_discovery_items
             if (item.get("sectionId"), item.get("discoveryItemId")) != (section_id, item_id)
+            and not (media_key is not None and (item.get("discoveryItemId") == item_id
+                     or (media_key and item.get("_media_key") == media_key)))
         ])
 
     def _supports_music_discovery_feedback(self) -> bool:
@@ -7186,6 +7189,12 @@ def _discovery_artwork(raw: dict[str, object], ha_url: str) -> dict[str, object]
     return {"imageUrl": source, "imageExpiresAt": expires * 1000, "imageSourceUrl": spotify_url}
 
 
+def _discovery_media_key(uri: object) -> str:
+    if not isinstance(uri, str) or not re.fullmatch(r"spotify:(?:track|album|artist|playlist):[A-Za-z0-9]{22}", uri):
+        return ""
+    return hashlib.sha256(uri.encode()).hexdigest()
+
+
 def _music_discovery_item(raw: dict[str, object], *, section_id: str, section_title: str, ha_url: str) -> dict[str, object] | None:
     kind = str(raw.get("kind") or "").strip().lower()
     title = str(raw.get("title") or "").strip()
@@ -7222,6 +7231,7 @@ def _music_discovery_item(raw: dict[str, object], *, section_id: str, section_ti
         "reasonSources": reason_sources,
         "hasReason": bool(reason),
         "playable": playable,
+        "_media_key": _discovery_media_key(uri),
         "payload": json.dumps(payload, ensure_ascii=True),
     }
 

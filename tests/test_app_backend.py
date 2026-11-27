@@ -438,6 +438,8 @@ def test_discovery_play_ignores_results_when_profile_changes(tmp_path, stage):
 @pytest.mark.parametrize(("receipt", "accepted"), [
     ({"success": True}, True),
     ({"success": True, "feedback": "not_for_me", "item": {"id": "fixture-id"}}, True),
+    ({"success": True, "feedback": "not_for_me", "item": {
+        "id": "fixture-id", "uri": "spotify:track:" + "a" * 22}}, True),
     ({"success": True, "feedback": "hide_artist", "item": {"id": "fixture-id"}}, False),
     ({"success": True, "feedback": "not_for_me", "item": {"id": "other-id"}}, False),
     ({"success": True, "feedback": "not_for_me"}, False),
@@ -449,23 +451,33 @@ def test_discovery_feedback_removes_only_acknowledged_recommendation(tmp_path, r
     config_path = tmp_path / "config.json"
     save_config(config_path, Config(paired=True, device_token="fixture", ha_url="http://fixture.invalid"))
     backend = DJConnectBackend(config_path)
+    uri = "spotify:track:" + "a" * 22
     backend._apply_music_discovery_data({"success": True, "feedback_supported": True, "sections": [
-        {"id": "daily", "items": [{"id": "fixture-id", "title": "Selected"}]},
-        {"id": "similar", "items": [{"id": "fixture-id", "title": "Different section"}]},
+        {"id": "daily", "items": [{"id": "fixture-id", "title": "Selected", "uri": uri}]},
+        {"id": "similar", "items": [{"id": "fixture-id", "title": "Different section", "uri": uri}]},
+        {"id": "mixed", "items": [{"id": "alias", "title": "Same recording", "uri": uri},
+                                   {"id": "independent", "title": "Unrelated"}]},
     ]})
     backend.client.music_discovery_feedback = Mock(return_value=receipt)
     backend.client.music_discovery_feed = Mock(side_effect=BackendUnavailable("fixture read error"))
     backend._executor.submit = Mock()
 
     backend.sendMusicDiscoveryFeedback(backend.musicDiscoveryItems[0]["payload"], "not_for_me")
-    assert [item["title"] for item in backend.musicDiscoveryItems] == ["Selected", "Different section"]
+    original_titles = ["Selected", "Different section", "Same recording", "Unrelated"]
+    assert [item["title"] for item in backend.musicDiscoveryItems] == original_titles
     backend._executor.submit.call_args.args[0]()
 
     if accepted:
-        assert [item["title"] for item in backend.musicDiscoveryItems] == ["Different section"]
+        if receipt.get("item", {}).get("uri"):
+            expected = ["Unrelated"]
+        elif "item" in receipt:
+            expected = ["Same recording", "Unrelated"]
+        else:
+            expected = original_titles[1:]
+        assert [item["title"] for item in backend.musicDiscoveryItems] == expected
         backend.client.music_discovery_feed.assert_called_once()
     else:
-        assert [item["title"] for item in backend.musicDiscoveryItems] == ["Selected", "Different section"]
+        assert [item["title"] for item in backend.musicDiscoveryItems] == original_titles
         assert backend.musicDiscoveryError == backend.t("music_discovery_feedback_failed")
         backend.client.music_discovery_feed.assert_not_called()
 
