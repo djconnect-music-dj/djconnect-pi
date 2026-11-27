@@ -2225,6 +2225,8 @@ class SessionController(QObject):
                     if not any(row["entry_id"] == eid for row in result["timeline"]["entries"]):
                         raise SessionError("unavailable")
                     result["timeline"]["selected_entry_id"] = eid
+                    if entry_guard is not None:
+                        result["timeline"]["_opened_from_ask_dj"] = True
                 else:
                     if action == "start":
                         self.transport.start(binding, value)

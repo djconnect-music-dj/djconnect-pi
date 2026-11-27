@@ -38,6 +38,7 @@ Item {
     property var backend
     property bool historical: false
     property bool currentHistory: false
+    property bool returnToAskDj: false
     readonly property bool compact: width < 900
     readonly property bool lowMemoryProfile: backend.releaseProfile === "pi-zero-2w-arm64"
     readonly property real ipadScale: compact ? 1 : Math.min(1.45, width / 835)
@@ -697,6 +698,12 @@ Item {
         ? JSON.stringify([historyPullScope, state.timeline.revision, state.timeline.next_cursor]) : ""
     function navigateBackFromHistory() {
         if (!historical) return
+        if (returnToAskDj) {
+            returnToAskDj = false
+            owner.closeSaved()
+            navigate("askdj")
+            return
+        }
         if (currentHistory) {
             owner.closeSaved()
             navigate("session")
@@ -998,7 +1005,7 @@ Item {
         if (contentDeletePanel) contentDeletePanel.close()
         if (owner) owner.clearSearch()
     }
-    onVisibleChanged: { syncMediaVisibility(); if (!visible) { cancelArchiveRead(); if (owner) owner.clearArchive(); clearFlowReturn(); historyRead.stop(); historyReadProfile = ""; historyReadSession = ""; historyReadPending = false; readingRestore.stop(); pendingReadingAnchor = ""; closeTransient() } }
+    onVisibleChanged: { syncMediaVisibility(); if (!visible) { returnToAskDj = false; cancelArchiveRead(); if (owner) owner.clearArchive(); clearFlowReturn(); historyRead.stop(); historyReadProfile = ""; historyReadSession = ""; historyReadPending = false; readingRestore.stop(); pendingReadingAnchor = ""; closeTransient() } }
     onHistoricalChanged: { if (historical) closePlaybackPanels(); syncMediaVisibility(); if (!historical) { archiveDetailReturn = null; cancelArchiveRead(); if (owner) owner.clearArchive() } readingRestore.stop(); pendingReadingAnchor = ""; readingOffset = 0; if (!historical && flowReturn) { historyScroll.contentItem.cancelFlick(); flowReturnRestore.restart() } }
     onSearchTargetChanged: Qt.callLater(syncSearchTarget)
     function syncSearchTarget() {
@@ -1244,8 +1251,12 @@ Item {
         function onSearchUpdated() { searchPosition.restart() }
         function onContextCleared() { screen.cancelArchiveRead(); screen.clearFlowReturn(); historyRead.stop(); screen.historyReadProfile = ""; screen.historyReadSession = ""; readingRestore.stop(); screen.pendingReadingAnchor = ""; screen.readingOffset = 0; screen.closeTransient(); if (screen.historical) screen.navigate(screen.currentHistory ? "session" : "more"); screen.historyReadPending = false }
         function onEntryOpened() {
-            const anchor = (screen.state.timeline || {}).selected_entry_id || ""
-            if (!screen.historical) screen.rememberFlow()
+            const timeline = screen.state.timeline || {}
+            const anchor = timeline.selected_entry_id || ""
+            if (!screen.historical) {
+                screen.returnToAskDj = timeline._opened_from_ask_dj === true
+                if (!screen.returnToAskDj) screen.rememberFlow()
+            }
             searchPanel.close()
             screen.readingOffset = 0
             screen.navigate(screen.currentHistory || !screen.historical ? "session-history" : "history")
@@ -1272,7 +1283,7 @@ Item {
             iconName: "back"
             tertiary: true
             implicitWidth: 52
-            Accessible.name: screen.tr(screen.currentHistory ? "session_back" : screen.state.timeline.session ? "session_history" : "more")
+            Accessible.name: screen.tr(screen.returnToAskDj ? "ask_dj_back" : screen.currentHistory ? "session_back" : screen.state.timeline.session ? "session_history" : "more")
             onClicked: screen.navigateBackFromHistory()
         }
         GlassSurface {

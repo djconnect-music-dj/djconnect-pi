@@ -549,6 +549,7 @@ def test_open_result_uses_navigation_then_anchor_without_mutating_runtime(contro
     backend.jobs.pop()()
     assert owner.state['session_id'] == 'current-session'
     assert owner.state['timeline']['selected_entry_id'] == row['entry_id']
+    assert owner.state['timeline'].get('_opened_from_ask_dj', False) is from_ask_dj
     assert owner.transport.timeline.call_args.kwargs == {'window':'anchor','anchor_entry_id':row['entry_id']}
     owner.transport.start.assert_not_called()
     owner.transport.end.assert_not_called()
