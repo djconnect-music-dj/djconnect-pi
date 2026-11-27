@@ -4041,12 +4041,24 @@ Item {
             }
             ScrollView {
                 id: momentInsightScroll
+                objectName: "sessionMomentInsightScroll"
                 visible: momentInsight.detail.status === "ready"
                 clip: true
                 Layout.fillWidth: true
                 Layout.preferredHeight: Math.min(momentInsightContent.implicitHeight, screen.height * 0.58)
                 contentWidth: availableWidth
                 ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+                Binding {
+                    target: momentInsightScroll.contentItem
+                    property: "flickableDirection"
+                    value: Flickable.VerticalFlick
+                }
+                PullToRefresh {
+                    objectName: "sessionMomentInsightPullToRefresh"
+                    flickable: momentInsightScroll.contentItem
+                    canRefresh: momentInsight.opened && screen.liveViewOpen && momentInsight.detail.status === "ready"
+                    onRefreshRequested: screen.owner.retryMomentTrackInsight()
+                }
                 ColumnLayout {
                     id: momentInsightContent
                     width: momentInsightScroll.availableWidth
