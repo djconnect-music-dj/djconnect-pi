@@ -4593,7 +4593,7 @@ BrandWindow {
             surfaceVisible: musicDiscoveryPanel.visible && !(djconnect.musicDnaLoaded && !djconnect.musicDnaEnabled)
             busy: djconnect.musicDiscoveryBusy
             loaded: djconnect.musicDiscoveryLoaded
-            onRequested: djconnect.loadMusicDiscovery()
+            onRequested: djconnect.openMusicDiscovery()
         }
 
         readonly property var sections: {

@@ -349,6 +349,7 @@ class DJConnectBackend(QObject):
         self._music_discovery_error = ""
         self._music_discovery_dna_disabled = False
         self._music_discovery_loaded = False
+        self._music_discovery_feed_deadline = None
         self._music_discovery_busy = False
         self._music_discovery_playing: tuple[str, str] | None = None
         self._music_discovery_feedback_supported = False
@@ -3192,6 +3193,10 @@ class DJConnectBackend(QObject):
         self._music_discovery_request("feed")
 
     @Slot()
+    def openMusicDiscovery(self) -> None:
+        self._music_discovery_request("open")
+
+    @Slot()
     def refreshMusicDiscovery(self) -> None:
         if not self._demo_mode and self._music_dna_blocks_discover():
             self.loadMusicDna()
@@ -3287,6 +3292,13 @@ class DJConnectBackend(QObject):
         if (self._demo_mode or not self.paired or self._music_discovery_busy
                 or (action != "accept" and self._music_dna_blocks_discover())):
             return
+        if action == "open" and self._music_discovery_feed_deadline is not None:
+            now = self._session_controller._clock.now()
+            if (self._backend_available and not self._music_discovery_error and self._music_discovery_items
+                    and now < self._music_discovery_feed_deadline
+                    and all(not item.get("imageExpiresAt") or item["imageExpiresAt"] > now * 1000
+                            for item in self._music_discovery_items)):
+                return
         ticket = self._private_read_context()
         consent_epoch = self._music_discovery_consent_epoch
         if revision is not None and (
@@ -4941,6 +4953,7 @@ class DJConnectBackend(QObject):
         self._music_discovery_error = ""
         self._music_discovery_dna_disabled = False
         self._music_discovery_loaded = False
+        self._music_discovery_feed_deadline = None
         self._music_discovery_playing = None
         self._music_discovery_feedback_supported = False
         self._music_discovery_consent_rejected = False
@@ -5025,6 +5038,7 @@ class DJConnectBackend(QObject):
             self._music_discovery_consent_epoch += 1
             self._set_music_discovery_items([])
             self._music_discovery_loaded = False
+            self._music_discovery_feed_deadline = None
             self._music_discovery_feedback_supported = False
             self._music_discovery_error = ""
             self._music_discovery_empty_text = ""
@@ -5069,6 +5083,7 @@ class DJConnectBackend(QObject):
             self._music_discovery_empty_text = ""
             self._music_discovery_dna_disabled = False
             self._music_discovery_loaded = False
+            self._music_discovery_feed_deadline = None
             key = "session_profile_missing" if error in PROFILE_ERROR_CODES | {"music_dna_context_changed"} else "backend_unavailable"
             self._music_discovery_error = self.tr_key(key)
             self.musicDiscoveryChanged.emit()
@@ -5080,6 +5095,7 @@ class DJConnectBackend(QObject):
         self._music_discovery_loaded = True
         self._music_discovery_dna_disabled = data.get("enabled") is False or error == "music_dna_disabled"
         if self._music_discovery_dna_disabled:
+            self._music_discovery_feed_deadline = None
             self._set_music_discovery_items([])
             self._music_discovery_feedback_supported = False
             self._music_discovery_error = ""
@@ -5089,6 +5105,11 @@ class DJConnectBackend(QObject):
                 self._show_toast(self.tr_key("music_discovery_requires_music_dna"), 2200, "discover")
             return
         parsed = parse_music_discovery_feed(data, ha_url=self.cfg.ha_url)
+        generated = timestamp(data.get("generated_at"))
+        ttl = data.get("ttl_seconds")
+        self._music_discovery_feed_deadline = (generated + ttl
+            if data.get("enabled") is True and generated is not None
+            and type(ttl) is int and 0 < ttl <= 2_147_483_647 else None)
         self._set_music_discovery_items(parsed["items"])
         self._music_discovery_empty_text = parsed["empty_text"]
         self._music_discovery_feedback_supported = bool(data.get("_feedback_supported") or data.get("feedback_supported") or data.get("supports_feedback"))
