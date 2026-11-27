@@ -14,6 +14,7 @@ Item {
     function tr(key) { backend.translationVersion; return backend.t(key) }
 
     component SelectableNotice: TextEdit {
+        id: notice
         Layout.fillWidth: true
         textFormat: TextEdit.PlainText
         color: BrandTheme.colors.text
@@ -22,7 +23,33 @@ Item {
         readOnly: true
         selectByMouse: true
         selectByKeyboard: true
+
+        TapHandler {
+            onLongPressed: {
+                noticeCopyMenu.notice = notice
+                noticeCopyMenu.popup(notice, point.position)
+            }
+        }
     }
+
+    Menu {
+        id: noticeCopyMenu
+        objectName: "informationNoticeCopyMenu"
+        property TextEdit notice: null
+        onClosed: notice = null
+        MenuItem {
+            objectName: "informationCopyNotice"
+            text: page.tr("copy_notice")
+            onTriggered: {
+                const source = noticeCopyMenu.notice
+                if (!source || !source.visible) return
+                source.selectAll()
+                source.copy()
+                source.deselect()
+            }
+        }
+    }
+
     ColumnLayout {
         anchors.fill: parent
         anchors.margins: 24
@@ -131,6 +158,12 @@ Item {
         feedbackOpenFailed = false
         fontLicenseDisclosure.checked = false
         if (visible) scroll.contentItem.contentY = 0
+        else noticeCopyMenu.close()
     }
-    onFeedbackChanged: { feedbackOpenFailed = false; scroll.contentItem.contentY = 0 }
+    onPrivacyChanged: noticeCopyMenu.close()
+    onFeedbackChanged: {
+        noticeCopyMenu.close()
+        feedbackOpenFailed = false
+        scroll.contentItem.contentY = 0
+    }
 }

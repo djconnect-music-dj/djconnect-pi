@@ -1847,6 +1847,7 @@ _SESSION_COMPOSER_TRANSLATIONS = {
         "Vous choisissez de partager ou non les diagnostics de l’application avec l’assistance ou dans un ticket GitHub.",
         "Tú decides si compartes los diagnósticos de la aplicación con el equipo de soporte o en una incidencia de GitHub.",
     ),
+    "copy_notice": ("Copy text", "Tekst kopiëren", "Text kopieren", "Copier le texte", "Copiar texto"),
     "privacy_open_failed": ("Could not open the privacy statement.", "De privacyverklaring kon niet worden geopend.", "Die Datenschutzerklärung konnte nicht geöffnet werden.", "Impossible d’ouvrir la déclaration de confidentialité.", "No se pudo abrir la declaración de privacidad."),
     "ask_dj_feedback_title": ("Ask DJ answer feedback", "Feedback op Ask DJ-antwoord", "Feedback zur Ask-DJ-Antwort", "Avis sur la réponse Ask DJ", "Comentarios sobre la respuesta de Ask DJ"),
     "ask_dj_feedback_copy": ("Copy answer", "Antwoord kopiëren", "Antwort kopieren", "Copier la réponse", "Copiar respuesta"),
