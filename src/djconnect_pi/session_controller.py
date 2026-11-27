@@ -1354,7 +1354,8 @@ class SessionController(QObject):
     def retryMomentTrackInsight(self):
         self._reconcile_moment_insight()
         request = self._moment_insight
-        if request and self._moment_insight_admitted(request) and request["view"].get("retryable"):
+        if (request and self._moment_insight_admitted(request)
+                and (request["view"].get("retryable") or request["view"].get("status") == "ready")):
             request["style"] = self.track_insight_session_style()
             self._fetch_moment_insight(request)
 
@@ -1456,6 +1457,11 @@ class SessionController(QObject):
                 "retryable": error in {"rate_limited", "uncertain"},
             }
         else:
+            media_identity = data["subject"].get("media_identity")
+            if request.get("media_identity") and media_identity != request["media_identity"]:
+                request["view"] = {"status": "unavailable"}
+                self.momentInsightChanged.emit()
+                return
             request["deadline"] = min(request["deadline"], started + data["subject"]["expires_in"])
             self._schedule_moment_insight_expiry(request)
             if not self._moment_insight_current(request):
@@ -1466,6 +1472,7 @@ class SessionController(QObject):
             title = text(track.get("title"), 2048).strip() if isinstance(track, dict) else ""
             summary = text(analysis.get("summary")).strip() if isinstance(analysis, dict) else ""
             if title and summary:
+                request["media_identity"] = media_identity
                 credit = track_insight_verified_credit(analysis)
                 cues = analysis.get("listening_cues")
                 listening_cues = list(dict.fromkeys(

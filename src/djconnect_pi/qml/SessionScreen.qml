@@ -3986,12 +3986,36 @@ Item {
         visible: screen.liveViewOpen && !!detail.status
         contentItem: ColumnLayout {
             spacing: 16
-            Text {
-                text: screen.tr("track_insight")
-                textFormat: Text.PlainText
-                color: BrandTheme.colors.text
-                font.pixelSize: 25; font.bold: true
+            RowLayout {
                 Layout.fillWidth: true
+                Text {
+                    text: screen.tr("track_insight")
+                    textFormat: Text.PlainText
+                    color: BrandTheme.colors.text
+                    font.pixelSize: 25; font.bold: true
+                    Layout.fillWidth: true
+                }
+                GlassButton {
+                    objectName: "sessionMomentInsightRefresh"
+                    readonly property bool loading: momentInsight.detail.status === "loading"
+                    iconName: loading ? "" : "refresh"
+                    Accessible.name: screen.tr("refresh_track_insight")
+                    ToolTip.text: Accessible.name
+                    ToolTip.visible: hovered
+                    visible: loading || momentInsight.detail.status === "ready"
+                    enabled: !loading
+                    tertiary: true
+                    Layout.preferredWidth: 48
+                    Layout.preferredHeight: 48
+                    BusyIndicator {
+                        anchors.centerIn: parent
+                        width: 26
+                        height: width
+                        running: parent.loading
+                        visible: running
+                    }
+                    onClicked: screen.owner.retryMomentTrackInsight()
+                }
             }
             RowLayout {
                 visible: momentInsight.detail.status !== "ready"
