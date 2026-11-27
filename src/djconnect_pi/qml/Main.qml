@@ -3591,13 +3591,26 @@ BrandWindow {
                 RowLayout {
                     visible: insightSharePopup.clipRunning
                     Layout.fillWidth: true
-                    ProgressBar {
-                        value: insightSharePopup.clipProgress
+                    ColumnLayout {
+                        spacing: 6
                         Layout.fillWidth: true
+                        Text {
+                            objectName: "trackInsightClipProgressLabel"
+                            text: root.tr("track_insight_clip_progress").replace("%1",
+                                Math.floor(insightSharePopup.clipProgress * 100).toLocaleString(Qt.locale(djconnect.language), "f", 0))
+                            color: BrandTheme.colors.muted
+                            font.pixelSize: 18
+                            wrapMode: Text.WordWrap
+                            Layout.fillWidth: true
+                        }
+                        ProgressBar {
+                            value: insightSharePopup.clipProgress
+                            Layout.fillWidth: true
+                        }
                     }
                     GlassButton {
                         objectName: "trackInsightClipCancel"
-                        text: root.tr("cancel")
+                        text: root.tr("track_insight_cancel_export")
                         tertiary: true
                         onClicked: {
                             insightSharePopup.exportGeneration += 1

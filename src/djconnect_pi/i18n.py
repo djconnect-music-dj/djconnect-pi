@@ -1803,6 +1803,13 @@ _SESSION_COMPOSER_TRANSLATIONS = {
     "track_insight_mp4_files": ("MP4 videos", "MP4-video’s", "MP4-Videos", "Vidéos MP4", "Vídeos MP4"),
     "track_insight_clip_saved": ("Clip saved", "Clip opgeslagen", "Clip gespeichert", "Clip enregistré", "Clip guardado"),
     "track_insight_clip_cancelled": ("Clip export cancelled", "Clip exporteren geannuleerd", "Clip-Export abgebrochen", "Exportation du clip annulée", "Exportación del clip cancelada"),
+    "track_insight_clip_progress": (
+        "Clip export %1%", "Clip exporteren %1%", "Clip-Export %1 %",
+        "Exportation du clip %1 %", "Exportación del clip %1 %",
+    ),
+    "track_insight_cancel_export": (
+        "Cancel export", "Export annuleren", "Export abbrechen", "Annuler l’exportation", "Cancelar exportación",
+    ),
     "track_insight_preparing_card": (
         "Preparing image…", "Afbeelding wordt gemaakt…", "Bild wird erstellt…",
         "Préparation de l’image…", "Preparando la imagen…",
