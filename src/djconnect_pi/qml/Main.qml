@@ -1084,7 +1084,7 @@ BrandWindow {
         function restoreMediaReading(anchor) {
             if (!visible || query || !matches.length) return
             const match = matches.findIndex(item => item.uri && item.uri === anchor.item.uri
-                && (playCommand !== "play_context_at" || item.index === anchor.item.index))
+                && (!trackQueue || queueIndex(item) === queueIndex(anchor.item)))
             const index = match < 0 ? Math.min(anchor.index, matches.length - 1) : match
             mediaRows.positionViewAtIndex(index, ListView.Beginning)
             mediaRows.forceLayout()
@@ -1113,8 +1113,12 @@ BrandWindow {
             const pending = start.item
             if (pending === item) return true
             if (playCommand === "start_playlist") return !!pending.uri && pending.uri === item.uri
-            return playCommand === "play_context_at" && Number.isInteger(pending.index)
-                && pending.index === item.index && pending.uri === item.uri && pending.contextUri === item.contextUri
+            return trackQueue && Number.isInteger(queueIndex(pending))
+                && queueIndex(pending) === queueIndex(item) && pending.uri === item.uri && pending.contextUri === item.contextUri
+        }
+
+        function queueIndex(item) {
+            return Number.isInteger(item.index) && item.index >= 0 ? item.index : item.sourceIndex
         }
 
         function itemPayload(item) {
@@ -1129,7 +1133,7 @@ BrandWindow {
                 context_uri: item.context_uri || "",
                 queueContext: item.queueContext || "",
                 queue_context: item.queue_context || "",
-                index: typeof item.index === "number" ? item.index : null
+                index: trackQueue ? queueIndex(item) : null
             })
         }
 

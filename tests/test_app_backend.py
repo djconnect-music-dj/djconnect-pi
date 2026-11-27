@@ -2137,6 +2137,7 @@ def test_queue_parser_renders_artist_album_identity_and_artwork_aliases() -> Non
             "tint": "#38bdf8",
             "contextUri": "",
             "index": None,
+            "sourceIndex": 0,
         }
     ]
 
@@ -2374,6 +2375,15 @@ def test_queue_parser_keeps_consecutive_repeats_with_distinct_positions():
     assert [item["index"] for item in queue] == [4, 5, 6]
     same_position = parse_queue_items({"queue": [{**track, "index": 4}] * 5})
     assert [item["index"] for item in same_position] == [4]
+
+
+def test_queue_play_uses_the_original_source_index_after_compaction():
+    first = {"title": "First", "uri": "spotify:track:first"}
+    middle = {"title": "Middle", "uri": "spotify:track:middle"}
+    rows = parse_queue_items({"queue": [first, first, middle, first]})
+    assert [row["sourceIndex"] for row in rows] == [0, 2, 3]
+    assert media_item_payload("play_context_at", rows[-1])["value"]["index"] == 3
+    assert media_item_payload("play_context_at", {**rows[-1], "index": 20})["value"]["index"] == 20
 
 
 def test_queue_parser_recognizes_repeated_placeholders_with_different_artwork():

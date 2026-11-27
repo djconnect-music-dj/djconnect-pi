@@ -5311,7 +5311,11 @@ def parse_queue_items(data: dict[str, object]) -> list[dict[str, object]]:
         raw_items = None
     if not isinstance(raw_items, list):
         return []
-    return compact_adjacent_tracks([parsed for item in raw_items[:100] if isinstance(item, dict) and (parsed := _queue_item(item, context_uri))])
+    return compact_adjacent_tracks([
+        {**parsed, "sourceIndex": source_index}
+        for source_index, item in enumerate(raw_items[:100])
+        if isinstance(item, dict) and (parsed := _queue_item(item, context_uri))
+    ])
 
 
 def parse_playlist_items(data: dict[str, object]) -> list[dict[str, object]]:
@@ -5354,7 +5358,7 @@ def _queue_item(item: dict[str, object], queue_context_uri: str = "") -> dict[st
         "imageUrl": image_url,
         "tint": "#38bdf8",
         "contextUri": context_uri,
-        "index": index if isinstance(index, int) else None,
+        "index": index if type(index) is int and index >= 0 else None,
     }
 
 
@@ -5394,11 +5398,13 @@ def media_item_payload(command: str, item: object) -> dict[str, object]:
         or ""
     ).strip()
     index = item_data.get("index")
+    if type(index) is not int or index < 0:
+        index = item_data.get("sourceIndex")
     if title:
         value["title"] = title
     if artist:
         value["artist"] = artist
-    if isinstance(index, int):
+    if type(index) is int and index >= 0:
         value["index"] = index
     if context_uri:
         value["context_uri"] = context_uri
