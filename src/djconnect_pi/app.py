@@ -3608,14 +3608,20 @@ class DJConnectBackend(QObject):
             self._statusReady.emit(self.tr_key("backend_unavailable"))
             self._toastReady.emit(self.tr_key("session_uncertain"), 5000, "connectivity")
             return
-        self._persist_backend_summary()
-        if data.get("success") is False:
+        success = data.get("success")
+        if success is False:
+            self._persist_backend_summary()
             failure_key = "media_playlist_start_failed" if command == "start_playlist" else "media_track_start_failed"
             self._toastReady.emit(self.tr_key(failure_key), 3500, "connectivity")
             _LOGGER.warning("Media item command %s was rejected", command)
             return
-        self._suppress_next_playback_navigation = command == "play_context_at"
         has_playback = _contains_playback_payload(data)
+        if success is not True and ("success" in data or not has_playback):
+            self._toastReady.emit(self.tr_key("session_uncertain"), 5000, "connectivity")
+            _LOGGER.warning("Media item command %s returned no confirmation", command)
+            return
+        self._persist_backend_summary()
+        self._suppress_next_playback_navigation = command == "play_context_at"
         if has_playback:
             self._playbackReady.emit(self.client.playback_from_status(data))
         self._load_queue_worker()

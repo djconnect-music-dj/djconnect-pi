@@ -4216,6 +4216,26 @@ def test_media_command_rejection_preserves_current_track(tmp_path: Path, command
     backend._load_queue_worker.assert_not_called()
 
 
+@pytest.mark.parametrize("reply", [{}, {"success": "true", "playback": {"title": "Unconfirmed track"}}])
+def test_media_command_missing_confirmation_preserves_current_track(tmp_path: Path, reply: dict) -> None:
+    ensure_app()
+    backend = DJConnectBackend(tmp_path / "config.json")
+    backend.playback = Playback(title="Current track")
+    backend.client.command = Mock(return_value=reply)
+    backend.client.playback_from_status = Mock()
+    backend._refresh_worker = Mock()
+    backend._load_queue_worker = Mock()
+
+    backend._play_media_item_worker("start_playlist", {"value": "fixture:uri"})
+
+    assert backend.title == "Current track"
+    assert backend.toastText == backend.t("session_uncertain")
+    backend.client.command.assert_called_once()
+    backend.client.playback_from_status.assert_not_called()
+    backend._refresh_worker.assert_not_called()
+    backend._load_queue_worker.assert_not_called()
+
+
 def test_backend_queue_item_play_uses_play_context_at_command(tmp_path: Path) -> None:
     ensure_app()
     backend = DJConnectBackend(tmp_path / "config.json")
