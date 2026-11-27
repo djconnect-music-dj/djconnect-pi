@@ -85,7 +85,7 @@ from .session_history_view import (
     ask_dj_history_matches, contribution_question, conversation_entries, local_highlighted_text,
     presented_history, retained_contribution_preview,
 )
-from .session_playback_control import REPEAT_NEXT, favorite_observation, output_id
+from .session_playback_control import REPEAT_NEXT, favorite_observation, output_id, sorted_output_choices
 from .session_playback_control import reference as session_playback_reference
 from .session_projection import active_session, history_page, safe_link, timestamp, track_insight_verified_credit, volume_observation
 from .session_projection import text as bounded_text
@@ -1275,8 +1275,10 @@ class DJConnectBackend(QObject):
     @Property("QVariantList", notify=outputDeviceChanged)
     def outputDeviceChoices(self) -> list[dict[str, object]]:
         if self.playback.output_device_details:
-            return [dict(item) for item in self.playback.output_device_details]
-        return [{"name": name, "value": name} for name in self.playback.output_devices]
+            choices = [dict(item) for item in self.playback.output_device_details]
+        else:
+            choices = [{"name": name, "value": name} for name in self.playback.output_devices]
+        return sorted_output_choices(choices, self.cfg.language)
 
     @Property(bool, notify=pairedChanged)
     def paired(self) -> bool:

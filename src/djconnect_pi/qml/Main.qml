@@ -2259,7 +2259,13 @@ BrandWindow {
                     id: controlOutputDeviceCombo
                     objectName: "controlOutputDeviceCombo"
                     property string noOutputDeviceLabel: root.tr("none")
-                    property var deviceChoices: [{ "name": noOutputDeviceLabel, "value": "" }].concat(djconnect.outputDeviceChoices.length > 0 ? djconnect.outputDeviceChoices : (djconnect.outputDevice.length > 0 ? [{ "name": djconnect.outputDevice, "value": djconnect.outputDevice }] : []))
+                    property var deviceChoices: {
+                        root.trVersion
+                        const choices = djconnect.outputDeviceChoices
+                        const selected = djconnect.outputDevice
+                        return [{ "name": noOutputDeviceLabel, "value": "" }].concat(choices.length > 0 ? choices
+                            : selected.length > 0 ? [{ "name": selected, "value": selected }] : [])
+                    }
                     function choiceName(choice) {
                         if (typeof choice === "string") return choice
                         return ((choice && choice.name) || (choice && choice.value) || "").toString()

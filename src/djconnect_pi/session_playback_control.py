@@ -97,6 +97,14 @@ def output_choices(payload, backend, revision, origin):
     return choices
 
 
+def sorted_output_choices(choices, language):
+    collator = QCollator(QLocale(language))
+    collator.setNumericMode(True)
+    return sorted(choices, key=lambda row: (
+        row.get("cached") is True, collator.sortKey(row["name"]), row.get("id") or row.get("value") or "",
+    ))
+
+
 def reference(owner):
     cfg = owner.backend.cfg
     playback = session_playback(owner._session)
@@ -502,9 +510,7 @@ class PlaybackControl(QObject):
             self.outputs_status = "unavailable" if result.get("error") else ""
             if not result.get("error"):
                 self.outputs_serial += 1
-                collator = QCollator(QLocale(self.owner.backend.cfg.language))
-                collator.setNumericMode(True)
-                choices = sorted(result["choices"], key=lambda row: (collator.sortKey(row["name"]), row["id"]))
+                choices = sorted_output_choices(result["choices"], self.owner.backend.cfg.language)
                 self.outputs = {"binding": self.request["binding"], "reference": self.request["reference"],
                                 "serial": self.outputs_serial, "origin": result["origin"], "choices": choices}
         elif command == "favorite_read":
