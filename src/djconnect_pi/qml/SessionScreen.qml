@@ -1649,6 +1649,16 @@ Item {
         clip: true; contentWidth: availableWidth
         contentHeight: historyContent.implicitHeight + (screen.historical ? 0 : dockClearance)
         ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+        Connections {
+            target: historyScroll.contentItem
+            function onMovementEnded() {
+                const flick = historyScroll.contentItem
+                if (!screen.historyViewOpen || screen.currentHistory || screen.state.timeline.session
+                        || screen.state.error || screen.backend.demoMode || flick.atYBeginning) return
+                const remaining = flick.originY + flick.contentHeight - flick.contentY - flick.height
+                if (remaining <= 100) screen.loadMoreArchive()
+            }
+        }
         PullToRefresh {
             objectName: "sessionFlowPullToRefresh"
             readonly property string savedSessionId: (screen.state.timeline.session || {}).session_id || ""
