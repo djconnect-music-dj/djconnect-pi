@@ -3422,7 +3422,7 @@ BrandWindow {
                 DangerButton {
                     objectName: "musicDnaSettingsClear"
                     text: root.tr("music_dna_clear")
-                    enabled: settingsPanel.canChangeMusicDna
+                    enabled: djconnect.musicDnaEnabled && settingsPanel.canChangeMusicDna
                     font.pixelSize: 22
                     Layout.preferredWidth: 150
                     Layout.preferredHeight: 52
