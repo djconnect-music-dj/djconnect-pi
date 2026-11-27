@@ -12,6 +12,8 @@ Control {
     property bool showLeading: true
     property string connectionLabel: ""
     property string connectionText: ""
+    property string aboutLabel: ""
+    signal aboutRequested()
     onVisibleChanged: if (!visible) connectionInfo.close()
     property bool compact: width < 900
     default property alias actions: trailingRow.data
@@ -27,6 +29,17 @@ Control {
         contentItem: ColumnLayout {
             Text { text: bar.connectionLabel; textFormat: Text.PlainText; font.bold: true; font.pixelSize: 24; color: BrandTheme.colors.text; Layout.fillWidth: true; wrapMode: Text.WordWrap }
             Text { text: bar.connectionText; textFormat: Text.PlainText; font.pixelSize: 22; color: BrandTheme.colors.muted; Layout.fillWidth: true; wrapMode: Text.WordWrap }
+            GlassButton {
+                objectName: "pageToolbarConnectionAbout"
+                visible: bar.aboutLabel.length > 0
+                text: bar.aboutLabel
+                iconName: "info"
+                Layout.fillWidth: true
+                onClicked: {
+                    connectionInfo.close()
+                    bar.aboutRequested()
+                }
+            }
         }
     }
     padding: 0

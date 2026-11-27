@@ -332,6 +332,11 @@ BrandWindow {
         return djconnect.demoMode ? title + " · " + root.tr("demo_mode") : title
     }
 
+    component AppPageToolbar: PageToolbar {
+        aboutLabel: root.tr("about")
+        onAboutRequested: root.aboutOpen = true
+    }
+
     readonly property string playbackConnectionText: djconnect.demoMode ? root.tr("demo_mode") : djconnect.connectionType
 
     function trackInsightLabel(value) {
@@ -1227,7 +1232,7 @@ BrandWindow {
             anchors.bottomMargin: panel.keyboardOpen ? 8 : 132
             spacing: panel.compact ? 10 : 16
 
-            PageToolbar {
+            AppPageToolbar {
                 title: panel.heading
                 showLeading: panel.playCommand === "start_playlist"
                 leading: [ GlassButton {
@@ -1780,7 +1785,7 @@ BrandWindow {
             anchors.bottomMargin: root.edge + 96
             spacing: 10
 
-            PageToolbar {
+            AppPageToolbar {
                 title: root.playbackScreenTitle("now_playing")
                 showConnection: true
                 connectionLabel: root.tr("connection_type")
@@ -2076,7 +2081,7 @@ BrandWindow {
             anchors.bottomMargin: root.edge + 112
             spacing: 10
 
-            PageToolbar {
+            AppPageToolbar {
                 title: root.playbackScreenTitle("control")
                 showConnection: true
                 connectionLabel: root.tr("connection_type")
@@ -3959,7 +3964,7 @@ BrandWindow {
             anchors.bottomMargin: root.edge + 126
             spacing: 12
 
-            PageToolbar {
+            AppPageToolbar {
                 title: root.playbackScreenTitle("track_insight")
                 showLeading: !trackInsightPanel.hasLiveSession || trackInsightPanel.canChooseSessionMood
                 leading: [
@@ -4889,7 +4894,7 @@ BrandWindow {
             anchors.bottomMargin: root.edge + 126
             spacing: root.wallProfile ? 22 : 10
 
-            PageToolbar {
+            AppPageToolbar {
                 title: root.playbackScreenTitle("music_discovery")
                 Layout.preferredHeight: compact ? implicitHeight : 140
                 showConnection: true
@@ -5567,7 +5572,7 @@ BrandWindow {
             anchors.bottomMargin: root.edge + 126
             spacing: 14
 
-            PageToolbar {
+            AppPageToolbar {
                 title: root.playbackScreenTitle("music_dna")
                 leading: [ GlassButton { iconName: "back"; tertiary: true; implicitWidth: 52; Accessible.name: root.tr("more"); onClicked: root.activeScreen = "more" } ]
                 showConnection: true
@@ -6486,7 +6491,7 @@ BrandWindow {
             anchors.bottomMargin: 130
             spacing: 10
 
-            PageToolbar {
+            AppPageToolbar {
                 title: root.playbackScreenTitle("ask_dj")
                 showConnection: true
                 connectionLabel: root.tr("connection_type")
