@@ -2777,12 +2777,16 @@ class DJConnectBackend(QObject):
                   done=lambda: self._set_ask_dj_busy(False))
 
     @Slot(str, result=bool)
-    def sendAskDjQuestion(self, text: str) -> bool:
+    @Slot(str, str, str, str, result=bool)
+    def sendAskDjQuestion(self, text: str, reply_id="", session_id="", entry_id="") -> bool:
         text = text.strip()
         if not text or len(text) > 4000 or self._ask_dj_busy or not self._application_foreground or self._shutting_down:
             return False
+        selected = {"session_id": session_id, "entry_id": entry_id} if reply_id else None
         message_id = uuid4().hex
         if self._demo_mode:
+            if selected is not None:
+                return False
             self._merge_ask_dj_messages(parse_ask_dj_messages({"messages": [
                 {"id": message_id, "role": "user", "text": text},
                 {"id": message_id + "-demo", "role": "assistant", "text": self.tr_key("demo_dj_answer")},
@@ -2790,6 +2794,9 @@ class DJConnectBackend(QObject):
             return True
         self._sync_config_from_disk()
         if not self.paired or self.cfg.private_session or not self._backend_available or self._version_mismatch_visible:
+            return False
+        if selected is not None and self.askDjContextEntry(reply_id) != selected:
+            self.showToastForContext(self.tr_key("session_question_reference_unavailable"), "askdj")
             return False
         transport = self._session_controller.transport
         try:
@@ -2814,7 +2821,14 @@ class DJConnectBackend(QObject):
                     self._askDjUnsentDraftReady.emit(ticket, text)
                     self._toastReady.emit(self.tr_key("session_profile_missing"), 5000, "askdj")
                     return
-                transport.standalone_question(binding, text, message_id, owner)
+                if selected is not None:
+                    if self.askDjContextEntry(reply_id) != selected:
+                        self._askDjUnsentDraftReady.emit(ticket, text)
+                        self._toastReady.emit(self.tr_key("session_question_reference_unavailable"), 5000, "askdj")
+                        return
+                    transport.standalone_question(binding, text, message_id, owner, selected_entry=selected)
+                else:
+                    transport.standalone_question(binding, text, message_id, owner)
                 accepted = True
                 if not current():
                     return

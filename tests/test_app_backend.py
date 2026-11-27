@@ -1681,6 +1681,7 @@ def test_ask_dj_context_requires_one_retained_answer_and_current_owner(tmp_path)
     backend = DJConnectBackend(tmp_path / "config.json")
     backend.cfg.paired = True
     backend.cfg.device_token = "synthetic-token"
+    backend.cfg.ha_url = "http://fixture.invalid"
     backend.cfg.active_profile_id = "fixture-profile"
     backend.cfg.active_profile_type = "personal"
     backend.cfg.active_profile_privacy_mode = "private"
@@ -1714,6 +1715,19 @@ def test_ask_dj_context_requires_one_retained_answer_and_current_owner(tmp_path)
     session._bootstrap_current.return_value = True
     session._clock.now.return_value = 180
     assert backend.askDjContextEntry("server-reply") == {}
+
+    session._clock.now.return_value = 100
+    backend._sync_config_from_disk = Mock()
+    backend._question_executor.submit = Mock()
+    session.transport.private_scope_owner = Mock(return_value="fixture-profile")
+    session.transport.standalone_question = Mock()
+    restored = Mock()
+    backend.askDjUnsentDraft.connect(restored)
+    assert backend.sendAskDjQuestion("Keep this draft", "server-reply", ref["session_id"], ref["entry_id"])
+    session._clock.now.return_value = 180
+    backend._question_executor.submit.call_args.args[0]()
+    session.transport.standalone_question.assert_not_called()
+    restored.assert_called_once_with("Keep this draft")
 
 
 @pytest.mark.parametrize("owner", ["fixture-profile", "other-profile", None])

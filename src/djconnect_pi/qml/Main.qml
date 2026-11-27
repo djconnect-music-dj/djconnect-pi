@@ -5865,17 +5865,33 @@ BrandWindow {
 
         function sendQuestion() {
             const question = askDjChatInput.text.trim()
-            if (askDjSend.enabled && djconnect.sendAskDjQuestion(question)) {
+            if (!askDjSend.enabled) return
+            const accepted = answerContext
+                ? djconnect.sendAskDjQuestion(question, answerContext.messageId,
+                    answerContext.reference.session_id, answerContext.reference.entry_id)
+                : djconnect.sendAskDjQuestion(question)
+            if (accepted) {
                 if (djconnect.askDjBusy) pendingQuestionText = question
+                answerContext = null
                 clearChatDraft()
                 Qt.callLater(scrollToTop)
             }
+        }
+
+        function selectAnswerContext(messageId, reference) {
+            const fresh = djconnect.askDjContextEntry(messageId)
+            if (fresh.session_id !== reference.session_id || fresh.entry_id !== reference.entry_id) return
+            answerContext = {messageId: messageId, reference: fresh}
+            closeSearch(false)
+            closeHelp()
+            askDjChatInput.forceActiveFocus()
         }
 
         function clearQuestionUi(clearDraft) {
             root.askDjClearConfirmOpen = false
             feedbackMessageId = ""
             pendingQuestionText = ""
+            answerContext = null
             readingAnchor = null
             closeHelp()
             if (clearDraft) clearChatDraft()
@@ -5926,16 +5942,22 @@ BrandWindow {
             }
         }
         Connections {
+            target: djconnect.djSession
+            function onChanged() { askDjPanel.answerContextRevision += 1 }
+        }
+        Connections {
             target: root
             function onActiveChanged() {
                 if (root.active) return
                 askDjPanel.pendingQuestionText = ""
+                askDjPanel.answerContext = null
                 askDjPanel.feedbackMessageId = ""
                 askDjPanel.closeHelp()
             }
             function onScreenBlankedChanged() {
                 if (!root.screenBlanked) return
                 askDjPanel.pendingQuestionText = ""
+                askDjPanel.answerContext = null
                 askDjPanel.feedbackMessageId = ""
                 askDjPanel.closeHelp()
             }
@@ -5947,6 +5969,8 @@ BrandWindow {
         property int selectedMatch: -1
         property string selectedMessageId: ""
         property var displayedMessages: []
+        property var answerContext: null
+        property int answerContextRevision: 0
         property var readingAnchor: null
         readonly property string searchQuery: searchOpen ? askDjSearchInput.text.trim() : ""
         property real messageClock: Date.now()
@@ -6388,6 +6412,23 @@ BrandWindow {
                                             root.activeScreen = "trackinsight"
                                             djconnect.openTrackInsight(true)
                                         }
+                                    }
+                                    GlassButton {
+                                        objectName: "askDjSelectAnswerContext"
+                                        readonly property var reference: {
+                                            void askDjPanel.answerContextRevision
+                                            return modelData.contextEligible ? djconnect.askDjContextEntry(modelData.id) : ({})
+                                        }
+                                        visible: !!reference.entry_id
+                                        enabled: askDjChatInput.enabled
+                                        iconName: "chat"
+                                        tertiary: true
+                                        checked: !!askDjPanel.answerContext
+                                            && askDjPanel.answerContext.messageId === modelData.id
+                                        Accessible.name: root.tr("session_ask_about")
+                                        ToolTip.text: Accessible.name
+                                        ToolTip.visible: hovered
+                                        onClicked: askDjPanel.selectAnswerContext(modelData.id, reference)
                                     }
                                     GlassButton {
                                         objectName: "askDjUseMessageAsDraft"
@@ -7172,6 +7213,32 @@ BrandWindow {
                             wrapMode: Text.WordWrap
                             Layout.fillWidth: true
                         }
+                    }
+                }
+            }
+
+            GlassCard {
+                objectName: "askDjSelectedAnswerContext"
+                visible: !askDjPanel.searchOpen && askDjPanel.answerContext !== null
+                Layout.fillWidth: true
+                padding: 8
+                RowLayout {
+                    Layout.fillWidth: true
+                    Text {
+                        text: root.tr("session_question_selected")
+                        color: BrandTheme.colors.text
+                        font.pixelSize: 18
+                        wrapMode: Text.Wrap
+                        Layout.fillWidth: true
+                    }
+                    GlassButton {
+                        objectName: "askDjClearAnswerContext"
+                        iconName: "end"
+                        tertiary: true
+                        Accessible.name: root.tr("session_clear_reference")
+                        ToolTip.text: Accessible.name
+                        ToolTip.visible: hovered
+                        onClicked: askDjPanel.answerContext = null
                     }
                 }
             }
