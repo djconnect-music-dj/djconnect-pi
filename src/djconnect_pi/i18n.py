@@ -1518,6 +1518,7 @@ _HISTORY_SEARCH_TRANSLATIONS = {
     "session_duration_minutes": ("%1 min", "%1 min", "%1 Min.", "%1 min", "%1 min"),
     "session_duration_subminute": ("Less than 1 min", "Minder dan 1 min", "Unter 1 Min.", "Moins de 1 min", "Menos de 1 min"),
     "session_open_entry": ("Open contribution", "Open bijdrage", "Beitrag öffnen", "Ouvrir la contribution", "Abrir contribución"),
+    "ask_dj_open_saved_session": ("Open session", "Open sessie", "Session öffnen", "Ouvrir la session", "Abrir sesión"),
 }
 for _key, _values in _HISTORY_SEARCH_TRANSLATIONS.items():
     for _language, _value in zip(("en", "nl", "de", "fr", "es"), _values):

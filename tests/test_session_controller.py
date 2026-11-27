@@ -525,7 +525,8 @@ def test_leaving_history_discards_delayed_search_without_erasing_active_session(
     assert not owner.busy
 
 
-def test_open_result_uses_navigation_then_anchor_without_mutating_runtime(controller):
+@pytest.mark.parametrize("from_ask_dj", [False, True])
+def test_open_result_uses_navigation_then_anchor_without_mutating_runtime(controller, from_ask_dj):
     from test_session_history_view import timeline_fixture
     owner, backend = controller
     enable_search(owner)
@@ -540,13 +541,18 @@ def test_open_result_uses_navigation_then_anchor_without_mutating_runtime(contro
     owner.transport.end = Mock()
     signal = Mock()
     owner.entryOpened.connect(signal)
-    owner.openEntry(row['session_id'], row['entry_id'])
+    if from_ask_dj:
+        owner._caps = {}
+        owner.open_ask_dj_entry(row['session_id'], row['entry_id'], lambda: True)
+    else:
+        owner.openEntry(row['session_id'], row['entry_id'])
     backend.jobs.pop()()
     assert owner.state['session_id'] == 'current-session'
     assert owner.state['timeline']['selected_entry_id'] == row['entry_id']
     assert owner.transport.timeline.call_args.kwargs == {'window':'anchor','anchor_entry_id':row['entry_id']}
     owner.transport.start.assert_not_called()
     owner.transport.end.assert_not_called()
+    assert owner.transport.capabilities.call_count == int(from_ask_dj)
     signal.assert_called_once()
 
 

@@ -314,6 +314,7 @@ class DJConnectBackend(QObject):
         self._queue_items: list[dict[str, object]] = []
         self._playlist_items: list[dict[str, object]] = []
         self._ask_dj_messages: list[dict[str, object]] = []
+        self._ask_dj_history_open = None
         self._ask_dj_history_revision = 0
         self._ask_dj_delivery_key = ""
         self._ask_dj_clear_revision = 0
@@ -672,6 +673,27 @@ class DJConnectBackend(QObject):
     @Slot(result=float)
     def askDjHistoryClock(self) -> float:
         return self._session_controller._clock.now()
+
+    @Slot()
+    def cancelAskDjHistoryOpen(self):
+        self._ask_dj_history_open = None
+
+    @Slot(str, str, str)
+    def openAskDjHistoryMatch(self, message_id, session_id, entry_id):
+        ticket = self._private_read_context()
+        request = self._ask_dj_history_open = object()
+
+        def current():
+            return (self._ask_dj_history_open is request and ticket == self._private_read_context()
+                    and self._application_foreground and self.paired and self._backend_available
+                    and not self._demo_mode and not self._version_mismatch_visible and self.personalProfileExportAllowed
+                    and any(match["session_id"] == session_id and match["entry_id"] == entry_id
+                            and match["can_open"] and match["expires_at"] > self.askDjHistoryClock()
+                            for message in self._ask_dj_messages if message.get("id") == message_id
+                            for match in message.get("historicalMatches", [])))
+
+        if current():
+            self._session_controller.open_ask_dj_entry(session_id, entry_id, current)
 
     @Slot(str, str, result=str)
     def highlightAskDjMessage(self, body: str, query: str) -> str:

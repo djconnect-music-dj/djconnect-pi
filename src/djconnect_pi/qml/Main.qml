@@ -5975,7 +5975,11 @@ BrandWindow {
             onActivated: askDjPanel.openSearch(false)
         }
 
-        onVisibleChanged: if (!visible) { closeSearch(); clearQuestionUi(false) }
+        onVisibleChanged: if (!visible) {
+            djconnect.cancelAskDjHistoryOpen()
+            closeSearch()
+            clearQuestionUi(false)
+        }
         onMatchesChanged: {
             if (!searchOpen)
                 return
@@ -6292,6 +6296,7 @@ BrandWindow {
                             border.color: root.moodColor("focus")
                             focused: askDjPanel.searchOpen && askDjPanel.selectedRow === index
                             property bool userBubble: modelData.role === "user"
+                            readonly property string messageId: modelData.id || ""
                             property bool systemBubble: modelData.role === "system" || modelData.role === "status" || modelData.messageKind === "system" || modelData.messageKind === "status"
 
                             width: bubble.userBubble ? Math.min(parent.width * 0.78, 520) : parent.width
@@ -6455,6 +6460,19 @@ BrandWindow {
                                             Layout.fillWidth: true
                                             requiresSpotify: historicalMatch.modelData.requires_spotify_attribution === true
                                             spotifyURL: historicalMatch.expired ? "" : historicalMatch.modelData.spotify_source_url || ""
+                                        }
+                                        GlassButton {
+                                            objectName: "askDjOpenHistoryMatch"
+                                            visible: historicalMatch.modelData.can_open === true
+                                            enabled: !djconnect.djSession.busy
+                                            text: root.tr("ask_dj_open_saved_session")
+                                            tertiary: true
+                                            Layout.alignment: Qt.AlignLeft
+                                            onClicked: {
+                                                if (historicalMatch.visible && !historicalMatch.expired)
+                                                    djconnect.openAskDjHistoryMatch(bubble.messageId,
+                                                        historicalMatch.modelData.session_id, historicalMatch.modelData.entry_id)
+                                            }
                                         }
                                     }
                                 }

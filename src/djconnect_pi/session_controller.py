@@ -1934,7 +1934,13 @@ class SessionController(QObject):
         self._view_epoch += 1
         self._launch("open_entry", {"session_id": session_id, "entry_id": entry_id})
 
-    def _launch(self, action, value="", *, background=False, manual_refresh=False, playback_confirmation=False):
+    def open_ask_dj_entry(self, session_id, entry_id, current):
+        if self._interactive_read_or_write or not private_scope_allowed(self):
+            return
+        self._view_epoch += 1
+        self._launch("open_entry", {"session_id": session_id, "entry_id": entry_id}, entry_guard=current)
+
+    def _launch(self, action, value="", *, background=False, manual_refresh=False, playback_confirmation=False, entry_guard=None):
         if not self._foreground or (action == "refresh" and not self._view_active):
             return
         if (self._artwork_prepare.running or self._playback_control.running or self._archive_delete.running or self._content_delete.running) and action != "end":
@@ -1955,7 +1961,7 @@ class SessionController(QObject):
         private_owner_known = owner_known and self._bootstrap_private
         archive_bootstrap = (action == "history" and not owner_known and not cfg.private_session
             and cfg.active_profile_id == "" and cfg.explicit_profile_id == "")
-        read_archive_capabilities = action == "history" and not self._caps
+        read_archive_capabilities = (action == "history" or entry_guard is not None) and not self._caps
         if not (session_profile_id(cfg) or private_owner_known or bootstrap or archive_bootstrap):
             self._error = "profile_required"
             self.changed.emit()
@@ -2029,6 +2035,8 @@ class SessionController(QObject):
 
         def worker():
             result = {"serial": serial, "binding": binding, "action": action, "view_epoch": view_epoch, "question_epoch": question_epoch, "raw_binding": raw_binding}
+            if entry_guard is not None:
+                result["entry_guard"] = entry_guard
             if action == "refresh" and manual_refresh:
                 result["manual_runtime_refresh"] = True
             if playback_confirmation:
@@ -2201,8 +2209,18 @@ class SessionController(QObject):
                 elif action == "archive_search":
                     result["archive_search"] = self._read_archive_search(binding, value, view_epoch)
                 elif action == "open_entry":
+                    if entry_guard is not None and not entry_guard():
+                        raise SessionError("context_changed")
+                    if read_archive_capabilities:
+                        result["archive_capabilities"] = self.transport.capabilities(binding, isolated=True)
+                        if not self._supports_history(result["archive_capabilities"]):
+                            raise SessionError("unsupported")
+                        if not entry_guard():
+                            raise SessionError("context_changed")
                     sid, eid = value["session_id"], value["entry_id"]
                     opened_entry(self.transport.open_entry(binding, sid, eid), sid, eid, now=self._clock.now())
+                    if entry_guard is not None and not entry_guard():
+                        raise SessionError("context_changed")
                     result["timeline"] = presented_history(history_page(self.transport.timeline(binding, sid, window="anchor", anchor_entry_id=eid), session_id=sid, now=self._clock.now()))
                     if not any(row["entry_id"] == eid for row in result["timeline"]["entries"]):
                         raise SessionError("unavailable")
@@ -2291,6 +2309,9 @@ class SessionController(QObject):
                 return
         except SessionError:
             self.invalidate()
+            return
+        if result.get("entry_guard") is not None and not result["entry_guard"]():
+            self.changed.emit()
             return
         if result.get("flow_expanded") and result.get("view_epoch") != self._view_epoch:
             self.changed.emit()
