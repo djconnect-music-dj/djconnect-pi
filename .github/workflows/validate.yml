@@ -13,13 +13,13 @@ jobs:
     name: Software Assurance governance
     permissions:
       contents: read
-    uses: djconnect-music-dj/djconnect-shared-workflows/.github/workflows/software-assurance-governance-aabd.yml@4025a68add8ba98f1f2e0307d7f3998e45c0d9ef
+    uses: djconnect-music-dj/djconnect-shared-workflows/.github/workflows/software-assurance-governance-aabd.yml@6e23f410e573343bea44bba58800ecde2059ebab
     with:
       execution_profile: balanced
       owner: ${{ github.repository }}
 
   python:
-    uses: djconnect-music-dj/djconnect-shared-workflows/.github/workflows/djconnect-python-5f12.yml@4025a68add8ba98f1f2e0307d7f3998e45c0d9ef
+    uses: djconnect-music-dj/djconnect-shared-workflows/.github/workflows/djconnect-python-5f12.yml@6e23f410e573343bea44bba58800ecde2059ebab
     with:
       python-version: "3.14.10"
       source-path: src
