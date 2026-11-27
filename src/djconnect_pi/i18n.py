@@ -1897,6 +1897,15 @@ _SESSION_COMPOSER_TRANSLATIONS = {
     ),
     "track_insight_clip_save_failed": ("Could not save the clip.", "De clip kon niet worden opgeslagen.", "Der Clip konnte nicht gespeichert werden.", "Impossible d’enregistrer le clip.", "No se pudo guardar el clip."),
     "track_insight_png_files": ("PNG images", "PNG-afbeeldingen", "PNG-Bilder", "Images PNG", "Imágenes PNG"),
+    "track_insight_open_saved_file": (
+        "Open saved file", "Opgeslagen bestand openen", "Gespeicherte Datei öffnen",
+        "Ouvrir le fichier enregistré", "Abrir el archivo guardado",
+    ),
+    "track_insight_open_saved_file_failed": (
+        "Could not open the saved file.", "Het opgeslagen bestand kon niet worden geopend.",
+        "Die gespeicherte Datei konnte nicht geöffnet werden.", "Impossible d’ouvrir le fichier enregistré.",
+        "No se pudo abrir el archivo guardado.",
+    ),
     "track_insight_card_saved": ("Card saved", "Kaart opgeslagen", "Karte gespeichert", "Carte enregistrée", "Tarjeta guardada"),
     "track_insight_card_save_failed": ("Could not save the card.", "De kaart kon niet worden opgeslagen.", "Die Karte konnte nicht gespeichert werden.", "Impossible d’enregistrer la carte.", "No se pudo guardar la tarjeta."),
     "track_insight_copy_share_text": ("Copy insight text", "Kopieer inzichttekst", "Insight-Text kopieren", "Copier le texte de l’analyse", "Copiar el texto del análisis"),

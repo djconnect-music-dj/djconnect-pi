@@ -3548,14 +3548,16 @@ BrandWindow {
             property color exportNoticeColor: BrandTheme.colors.muted
             property bool copiedShareText: false
             property string saveIntent: ""
-            property string exportFileName: ""
-            property string savedFileName: ""
+            property url exportFile: ""
+            property url savedFile: ""
+            readonly property string savedFileName: String(savedFile)
+                ? decodeURIComponent(String(savedFile).split("/").pop()) : ""
             readonly property string exportSelection: JSON.stringify([trackInsightPanel.autoInsightKey,
                 djconnect.trackInsightShareText, djconnect.trackInsightImageUrl, djconnect.trackInsightShareDescriptors,
                 djconnect.trackInsightShareMeters, djconnect.language, djconnect.demoMode, storyCard, exportClip])
             onExportSelectionChanged: {
-                exportFileName = ""
-                savedFileName = ""
+                exportFile = ""
+                savedFile = ""
                 if ((saveIntent && saveIntent !== exportSelection) || exportBusy) {
                     saveIntent = ""
                     exportGeneration += 1
@@ -3580,8 +3582,8 @@ BrandWindow {
             }
             onAboutToHide: {
                 saveIntent = ""
-                exportFileName = ""
-                savedFileName = ""
+                exportFile = ""
+                savedFile = ""
                 exportGeneration += 1
                 renderingCard = false
                 djconnect.cancelTrackInsightClip()
@@ -3605,8 +3607,8 @@ BrandWindow {
                     const popup = insightSharePopup
                     popup.exportNoticeKey = key
                     popup.exportNoticeColor = saved ? BrandTheme.colors.success : BrandTheme.colors.danger
-                    popup.savedFileName = saved ? popup.exportFileName : ""
-                    popup.exportFileName = ""
+                    popup.savedFile = saved ? popup.exportFile : ""
+                    popup.exportFile = ""
                 }
                 function onTrackInsightClipFrameRequested(phase) {
                     if (!insightSharePopup.opened || !trackInsightPanel.canShareInsight) {
@@ -3628,8 +3630,8 @@ BrandWindow {
             function saveCard(destination) {
                 if (!trackInsightPanel.canShareInsight || exportBusy) return
                 exportNoticeKey = ""
-                savedFileName = ""
-                exportFileName = decodeURIComponent(String(destination).split("/").pop())
+                savedFile = ""
+                exportFile = destination
                 if (exportClip) {
                     exportGeneration += 1
                     clipProgress = 0
@@ -3651,7 +3653,7 @@ BrandWindow {
                 }, Qt.size(1080, story ? 1920 : 1080))
                 if (!accepted) {
                     renderingCard = false
-                    exportFileName = ""
+                    exportFile = ""
                     exportNoticeKey = "track_insight_card_save_failed"
                     exportNoticeColor = BrandTheme.colors.danger
                 }
@@ -3809,7 +3811,7 @@ BrandWindow {
                         tertiary: true
                         onClicked: {
                             insightSharePopup.exportGeneration += 1
-                            insightSharePopup.exportFileName = ""
+                            insightSharePopup.exportFile = ""
                             djconnect.cancelTrackInsightClip()
                             insightSharePopup.exportNoticeKey = "track_insight_clip_cancelled"
                             insightSharePopup.exportNoticeColor = BrandTheme.colors.muted
@@ -3881,9 +3883,29 @@ BrandWindow {
                     font.pixelSize: 18
                     Layout.fillWidth: true
                 }
-                GlassButton {
-                    text: root.tr("close"); tertiary: true; Layout.fillWidth: true
-                    onClicked: insightSharePopup.close()
+                RowLayout {
+                    Layout.fillWidth: true
+                    GlassButton {
+                        objectName: "trackInsightOpenSavedFile"
+                        visible: !!insightSharePopup.savedFileName
+                        enabled: trackInsightPanel.canShareInsight && !insightSharePopup.exportBusy
+                        text: root.tr("track_insight_open_saved_file")
+                        Layout.fillWidth: true
+                        onClicked: {
+                            if (Qt.openUrlExternally(insightSharePopup.savedFile)) {
+                                insightSharePopup.exportNoticeKey = insightSharePopup.exportClip
+                                    ? "track_insight_clip_saved" : "track_insight_card_saved"
+                                insightSharePopup.exportNoticeColor = BrandTheme.colors.success
+                            } else {
+                                insightSharePopup.exportNoticeKey = "track_insight_open_saved_file_failed"
+                                insightSharePopup.exportNoticeColor = BrandTheme.colors.danger
+                            }
+                        }
+                    }
+                    GlassButton {
+                        text: root.tr("close"); tertiary: true; Layout.fillWidth: true
+                        onClicked: insightSharePopup.close()
+                    }
                 }
             }
         }
