@@ -91,6 +91,45 @@ def presented_history(response):
     return result
 
 
+def ask_dj_history_matches(rows, *, now):
+    """Playback observations from a Profile-owned Ask DJ response."""
+    if not isinstance(rows, list):
+        return []
+    matches = {}
+    for raw in rows[:20]:
+        if (not isinstance(raw, dict) or raw.get("kind") != "playback_observed"
+                or raw.get("historical_view_only") is not True or raw.get("current_display_allowed") is not False
+                or raw.get("state") == "source_withdrawn"
+                or type(raw.get("order")) is not int or raw["order"] <= 0):
+            continue
+        expiry = timestamp(raw.get("retained_until"))
+        if expiry is None or expiry <= now or timestamp(raw.get("occurred_at")) is None:
+            continue
+        try:
+            session_id = identifier(raw.get("session_id"))
+            entry_id = identifier(raw.get("entry_id"))
+            row, = presented_history({"entries": [raw]})["entries"]
+        except SessionError:
+            continue
+        playback = row["historical_playback"]
+        spotify = row["requires_spotify_attribution"] or text(raw["playback"].get("provider"), 128).casefold() == "spotify"
+        if not playback or (spotify and not row["spotify_source_url"]):
+            continue
+        action = row.get("open_action")
+        can_open = (isinstance(action, dict) and action.get("navigation_only") is True
+                    and action == {"kind": "open_session", "session_id": session_id,
+                                   "entry_id": entry_id, "navigation_only": True})
+        if action is not None and not can_open:
+            continue
+        matches.setdefault((session_id, entry_id), {
+            **playback, "session_id": session_id, "entry_id": entry_id, "can_open": can_open,
+            "occurred_at": row["occurred_at"], "expires_at": expiry,
+            "requires_spotify_attribution": row["requires_spotify_attribution"],
+            "spotify_source_url": row["spotify_source_url"],
+        })
+    return list(matches.values())
+
+
 
 def retained_flow_presentation(entries, admitted_moments, session_id):
     """Order admitted history for Flow without changing the canonical timeline.

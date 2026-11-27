@@ -80,7 +80,7 @@ from .logging_config import clear_log_files, setup_logging
 from .navigation_gesture import EdgeBackGesture
 from .queue_projection import compact_adjacent_tracks, queue_artist_and_album
 from .session_controller import SessionController
-from .session_history_view import local_highlighted_text
+from .session_history_view import ask_dj_history_matches, local_highlighted_text
 from .session_playback_control import favorite_observation, output_id
 from .session_playback_control import reference as session_playback_reference
 from .session_projection import safe_link, timestamp, track_insight_verified_credit, volume_observation
@@ -4490,6 +4490,19 @@ class DJConnectBackend(QObject):
         if trimmed_count > 0:
             self._ask_dj_messages = _sort_ask_dj_messages_newest_first(_sort_ask_dj_messages(self._ask_dj_messages)[trimmed_count:])
         messages = parse_ask_dj_messages(data)
+        if (messages and data.get("history_scope") == "profile" and self.cfg.active_profile_id
+                and data.get("owner_profile_id") == self.cfg.active_profile_id
+                and self.personalProfileExportAllowed and self.cfg.active_profile_privacy_mode == "private"
+                and isinstance(data.get("messages"), list)):
+            by_id = {
+                row["id"]: row.get("historical_matches")
+                for row in data["messages"] if isinstance(row, dict) and isinstance(row.get("id"), str)
+                and row.get("status") != "source_withdrawn"
+            }
+            now = self._session_controller._clock.now()
+            for message in messages:
+                if message.get("role") == "assistant":
+                    message["historicalMatches"] = ask_dj_history_matches(by_id.get(message.get("id")), now=now)
         if messages:
             self._merge_ask_dj_messages(messages, limit=_int_value(data.get("history_limit"), 100))
         else:

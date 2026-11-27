@@ -1676,6 +1676,38 @@ def test_ask_dj_merge_orders_exchange_and_deduplicates_refreshes(tmp_path: Path)
     ]
 
 
+@pytest.mark.parametrize("owner", ["fixture-profile", "other-profile", None])
+def test_ask_dj_history_keeps_only_qualified_matches_for_the_read_owner(tmp_path: Path, owner: str | None) -> None:
+    ensure_app()
+    backend = DJConnectBackend(tmp_path / "config.json")
+    backend.cfg.active_profile_id = "fixture-profile"
+    backend.cfg.active_profile_type = "personal"
+    backend.cfg.active_profile_privacy_mode = "private"
+    backend._session_controller._clock = Mock()
+    backend._session_controller._clock.now.return_value = 100
+    reference = {"session_id": "fixture-session", "entry_id": "fixture-entry"}
+    row = {
+        **reference, "kind": "playback_observed", "order": 1, "historical_view_only": True,
+        "current_display_allowed": False, "occurred_at": "1970-01-01T00:01:00Z",
+        "retained_until": "1970-01-01T00:03:00Z",
+        "playback": {"title": "Fixture track", "coverage": "observed_playing_not_full_listen"},
+        "open_action": {"kind": "open_session", **reference, "navigation_only": True},
+    }
+    assert backend._apply_ask_dj_data({
+        "success": True, "history_scope": "profile", "owner_profile_id": owner,
+        "messages": [{"id": "fixture-reply", "role": "assistant", "text": "Fixture reply",
+                      "historical_matches": [row, {**row, "retained_until": "1970-01-01T00:01:30Z"},
+                                             {**row, "open_action": {**row["open_action"], "entry_id": "wrong"}}]}],
+    })
+    matches = backend.askDjMessages[0].get("historicalMatches", [])
+    if owner == "fixture-profile":
+        match, = matches
+        assert match["title"] == "Fixture track" and match["can_open"]
+        assert match["entry_id"] == "fixture-entry" and match["expires_at"] == 180
+    else:
+        assert not matches
+
+
 def test_ask_dj_history_limit_is_applied_from_server(tmp_path: Path) -> None:
     ensure_app()
     backend = DJConnectBackend(tmp_path / "config.json")
