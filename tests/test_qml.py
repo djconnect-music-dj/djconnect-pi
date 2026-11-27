@@ -278,7 +278,9 @@ def test_qml_has_touch_readable_glass_controls_and_scrollable_settings() -> None
     assert 'root.tr("control")' in main_qml
     assert "id: controlOutputDeviceCombo" in main_qml
     assert "function selectedIndex()" in main_qml
-    assert "currentIndex: selectedIndex()" in main_qml
+    assert "readonly property int confirmedOutputIndex: selectedIndex()" in main_qml
+    assert "currentIndex: confirmedOutputIndex" in main_qml
+    assert "displayText: displayName(confirmedOutputIndex)" in main_qml
     assert 'text: "🔊"' not in main_qml
     assert "wrapMode: Text.Wrap" in logs_qml
     assert 'text: view.tr("log") + ": " + view.backend.logFile' in logs_qml
