@@ -1211,6 +1211,13 @@ _SHARED_SETTINGS_TRANSLATIONS = {
         'La voix enregistrée est indisponible. Votre choix est conservé.',
         'La voz guardada no está disponible. Se conserva tu elección.',
     ),
+    'shared_voice_preserved_text_only': (
+        'Voice choices are kept. Text only produces no spoken audio.',
+        'Je stemkeuzes blijven bewaard. Alleen tekst maakt geen gesproken audio.',
+        'Die Stimmauswahl bleibt gespeichert. Nur Text erzeugt keine Sprachausgabe.',
+        'Les choix de voix sont conservés. Le mode texte seul ne produit aucun audio.',
+        'Se conservan las opciones de voz. Solo texto no produce audio hablado.',
+    ),
     'shared_reload': (
         'Reload',
         'Vernieuwen',

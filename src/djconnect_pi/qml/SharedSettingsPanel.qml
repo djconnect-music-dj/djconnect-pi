@@ -14,6 +14,7 @@ ColumnLayout {
     readonly property var allFields: ["persona", "voice", "gender", "mood", "presence", "announcement_output"]
     property var fields: allFields
     readonly property var displayedFields: backend.sharedSettings.selection_required ? allFields : fields
+    readonly property bool textOnly: draft.announcement_output === "text_only"
     spacing: 12
 
     function tr(key) { backend.translationVersion; return backend.t(key) }
@@ -123,6 +124,7 @@ ColumnLayout {
         delegate: ColumnLayout {
             id: fieldRow
             required property string modelData
+            visible: !editor.textOnly || !["voice", "gender"].includes(modelData)
             Layout.fillWidth: true
             spacing: 6
             Label {
@@ -163,8 +165,8 @@ ColumnLayout {
         wrapMode: Text.WordWrap
     }
     Label {
-        visible: !!editor.backend.sharedSettings.values && !editor.backend.sharedSettings.speaker_available &&
-                 ["ha_speaker", "both"].indexOf((editor.backend.sharedSettings.values || {}).announcement_output) >= 0
+        visible: !editor.backend.sharedSettings.speaker_available
+            && ["ha_speaker", "both"].includes(editor.draft.announcement_output)
         text: editor.tr("dj_announcement_speaker_unavailable")
         color: BrandTheme.colors.muted
         font.pixelSize: 18
@@ -172,8 +174,17 @@ ColumnLayout {
         wrapMode: Text.WordWrap
     }
     Label {
-        visible: !!editor.backend.sharedSettings.values && !editor.backend.sharedSettings.voice_available
+        visible: !!editor.backend.sharedSettings.values && !editor.textOnly && !editor.backend.sharedSettings.voice_available
         text: editor.tr("shared_voice_unavailable")
+        color: BrandTheme.colors.muted
+        font.pixelSize: 18
+        Layout.fillWidth: true
+        wrapMode: Text.WordWrap
+    }
+    Label {
+        objectName: "sharedVoicePreserved"
+        visible: editor.textOnly
+        text: editor.tr("shared_voice_preserved_text_only")
         color: BrandTheme.colors.muted
         font.pixelSize: 18
         Layout.fillWidth: true
@@ -193,6 +204,7 @@ ColumnLayout {
             }
         }
         GlassButton {
+            objectName: "sharedApply"
             primary: true
             text: editor.tr("shared_apply")
             Layout.fillWidth: true
