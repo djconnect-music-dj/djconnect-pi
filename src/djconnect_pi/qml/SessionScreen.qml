@@ -4051,33 +4051,71 @@ Item {
                     id: momentInsightContent
                     width: momentInsightScroll.availableWidth
                     spacing: 12
-                    Text {
-                        objectName: "sessionMomentInsightTitle"
-                        text: momentInsight.detail.title || ""
-                        textFormat: Text.PlainText
-                        color: BrandTheme.colors.text
-                        font.pixelSize: 26; font.bold: true
-                        wrapMode: Text.Wrap
+                    RowLayout {
                         Layout.fillWidth: true
-                    }
-                    Text {
-                        visible: text.length > 0
-                        text: momentInsight.detail.artist || ""
-                        textFormat: Text.PlainText
-                        color: BrandTheme.colors.muted
-                        font.pixelSize: 21
-                        wrapMode: Text.Wrap
-                        Layout.fillWidth: true
-                    }
-                    Text {
-                        objectName: "sessionMomentInsightAlbum"
-                        visible: text.length > 0
-                        text: momentInsight.detail.album || ""
-                        textFormat: Text.PlainText
-                        color: BrandTheme.colors.muted
-                        font.pixelSize: 18
-                        wrapMode: Text.Wrap
-                        Layout.fillWidth: true
+                        spacing: 14
+                        Rectangle {
+                            id: pinnedInsightMark
+                            objectName: "sessionMomentInsightPlaceholder"
+                            visible: momentInsight.detail.status === "ready"
+                            Layout.preferredWidth: Math.min(screen.compact ? 104 : 134, momentInsightScroll.availableWidth * 0.27)
+                            Layout.preferredHeight: Layout.preferredWidth
+                            Layout.alignment: Qt.AlignTop
+                            radius: 18
+                            readonly property var colors: visible ? momentInsight.detail.palette || [] : []
+                            gradient: Gradient {
+                                GradientStop { position: 0; color: pinnedInsightMark.colors[0] || BrandTheme.colors.surface }
+                                GradientStop { position: 0.58; color: pinnedInsightMark.colors[1] || BrandTheme.colors.actionAccent }
+                                GradientStop { position: 1; color: pinnedInsightMark.colors[2] || BrandTheme.colors.background }
+                            }
+                            Rectangle {
+                                anchors.centerIn: parent
+                                width: parent.width * 0.72
+                                height: width
+                                radius: width / 2
+                                color: "#a0080c19"
+                            }
+                            FeatureIcon {
+                                anchors.centerIn: parent
+                                width: parent.width * 0.55
+                                height: width
+                                iconName: "trackInsight"
+                                iconColor: BrandTheme.colors.text
+                                Accessible.ignored: true
+                            }
+                        }
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 4
+                            Text {
+                                objectName: "sessionMomentInsightTitle"
+                                text: momentInsight.detail.title || ""
+                                textFormat: Text.PlainText
+                                color: BrandTheme.colors.text
+                                font.pixelSize: 26; font.bold: true
+                                wrapMode: Text.Wrap
+                                Layout.fillWidth: true
+                            }
+                            Text {
+                                visible: text.length > 0
+                                text: momentInsight.detail.artist || ""
+                                textFormat: Text.PlainText
+                                color: BrandTheme.colors.muted
+                                font.pixelSize: 21
+                                wrapMode: Text.Wrap
+                                Layout.fillWidth: true
+                            }
+                            Text {
+                                objectName: "sessionMomentInsightAlbum"
+                                visible: text.length > 0
+                                text: momentInsight.detail.album || ""
+                                textFormat: Text.PlainText
+                                color: BrandTheme.colors.muted
+                                font.pixelSize: 18
+                                wrapMode: Text.Wrap
+                                Layout.fillWidth: true
+                            }
+                        }
                     }
                     Text {
                         visible: !!momentInsight.credit.context

@@ -1,6 +1,7 @@
 """Closed, ephemeral Session projections. Historical rows never become live grants."""
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 from functools import lru_cache
 from itertools import pairwise
@@ -62,6 +63,17 @@ def track_insight_verified_credit(analysis: dict[str, object]) -> dict[str, str]
 
 def text(value, maximum=32768):
     return value if isinstance(value, str) and len(value) <= maximum else ""
+
+
+def moment_insight_palette(visual):
+    if (not isinstance(visual, dict) or visual.get("basis") != "decorative_unmeasured_v1"
+            or visual.get("audio_reactive") is not False):
+        return []
+    colors = visual.get("palette")
+    if (not isinstance(colors, list) or len(colors) != 3
+            or not all(isinstance(color, str) and re.fullmatch(r"#[0-9a-fA-F]{6}", color) for color in colors)):
+        return []
+    return colors.copy()
 
 
 def active_session(response):

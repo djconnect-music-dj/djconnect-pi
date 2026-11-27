@@ -51,6 +51,7 @@ from .session_playback_control import PlaybackControl
 from .session_projection import (
     active_session,
     history_page,
+    moment_insight_palette,
     session_current_idle,
     session_playback,
     text,
@@ -1481,6 +1482,7 @@ class SessionController(QObject):
                 request["view"] = {"status": "ready", "title": title, "summary": summary,
                                    "artist": text(track.get("artist"), 2048).strip(),
                                    "album": text(track.get("album"), 2048).strip(), "credit": credit,
+                                   "palette": moment_insight_palette(data.get("visual_profile")),
                                    "listening_cues": listening_cues,
                                    "unmeasured_audio": analysis.get("measured_audio") is False}
             else:
