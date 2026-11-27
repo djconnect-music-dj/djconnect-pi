@@ -3434,6 +3434,7 @@ BrandWindow {
                 spacing: 12
 
                 DangerButton {
+                    objectName: "settingsPairAgain"
                     text: root.tr("reset_pairing")
                     Layout.fillWidth: true
                     Layout.preferredHeight: 58
@@ -8898,6 +8899,7 @@ BrandWindow {
                 }
 
                 Text {
+                    objectName: "resetPairingConfirmMessage"
                     text: root.tr("reset_pairing_confirm_message")
                     color: BrandTheme.colors.text
                     font.pixelSize: 24
@@ -8912,8 +8914,8 @@ BrandWindow {
                     Layout.preferredHeight: 56
                     onClicked: {
                         root.resetPairingConfirmOpen = false
+                        root.activeScreen = "session"
                         djconnect.resetPairing()
-                        root.activeScreen = "now"
                     }
                 }
 
