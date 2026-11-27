@@ -5458,7 +5458,8 @@ BrandWindow {
 
             GlassCard {
                 objectName: "musicDnaErrorCard"
-                visible: !djconnect.musicDnaBusy && (djconnect.musicDnaError.length > 0 || !djconnect.musicDnaLoaded)
+                visible: (musicDnaPanel.showProfile && djconnect.musicDnaNeedsRecovery)
+                    || (!djconnect.musicDnaBusy && (djconnect.musicDnaError.length > 0 || !djconnect.musicDnaLoaded))
                 Layout.fillWidth: true
                 Text {
                     objectName: "musicDnaUnavailableText"
