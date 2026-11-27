@@ -2577,6 +2577,48 @@ BrandWindow {
         sourceComponent: SettingsPage {}
     }
 
+    component AboutCopyValue: RowLayout {
+        id: aboutCopyValue
+        required property string text
+        required property string labelKey
+        spacing: 8
+        Layout.fillWidth: true
+
+        TextEdit {
+            id: aboutCopyText
+            objectName: "aboutCopyValueText"
+            text: aboutCopyValue.text
+            textFormat: TextEdit.PlainText
+            color: BrandTheme.colors.text
+            font.pixelSize: 20
+            wrapMode: TextEdit.Wrap
+            readOnly: true
+            selectByMouse: true
+            verticalAlignment: TextEdit.AlignVCenter
+            Layout.fillWidth: true
+        }
+
+        GlassButton {
+            objectName: "aboutCopyValueAction"
+            readonly property string copyLabel: root.tr(labelKey)
+            iconName: "copy"
+            tertiary: true
+            padding: 5
+            implicitWidth: 40
+            implicitHeight: 40
+            Accessible.name: copyLabel
+            ToolTip.text: copyLabel
+            ToolTip.visible: hovered
+            enabled: aboutCopyText.text.length > 0
+            onClicked: {
+                aboutCopyText.selectAll()
+                aboutCopyText.copy()
+                aboutCopyText.deselect()
+                djconnect.showToastForContext(root.tr("copied"), "connectivity")
+            }
+        }
+    }
+
     component ProfileExportStatusLabel: Text {
         required property string status
         required property string keyPrefix
@@ -9111,23 +9153,16 @@ BrandWindow {
                     Layout.fillWidth: true
 
                     Text { text: root.tr("version"); color: BrandTheme.colors.muted; font.pixelSize: 20; font.bold: true; horizontalAlignment: Text.AlignRight; Layout.preferredWidth: 190 }
-                    Text {
+                    AboutCopyValue {
                         objectName: "aboutAppVersion"
                         text: djconnect.version
-                        textFormat: Text.PlainText
-                        color: BrandTheme.colors.text
-                        font.pixelSize: 20
-                        Layout.fillWidth: true
+                        labelKey: "copy_app_version"
                     }
                     Text { text: root.tr("device_name"); color: BrandTheme.colors.muted; font.pixelSize: 20; font.bold: true; horizontalAlignment: Text.AlignRight; Layout.preferredWidth: 190 }
-                    Text {
+                    AboutCopyValue {
                         objectName: "aboutDeviceName"
                         text: djconnect.deviceName
-                        textFormat: Text.PlainText
-                        color: BrandTheme.colors.text
-                        font.pixelSize: 20
-                        wrapMode: Text.Wrap
-                        Layout.fillWidth: true
+                        labelKey: "copy_device_name"
                     }
                     Text { text: root.tr("client_type"); color: BrandTheme.colors.muted; font.pixelSize: 20; font.bold: true; horizontalAlignment: Text.AlignRight; Layout.preferredWidth: 190 }
                     Text { text: djconnect.clientType; color: BrandTheme.colors.text; font.pixelSize: 20; Layout.fillWidth: true }

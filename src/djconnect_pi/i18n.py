@@ -1949,6 +1949,8 @@ _SESSION_COMPOSER_TRANSLATIONS = {
     "music_backend_unavailable_state": ("Unavailable", "Niet beschikbaar", "Nicht verfügbar", "Indisponible", "No disponible"),
     "music_backend_unconfirmed_state": ("Availability unconfirmed", "Beschikbaarheid niet bevestigd", "Verfügbarkeit unbestätigt", "Disponibilité non confirmée", "Disponibilidad sin confirmar"),
     "about_source_repository": ("Source on GitHub", "Broncode op GitHub", "Quellcode auf GitHub", "Code source sur GitHub", "Código en GitHub"),
+    "copy_app_version": ("Copy app version", "Kopieer appversie", "App-Version kopieren", "Copier la version de l’app", "Copiar la versión de la app"),
+    "copy_device_name": ("Copy device name", "Kopieer apparaatnaam", "Gerätenamen kopieren", "Copier le nom de l’appareil", "Copiar el nombre del dispositivo"),
     "copy_device_id": ("Copy device ID", "Kopieer apparaat-ID", "Geräte-ID kopieren", "Copier l’identifiant de l’appareil", "Copiar el ID del dispositivo"),
     "copy_pairing_code": ("Copy pairing code", "Kopieer koppelcode", "Kopplungscode kopieren", "Copier le code d’appairage", "Copiar el código de vinculación"),
     "device_id_copied": ("Device ID copied", "Apparaat-ID gekopieerd", "Geräte-ID kopiert", "Identifiant de l’appareil copié", "ID del dispositivo copiado"),
