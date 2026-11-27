@@ -99,7 +99,7 @@ class SessionController(QObject):
     flowRowsChanged = Signal()
     newCurrentContribution = Signal()
     entryOpened = Signal()
-    askDjEntryOpenFailed = Signal()
+    askDjEntryOpenFailed = Signal(str, str)
     questionConfirmed = Signal(str)
     currentReplyReady = Signal()
     pendingQuestionReady = Signal()
@@ -2220,7 +2220,13 @@ class SessionController(QObject):
                         if not entry_guard():
                             raise SessionError("context_changed")
                     sid, eid = value["session_id"], value["entry_id"]
-                    opened_entry(self.transport.open_entry(binding, sid, eid), sid, eid, now=self._clock.now())
+                    try:
+                        response = self.transport.open_entry(binding, sid, eid)
+                    except SessionError as exc:
+                        if entry_guard is not None and exc.category == "unavailable" and exc.code == "history_unavailable":
+                            result["withdrawn_ask_dj_entry"] = (sid, eid)
+                        raise
+                    opened_entry(response, sid, eid, now=self._clock.now())
                     if entry_guard is not None and not entry_guard():
                         raise SessionError("context_changed")
                     result["timeline"] = presented_history(history_page(self.transport.timeline(binding, sid, window="anchor", anchor_entry_id=eid), session_id=sid, now=self._clock.now()))
@@ -2399,7 +2405,7 @@ class SessionController(QObject):
             self.changed.emit()
             return
         if result.get("entry_guard") is not None and "error" in result:
-            self.askDjEntryOpenFailed.emit()
+            self.askDjEntryOpenFailed.emit(*result.get("withdrawn_ask_dj_entry", ("", "")))
         if result.get("archive_owner") and "error" not in result:
             owner = result["archive_owner"]
             if (self.backend.cfg.private_session or (self._bootstrap_current() and self._bootstrap_owner != owner)):
@@ -2651,7 +2657,7 @@ class SessionController(QObject):
             if anchor and any(row["entry_id"] == anchor for row in self._timeline.get("entries", [])):
                 self.entryOpened.emit()
             elif result.get("entry_guard") is not None and result["entry_guard"]():
-                self.askDjEntryOpenFailed.emit()
+                self.askDjEntryOpenFailed.emit("", "")
         self._reconcile_if_idle()
 
     def _reconcile_if_idle(self):

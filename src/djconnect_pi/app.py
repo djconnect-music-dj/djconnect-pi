@@ -315,6 +315,7 @@ class DJConnectBackend(QObject):
         self._playlist_items: list[dict[str, object]] = []
         self._ask_dj_messages: list[dict[str, object]] = []
         self._ask_dj_withdrawn_ids: set[str] = set()
+        self._ask_dj_withdrawn_entries: set[tuple[str, str]] = set()
         self._ask_dj_history_open = None
         self._ask_dj_history_revision = 0
         self._ask_dj_delivery_key = ""
@@ -695,10 +696,21 @@ class DJConnectBackend(QObject):
                             for match in message.get("historicalMatches", [])))
 
         if current() and not self._session_controller.open_ask_dj_entry(session_id, entry_id, current):
-            self._show_ask_dj_history_open_failed()
+            self._show_ask_dj_history_open_failed("", "")
 
-    @Slot()
-    def _show_ask_dj_history_open_failed(self):
+    @Slot(str, str)
+    def _show_ask_dj_history_open_failed(self, session_id, entry_id):
+        if session_id and entry_id:
+            reference = (session_id, entry_id)
+            self._ask_dj_withdrawn_entries.add(reference)
+            self._ask_dj_messages = [
+                {**message, "historicalMatches": [
+                    match for match in message["historicalMatches"]
+                    if (match["session_id"], match["entry_id"]) != reference
+                ]} if message.get("historicalMatches") else message
+                for message in self._ask_dj_messages
+            ]
+            self.askDjChanged.emit()
         self._show_toast(self.tr_key("ask_dj_saved_session_open_failed"), 3000, "askdj")
 
     @Slot(str, str, result=str)
@@ -4540,7 +4552,10 @@ class DJConnectBackend(QObject):
             for message in messages:
                 if message.get("role") == "assistant":
                     row = by_id.get(message.get("id"), {})
-                    message["historicalMatches"] = ask_dj_history_matches(row.get("historical_matches"), now=now)
+                    message["historicalMatches"] = [
+                        match for match in ask_dj_history_matches(row.get("historical_matches"), now=now)
+                        if (match["session_id"], match["entry_id"]) not in self._ask_dj_withdrawn_entries
+                    ]
         messages = [message for message in messages if message.get("id") not in self._ask_dj_withdrawn_ids]
         if messages:
             self._merge_ask_dj_messages(messages, limit=_int_value(data.get("history_limit"), 100))
@@ -4580,6 +4595,7 @@ class DJConnectBackend(QObject):
     def _clear_ask_dj_cache(self, *, reset_revisions: bool = True) -> None:
         self._ask_dj_messages = []
         self._ask_dj_withdrawn_ids.clear()
+        self._ask_dj_withdrawn_entries.clear()
         self._ask_dj_delivery_key = ""
         self._ask_dj_poll_error_count = 0
         self._ask_dj_poll_in_flight = False
