@@ -3744,7 +3744,7 @@ class DJConnectBackend(QObject):
 
     def _start_media_list_load(self, kind: str, worker: Callable[..., None], *, manual: bool = False) -> None:
         self._sync_config_from_disk()
-        if not self.paired or kind in self._media_loads_in_flight:
+        if not self.paired or self._version_mismatch_visible or kind in self._media_loads_in_flight:
             return
         self._media_loads_in_flight.add(kind)
         self._media_list_load_failures.discard(kind)

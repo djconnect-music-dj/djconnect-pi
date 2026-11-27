@@ -1020,6 +1020,7 @@ BrandWindow {
         property string heading: ""
         property string emptyText: ""
         property string loadErrorText: ""
+        property bool loadFailed: false
         property string searchLabel: ""
         property string refreshLabel: root.tr("refresh")
         property string iconName: "queue"
@@ -1035,7 +1036,9 @@ BrandWindow {
         readonly property bool compact: width < 900
         readonly property bool playbackAvailable: djconnect.demoMode || (djconnect.paired && djconnect.backendAvailable
             && djconnect.musicBackendAvailable && !djconnect.versionMismatchVisible)
-        readonly property bool refreshAvailable: playbackAvailable && !loading
+        readonly property bool canReloadForProfile: playbackAvailable && !loading
+        readonly property bool refreshAvailable: !loading && (playbackAvailable
+            || (loadFailed && djconnect.paired && !djconnect.versionMismatchVisible))
         readonly property bool trackQueue: playCommand === "play_context_at"
         readonly property string query: searchInput.text.trim()
         readonly property var matches: filterItems(items, query)
@@ -1044,7 +1047,7 @@ BrandWindow {
 
         function reloadForProfile() {
             if (!profileReloadPending || !visible || !root.active || root.screenBlanked
-                    || root.splashVisible || !refreshAvailable || djconnect.demoMode) return
+                    || root.splashVisible || !canReloadForProfile || djconnect.demoMode) return
             profileReloadPending = false
             profileReloadRequested()
         }
@@ -1052,7 +1055,7 @@ BrandWindow {
             profileReloadPending = visible && !djconnect.demoMode
             if (profileReloadPending) Qt.callLater(reloadForProfile)
         }
-        onRefreshAvailableChanged: if (refreshAvailable && profileReloadPending) Qt.callLater(reloadForProfile)
+        onCanReloadForProfileChanged: if (canReloadForProfile && profileReloadPending) Qt.callLater(reloadForProfile)
 
         function queueSubtitle(item) {
             var artist = (item.artist || item.subtitle || "").trim()
@@ -1450,14 +1453,22 @@ BrandWindow {
                     Text {
                         objectName: "mediaEmptyStateMessage"
                         text: panel.items.length > 0 ? root.tr("media_no_matches")
-                            : panel.loading ? root.tr("loading") : (panel.loadErrorText || panel.emptyText)
+                            : panel.loading ? root.tr("loading") : panel.loadFailed ? panel.loadErrorText : panel.emptyText
                         textFormat: Text.PlainText
-                        color: !panel.items.length && !panel.loading && panel.loadErrorText
+                        color: !panel.items.length && !panel.loading && panel.loadFailed
                             ? BrandTheme.colors.warning : BrandTheme.colors.muted
                         font.pixelSize: panel.compact ? 20 : 24
                         horizontalAlignment: Text.AlignHCenter
                         wrapMode: Text.Wrap
                         Layout.fillWidth: true
+                    }
+                    GlassButton {
+                        objectName: "mediaRetry"
+                        visible: !panel.items.length && panel.loadFailed && panel.refreshAvailable
+                        text: panel.refreshLabel
+                        iconName: "refresh"
+                        Layout.alignment: Qt.AlignHCenter
+                        onClicked: panel.refreshList()
                     }
                 }
             }
@@ -3215,7 +3226,8 @@ BrandWindow {
             objectName: "queuePanel"
             heading: root.playbackScreenTitle("queue")
             emptyText: root.tr("empty_queue")
-            loadErrorText: djconnect.queueLoadFailed ? root.tr("queue_update_failed") : ""
+            loadErrorText: root.tr("queue_update_failed")
+            loadFailed: djconnect.queueLoadFailed
             searchLabel: root.tr("media_search_queue")
             refreshLabel: root.tr("refresh_queue")
             playCommand: "play_context_at"
@@ -3235,7 +3247,8 @@ BrandWindow {
             objectName: "playlistsPanel"
             heading: root.playbackScreenTitle("playlists")
             emptyText: root.tr("empty_playlists")
-            loadErrorText: djconnect.playlistsLoadFailed ? root.tr("playlists_update_failed") : ""
+            loadErrorText: root.tr("playlists_update_failed")
+            loadFailed: djconnect.playlistsLoadFailed
             searchLabel: root.tr("media_search_playlists")
             refreshLabel: root.tr("refresh_playlists")
             iconName: "playlists"
