@@ -1665,6 +1665,13 @@ _KEYBOARD_TRANSLATIONS = {
     "music_dna_export_review": ("Save a JSON backup of your personal Music DNA profile.", "Sla een JSON-back-up van je persoonlijke Music DNA-profiel op.", "Speichere eine JSON-Sicherung deines persönlichen Music-DNA-Profils.", "Enregistrez une sauvegarde JSON de votre profil Music DNA personnel.", "Guarda una copia JSON de tu perfil personal de Music DNA."),
     "profile_export_choose_file": ("Choose where to save JSON", "Kies waar je het JSON-bestand opslaat", "Speicherort für JSON-Datei wählen", "Choisir où enregistrer le fichier JSON", "Elegir dónde guardar el archivo JSON"),
     "profile_export_saving": ("Saving JSON…", "JSON-bestand wordt opgeslagen…", "JSON-Datei wird gespeichert…", "Enregistrement du fichier JSON…", "Guardando el archivo JSON…"),
+    "profile_export_read_failed": (
+        "Could not retrieve the export from Home Assistant.",
+        "De export kon niet worden opgehaald uit Home Assistant.",
+        "Der Export konnte nicht aus Home Assistant abgerufen werden.",
+        "Impossible de récupérer l’export depuis Home Assistant.",
+        "No se pudo obtener la exportación de Home Assistant.",
+    ),
     "ask_dj_export_failed": ("Could not save Ask DJ history", "Ask DJ-geschiedenis kon niet worden opgeslagen", "Ask-DJ-Verlauf konnte nicht gespeichert werden", "Impossible d’enregistrer l’historique Ask DJ", "No se pudo guardar el historial de Ask DJ"),
     "music_dna_export": ("Export Music DNA", "Music DNA exporteren", "Music DNA exportieren", "Exporter Music DNA", "Exportar Music DNA"),
     "music_dna_export_saved": ("Music DNA saved", "Music DNA opgeslagen", "Music DNA gespeichert", "Music DNA enregistré", "Music DNA guardado"),

@@ -2799,10 +2799,10 @@ class DJConnectBackend(QObject):
                     and ticket == self._private_read_context()
                     and (not music_dna or (self._music_dna_enabled and self.cfg.music_dna_key == dna_key)))
 
-        saved = False
+        outcome = "failed"
 
         def export() -> None:
-            nonlocal saved
+            nonlocal outcome
             if not current():
                 return
             try:
@@ -2820,7 +2820,8 @@ class DJConnectBackend(QObject):
                 return
             except (DJConnectError, requests.RequestException):
                 if current():
-                    self._toastReady.emit(self.tr_key(prefix + "_failed"), 3500, context)
+                    outcome = "read_failed"
+                    self._toastReady.emit(self.tr_key("profile_export_read_failed"), 3500, context)
                 return
             if not current():
                 return
@@ -2829,15 +2830,16 @@ class DJConnectBackend(QObject):
             if target.open(QIODevice.OpenModeFlag.WriteOnly):
                 if (target.setPermissions(QSaveFile.Permission.ReadOwner | QSaveFile.Permission.WriteOwner)
                         and target.write(contents) == len(contents) and current()):
-                    saved = target.commit()
+                    if target.commit():
+                        outcome = "saved"
                 else:
                     target.cancelWriting()
             if current():
-                self._toastReady.emit(self.tr_key(prefix + ("_saved" if saved else "_failed")), 3500, context)
+                self._toastReady.emit(self.tr_key(prefix + "_" + outcome), 3500, context)
 
         def finish() -> None:
             set_busy(False)
-            self.profileExportProgress.emit(revision, music_dna, ("saved" if saved else "failed") if current() else "")
+            self.profileExportProgress.emit(revision, music_dna, outcome if current() else "")
 
         set_busy(True)
         self.profileExportProgress.emit(revision, music_dna, "saving")

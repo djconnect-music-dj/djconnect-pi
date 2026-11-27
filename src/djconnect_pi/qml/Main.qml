@@ -2422,9 +2422,10 @@ BrandWindow {
     component ProfileExportStatusLabel: Text {
         required property string status
         required property string keyPrefix
-        text: !status ? "" : root.tr(status === "saving" ? "profile_export_saving" : keyPrefix + "_" + status)
+        readonly property bool sharedStatus: status === "saving" || status === "read_failed"
+        text: !status ? "" : root.tr((sharedStatus ? "profile_export" : keyPrefix) + "_" + status)
         textFormat: Text.PlainText
-        color: status === "failed" ? BrandTheme.colors.warning : BrandTheme.colors.muted
+        color: status === "failed" || status === "read_failed" ? BrandTheme.colors.warning : BrandTheme.colors.muted
         visible: status.length > 0
         font.pixelSize: 17
         wrapMode: Text.WordWrap
