@@ -1519,6 +1519,11 @@ _HISTORY_SEARCH_TRANSLATIONS = {
     "session_duration_subminute": ("Less than 1 min", "Minder dan 1 min", "Unter 1 Min.", "Moins de 1 min", "Menos de 1 min"),
     "session_open_entry": ("Open contribution", "Open bijdrage", "Beitrag öffnen", "Ouvrir la contribution", "Abrir contribución"),
     "ask_dj_open_saved_session": ("Open session", "Open sessie", "Session öffnen", "Ouvrir la session", "Abrir sesión"),
+    "ask_dj_saved_session_open_failed": (
+        "Could not open this saved session.", "Deze opgeslagen sessie kon niet worden geopend.",
+        "Diese gespeicherte Session konnte nicht geöffnet werden.", "Impossible d’ouvrir cette session enregistrée.",
+        "No se pudo abrir esta sesión guardada.",
+    ),
     "ask_dj_back": ("Back to Ask DJ", "Terug naar Ask DJ", "Zurück zu Ask DJ", "Revenir à Ask DJ", "Volver a Ask DJ"),
 }
 for _key, _values in _HISTORY_SEARCH_TRANSLATIONS.items():

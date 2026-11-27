@@ -403,6 +403,7 @@ class DJConnectBackend(QObject):
         self._shared_settings.owner_context = self._session_controller.scope_context
         self._shared_owner_context = self._shared_settings.context()
         self._session_controller.ownerScopeChanged.connect(self._session_owner_changed)
+        self._session_controller.askDjEntryOpenFailed.connect(self._show_ask_dj_history_open_failed)
         self._control_volume_serial = 0
         self._playback_seek_epoch = 0
         self._playback_seek_gesture = None
@@ -692,8 +693,12 @@ class DJConnectBackend(QObject):
                             for message in self._ask_dj_messages if message.get("id") == message_id
                             for match in message.get("historicalMatches", [])))
 
-        if current():
-            self._session_controller.open_ask_dj_entry(session_id, entry_id, current)
+        if current() and not self._session_controller.open_ask_dj_entry(session_id, entry_id, current):
+            self._show_ask_dj_history_open_failed()
+
+    @Slot()
+    def _show_ask_dj_history_open_failed(self):
+        self._show_toast(self.tr_key("ask_dj_saved_session_open_failed"), 3000, "askdj")
 
     @Slot(str, str, result=str)
     def highlightAskDjMessage(self, body: str, query: str) -> str:

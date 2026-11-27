@@ -99,6 +99,7 @@ class SessionController(QObject):
     flowRowsChanged = Signal()
     newCurrentContribution = Signal()
     entryOpened = Signal()
+    askDjEntryOpenFailed = Signal()
     questionConfirmed = Signal(str)
     currentReplyReady = Signal()
     pendingQuestionReady = Signal()
@@ -1936,9 +1937,10 @@ class SessionController(QObject):
 
     def open_ask_dj_entry(self, session_id, entry_id, current):
         if self._interactive_read_or_write or not private_scope_allowed(self):
-            return
+            return False
         self._view_epoch += 1
         self._launch("open_entry", {"session_id": session_id, "entry_id": entry_id}, entry_guard=current)
+        return self._running_action == "open_entry"
 
     def _launch(self, action, value="", *, background=False, manual_refresh=False, playback_confirmation=False, entry_guard=None):
         if not self._foreground or (action == "refresh" and not self._view_active):
@@ -2396,6 +2398,8 @@ class SessionController(QObject):
         if history_action and result.get("view_epoch") != self._view_epoch:
             self.changed.emit()
             return
+        if result.get("entry_guard") is not None and "error" in result:
+            self.askDjEntryOpenFailed.emit()
         if result.get("archive_owner") and "error" not in result:
             owner = result["archive_owner"]
             if (self.backend.cfg.private_session or (self._bootstrap_current() and self._bootstrap_owner != owner)):
@@ -2643,7 +2647,11 @@ class SessionController(QObject):
             else:
                 self.timelineUpdated.emit(result.get("reading_anchor", self._timeline.get("selected_entry_id", "")))
         if result["action"] == "open_entry" and "error" not in result:
-            self.entryOpened.emit()
+            anchor = self._timeline.get("selected_entry_id")
+            if anchor and any(row["entry_id"] == anchor for row in self._timeline.get("entries", [])):
+                self.entryOpened.emit()
+            elif result.get("entry_guard") is not None and result["entry_guard"]():
+                self.askDjEntryOpenFailed.emit()
         self._reconcile_if_idle()
 
     def _reconcile_if_idle(self):
