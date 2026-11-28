@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 4.1.3
+
+- Keep the active DJ Session visible during refresh and show saved confirmations of session settings in Flow.
+
 ## 4.1.2
 
 - Bring DJ Session, playback and output controls, and Saved Sessions closer to the iPad portrait layout on both Pi profiles.
