@@ -1678,6 +1678,37 @@ def test_personal_scope_second_read_imports_only_existing_typed_flow(controller)
     assert owner.state["composer_available"]
 
 
+def test_personal_scope_polls_keep_accepted_settings_in_flow(controller):
+    owner, backend = controller
+    _personal_owner(owner, backend)
+    row = {"entry_id": "settings", "session_id": "active-server", "order": 1, "kind": "dj_moment",
+           "moment_type": "session", "text": "Your mood is now Chill.",
+           "archive_basis": "runtime_accepted_settings_v1", "historical_view_only": True,
+           "current_display_allowed": False, "occurred_at": "2026-11-27T10:00:00Z",
+           "retained_until": "2099-01-01T00:00:00Z"}
+    owner.transport.timeline = Mock(return_value={
+        "success": True, "schema_version": 2, "history_contract_version": 2,
+        "session": {"session_id": "active-server"}, "revision": "r", "entries": [row],
+    })
+    owner.refresh(); backend.jobs.pop()()
+    for _ in range(2):
+        owner.poll(); backend.jobs.pop()()
+        assert not owner.state["error"] and owner.state["session_id"] == "active-server"
+        retained, = owner.state["retained_flow"]
+        assert retained["text"] == row["text"] and retained["current_display_allowed"] is False
+
+    # Future or malformed retained content must never hide a confirmed Runtime.
+    row["archive_basis"] = "unknown_basis"
+    owner.poll(); backend.jobs.pop()()
+    assert not owner.state["error"] and owner.state["session_id"] == "active-server"
+    assert not owner.state["retained_flow"]
+
+    # Access and session-context errors must still withdraw the view.
+    owner.transport.timeline.side_effect = SessionError("denied")
+    owner.poll(); backend.jobs.pop()()
+    assert owner.state["error"] == "denied" and not owner.state["session_id"]
+
+
 def test_personal_scope_revocation_removes_private_views_and_late_binding(controller):
     from djconnect_pi.session_transport import private_scope_allowed
     owner, backend = controller
