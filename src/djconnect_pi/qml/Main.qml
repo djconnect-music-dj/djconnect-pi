@@ -215,14 +215,17 @@ BrandWindow {
     property bool suppressNextNowPanelTap: false
     property bool trackArtworkOpen: false
     property bool trackArtworkControlsOpen: false
+    property bool trackArtworkControlsEngaged: false
     property Item trackArtworkOpeningControl: null
     property string trackArtworkOpeningScope: ""
-    readonly property bool trackArtworkCanControl: trackArtworkOpen && sessionTrackArtwork
+    readonly property bool trackArtworkCanControl: trackArtworkOpen
         && trackArtworkViewOpen && !!sharedSessionScreen.state.playback_control.available
-    onTrackArtworkCanControlChanged: if (!trackArtworkCanControl) trackArtworkControlsOpen = false
-    onTrackArtworkControlsOpenChanged: {
-        if (!trackArtworkControlsOpen && sharedSessionScreen.owner)
-            sharedSessionScreen.owner.cancelPlaybackIntent()
+        && (sessionTrackArtwork || (!!djconnect.trackInsightPlaybackItemId
+            && djconnect.trackInsightPlaybackItemId === sharedSessionScreen.state.playback.item_id))
+    onTrackArtworkCanControlChanged: if (!trackArtworkCanControl) dismissTrackArtworkControls()
+    Connections {
+        target: sharedSessionScreen
+        function onPlaybackMenuScopeChanged() { root.dismissTrackArtworkControls() }
     }
     property bool sessionTrackArtwork: false
     readonly property bool trackArtworkViewOpen: sharedSessionScreen.liveViewOpen && !sharedSessionScreen.showForecast
@@ -231,6 +234,7 @@ BrandWindow {
     onOverlayTrackAvailableChanged: if (!overlayTrackAvailable) trackArtworkOpen = false
     onTrackArtworkOpenChanged: {
         if (trackArtworkOpen) return
+        dismissTrackArtworkControls()
         trackArtworkDismissTimer.stop()
         const source = trackArtworkOpeningControl
         const scope = trackArtworkOpeningScope
@@ -258,17 +262,27 @@ BrandWindow {
     function showTrackArtwork(fromSession, automatic) {
         if (!trackArtworkViewOpen || (automatic && trackArtworkOpen && !trackArtworkDismissTimer.running))
             return
+        dismissTrackArtworkControls()
         sessionTrackArtwork = fromSession
         trackArtworkOpen = true
-        trackArtworkControlsOpen = trackArtworkCanControl
-        if (automatic && !trackArtworkControlsOpen) trackArtworkDismissTimer.restart()
+        if (automatic) trackArtworkDismissTimer.restart()
         else trackArtworkDismissTimer.stop()
     }
-    function toggleTrackArtworkControls() {
+    function revealTrackArtworkControls() {
         if (!trackArtworkCanControl)
             return
         trackArtworkDismissTimer.stop()
-        trackArtworkControlsOpen = !trackArtworkControlsOpen
+        trackArtworkControlsEngaged = true
+        trackArtworkControlsOpen = true
+        trackArtworkControlsTimer.restart()
+    }
+    function dismissTrackArtworkControls() {
+        if (!trackArtworkControlsEngaged)
+            return
+        trackArtworkControlsEngaged = false
+        trackArtworkControlsTimer.stop()
+        trackArtworkControlsOpen = false
+        if (sharedSessionScreen.owner) sharedSessionScreen.owner.cancelPlaybackIntent()
     }
     function openTrackArtwork(source) {
         if (!trackArtworkViewOpen || !sharedSessionScreen.trackArtworkAvailable) return
@@ -279,7 +293,7 @@ BrandWindow {
     property double lastWakeDisplayAt: 0
     property int wakeDisplayDebounceMs: 800
     property int standardButtonRadius: 24
-    property bool screenBlanked: djconnect.screenTimeoutSeconds > 0 && !idleTimer.running && !root.forceScreenAwake && !vibeScapeLoader.active
+    property bool screenBlanked: djconnect.screenTimeoutSeconds > 0 && idleTimer.expired && !root.forceScreenAwake && !vibeScapeLoader.active
     property real brightnessOverlayOpacity: root.screenBlanked || root.forceBrightnessFull ? 0 : 1 - (djconnect.screenBrightnessPercent / 100.0)
     property int trVersion: djconnect.translationVersion
 
@@ -1527,10 +1541,16 @@ BrandWindow {
 
     Timer {
         id: idleTimer
+        // Restarting the timer briefly stops it during a normal touch.
+        property bool expired: false
         interval: Math.max(1000, djconnect.screenTimeoutSeconds * 1000)
         running: djconnect.screenTimeoutSeconds > 0
         repeat: false
-        onTriggered: root.hideTransientUi()
+        onRunningChanged: if (running) expired = false
+        onTriggered: {
+            expired = true
+            root.hideTransientUi()
+        }
     }
 
     Timer {
@@ -9437,6 +9457,11 @@ BrandWindow {
         interval: 5000
         onTriggered: root.trackArtworkOpen = false
     }
+    Timer {
+        id: trackArtworkControlsTimer
+        interval: 5000
+        onTriggered: root.trackArtworkControlsOpen = false
+    }
 
     Loader {
         anchors.fill: parent
@@ -9465,6 +9490,9 @@ BrandWindow {
                 function onTrackArtworkCanControlChanged() {
                     if (!root.trackArtworkCanControl) Qt.callLater(artworkOverlay.restoreControlFocus)
                 }
+                function onTrackArtworkControlsOpenChanged() {
+                    if (!root.trackArtworkControlsOpen) Qt.callLater(artworkOverlay.restoreControlFocus)
+                }
             }
             function activeControls() {
                 const playback = artworkTransportLoader.item
@@ -9483,7 +9511,7 @@ BrandWindow {
             Shortcut { sequence: "Shift+Tab"; onActivated: moveControlFocus(true) }
             Keys.onEscapePressed: {
                 if (root.trackArtworkControlsOpen) {
-                    root.toggleTrackArtworkControls()
+                    root.dismissTrackArtworkControls()
                     artworkControlsToggle.forceActiveFocus(Qt.PopupFocusReason)
                 } else {
                     root.trackArtworkOpen = false
@@ -9497,7 +9525,7 @@ BrandWindow {
             ModalBlocker {
                 onClicked: function(mouse) {
                     if (mouse.button === Qt.LeftButton && root.trackArtworkControlsOpen)
-                        root.toggleTrackArtworkControls()
+                        root.dismissTrackArtworkControls()
                 }
             }
 
@@ -9608,8 +9636,6 @@ BrandWindow {
                                 anchors.fill: parent
                                 enabled: root.trackArtworkCanControl
                                 Accessible.name: root.tr("session_playback_controls")
-                                Accessible.checkable: true
-                                Accessible.checked: root.trackArtworkControlsOpen
                                 contentItem: Item {}
                                 background: Rectangle {
                                     color: "transparent"
@@ -9617,7 +9643,7 @@ BrandWindow {
                                     border.width: artworkControlsToggle.visualFocus ? 2 : 0
                                     border.color: BrandTheme.colors.focus
                                 }
-                                onClicked: root.toggleTrackArtworkControls()
+                                onClicked: root.revealTrackArtworkControls()
                             }
                             Loader {
                                 id: artworkTransportLoader

@@ -5053,6 +5053,8 @@ def test_now_playing_seek_requires_the_same_observed_output(tmp_path: Path, repo
     backend._apply_playback(Playback(uri="fixture:track", duration_seconds=240, output_device_id="speaker-a"))
     backend._run = Mock()
     backend._refresh_worker = Mock()
+    notifications = []
+    backend._toastReady.connect(lambda *args: notifications.append(args))
     transport = backend.djSession.transport
     transport.playback_status = Mock(return_value={
         "music_backend": "spotify_direct", "music_backend_revision": 3,
@@ -5076,10 +5078,12 @@ def test_now_playing_seek_requires_the_same_observed_output(tmp_path: Path, repo
         else:
             transport.playback_adjustment.assert_called_once_with(transport.binding(), "seek_relative", 15000)
         backend._refresh_worker.assert_called_once()
+        assert not notifications
     else:
         transport.playback_adjustment.assert_not_called()
         transport.playback_seek_offset.assert_not_called()
         backend._refresh_worker.assert_not_called()
+        assert notifications == [(backend.tr_key("playback_seek_unconfirmed"), 3500, "connectivity")]
 
 
 @pytest.mark.parametrize("transition", ["none", "speaker", "profile", "item", "foreground", "fresh_speaker"])

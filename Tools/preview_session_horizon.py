@@ -15,6 +15,7 @@ from PySide6.QtCore import (
     QPointF,
     QSignalBlocker,
     Qt,
+    QtMsgType,
     QTimer,
     qInstallMessageHandler,
 )
@@ -108,7 +109,11 @@ def main():
     output = parser.parse_args().output
     output.mkdir(parents=True, exist_ok=True)
     warnings = []
-    qInstallMessageHandler(lambda kind, context, message: warnings.append(message))
+    def record_warning(kind, context, message):
+        if kind in (QtMsgType.QtWarningMsg, QtMsgType.QtCriticalMsg, QtMsgType.QtFatalMsg):
+            warnings.append(message)
+
+    qInstallMessageHandler(record_warning)
     QQuickStyle.setStyle("Basic")
     app = QGuiApplication([])
     apply_palette(app)
@@ -161,8 +166,10 @@ def main():
                 assert one(window.contentItem(), "navIcon-session").property("iconColor").name() == "#ffffff"
                 screen = window.findChild(QObject, "djSessionScreen")
                 poll_timer = screen.findChild(QObject, "sessionRuntimePollTimer")
-                assert poll_timer is not None
-                poll_timer.blockSignals(True)  # The fixture completes only explicitly driven reads.
+                history_timer = screen.findChild(QObject, "sessionHistoryRevalidationTimer")
+                assert poll_timer is not None and history_timer is not None
+                poll_timer.blockSignals(True)
+                history_timer.blockSignals(True)  # The fixture completes only explicitly driven reads.
                 mode_strip = one(screen, "sessionModeStrip")
                 horizon = one(screen, "sessionForecastMode")
                 flow = one(screen, "sessionFlowMode")
@@ -859,7 +866,6 @@ def main():
                 owner.changed.emit()
                 owner._timeline = {"session": saved, "revision": "fixture-saved", "entries": []}
                 owner.changed.emit()
-                screen.findChild(QObject, "sessionHistoryRevalidationTimer").stop()
                 show_search = QQmlExpression(engine.rootContext(), screen, "showSearch()")
                 show_search.evaluate()
                 assert not show_search.hasError()

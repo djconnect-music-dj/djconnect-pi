@@ -405,6 +405,7 @@ Item {
         if (outputsPanel) outputsPanel.close()
     }
     property bool forecastMode: false
+    property real flowOffsetBeforeForecast: 0
     readonly property bool showForecast: !historical && state.forecast_supported && forecastMode
     readonly property bool flowSearchBlocked: showForecast || vibeScapeActive
     onFlowSearchBlockedChanged: if (flowSearchBlocked && searchPanel && searchPanel.visible) searchPanel.close()
@@ -474,6 +475,7 @@ Item {
     }
     onComposerContextChanged: {
         clearFlowReturn()
+        flowOffsetBeforeForecast = 0
         if (forecastScroll && forecastScroll.contentItem)
             forecastScroll.contentItem.contentY = forecastScroll.contentItem.originY
         forecastMode = false
@@ -1461,8 +1463,25 @@ Item {
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.top: toolbar.bottom
         anchors.topMargin: 10
-        onFlowRequested: screen.forecastMode = false
-        onForecastRequested: screen.forecastMode = true
+        onFlowRequested: {
+            const restore = screen.showForecast
+            const context = screen.composerContext
+            const offset = screen.flowOffsetBeforeForecast
+            screen.forecastMode = false
+            if (!restore) return
+            Qt.callLater(function() {
+                if (!screen.liveViewOpen || screen.showForecast || screen.composerContext !== context) return
+                const flick = historyScroll.contentItem
+                flick.contentY = flick.originY + Math.max(0, Math.min(offset, flick.contentHeight - flick.height))
+            })
+        }
+        onForecastRequested: {
+            if (screen.showForecast) return
+            const flick = historyScroll.contentItem
+            flick.cancelFlick()
+            screen.flowOffsetBeforeForecast = flick.contentY - flick.originY
+            screen.forecastMode = true
+        }
         onVibeScapeRequested: screen.openVibeScape(modeSwitch.mapToItem(null, 0, 0).y)
     }
     BusyIndicator {
@@ -1673,6 +1692,11 @@ Item {
         clip: true; contentWidth: availableWidth
         contentHeight: historyContent.implicitHeight + (screen.historical ? 0 : dockClearance)
         ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+        Binding {
+            target: historyScroll.contentItem
+            property: "flickableDirection"
+            value: Flickable.VerticalFlick
+        }
         Timer {
             interval: 120
             running: historyScroll.timelineAutoPageAllowed || (historyScroll.archiveAutoPageAllowed
@@ -2760,10 +2784,11 @@ Item {
         property bool compactMetric: false
         readonly property string valueText: {
             if (modelData.coverage === "withdrawn") return screen.tr("session_summary_withdrawn")
-            if (modelData.value === null) return screen.tr("session_summary_unknown")
-            if (typeof modelData.value === "string")
-                return screen.tr(modelData.value === "mixed" ? "session_summary_mixed" : "mood_" + modelData.value)
-            const count = Number(modelData.value).toLocaleString(Qt.locale(screen.backend.language), "f", 0)
+            const value = modelData.value
+            if (typeof value === "string")
+                return screen.tr(value === "mixed" ? "session_summary_mixed" : "mood_" + value)
+            if (!Number.isFinite(value)) return screen.tr("session_summary_unknown")
+            const count = value.toLocaleString(Qt.locale(screen.backend.language), "f", 0)
             return modelData.coverage === "partial" ? count + " · " + screen.tr("session_summary_partial") : count
         }
         text: screen.tr(modelData.label) + ": " + valueText

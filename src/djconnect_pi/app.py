@@ -2233,6 +2233,10 @@ class DJConnectBackend(QObject):
             return (self._session_controller._foreground and epoch == self._playback_seek_epoch
                     and context == self._playback_seek_context(self.playback))
 
+        def report_unconfirmed() -> None:
+            if current():
+                self._toastReady.emit(self.tr_key("playback_seek_unconfirmed"), 3500, "connectivity")
+
         def worker() -> None:
             if not current():
                 return
@@ -2249,6 +2253,7 @@ class DJConnectBackend(QObject):
                         or not isinstance(observed, dict) or observed.get("has_playback") is not True or observed.get("uri") != uri
                         or not isinstance(device, dict) or device.get("active") is not True
                         or device.get("is_restricted") is not False or device.get("id") != output):
+                    report_unconfirmed()
                     return
                 if target_seconds is None:
                     transport.playback_adjustment(binding, "seek_relative", offset_ms)
@@ -2256,12 +2261,14 @@ class DJConnectBackend(QObject):
                     progress = observed.get("progress_ms")
                     duration = observed.get("duration_ms")
                     if type(progress) is not int or type(duration) is not int or not 0 <= progress <= duration or duration <= 0:
+                        report_unconfirmed()
                         return
                     delta = max(0, min(duration, target_seconds * 1000)) - progress
                     if abs(delta) < 500:
                         return
                     transport.playback_seek_offset(binding, delta)
             except SessionError:
+                report_unconfirmed()
                 return
             if current():
                 self._refresh_worker()

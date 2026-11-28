@@ -637,7 +637,7 @@ def test_qml_screen_blanking_wakes_on_tap() -> None:
     assert "property bool suppressNextNowPanelTap: false" in main_qml
     assert "property double lastWakeDisplayAt: 0" in main_qml
     assert "property int wakeDisplayDebounceMs: 800" in main_qml
-    assert "property bool screenBlanked: djconnect.screenTimeoutSeconds > 0 && !idleTimer.running && !root.forceScreenAwake" in main_qml
+    assert "property bool screenBlanked: djconnect.screenTimeoutSeconds > 0 && idleTimer.expired && !root.forceScreenAwake" in main_qml
     assert "root.screenBlanked || root.forceBrightnessFull" in main_qml
     assert "id: forcedWakeTimer" in main_qml
     assert "returnToNowTimer" not in main_qml
@@ -885,6 +885,20 @@ def test_qml_flow_delete_swipe_checks_direction_at_release() -> None:
     for width in (720, 1200):
         result = subprocess.run(
             [sys.executable, str(probe), str(width)],
+            env={**os.environ, "QT_QPA_PLATFORM": "offscreen", "QT_QUICK_BACKEND": "software"},
+            text=True,
+            capture_output=True,
+            timeout=15,
+            check=False,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_qml_game_dpad_keeps_playing_when_activity_restarts_timeout(tmp_path: Path) -> None:
+    probe = Path(__file__).parent / "probes/game_dpad_readback.py"
+    for width in (720, 1200):
+        result = subprocess.run(
+            [sys.executable, str(probe), str(width), str(tmp_path / f"game-{width}.json")],
             env={**os.environ, "QT_QPA_PLATFORM": "offscreen", "QT_QUICK_BACKEND": "software"},
             text=True,
             capture_output=True,
