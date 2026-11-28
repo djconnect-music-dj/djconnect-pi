@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 4.1.2
+
+- Bring DJ Session, playback and output controls, and Saved Sessions closer to the iPad portrait layout on both Pi profiles.
+- Limit inline track artwork to half the available width and redraw the refresh icon.
+- Improve Ask DJ draft recovery, Track Insight export, Discover, and Music DNA.
+- Align Settings, profile import and export, and diagnostic log controls.
+
 ## 4.1.1
 
 - Skip internal evidence records when selecting beta app updates.
