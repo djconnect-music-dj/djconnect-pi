@@ -2271,6 +2271,13 @@ _PLAYBACK_CONTROL_TRANSLATIONS = {
     "track_artwork": ("Track artwork", "Trackhoes", "Titelcover", "Pochette du titre", "Portada de la pista"),
     "session_playback_controls": ("Playback controls", "Afspeelbediening", "Wiedergabesteuerung", "Commandes de lecture", "Controles de reproducción"),
     "session_playback_position": ("Playback position", "Afspeelpositie", "Wiedergabeposition", "Position de lecture", "Posición de reproducción"),
+    "playback_seek_unconfirmed": (
+        "Could not confirm the new playback position.",
+        "De nieuwe afspeelpositie is niet bevestigd.",
+        "Die neue Wiedergabeposition konnte nicht bestätigt werden.",
+        "La nouvelle position de lecture n’a pas pu être confirmée.",
+        "No se pudo confirmar la nueva posición de reproducción.",
+    ),
     "session_playback_previous_track": ("Previous track", "Vorig nummer", "Vorheriger Titel", "Titre précédent", "Pista anterior"),
     "session_playback_next_track": ("Next track", "Volgend nummer", "Nächster Titel", "Titre suivant", "Pista siguiente"),
     "session_playback_command_sending": (

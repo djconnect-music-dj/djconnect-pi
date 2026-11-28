@@ -63,6 +63,39 @@ def main():
         def capture(name):
             QTest.qWait(120);target=output/f'{name}-{width}x{height}.png'
             assert window.grabWindow().save(str(target));captures.append(target.name)
+        archive_header = json.loads((ROOT/'tests/fixtures/session_core/retention-v2-touch.json').read_text())['tail_window']['session']
+        archive_header.update(lifecycle_status='INTERRUPTED', read_only=True, _history_deadline=4_000_000_000)
+        summary = archive_header['summary']
+        summary['state'] = 'final'
+        for name in ('tracks_observed', 'moments_published', 'mood'):
+            summary[name]['state'] = 'final'
+        owner._caps = {
+            'capabilities': {**caps['capabilities'], 'session_history_summary': True},
+            'contract_versions': {**caps['contract_versions'], 'session_history_summary': 1},
+        }
+        owner._archive_summary_binding = owner.transport.binding()
+        owner._sessions = [archive_header]
+        owner._history_loaded = True
+        window.setProperty('activeScreen', 'history')
+        for coverage, value, translation in (
+            ('unknown', None, 'session_summary_unknown'), ('partial', None, 'session_summary_unknown'),
+            ('withdrawn', None, 'session_summary_withdrawn'), ('complete', 'chill', 'mood_chill'),
+        ):
+            summary['mood'].update(coverage=coverage, value=value)
+            owner.changed.emit()
+            QTest.qWait(80)
+            rows = window.findChild(QObject, 'sessionArchiveRows')
+            expression = QQmlExpression(engine.rootContext(), rows,
+                                        'itemAt(0).contentItem.children[1].children.find(child => '
+                                        'child.objectName === "sessionArchiveSummary").itemAt(2).valueText')
+            actual, _ = expression.evaluate()
+            assert not expression.hasError() and actual == backend.t(translation), (width, coverage, actual, expression.error())
+        window.setProperty('activeScreen', 'session')
+        owner.invalidate()
+        owner._session = deepcopy(active)
+        owner._caps = deepcopy(caps)
+        owner._loaded = True
+        owner.changed.emit()
         for language in ['en','nl','de','fr','es']:
             settle();backend.setLanguage(language);backend._toast_visible=False;backend.toastChanged.emit();settle()
             for origin in ['current','archive']:

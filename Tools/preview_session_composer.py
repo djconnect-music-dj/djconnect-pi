@@ -106,9 +106,9 @@ def main():
             assert window.grabWindow().save(str(target))
             captures.append(target.name)
         capture('composer-dock')
-        if owner.busy: backend._executor.submit.call_args.args[0]()
+        if owner.busy or owner.refreshing: backend._executor.submit.call_args.args[0]()
         QMetaObject.invokeMethod(window.findChild(QObject,'sessionRuntimePollTimer'),'triggered')
-        assert owner.busy
+        assert owner.refreshing
         backend._executor.submit.call_args.args[0]()
         capture('runtime-poll-explicit-owner-read')
         panel=window.findChild(QObject,'sessionComposerPanel')
@@ -337,7 +337,17 @@ def main():
         saved=screen.property('flowReturn').toVariant()
         assert saved and saved['kind']=='conversation' and set(saved)=={'session','profile','kind','id','offset'}
         back_to_flow=window.findChild(QObject,'sessionHistoryBack')
-        QMetaObject.invokeMethod(back_to_flow,'clicked');QTest.qWait(100)
+        def wait_for_flow_reading():
+            settled = QQmlExpression(engine.rootContext(), screen, '!flowReturn')
+            for _ in range(16):
+                if window.property('activeScreen') == 'session' and settled.evaluate()[0] is True:
+                    return
+                QTest.qWait(32)
+            raise AssertionError('Flow reading position did not settle')
+        def return_to_flow():
+            assert QMetaObject.invokeMethod(back_to_flow, 'clicked')
+            wait_for_flow_reading()
+        return_to_flow()
         assert window.property('activeScreen')=='session'
         QMetaObject.invokeMethod(screen,'rememberFlow')
         restored=screen.property('flowReturn').toVariant()
@@ -350,7 +360,7 @@ def main():
         kept_flow=owner._retained_flow
         owner._conversation=[row for row in kept if row['entry_id']!=saved['id']]
         owner._retained_flow=[row for row in kept_flow if row['entry_id']!=saved['id']];owner.changed.emit()
-        QMetaObject.invokeMethod(back_to_flow,'clicked');QTest.qWait(100)
+        return_to_flow()
         assert abs(flick.property('contentY'))<1
         capture('flow-return-withdrawn-entry-top')
         owner._conversation=kept;owner._retained_flow=kept_flow;owner.changed.emit();QTest.qWait(80)
@@ -364,7 +374,7 @@ def main():
         touch.move(0,QPoint(width//2,360),window).commit();QTest.qWait(80)
         touch.release(0,QPoint(width//2,360),window).commit();QTest.qWait(400)
         assert screen.property('flowReturn').toVariant()==history_saved
-        QMetaObject.invokeMethod(back_to_flow,'clicked');QTest.qWait(100)
+        return_to_flow()
         QMetaObject.invokeMethod(screen,'rememberFlow')
         after_history_drag=screen.property('flowReturn').toVariant()
         assert after_history_drag['id']==history_saved['id'] and abs(after_history_drag['offset']-history_saved['offset'])<1
@@ -612,14 +622,14 @@ def main():
         assert set(reply_reading)=={'session','profile','kind','id','offset'}
         window.setProperty('activeScreen','session-history');QTest.qWait(80)
         flick.setProperty('contentY',0)
-        window.setProperty('activeScreen','session');QTest.qWait(120)
+        window.setProperty('activeScreen','session');wait_for_flow_reading()
         assert abs(reply_card.mapToItem(flick,0,0).y()-reply_y)<2, (width, reply_y, reply_card.mapToItem(flick,0,0).y(), flick.property('contentY'), flick.property('contentHeight'), screen.property('flowReturn').toVariant())
         capture('current-reply-return-same-identity-and-pixel')
         QMetaObject.invokeMethod(screen,'rememberFlow')
         window.setProperty('activeScreen','session-history');QTest.qWait(80)
         # A withdrawn reply must not be restored from position metadata.
         owner._current_reply={};owner._current_reply_binding=None;owner.changed.emit()
-        window.setProperty('activeScreen','session');QTest.qWait(120)
+        window.setProperty('activeScreen','session');wait_for_flow_reading()
         assert not owner.state['current_reply'] and flick.property('contentY')<1
         assert not reply_card.property('visible')
         assert not window.findChild(QObject,'sessionCurrentQuestion').property('visible')
@@ -699,7 +709,10 @@ def main():
             QMetaObject.invokeMethod(window.findChild(QObject,'sessionFlowMode'),'clicked')
             assert not screen.property('showForecast') and screen.property('draft')=='Synthetic unsent draft'
             QTest.qWait(80)
-            assert abs(flick.property('contentY')-flow_position)<1
+            assert abs(flick.property('contentY')-flow_position)<1, (
+                width, language, flow_position, flick.property('contentY'),
+                flick.property('contentHeight'), flick.property('height'),
+            )
             assert field.property('text')=='Synthetic unsent draft'
         QMetaObject.invokeMethod(forecast_button,'clicked')
         owner._clock=ExpiryClock(lambda:stamp+120,lambda:0)
@@ -787,7 +800,8 @@ def main():
         capture('search-revalidated-withdrawal-position')
         # Actual timer callback waits for a busy read; closing cancels before query dispatch.
         complete_navigation()
-        owner.refresh();held_search_control=backend._executor.submit.call_args.args[0]
+        owner._launch('refresh');held_search_control=backend._executor.submit.call_args.args[0]
+        assert owner.busy
         search_tick=window.findChild(QObject,'sessionSearchRevalidationTimer')
         QMetaObject.invokeMethod(search_tick,'triggered');QTest.qWait(30)
         assert screen.property('searchRefreshPending')
@@ -921,11 +935,20 @@ def main():
             restored=screen.property('archiveReturn').toVariant()
             assert restored['id']==saved['id'] and abs(restored['offset']-saved['offset'])<2,(saved,restored)
             capture('archive-fresh-pages-reading-preserved-'+language)
-            for payload in pages:payload['sessions']=[r for r in payload['sessions'] if r['session_id']!=restored['id']]
-            QMetaObject.invokeMethod(screen,'refreshArchiveList');complete_navigation()
-            assert all(r['session_id']!=restored['id'] for r in owner.state['sessions']) and flick.property('contentY')<1
+            for payload in pages:
+                payload['sessions'] = [row for row in payload['sessions'] if row['session_id'] != restored['id']]
+                payload['revision'] = 'synthetic-owner-r3'
+            before = owner.transport.history.call_count
+            assert QMetaObject.invokeMethod(window.findChild(QObject, 'sessionHistoryRevalidationTimer'), 'triggered')
+            complete_navigation()
+            assert owner.transport.history.call_count == before + 5
+            sessions = owner.state['sessions']
+            assert len(sessions) == 98 and all(row['session_id'] != restored['id'] for row in sessions)
+            assert abs(flick.property('contentY') - flick.property('originY')) < 1
             capture('archive-withdrawn-reading-anchor-top-'+language)
-        owner.refresh();held_archive_read=backend._executor.submit.call_args.args[0]
+        owner.openSaved(owner.state['sessions'][0]['session_id'])
+        assert owner.busy
+        held_archive_read=backend._executor.submit.call_args.args[0]
         before=owner.transport.history.call_count
         QMetaObject.invokeMethod(window.findChild(QObject,'sessionHistoryRevalidationTimer'),'triggered');QTest.qWait(60)
         assert screen.property('archiveIntent').toVariant() and owner.transport.history.call_count==before
@@ -944,7 +967,7 @@ def main():
             owner._clock=ExpiryClock(lambda:header_now,lambda:elapsed[0])
             ended=datetime.fromtimestamp(header_now-86400+5,UTC).isoformat()
             owner.transport.history=Mock(return_value={'success':True,'schema_version':2,'history_contract_version':2,
-                'retention_days':1,'retention_revision':1,'revision':'synthetic-header-revision','next_cursor':'synthetic-next',
+                'retention_days':1,'retention_revision':1,'revision':'synthetic-header-revision','next_cursor':None,
                 'sessions':[{'session_id':archive_sid,'revision':'synthetic-header-r1','lifecycle_status':'ENDED',
                     'created_at':ended,'started_at':ended,'ended_at':ended,'interrupted_at':''}]})
             window.setProperty('activeScreen','history');owner.closeSaved();complete_navigation()
@@ -1062,7 +1085,8 @@ def main():
 
             refresh_flow(playing)
             assert not waiting.property('visible')
-            flick.setProperty('contentY', min(420, flick.property('contentHeight') - flick.height() - 100))
+            below_header = max(420, jump.property('currentHeaderBottom') + 8)
+            flick.setProperty('contentY', min(below_header, flick.property('contentHeight') - flick.height()))
             QTest.qWait(40)
             assert jump.property('visible')
             QMetaObject.invokeMethod(screen, 'rememberFlow')

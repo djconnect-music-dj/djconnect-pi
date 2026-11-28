@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 4.1.4
+
+- Keep games active while using the directional controls.
+- Open fullscreen track artwork with playback controls hidden and show them for five seconds on tap.
+- Preserve the Flow scroll position when returning from Horizon and improve the session composer layout.
+- Give feedback when a change to the playback position cannot be confirmed.
+
 ## 4.1.3
 
 - Keep the active DJ Session visible during refresh and show saved confirmations of session settings in Flow.

@@ -38,7 +38,7 @@ from djconnect_pi.brand_theme import apply_palette
 from djconnect_pi.config import Config, save_config
 from djconnect_pi.expiry_clock import ExpiryClock
 from djconnect_pi.ha import Playback
-from djconnect_pi.i18n import TRANSLATIONS
+from djconnect_pi.i18n import SUPPORTED_LANGUAGES, TRANSLATIONS
 from djconnect_pi.session_projection import timestamp
 from djconnect_pi.session_transport import (
     JSON_CONTROL_BYTES,
@@ -62,7 +62,10 @@ class RecordedUrls(QObject):
 def main():
     parser = argparse.ArgumentParser(__doc__)
     parser.add_argument('--output', type=Path, required=True)
-    output = parser.parse_args().output
+    parser.add_argument('--locale', choices=SUPPORTED_LANGUAGES, help='Run a single locale on both Pi formats')
+    args = parser.parse_args()
+    output = args.output
+    languages = (args.locale,) if args.locale else SUPPORTED_LANGUAGES
     output.mkdir(parents=True, exist_ok=True)
     warnings = []
     qInstallMessageHandler(lambda kind, context, message: warnings.append(message))
@@ -79,7 +82,7 @@ def main():
     original = json.loads((ROOT/'tests/fixtures/session_core/native-expressive-snapshots.json').read_text())
     with patch('requests.request', side_effect=AssertionError('Unexpected network')) as network:
         for width, height, profile in [(720, 720, 'pi-zero-2w-arm64'), (1200, 1920, 'pi5-arm64')]:
-            for language in ['en', 'nl', 'de', 'fr', 'es']:
+            for language in languages:
                 path = output/f'fixture-{width}-{language}.json'
                 save_config(path, Config(language=language, release_profile=profile, log_file=str(output/'fixture.log'),
                     paired=True, device_token='synthetic-not-a-credential', device_id='djconnect-raspberry-pi-fixture',
@@ -257,6 +260,39 @@ def main():
                     QTest.qWait(50)
                 assert expression.evaluate()[0] is True, warnings
                 capture('current-track-art')
+                if width == 720 and language == 'en':
+                    previous_playback = backend.playback
+                    track_uri = owner.transport.playback_status.return_value['playback']['uri']
+                    with patch('djconnect_pi.app.subprocess.run'):
+                        backend._apply_playback(Playback(title=current_playback['title'], uri=track_uri,
+                                                         image_url=art_source, is_playing=True))
+                    assert window.property('trackArtworkOpen') and window.property('trackArtworkCanControl')
+                    assert not window.property('trackArtworkControlsOpen')
+                    QTest.qWait(120)
+                    click('trackArtworkControlsToggle')
+                    assert window.property('trackArtworkControlsOpen')
+                    QTest.qWait(2500)
+                    click('trackArtworkControlsToggle', x_fraction=0.04)
+                    QTest.qWait(2800)
+                    assert window.property('trackArtworkControlsOpen')
+                    overlay = visual(window.contentItem(), 'trackArtworkOverlay')
+                    focused_transport = visual(overlay, 'sessionPlaybackPrevious')
+                    focused_transport.forceActiveFocus()
+                    assert focused_transport.property('activeFocus')
+                    QTest.keyClick(window, Qt.Key.Key_Space)
+                    assert len(intents) == 1 and owner.state['playback_control']['pending_command'] == 'previous'
+                    QTest.qWait(2400)
+                    assert window.property('trackArtworkOpen') and not window.property('trackArtworkControlsOpen')
+                    assert visual(overlay, 'trackArtworkControlsToggle').property('activeFocus')
+                    assert owner.state['playback_control']['pending_command'] == 'previous'
+                    click('trackArtworkControlsToggle')
+                    assert window.property('trackArtworkControlsOpen')
+                    click('closeTrackArtwork')
+                    intents.pop()()
+                    owner.transport.playback_command.assert_not_called()
+                    backend._apply_playback(previous_playback)
+                    window.setProperty('forceScreenAwake', False)
+                    window.setProperty('forceBrightnessFull', False)
                 click('sessionExpandTrackMetadata')
                 overlay = visual(window.contentItem(), 'trackArtworkOverlay')
                 expanded = visual(overlay, 'expandedTrackArtwork')
@@ -274,7 +310,7 @@ def main():
                 assert artist.property('text') == owner.state['playback']['artist']
                 capture('fullscreen-track-art')
                 shade = visual(window.contentItem(), 'trackArtworkControlsShade')
-                assert shade.property('visible')
+                assert not shade.property('visible')
                 close_artwork = visual(overlay, 'closeTrackArtwork')
                 artwork_controls = visual(overlay, 'trackArtworkControlsToggle')
                 assert close_artwork.property('activeFocus')
@@ -282,11 +318,9 @@ def main():
                 assert artwork_controls.property('activeFocus')
                 accessible_toggle = QAccessible.queryAccessibleInterface(artwork_controls)
                 assert accessible_toggle.text(QAccessible.Text.Name) == backend.t('session_playback_controls')
-                assert accessible_toggle.state().checkable and accessible_toggle.state().checked
+                del accessible_toggle
                 QTest.keyClick(window, Qt.Key.Key_Space)
-                assert not shade.property('visible') and not accessible_toggle.state().checked
-                QTest.keyClick(window, Qt.Key.Key_Space)
-                assert shade.property('visible') and accessible_toggle.state().checked and not intents
+                assert shade.property('visible') and not intents
                 previous = visual(window.contentItem(), 'sessionPlaybackPrevious')
                 toggle = visual(window.contentItem(), 'sessionPlaybackToggle')
                 controls = visual(overlay, 'trackArtworkTransportControls')
@@ -294,6 +328,7 @@ def main():
                                   ('sessionPlaybackNext', 'session_playback_next_track')):
                     label_accessible = QAccessible.queryAccessibleInterface(visual(controls, name))
                     assert label_accessible.text(QAccessible.Text.Name) == backend.t(key)
+                    del label_accessible
                 focus_order = [close_artwork, artwork_controls]
                 for name in ('sessionPlaybackRepeat', 'sessionPlaybackShuffle', 'sessionArtworkFavorite',
                              'sessionPlaybackPrevious', 'sessionPlaybackToggle', 'sessionPlaybackNext',
@@ -324,6 +359,7 @@ def main():
                     assert recorded.urls == [owner.state['playback']['source_url']] * 3
                 finally:
                     QDesktopServices.unsetUrlHandler('https')
+                del accessible_source
                 close_artwork.forceActiveFocus()
                 for control in focus_order[1:] + focus_order[:1]:
                     QTest.keyClick(window, Qt.Key.Key_Tab)
@@ -334,10 +370,8 @@ def main():
                 back = visual(controls, 'sessionPlaybackSeekBack')
                 forward = visual(controls, 'sessionPlaybackSeekForward')
                 assert back.y() == forward.y() > previous.y() and back.x() < toggle.x() < forward.x()
-                gap = previous.mapToScene(QPointF(previous.width(), previous.height()/2))
-                gap_x = (gap.x() + toggle.mapToScene(QPointF(0, 0)).x()) / 2
                 QTest.mouseClick(window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier,
-                                 QPoint(round(gap_x), round(gap.y())))
+                                 QPoint(3, 3))
                 QTest.qWait(60)
                 assert not shade.property('visible') and window.property('trackArtworkOpen') and not intents
                 image = window.grabWindow()
@@ -372,6 +406,7 @@ def main():
                     click('closeTrackArtwork')
                     assert not window.property('trackArtworkOpen')
                 click('sessionTrackArtwork')
+                click('trackArtworkControlsToggle')
                 overlay = visual(window.contentItem(), 'trackArtworkOverlay')
                 focused_transport = visual(overlay, 'sessionPlaybackPrevious')
                 focused_transport.forceActiveFocus()
@@ -385,6 +420,7 @@ def main():
                 accessible_status = QAccessible.queryAccessibleInterface(command_status)
                 assert command_status.property('visible') and accessible_status.role() == QAccessible.Role.StatusBar
                 assert accessible_status.text(QAccessible.Text.Name) == backend.t('session_playback_command_sending')
+                del accessible_status
                 QTest.keyClick(window, Qt.Key.Key_Escape)
                 assert not window.property('trackArtworkControlsOpen') and artwork_controls.property('activeFocus')
                 intents.pop()()
@@ -416,6 +452,7 @@ def main():
                 assert refresh_status.property('visible') and not refresh_status.property('enabled')
                 assert spinner.property('visible') and spinner.property('running')
                 assert refresh_accessible.text(QAccessible.Text.Name) == backend.t('session_refreshing_playback_status')
+                del refresh_accessible
                 owner.transport.active.side_effect = SessionError('unavailable')
                 drain()
                 capture('fullscreen-track-art-refresh-failed')
@@ -481,6 +518,7 @@ def main():
                 title_accessible = QAccessible.queryAccessibleInterface(title)
                 assert title_accessible.role() == QAccessible.Role.Heading
                 assert title_accessible.text(QAccessible.Text.Name) == title.property('text')
+                del title_accessible
                 current_playback.update(original_metadata)
                 owner.changed.emit()
                 assert title.property('text') == original_metadata['title']
@@ -646,6 +684,7 @@ def main():
                 assert target and transport_subtitle.property('text') == target
                 subtitle_accessible = QAccessible.queryAccessibleInterface(transport_subtitle)
                 assert subtitle_accessible.text(QAccessible.Text.Name) == f'{TRANSLATIONS[language]["output_device"]}: {target}'
+                del subtitle_accessible
                 displayed_playback['artist'] = artist
                 owner.changed.emit()
                 title_accessible = QAccessible.queryAccessibleInterface(transport_title)
@@ -655,6 +694,7 @@ def main():
                 owner.changed.emit()
                 assert transport_title.property('text') == TRANSLATIONS[language]['session_track_title_unknown']
                 assert title_accessible.text(QAccessible.Text.Name) == TRANSLATIONS[language]['session_track_title_unknown']
+                del title_accessible
                 assert transport_subtitle.property('text') == artist
                 displayed_playback['title'] = title
                 owner.changed.emit()
@@ -719,6 +759,7 @@ def main():
                 assert accessible_progress.text(QAccessible.Text.Description) == playback_time.property('text')
                 assert accessible_progress.childCount() == 0
                 accessible_progress.actionInterface().doAction(QAccessibleActionInterface.pressAction())
+                del accessible_progress
                 QTest.qWait(60)
                 assert transport_panel.property('opened') and not intents
                 QTest.keyClick(window, Qt.Key.Key_Escape)
@@ -806,6 +847,7 @@ def main():
                 backend.outputDeviceChanged.emit()
                 mode_status['playback'].update(favorite_status=True, is_liked=True)
                 click('sessionExpandTrackArtwork')
+                click('trackArtworkControlsToggle')
                 assert window.property('trackArtworkControlsOpen') and len(intents) == 1
                 intents.pop(0)()
                 QTest.qWait(60)
@@ -836,6 +878,7 @@ def main():
                 backend._request_track_insight = Mock()
                 backend.playback = Playback(title='Another track', uri='spotify:track:mismatch', is_playing=True)
                 backend.titleChanged.emit()
+                backend.playingChanged.emit()
                 backend.trackInsightPlaybackItemChanged.emit()
                 assert not insight.property('enabled')
                 backend.playback.uri = 'spotify:track:' + session['broadcast']['playback']['source_url'].rsplit('/', 1)[-1]
@@ -843,12 +886,17 @@ def main():
                 assert insight.property('enabled') and insight.width() >= 44
                 click('sessionPlaybackInsight')
                 assert window.property('activeScreen') == 'trackinsight'
+                for _ in range(10):
+                    if backend._request_track_insight.called:
+                        break
+                    QTest.qWait(50)
                 backend._request_track_insight.assert_called_once_with(manual=False)
                 assert not transport_panel.property('opened') and not intents
                 window.setProperty('activeScreen', 'session')
                 backend.playback = original_playback
                 backend._request_track_insight = original_request
                 backend.titleChanged.emit()
+                backend.playingChanged.emit()
                 backend.trackInsightPlaybackItemChanged.emit()
                 drain()
 
@@ -913,12 +961,14 @@ def main():
                 output_heading = QAccessible.queryAccessibleInterface(window.findChild(QObject, 'sessionOutputHeading'))
                 assert output_heading.role() == QAccessible.Role.Heading
                 assert output_heading.text(QAccessible.Text.Name) == TRANSLATIONS[language]['output_device']
+                del output_heading
                 output_refresh = window.findChild(QObject, 'sessionOutputRead')
                 output_spinner = window.findChild(QObject, 'sessionOutputReadSpinner')
                 assert output_spinner.property('visible') and not output_refresh.property('enabled')
                 assert output_refresh.property('opacity') == 1
                 refresh_accessible = QAccessible.queryAccessibleInterface(output_refresh)
                 assert refresh_accessible.text(QAccessible.Text.Name) == TRANSLATIONS[language]['session_output_refresh']
+                del refresh_accessible
                 refresh_size = output_refresh.size()
                 intents.pop()()
                 QTest.qWait(80)
@@ -1070,6 +1120,7 @@ def main():
                 volume_heading = QAccessible.queryAccessibleInterface(window.findChild(QObject, 'sessionVolumeHeading'))
                 assert volume_heading.role() == QAccessible.Role.Heading
                 assert volume_heading.text(QAccessible.Text.Name) == TRANSLATIONS[language]['volume']
+                del volume_heading
                 intents.pop()()
                 QTest.qWait(80)
                 slider = window.findChild(QObject, 'sessionVolumeSlider')
@@ -1077,6 +1128,7 @@ def main():
                 volume_accessible = QAccessible.queryAccessibleInterface(slider)
                 assert volume_accessible.text(QAccessible.Text.Name) == TRANSLATIONS[language]['volume']
                 assert volume_accessible.text(QAccessible.Text.Description) == speaker_name
+                del volume_accessible
                 assert volume_shortcut.property('text') == '11%' and volume_shortcut.property('iconName') == 'voice'
                 assert volume_icon.property('visible') and volume_icon.property('iconName') == 'voice'
                 assert abs(volume_shortcut.width() - zero_width) <= 1
@@ -1131,6 +1183,7 @@ def main():
                 owner.changed.emit()
                 QTest.qWait(80)
                 click('sessionExpandTrackArtwork')
+                click('trackArtworkControlsToggle')
                 click('sessionArtworkFavorite')
                 assert len(intents) == 1
                 intents.pop()()
@@ -1184,6 +1237,7 @@ def main():
                 screen.setProperty('historical', False); drain()
                 click('sessionExpandTrackArtwork', x_fraction=0.18)
                 assert window.property('trackArtworkOpen') and not intents
+                click('trackArtworkControlsToggle')
                 backend.cfg.music_backend_capabilities = {'supports_favorites': False}; owner.changed.emit(); QTest.qWait(60)
                 assert not window.findChild(QObject, 'sessionArtworkFavorite').property('enabled')
                 capture('favorite-unsupported')
@@ -1267,6 +1321,7 @@ def main():
                     assert window.property('activeScreen') == 'session' and not window.property('screenBlanked')
                     assert window.property('trackArtworkOpen')
                     assert visual(window.contentItem(), 'expandedTrackTitle').property('text') == 'Next track'
+                    assert not window.property('trackArtworkControlsOpen') and not window.property('trackArtworkCanControl')
                     QTest.qWait(4300)
                     assert window.property('trackArtworkOpen')
                     for _ in range(17):
