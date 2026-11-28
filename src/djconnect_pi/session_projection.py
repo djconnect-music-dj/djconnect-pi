@@ -10,7 +10,10 @@ from urllib.parse import urlsplit
 from .session_transport import SessionError, identifier, moment_insight_reference
 
 HISTORY_KINDS = {"playback_observed", "dj_moment", "conversation_user", "conversation_dj", "dj_publication", "dj_silence"}
-ARCHIVE_BASES = {"cc0_normalized_fields_v1", "runtime_authored_direction_v1", "owner_metadata_narration_v1", "public_artist_narration_v1"}
+ARCHIVE_BASES = {
+    "cc0_normalized_fields_v1", "runtime_authored_direction_v1", "runtime_accepted_settings_v1",
+    "owner_metadata_narration_v1", "public_artist_narration_v1",
+}
 
 
 def _parse_timestamp(value):

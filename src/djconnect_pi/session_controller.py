@@ -2127,10 +2127,16 @@ class SessionController(QObject):
         selection_source = value.get("selection_source") if action == "question" and value.get("preserve_selection") else self._selection_source
         flow_window = self._flow_window
         expand_session = value if action == "refresh" else ""
-        def read_flow(sid, receipt):
+        def read_flow(sid, receipt, *, optional=False):
             expanding = bool(expand_session and expand_session == sid and view_epoch == self._view_epoch)
             limit = 50 if expanding or flow_window == (binding, sid, 50) else 20
-            projection = self._read_conversation(binding, sid, receipt, check_conversation_read, limit=limit)
+            try:
+                projection = self._read_conversation(binding, sid, receipt, check_conversation_read, limit=limit)
+            except SessionError as exc:
+                if not optional or exc.category in {"denied", "unpaired", "context_changed"}:
+                    raise
+                # A confirmed Runtime can render without the retained Flow window.
+                return {}
             return {**projection, "flow_window": (binding, sid, limit), "flow_expanded": expanding}
         self._serial += 1
         serial = self._serial
@@ -2240,7 +2246,7 @@ class SessionController(QObject):
                     if (personal and binding.private_authorized and sid
                             and caps.get("capabilities", {}).get("session_conversation_history") is True
                             and caps.get("contract_versions", {}).get("session_history_entries") == 2):
-                        result.update(read_flow(sid, receipt_snapshot))
+                        result.update(read_flow(sid, receipt_snapshot, optional=True))
                 elif action == "question":
                     # Queued work must validate the original intent without a GUI getter/tick.
                     check_conversation_read()
@@ -2396,12 +2402,7 @@ class SessionController(QObject):
                     sid = result["session"].get("session_id")
                     if sid and caps.get("capabilities", {}).get("session_conversation_history") is True and caps.get("contract_versions", {}).get("session_history_entries") == 2:
                         result["receipt_update"] = receipt_snapshot
-                        try:
-                            result.update(read_flow(sid, receipt_snapshot))
-                        except SessionError as exc:
-                            if exc.category in {"denied", "unpaired", "context_changed"}:
-                                raise
-                            result["conversation"] = []
+                        result.update(read_flow(sid, receipt_snapshot, optional=True))
             except SessionError as exc:
                 result["error"] = exc.category
                 result["error_code"] = exc.code
